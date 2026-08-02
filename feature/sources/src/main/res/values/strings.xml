@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Vibrato — a free, open source IPTV player.
+  Copyright (C) 2026 The Vibrato Authors
+  Licensed under the GNU General Public License v3.0 or later. See LICENSE.
+-->
+<resources>
+    <string name="feature_sources_title">Sources</string>
+    <string name="feature_sources_empty">Add an M3U playlist or Xtream account to get started.</string>
+</resources>

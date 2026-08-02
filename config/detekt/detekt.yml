@@ -1,0 +1,44 @@
+## Vibrato detekt configuration.
+## buildUponDefaultConfig = true, so this file only records deliberate deviations.
+## Licensed under GPLv3 — see LICENSE.
+
+build:
+  maxIssues: 0
+
+style:
+  MagicNumber:
+    active: true
+    ignorePropertyDeclaration: true
+    ignoreCompanionObjectPropertyDeclaration: true
+    ignoreAnnotated: [ 'Composable' ]
+  # Compose screen composables legitimately take many parameters via hoisting.
+  UnusedPrivateMember:
+    active: true
+
+complexity:
+  LongParameterList:
+    active: true
+    ignoreAnnotated: [ 'Composable' ]
+  TooManyFunctions:
+    active: true
+    ignoreAnnotatedFunctions: [ 'Composable' ]
+
+naming:
+  # @Composable functions are PascalCase by convention and would otherwise be flagged.
+  FunctionNaming:
+    active: true
+    ignoreAnnotated: [ 'Composable' ]
+  TopLevelPropertyNaming:
+    active: true
+
+formatting:
+  active: true
+  MaximumLineLength:
+    active: true
+    maxLineLength: 140
+
+exceptions:
+  TooGenericExceptionCaught:
+    active: true
+  SwallowedException:
+    active: true

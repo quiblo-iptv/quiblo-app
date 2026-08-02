@@ -1,0 +1,92 @@
+# Vibrato — a free, open source IPTV player.
+# Copyright (C) 2026 The Vibrato Authors
+# Licensed under the GNU General Public License v3.0 or later. See LICENSE.
+
+name: Bug report
+description: Something in the app behaves incorrectly
+labels: [ "bug", "needs-triage" ]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## Before you post
+
+        **Do not include a playlist URL, a provider hostname, or any credentials.**
+        Not in the description, not in a log paste, not in a screenshot.
+
+        Issues containing them are deleted and the account is blocked on the first
+        offence. See [CONTRIBUTING.md](../blob/main/CONTRIBUTING.md), AC-LEGAL-04.
+
+        Describe the *shape* of your source instead — "an M3U with ~8,000 entries and
+        no `group-title` attributes" tells us everything we need.
+
+        Security vulnerabilities go through
+        [SECURITY.md](../blob/main/SECURITY.md), not this form.
+
+  - type: checkboxes
+    id: no-sources
+    attributes:
+      label: Confirmation
+      options:
+        - label: This report contains no playlist URL, provider hostname, or credential — including inside screenshots and log output.
+          required: true
+        - label: I have checked that this is not an existing open issue.
+          required: true
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What did you expect, and what actually occurred?
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to reproduce
+      value: |
+        1.
+        2.
+        3.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: source-type
+    attributes:
+      label: Source type
+      description: The kind of source, not the source itself.
+      options:
+        - M3U — remote URL
+        - M3U — local file
+        - Xtream Codes
+        - Not source-related
+        - Not sure
+    validations:
+      required: true
+
+  - type: input
+    id: app-version
+    attributes:
+      label: Vibrato version
+      placeholder: "0.1.0-alpha01, or a commit SHA"
+    validations:
+      required: true
+
+  - type: input
+    id: device
+    attributes:
+      label: Device and Android version
+      placeholder: "Pixel 6a, Android 14"
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: |
+        Optional. **Redact every hostname, username, password and token before pasting.**
+        Rendered as a code block — no backticks needed.
+      render: shell

@@ -1,0 +1,75 @@
+/*
+ * Vibrato — a free, open source IPTV player.
+ * Copyright (C) 2026 The Vibrato Authors
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
+pluginManagement {
+    includeBuild("build-logic")
+    repositories {
+        google {
+            content {
+                includeGroupByRegex("com\\.android.*")
+                includeGroupByRegex("com\\.google.*")
+                includeGroupByRegex("androidx.*")
+            }
+        }
+        mavenCentral()
+        gradlePluginPortal()
+    }
+}
+
+dependencyResolutionManagement {
+    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+    repositories {
+        google {
+            content {
+                includeGroupByRegex("com\\.android.*")
+                includeGroupByRegex("com\\.google.*")
+                includeGroupByRegex("androidx.*")
+            }
+        }
+        mavenCentral()
+    }
+}
+
+rootProject.name = "vibrato"
+
+enableFeaturePreview("TYPESAFE_PROJECT_ACCESSORS")
+
+include(":app")
+
+// Pure Kotlin / Android core. Never depends on :feature:* and never imports Compose.
+include(":core:model")
+include(":core:common")
+include(":core:database")
+include(":core:datastore")
+include(":core:network")
+include(":core:media")
+include(":core:data")
+
+// Source layer. MediaSource abstraction plus per-protocol implementations.
+include(":source:api")
+include(":source:m3u")
+include(":source:xtream")
+
+// Feature layer. Compose UI, consumes :core:data only.
+include(":feature:sources")
+include(":feature:live")
+include(":feature:vod")
+include(":feature:series")
+include(":feature:player")
+include(":feature:favorites")
+include(":feature:settings")

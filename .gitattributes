@@ -1,0 +1,25 @@
+# Vibrato — a free, open source IPTV player.
+# Copyright (C) 2026 The Vibrato Authors
+# Licensed under the GNU General Public License v3.0 or later. See LICENSE.
+
+# Normalise everything to LF in the repository. Without this, a checkout on Windows
+# rewrites gradlew with CRLF, and the Linux CI runner then fails with
+# "bad interpreter: /bin/sh^M".
+* text=auto eol=lf
+
+# Windows-only scripts must keep CRLF to run under cmd.exe.
+*.bat  text eol=crlf
+*.cmd  text eol=crlf
+
+# The Gradle wrapper script is executed by /bin/sh on CI. Never CRLF.
+gradlew text eol=lf
+
+# Binary assets git must not touch.
+*.jar      binary
+*.png      binary
+*.jpg      binary
+*.webp     binary
+*.apk      binary
+*.aab      binary
+*.keystore binary
+*.jks      binary

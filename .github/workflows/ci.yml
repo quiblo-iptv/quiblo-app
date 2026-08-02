@@ -1,0 +1,87 @@
+# Vibrato — a free, open source IPTV player.
+# Copyright (C) 2026 The Vibrato Authors
+# Licensed under the GNU General Public License v3.0 or later. See LICENSE.
+
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+# A new push to the same branch cancels the previous run.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build, test and analyse
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Validate Gradle wrapper
+        uses: gradle/actions/wrapper-validation@v4
+
+      # AC-LEGAL-04: no playlist, provider host or credential may ever enter the repo.
+      # Cheap to check here, expensive to remove from history later.
+      - name: Guard against leaked playlists and providers
+        run: |
+          set -euo pipefail
+          if git grep -nIE '(^|[^A-Za-z])(get\.php\?username=|player_api\.php\?username=)' -- . ; then
+            echo "::error::An Xtream-style provider URL with credentials is present. See AC-LEGAL-04."
+            exit 1
+          fi
+          # The forbidden brand string. Two files legitimately contain it: FREEZE.md,
+          # which is frozen and explains *why* it is forbidden, and this workflow, which
+          # has to name it in order to search for it. Everywhere else is a violation.
+          if git grep -nI 'VIPTV' -- . ':!docs/FREEZE.md' ':!.github/workflows/ci.yml' ; then
+            echo "::error::The forbidden brand string must not appear outside docs/FREEZE.md (docs/FREEZE.md §1)."
+            exit 1
+          fi
+          echo "No provider URLs or forbidden strings found."
+
+      - name: Assemble
+        run: ./gradlew assemble --stacktrace
+
+      - name: Unit tests
+        run: ./gradlew test --stacktrace
+
+      - name: detekt
+        run: ./gradlew detektAll --stacktrace
+
+      - name: Android Lint
+        run: ./gradlew lint --stacktrace
+
+      - name: Upload reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: reports
+          path: |
+            **/build/reports/detekt/
+            **/build/reports/tests/
+            **/build/reports/lint-results-*.html
+          retention-days: 14
+          if-no-files-found: ignore

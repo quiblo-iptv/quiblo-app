@@ -135,6 +135,26 @@ sealed interface SourceError {
     data object FileUnreadable : SourceError
 
     /**
+     * The credentials were rejected.
+     *
+     * AC-XT-02 requires this to be distinguishable from a network failure: "wrong
+     * password" and "server unreachable" demand completely different actions from the
+     * user, and conflating them is the single most common failure in this category.
+     */
+    data object Unauthorized : SourceError
+
+    /**
+     * The account authenticated but its subscription has lapsed.
+     *
+     * Surfaced explicitly rather than being allowed to present as a generic playback
+     * failure later on (AC-XT-05).
+     */
+    data object SubscriptionExpired : SourceError
+
+    /** The panel reports the account as banned or disabled. */
+    data object AccountDisabled : SourceError
+
+    /**
      * Anything not otherwise classified.
      *
      * [technicalDetail] is for logs and bug reports only and must never be rendered as

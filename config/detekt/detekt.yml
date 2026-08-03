@@ -28,6 +28,14 @@ complexity:
   TooManyFunctions:
     active: true
     ignoreAnnotatedFunctions: [ 'Composable' ]
+  # A @Composable is a declarative tree, not imperative logic: its length tracks how much
+  # UI it describes, which is not the complexity this rule exists to catch. Extracting
+  # sub-composables purely to satisfy a line count produces worse code, not better.
+  # Non-composable functions stay capped.
+  LongMethod:
+    active: true
+    threshold: 60
+    ignoreAnnotated: [ 'Composable' ]
 
 naming:
   # @Composable functions are PascalCase by convention and would otherwise be flagged.

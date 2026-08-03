@@ -1,0 +1,237 @@
+/*
+ * Vibrato — a free, open source IPTV player.
+ * Copyright (C) 2026 The Vibrato Authors
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
+package dev.vibrato.source.xtream
+
+import dev.vibrato.core.model.Category
+import dev.vibrato.core.model.MediaKind
+import dev.vibrato.source.api.CredentialStore
+import dev.vibrato.source.api.Credentials
+import dev.vibrato.source.api.SourceError
+import dev.vibrato.source.api.SourceRequest
+import dev.vibrato.source.api.SourceResult
+import io.ktor.client.HttpClient
+import io.ktor.client.engine.mock.MockEngine
+import io.ktor.client.engine.mock.respond
+import io.ktor.http.HttpStatusCode
+import io.ktor.http.headersOf
+import kotlinx.coroutines.test.runTest
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
+import org.junit.jupiter.api.Assertions.assertInstanceOf
+import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.DisplayName
+import org.junit.jupiter.api.Test
+
+/**
+ * All responses here are synthetic and modelled on the quirks documented in
+ * docs/PLAN.md §5 — never captured from a real panel (AC-LEGAL-04).
+ */
+class XtreamSourceTest {
+
+    private val credentials = Credentials("user", "pass")
+
+    private class FakeStore(private val value: Credentials?) : CredentialStore {
+        override suspend fun credentials(sourceId: Long) = value
+        override suspend fun put(sourceId: Long, credentials: Credentials) = Unit
+        override suspend fun clear(sourceId: Long) = Unit
+    }
+
+    /** Routes each `action` to a canned body. */
+    private fun sourceServing(
+        bodies: Map<String?, String>,
+        status: HttpStatusCode = HttpStatusCode.OK,
+        store: CredentialStore = FakeStore(credentials),
+    ) = createXtreamSource(
+        HttpClient(
+            MockEngine { request ->
+                val action = request.url.parameters["action"]
+                respond(
+                    content = bodies[action] ?: "[]",
+                    status = status,
+                    headers = headersOf("Content-Type", "application/json"),
+                )
+            },
+        ),
+        store,
+    )
+
+    private val request = SourceRequest(sourceId = 5L, location = "panel.example.invalid:8080")
+
+    private val authOk = """{"user_info":{"username":"user","auth":1,"status":"Active","exp_date":"1900000000"}}"""
+
+    // Deliberately inconsistent: numeric stream_id, string category_id, missing fields.
+    private val liveStreams = """
+        [
+          {"num":1,"stream_id":101,"name":"Alpha","stream_icon":"http://logos.example.invalid/a.png",
+           "epg_channel_id":"alpha.epg","category_id":"1"},
+          {"num":"2","stream_id":"102","name":"Beta","category_id":2},
+          {"num":3,"stream_id":null,"name":"No Id","category_id":"1"},
+          {"num":4,"stream_id":104,"name":"","category_id":"1"}
+        ]
+    """.trimIndent()
+
+    private val liveCategories = """
+        [{"category_id":"1","category_name":"News"},{"category_id":"2","category_name":"Sports"}]
+    """.trimIndent()
+
+    @Test
+    @DisplayName("AC-XT-01 — categories and streams populate after authentication")
+    fun `loads live streams with categories`() = runTest {
+        val result = sourceServing(
+            mapOf(
+                null to authOk,
+                "get_live_categories" to liveCategories,
+                "get_live_streams" to liveStreams,
+            ),
+        ).load(request)
+
+        val success = assertInstanceOf(SourceResult.Success::class.java, result)
+        assertEquals(2, success.channels.size)
+        assertEquals(2, success.report.skippedEntries)
+
+        val alpha = success.channels.first()
+        assertEquals("Alpha", alpha.name)
+        assertEquals("News", alpha.groupTitle)
+        assertEquals("alpha.epg", alpha.tvgId)
+        assertEquals(MediaKind.LIVE, alpha.kind)
+        assertEquals("http://panel.example.invalid:8080/live/user/pass/101.ts", alpha.streamUrl)
+    }
+
+    @Test
+    @DisplayName("AC-XT-06 — string and numeric forms of the same field both parse")
+    fun `tolerates mistyped fields`() = runTest {
+        val result = sourceServing(
+            mapOf(
+                null to authOk,
+                "get_live_categories" to liveCategories,
+                "get_live_streams" to liveStreams,
+            ),
+        ).load(request)
+
+        val channels = assertInstanceOf(SourceResult.Success::class.java, result).channels
+        // stream_id 101 arrived as a number, 102 as a string; both must resolve.
+        assertTrue(channels.any { it.streamUrl.endsWith("/101.ts") })
+        assertTrue(channels.any { it.streamUrl.endsWith("/102.ts") })
+        // category_id "1" as string and 2 as number both resolve to their names.
+        assertEquals(setOf("News", "Sports"), channels.map { it.groupTitle }.toSet())
+    }
+
+    @Test
+    fun `entries with no category fall back to the ungrouped bucket`() = runTest {
+        val result = sourceServing(
+            mapOf(
+                null to authOk,
+                "get_live_categories" to "[]",
+                "get_live_streams" to """[{"stream_id":1,"name":"Orphan"}]""",
+            ),
+        ).load(request)
+
+        val channels = assertInstanceOf(SourceResult.Success::class.java, result).channels
+        assertEquals(Category.UNGROUPED_TITLE, channels.single().groupTitle)
+    }
+
+    @Test
+    @DisplayName("AC-XT-02 — rejected credentials are distinguished from a network error")
+    fun `reports an auth failure when the panel denies access`() = runTest {
+        val result = sourceServing(mapOf(null to """{"user_info":{"auth":0}}""")).load(request)
+        assertEquals(SourceError.Unauthorized, (result as SourceResult.Failure).error)
+    }
+
+    @Test
+    fun `reports an auth failure on a 401`() = runTest {
+        val result = sourceServing(mapOf(null to "{}"), status = HttpStatusCode.Unauthorized).load(request)
+        assertEquals(SourceError.Unauthorized, (result as SourceResult.Failure).error)
+    }
+
+    @Test
+    fun `reports an auth failure when no credentials are stored`() = runTest {
+        val result = sourceServing(mapOf(null to authOk), store = FakeStore(null)).load(request)
+        assertEquals(SourceError.Unauthorized, (result as SourceResult.Failure).error)
+    }
+
+    @Test
+    @DisplayName("AC-XT-05 — an expired subscription is surfaced as itself")
+    fun `reports an expired subscription`() = runTest {
+        val expired = """{"user_info":{"auth":1,"status":"Expired","exp_date":"1000000000"}}"""
+        val result = sourceServing(mapOf(null to expired)).load(request)
+        assertEquals(SourceError.SubscriptionExpired, (result as SourceResult.Failure).error)
+    }
+
+    @Test
+    fun `reports a banned account distinctly from an expired one`() = runTest {
+        val banned = """{"user_info":{"auth":"true","status":"Banned"}}"""
+        val result = sourceServing(mapOf(null to banned)).load(request)
+        assertEquals(SourceError.AccountDisabled, (result as SourceResult.Failure).error)
+    }
+
+    @Test
+    fun `treats an HTML response as not a playlist`() = runTest {
+        val result = sourceServing(mapOf(null to "<!DOCTYPE html><html><body>login</body></html>")).load(request)
+        assertEquals(SourceError.NotAPlaylist, (result as SourceResult.Failure).error)
+    }
+
+    @Test
+    fun `rejects a base url that cannot be understood`() = runTest {
+        val result = sourceServing(mapOf(null to authOk))
+            .load(SourceRequest(1L, "not a host"))
+        assertEquals(SourceError.UnreachableHost, (result as SourceResult.Failure).error)
+    }
+
+    @Test
+    fun `a panel with no content at all reports empty rather than success`() = runTest {
+        val result = sourceServing(mapOf(null to authOk)).load(request)
+        assertEquals(SourceError.EmptyPlaylist, (result as SourceResult.Failure).error)
+    }
+
+    @Test
+    fun `vod and series are collected alongside live`() = runTest {
+        val result = sourceServing(
+            mapOf(
+                null to authOk,
+                "get_live_categories" to liveCategories,
+                "get_live_streams" to """[{"stream_id":1,"name":"Live One","category_id":"1"}]""",
+                "get_vod_streams" to """[{"stream_id":"7","name":"A Movie","container_extension":"mkv"}]""",
+                "get_series" to """[{"series_id":9,"name":"A Series"}]""",
+            ),
+        ).load(request)
+
+        val channels = assertInstanceOf(SourceResult.Success::class.java, result).channels
+        assertEquals(1, channels.count { it.kind == MediaKind.LIVE })
+        assertEquals(1, channels.count { it.kind == MediaKind.VOD })
+        assertEquals(1, channels.count { it.kind == MediaKind.SERIES })
+        assertTrue(channels.first { it.kind == MediaKind.VOD }.streamUrl.endsWith("/movie/user/pass/7.mkv"))
+    }
+
+    @Test
+    @DisplayName("AC-XT-04 — credentials never appear in an error value")
+    fun `errors carry no credential material`() = runTest {
+        val result = sourceServing(mapOf(null to "{ this is not json"), status = HttpStatusCode.OK).load(request)
+        val error = (result as SourceResult.Failure).error
+        val rendered = error.toString()
+        assertFalse(rendered.contains("pass"), "A password reached an error value: $rendered")
+        assertFalse(rendered.contains("user"), "A username reached an error value: $rendered")
+    }
+
+    @Test
+    fun `credentials never render themselves`() {
+        val rendered = Credentials("alice", "hunter2").toString()
+        assertFalse(rendered.contains("alice"))
+        assertFalse(rendered.contains("hunter2"))
+    }
+}

@@ -69,6 +69,34 @@ interface ChannelDao {
     @Query(
         """
         SELECT * FROM channels
+        WHERE sourceId = :sourceId AND kind = :kind
+        ORDER BY sortIndex ASC
+        """,
+    )
+    fun observeBySourceAndKind(sourceId: Long, kind: String): Flow<List<ChannelEntity>>
+
+    @Query(
+        """
+        SELECT * FROM channels
+        WHERE sourceId = :sourceId AND kind = :kind AND groupTitle = :groupTitle
+        ORDER BY sortIndex ASC
+        """,
+    )
+    fun observeByGroupAndKind(sourceId: Long, kind: String, groupTitle: String): Flow<List<ChannelEntity>>
+
+    @Query(
+        """
+        SELECT groupTitle, COUNT(*) AS itemCount FROM channels
+        WHERE sourceId = :sourceId AND kind = :kind
+        GROUP BY groupTitle
+        ORDER BY groupTitle ASC
+        """,
+    )
+    fun observeCategoriesByKind(sourceId: Long, kind: String): Flow<List<CategoryCount>>
+
+    @Query(
+        """
+        SELECT * FROM channels
         WHERE sourceId = :sourceId AND groupTitle = :groupTitle
         ORDER BY sortIndex ASC
         """,

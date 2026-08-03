@@ -16,14 +16,15 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-package dev.vibrato.core.datastore
+package dev.vibrato.core.datastore.di
 
-/**
- * Module marker for `:core:datastore`.
- *
- * Settings and encrypted Xtream credentials land here in M4 (AC-XT-04).
- *
- * The module exists from M0 so the dependency graph and the AC-NFR-06 Compose
- * check are wired and enforced from the first commit (docs/PLAN.md §3).
- */
-internal object CoreDatastoreMarker
+import android.content.Context
+import dev.vibrato.core.datastore.EncryptedCredentialStore
+import dev.vibrato.source.api.CredentialStore
+import org.koin.core.module.Module
+import org.koin.dsl.module
+
+/** Wiring owned by `:core:datastore`. */
+val datastoreModule: Module = module {
+    single<CredentialStore> { EncryptedCredentialStore(get<Context>()) }
+}

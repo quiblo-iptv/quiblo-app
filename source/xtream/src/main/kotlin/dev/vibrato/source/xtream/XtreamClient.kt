@@ -1,0 +1,150 @@
+/*
+ * Vibrato — a free, open source IPTV player.
+ * Copyright (C) 2026 The Vibrato Authors
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
+package dev.vibrato.source.xtream
+
+import dev.vibrato.source.api.Credentials
+import dev.vibrato.source.api.SourceError
+import dev.vibrato.source.xtream.dto.AuthResponse
+import dev.vibrato.source.xtream.dto.CategoryDto
+import dev.vibrato.source.xtream.dto.EpgResponse
+import dev.vibrato.source.xtream.dto.LiveStreamDto
+import dev.vibrato.source.xtream.dto.SeriesDto
+import dev.vibrato.source.xtream.dto.VodStreamDto
+import io.ktor.client.HttpClient
+import io.ktor.client.request.get
+import io.ktor.client.request.parameter
+import io.ktor.client.statement.bodyAsText
+import io.ktor.http.HttpStatusCode
+import io.ktor.http.isSuccess
+import kotlinx.serialization.json.Json
+
+/** A typed result carrying either a value or a [SourceError]. */
+internal sealed interface ApiResult<out T> {
+    data class Ok<T>(val value: T) : ApiResult<T>
+    data class Err(val error: SourceError) : ApiResult<Nothing>
+}
+
+/**
+ * A thin, defensive client for the Xtream Codes API.
+ *
+ * Two rules run through it. Never trust a field's declared type — every scalar goes
+ * through a flexible serializer (AC-XT-06). And never let a credential escape — no
+ * request URL, response body, or error value produced here is ever logged, and
+ * [SourceError.Unknown] carries only an exception class name (AC-XT-04).
+ */
+internal class XtreamClient(
+    private val client: HttpClient,
+    private val json: Json = defaultJson,
+) {
+
+    suspend fun authenticate(base: String, credentials: Credentials): ApiResult<AuthResponse> =
+        request(base, credentials, action = null)
+
+    suspend fun liveCategories(base: String, credentials: Credentials): ApiResult<List<CategoryDto>> =
+        request(base, credentials, "get_live_categories")
+
+    suspend fun liveStreams(base: String, credentials: Credentials): ApiResult<List<LiveStreamDto>> =
+        request(base, credentials, "get_live_streams")
+
+    suspend fun vodCategories(base: String, credentials: Credentials): ApiResult<List<CategoryDto>> =
+        request(base, credentials, "get_vod_categories")
+
+    suspend fun vodStreams(base: String, credentials: Credentials): ApiResult<List<VodStreamDto>> =
+        request(base, credentials, "get_vod_streams")
+
+    suspend fun seriesCategories(base: String, credentials: Credentials): ApiResult<List<CategoryDto>> =
+        request(base, credentials, "get_series_categories")
+
+    suspend fun series(base: String, credentials: Credentials): ApiResult<List<SeriesDto>> =
+        request(base, credentials, "get_series")
+
+    /** Short-range guide for one channel. */
+    suspend fun shortEpg(base: String, credentials: Credentials, streamId: String): ApiResult<EpgResponse> =
+        request(base, credentials, "get_short_epg") { parameter("stream_id", streamId) }
+
+    private suspend inline fun <reified T> request(
+        base: String,
+        credentials: Credentials,
+        action: String?,
+        crossinline extra: io.ktor.client.request.HttpRequestBuilder.() -> Unit = {},
+    ): ApiResult<T> = runCatchingApi {
+        val response = client.get(XtreamUrl.playerApi(base)) {
+            parameter("username", credentials.username)
+            parameter("password", credentials.password)
+            if (action != null) parameter("action", action)
+            extra()
+        }
+
+        when {
+            response.status == HttpStatusCode.Unauthorized || response.status == HttpStatusCode.Forbidden ->
+                ApiResult.Err(SourceError.Unauthorized)
+
+            response.status == HttpStatusCode.NotFound ->
+                ApiResult.Err(SourceError.NotFound)
+
+            !response.status.isSuccess() ->
+                ApiResult.Err(SourceError.HttpStatus(response.status.value))
+
+            else -> {
+                val body = response.bodyAsText()
+                // Panels return an HTML error page with status 200 more often than they
+                // should; treat that the same as a malformed playlist (AC-PL-07).
+                if (body.trimStart().startsWith("<")) {
+                    ApiResult.Err(SourceError.NotAPlaylist)
+                } else {
+                    ApiResult.Ok(json.decodeFromString<T>(body))
+                }
+            }
+        }
+    }
+
+    companion object {
+        /**
+         * Lenient on purpose. Unknown keys are ignored because panels add fields freely,
+         * and malformed values coerce to defaults rather than aborting the parse
+         * (docs/PLAN.md §1, AC-XT-06).
+         */
+        val defaultJson: Json = Json {
+            isLenient = true
+            ignoreUnknownKeys = true
+            coerceInputValues = true
+            explicitNulls = false
+        }
+    }
+}
+
+/**
+ * Runs an API call, converting every failure into a typed error.
+ *
+ * The caught detail is limited to an exception class name so that no host, username or
+ * password can reach a log or a crash trace through this path (AC-XT-04).
+ */
+@Suppress("TooGenericExceptionCaught")
+internal inline fun <T> runCatchingApi(block: () -> ApiResult<T>): ApiResult<T> = try {
+    block()
+} catch (error: Exception) {
+    ApiResult.Err(mapThrowable(error))
+}
+
+internal fun mapThrowable(error: Throwable): SourceError = when (error::class.simpleName) {
+    "HttpRequestTimeoutException", "SocketTimeoutException", "ConnectTimeoutException" -> SourceError.Timeout
+    "UnresolvedAddressException", "UnknownHostException" -> SourceError.UnreachableHost
+    "SerializationException", "JsonConvertException", "IllegalArgumentException" -> SourceError.NotAPlaylist
+    else -> SourceError.Unknown(error::class.simpleName)
+}

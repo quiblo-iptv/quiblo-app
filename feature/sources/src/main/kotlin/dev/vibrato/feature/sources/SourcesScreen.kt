@@ -29,6 +29,9 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
@@ -43,6 +46,9 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -54,6 +60,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -114,9 +122,13 @@ fun SourcesScreen(
     if (showAddDialog) {
         AddSourceDialog(
             onDismiss = { showAddDialog = false },
-            onConfirm = { name, location ->
+            onConfirmM3u = { name, location ->
                 showAddDialog = false
                 viewModel.addM3uSource(name, location)
+            },
+            onConfirmXtream = { name, base, user, password ->
+                showAddDialog = false
+                viewModel.addXtreamSource(name, base, user, password)
             },
         )
     }
@@ -185,55 +197,167 @@ private fun SourceRow(
 @Composable
 private fun AddSourceDialog(
     onDismiss: () -> Unit,
-    onConfirm: (name: String, location: String) -> Unit,
+    onConfirmM3u: (name: String, location: String) -> Unit,
+    onConfirmXtream: (name: String, base: String, user: String, password: String) -> Unit,
 ) {
+    var xtreamSelected by remember { mutableStateOf(false) }
     var name by remember { mutableStateOf("") }
     var url by remember { mutableStateOf("") }
+    var username by remember { mutableStateOf("") }
+    var password by remember { mutableStateOf("") }
 
     // SAF, so Vibrato needs no storage permission at all (AC-NFR-04).
     val picker = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocument(),
     ) { uri ->
-        if (uri != null) onConfirm(name, uri.toString())
+        if (uri != null) onConfirmM3u(name, uri.toString())
+    }
+
+    val canConfirm = if (xtreamSelected) {
+        url.isNotBlank() && username.isNotBlank() && password.isNotBlank()
+    } else {
+        url.isNotBlank()
     }
 
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(stringResource(R.string.sources_add_title)) },
         text = {
-            Column {
-                OutlinedTextField(
-                    value = name,
-                    onValueChange = { name = it },
-                    label = { Text(stringResource(R.string.sources_name_label)) },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
+            Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                SourceKindSelector(
+                    xtreamSelected = xtreamSelected,
+                    onSelect = { xtreamSelected = it },
                 )
-                OutlinedTextField(
-                    value = url,
-                    onValueChange = { url = it },
-                    label = { Text(stringResource(R.string.sources_url_label)) },
-                    singleLine = true,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 12.dp),
+                CommonFields(
+                    name = name,
+                    url = url,
+                    xtreamSelected = xtreamSelected,
+                    onNameChange = { name = it },
+                    onUrlChange = { url = it },
                 )
-                TextButton(
-                    onClick = { picker.launch(arrayOf("*/*")) },
-                    modifier = Modifier.padding(top = 8.dp),
-                ) {
-                    Text(stringResource(R.string.sources_pick_file))
+                if (xtreamSelected) {
+                    XtreamCredentialFields(
+                        username = username,
+                        password = password,
+                        onUsernameChange = { username = it },
+                        onPasswordChange = { password = it },
+                    )
+                } else {
+                    TextButton(
+                        onClick = { picker.launch(arrayOf("*/*")) },
+                        modifier = Modifier.padding(top = 8.dp),
+                    ) {
+                        Text(stringResource(R.string.sources_pick_file))
+                    }
                 }
             }
         },
         confirmButton = {
-            Button(onClick = { onConfirm(name, url) }, enabled = url.isNotBlank()) {
+            Button(
+                onClick = {
+                    if (xtreamSelected) onConfirmXtream(name, url, username, password) else onConfirmM3u(name, url)
+                },
+                enabled = canConfirm,
+            ) {
                 Text(stringResource(R.string.sources_confirm))
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) { Text(stringResource(R.string.sources_cancel)) }
         },
+    )
+}
+
+/** Chooses between an M3U playlist and an Xtream account. */
+@Composable
+private fun SourceKindSelector(xtreamSelected: Boolean, onSelect: (Boolean) -> Unit) {
+    SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+        SegmentedButton(
+            selected = !xtreamSelected,
+            onClick = { onSelect(false) },
+            shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2),
+        ) { Text(stringResource(R.string.sources_tab_m3u)) }
+        SegmentedButton(
+            selected = xtreamSelected,
+            onClick = { onSelect(true) },
+            shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2),
+        ) { Text(stringResource(R.string.sources_tab_xtream)) }
+    }
+}
+
+/** Label and address, shared by both source kinds. */
+@Composable
+private fun CommonFields(
+    name: String,
+    url: String,
+    xtreamSelected: Boolean,
+    onNameChange: (String) -> Unit,
+    onUrlChange: (String) -> Unit,
+) {
+    OutlinedTextField(
+        value = name,
+        onValueChange = onNameChange,
+        label = { Text(stringResource(R.string.sources_name_label)) },
+        singleLine = true,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 12.dp),
+    )
+    OutlinedTextField(
+        value = url,
+        onValueChange = onUrlChange,
+        label = {
+            Text(
+                stringResource(
+                    if (xtreamSelected) R.string.sources_xtream_url_label else R.string.sources_url_label,
+                ),
+            )
+        },
+        singleLine = true,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 12.dp),
+    )
+}
+
+/**
+ * Username and password entry.
+ *
+ * The password is masked and never echoed back into any other state. It travels straight
+ * to the encrypted store (AC-XT-04).
+ */
+@Composable
+private fun XtreamCredentialFields(
+    username: String,
+    password: String,
+    onUsernameChange: (String) -> Unit,
+    onPasswordChange: (String) -> Unit,
+) {
+    OutlinedTextField(
+        value = username,
+        onValueChange = onUsernameChange,
+        label = { Text(stringResource(R.string.sources_xtream_user_label)) },
+        singleLine = true,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 12.dp),
+    )
+    OutlinedTextField(
+        value = password,
+        onValueChange = onPasswordChange,
+        label = { Text(stringResource(R.string.sources_xtream_pass_label)) },
+        singleLine = true,
+        visualTransformation = PasswordVisualTransformation(),
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 12.dp),
+    )
+    Text(
+        text = stringResource(R.string.sources_xtream_hint),
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(top = 8.dp),
     )
 }
 

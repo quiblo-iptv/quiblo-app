@@ -37,6 +37,9 @@ internal fun SourceError.messageRes(): Int = when (this) {
     SourceError.NotAPlaylist -> R.string.source_error_not_a_playlist
     SourceError.EmptyPlaylist -> R.string.source_error_empty
     SourceError.FileUnreadable -> R.string.source_error_file_unreadable
+    SourceError.Unauthorized -> R.string.source_error_unauthorized
+    SourceError.SubscriptionExpired -> R.string.source_error_expired
+    SourceError.AccountDisabled -> R.string.source_error_disabled
     is SourceError.HttpStatus -> R.string.source_error_http_status
     is SourceError.Unknown -> R.string.source_error_unknown
 }

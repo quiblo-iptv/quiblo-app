@@ -24,6 +24,7 @@ import dev.vibrato.core.data.RefreshOutcome
 import dev.vibrato.core.data.SourceRepository
 import dev.vibrato.core.model.Source
 import dev.vibrato.core.model.SourceKind
+import dev.vibrato.source.api.Credentials
 import dev.vibrato.source.api.SourceError
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -74,6 +75,35 @@ class SourcesViewModel(
                 is RefreshOutcome.Failure -> _addState.value = AddSourceState.Failed(outcome.error)
 
                 is RefreshOutcome.Success -> _addState.value = AddSourceState.Added(
+                    channelCount = outcome.report.parsedEntries,
+                    skippedEntries = outcome.report.skippedEntries,
+                )
+            }
+        }
+    }
+
+    /**
+     * Adds an Xtream account.
+     *
+     * The password is passed straight through to the encrypted store and is never held
+     * in this ViewModel's state, so it cannot survive in a saved-state bundle or reach a
+     * crash trace (AC-XT-04).
+     */
+    fun addXtreamSource(name: String, baseUrl: String, username: String, password: String) {
+        if (baseUrl.isBlank() || username.isBlank() || password.isBlank()) return
+
+        _addState.value = AddSourceState.Working
+        viewModelScope.launch {
+            val label = name.ifBlank { deriveName(baseUrl) }
+            val outcome = repository.addSource(
+                name = label,
+                url = baseUrl,
+                kind = SourceKind.XTREAM,
+                credentials = Credentials(username.trim(), password),
+            )
+            _addState.value = when (outcome) {
+                is RefreshOutcome.Failure -> AddSourceState.Failed(outcome.error)
+                is RefreshOutcome.Success -> AddSourceState.Added(
                     channelCount = outcome.report.parsedEntries,
                     skippedEntries = outcome.report.skippedEntries,
                 )

@@ -20,10 +20,10 @@ package dev.vibrato.core.data
 
 import dev.vibrato.core.database.dao.ChannelDao
 import dev.vibrato.core.database.dao.SourceDao
-import dev.vibrato.core.model.Category
-import dev.vibrato.core.model.Channel
 import dev.vibrato.core.model.Source
 import dev.vibrato.core.model.SourceKind
+import dev.vibrato.source.api.CredentialStore
+import dev.vibrato.source.api.Credentials
 import dev.vibrato.source.api.MediaSource
 import dev.vibrato.source.api.SourceError
 import dev.vibrato.source.api.SourceReport
@@ -51,20 +51,12 @@ class SourceRepository(
     private val sourceDao: SourceDao,
     private val channelDao: ChannelDao,
     private val mediaSources: Map<SourceKind, MediaSource>,
+    private val credentialStore: CredentialStore,
     private val now: () -> Long = System::currentTimeMillis,
 ) {
 
     fun observeSources(): Flow<List<Source>> =
         sourceDao.observeAll().map { entities -> entities.map { it.toDomain() } }
-
-    fun observeChannels(sourceId: Long): Flow<List<Channel>> =
-        channelDao.observeBySource(sourceId).map { entities -> entities.map { it.toDomain() } }
-
-    fun observeChannelsInGroup(sourceId: Long, groupTitle: String): Flow<List<Channel>> =
-        channelDao.observeByGroup(sourceId, groupTitle).map { entities -> entities.map { it.toDomain() } }
-
-    fun observeCategories(sourceId: Long): Flow<List<Category>> =
-        channelDao.observeCategories(sourceId).map { counts -> counts.map { it.toDomain(sourceId) } }
 
     /**
      * Adds a source and immediately loads it.
@@ -73,7 +65,12 @@ class SourceRepository(
      * can retry, rather than silently discarding what they typed. A source that has never
      * loaded is distinguishable by its null `lastRefreshedEpochMillis`.
      */
-    suspend fun addSource(name: String, url: String, kind: SourceKind): RefreshOutcome {
+    suspend fun addSource(
+        name: String,
+        url: String,
+        kind: SourceKind,
+        credentials: Credentials? = null,
+    ): RefreshOutcome {
         val entity = Source(
             id = Source.UNSAVED_ID,
             name = name.trim(),
@@ -83,6 +80,13 @@ class SourceRepository(
         ).toEntity().copy(id = 0L)
 
         val sourceId = sourceDao.insert(entity)
+
+        // Stored before the first load, because the load needs them, and stored encrypted
+        // rather than on the source row so a database dump cannot leak them (AC-XT-04).
+        if (credentials != null) {
+            credentialStore.put(sourceId, credentials)
+        }
+
         return refresh(sourceId)
     }
 
@@ -121,9 +125,10 @@ class SourceRepository(
     }
 
     suspend fun deleteSource(sourceId: Long) {
+        // Credentials are not in the database, so the cascade cannot reach them. Clearing
+        // them explicitly is what stops a removed account leaving material behind.
+        credentialStore.clear(sourceId)
         // Channels and favourites cascade via the foreign key.
         sourceDao.deleteById(sourceId)
     }
-
-    suspend fun channelCount(sourceId: Long): Int = channelDao.countForSource(sourceId)
 }

@@ -9,7 +9,13 @@
     <string name="feature_sources_empty">Add an M3U playlist to get started.</string>
 
     <string name="sources_add">Add playlist</string>
-    <string name="sources_add_title">Add M3U playlist</string>
+    <string name="sources_add_title">Add source</string>
+    <string name="sources_tab_m3u">M3U playlist</string>
+    <string name="sources_tab_xtream">Xtream</string>
+    <string name="sources_xtream_url_label">Server address</string>
+    <string name="sources_xtream_user_label">Username</string>
+    <string name="sources_xtream_pass_label">Password</string>
+    <string name="sources_xtream_hint">Your credentials are encrypted on this device and never leave it.</string>
     <string name="sources_name_label">Name (optional)</string>
     <string name="sources_url_label">Playlist URL</string>
     <string name="sources_pick_file">Choose a file instead</string>
@@ -41,4 +47,7 @@
     <string name="source_error_file_unreadable">That file could not be read. Try choosing it again.</string>
     <string name="source_error_http_status">The server responded with an error (%1$d).</string>
     <string name="source_error_unknown">Something went wrong loading that playlist. Please try again.</string>
+    <string name="source_error_unauthorized">Those credentials were rejected. Check the username and password.</string>
+    <string name="source_error_expired">That subscription has expired. Contact whoever provides it.</string>
+    <string name="source_error_disabled">That account is disabled or banned on the server.</string>
 </resources>

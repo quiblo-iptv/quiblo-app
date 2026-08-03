@@ -19,13 +19,17 @@
 package dev.vibrato.core.data.di
 
 import android.content.Context
+import dev.vibrato.core.data.ChannelRepository
 import dev.vibrato.core.data.LocalFileContentFetcher
 import dev.vibrato.core.data.SourceRepository
 import dev.vibrato.core.model.SourceKind
 import dev.vibrato.core.network.HttpContentFetcher
 import dev.vibrato.source.api.ContentFetcher
+import dev.vibrato.source.api.CredentialStore
 import dev.vibrato.source.api.MediaSource
 import dev.vibrato.source.m3u.M3uSource
+import dev.vibrato.source.xtream.createXtreamSource
+import io.ktor.client.HttpClient
 import org.koin.core.module.Module
 import org.koin.dsl.module
 
@@ -45,8 +49,13 @@ val dataModule: Module = module {
     }
 
     single<Map<SourceKind, MediaSource>> {
-        mapOf(SourceKind.M3U to M3uSource(get()))
+        mapOf(
+            SourceKind.M3U to M3uSource(get()),
+            // Adding a protocol is one entry here plus one module (docs/FREEZE.md §4.2).
+            SourceKind.XTREAM to createXtreamSource(get<HttpClient>(), get<CredentialStore>()),
+        )
     }
 
-    single { SourceRepository(get(), get(), get()) }
+    single { SourceRepository(get(), get(), get(), get()) }
+    single { ChannelRepository(get()) }
 }

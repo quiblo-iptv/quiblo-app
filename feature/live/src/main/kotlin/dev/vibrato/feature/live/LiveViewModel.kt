@@ -20,9 +20,11 @@ package dev.vibrato.feature.live
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import dev.vibrato.core.data.ChannelRepository
 import dev.vibrato.core.data.SourceRepository
 import dev.vibrato.core.model.Category
 import dev.vibrato.core.model.Channel
+import dev.vibrato.core.model.MediaKind
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -51,13 +53,14 @@ data class LiveUiState(
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class LiveViewModel(
-    private val repository: SourceRepository,
+    private val sourceRepository: SourceRepository,
+    private val channelRepository: ChannelRepository,
 ) : ViewModel() {
 
     private val selectedCategory = MutableStateFlow<String?>(null)
 
     /** M1 renders the first configured source. Multi-source selection arrives in M3. */
-    private val activeSourceId: StateFlow<Long?> = repository.observeSources()
+    private val activeSourceId: StateFlow<Long?> = sourceRepository.observeSources()
         .map { sources -> sources.firstOrNull()?.id }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS), null)
 
@@ -67,14 +70,14 @@ class LiveViewModel(
                 flowOf(LiveUiState(hasSource = false))
             } else {
                 combine(
-                    repository.observeCategories(sourceId),
+                    channelRepository.observeCategories(sourceId, MediaKind.LIVE),
                     selectedCategory,
                 ) { categories, selected -> categories to selected }
                     .flatMapLatest { (categories, selected) ->
                         val channelFlow = if (selected == null) {
-                            repository.observeChannels(sourceId)
+                            channelRepository.observeChannels(sourceId, MediaKind.LIVE)
                         } else {
-                            repository.observeChannelsInGroup(sourceId, selected)
+                            channelRepository.observeChannelsInGroup(sourceId, MediaKind.LIVE, selected)
                         }
                         channelFlow.map { channels ->
                             LiveUiState(

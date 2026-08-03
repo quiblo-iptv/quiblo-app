@@ -35,4 +35,13 @@
     <string name="player_unlock">Unlock screen</string>
     <string name="player_skip_back">Skip back %1$d seconds</string>
     <string name="player_skip_forward">Skip forward %1$d seconds</string>
+
+    <string name="player_aspect_ratio">Aspect ratio: %1$s</string>
+    <string name="player_aspect_fit">Fit</string>
+    <string name="player_aspect_fill">Fill</string>
+    <string name="player_aspect_zoom">Zoom</string>
+    <string name="player_aspect_stretch">Stretch</string>
+
+    <string name="player_brightness">Brightness</string>
+    <string name="player_volume">Volume</string>
 </resources>

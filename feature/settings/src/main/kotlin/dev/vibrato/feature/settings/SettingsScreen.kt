@@ -67,6 +67,7 @@ fun SettingsScreen(
     viewModel: SettingsViewModel = koinViewModel(),
 ) {
     val backupState by viewModel.backupState.collectAsStateWithLifecycle()
+    val playerSettings by viewModel.playerSettings.collectAsStateWithLifecycle()
     val context = LocalContext.current
 
     // SAF, so the file lands wherever the user chooses and the app needs no storage
@@ -112,6 +113,15 @@ fun SettingsScreen(
             isWorking = backupState is BackupUiState.Working,
             onExport = { exportLauncher.launch(defaultFilename) },
             onImport = { importLauncher.launch(arrayOf(BACKUP_MIME_TYPE, ANY_MIME_TYPE)) },
+        )
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        PlaybackSettingsCard(
+            settings = playerSettings,
+            onSeekInterval = viewModel::setSeekInterval,
+            onBufferMode = viewModel::setBufferMode,
+            onMaxBitrate = viewModel::setMaxBitrate,
         )
 
         Spacer(modifier = Modifier.height(16.dp))

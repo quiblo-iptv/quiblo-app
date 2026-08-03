@@ -35,6 +35,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.navigation.NavDestination
+import androidx.navigation.NavDestination.Companion.hasRoute
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.currentBackStackEntryAsState
@@ -44,6 +45,7 @@ import dev.vibrato.player.navigation.PlayerRoute
 import dev.vibrato.player.navigation.SettingsRoute
 import dev.vibrato.player.navigation.TopLevelDestination
 import dev.vibrato.player.navigation.VibratoNavHost
+import kotlin.reflect.KClass
 
 /**
  * The app shell: top bar, bottom navigation and the navigation host.
@@ -57,7 +59,7 @@ fun VibratoApp() {
     val navController = rememberNavController()
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = backStackEntry?.destination
-    val isPlayer = currentDestination.matches(PlayerRoute::class.qualifiedName)
+    val isPlayer = currentDestination.matches(PlayerRoute::class)
 
     Scaffold(
         modifier = Modifier.fillMaxSize(),
@@ -80,7 +82,7 @@ fun VibratoApp() {
             if (!isPlayer) {
                 NavigationBar {
                     TopLevelDestination.entries.forEach { destination ->
-                        val selected = currentDestination.matches(destination.route::class.qualifiedName)
+                        val selected = currentDestination.matches(destination.route::class)
                         NavigationBarItem(
                             selected = selected,
                             onClick = { navController.navigateSingleTop(destination.route) },
@@ -104,18 +106,26 @@ fun VibratoApp() {
     }
 }
 
-/** True when [this] destination, or any parent of it, is the route named [qualifiedName]. */
-private fun NavDestination?.matches(qualifiedName: String?): Boolean {
-    if (this == null || qualifiedName == null) return false
-    return hierarchy.any { it.route?.substringBefore('/') == qualifiedName }
+/**
+ * True when [this] destination, or any parent of it, is [route].
+ *
+ * Uses `hasRoute` rather than comparing `destination.route` to a qualified name by hand.
+ * The generated route string carries its arguments — `…/PlayerRoute/{channelId}?title=…` —
+ * so string surgery has to guess where the name ends, and it guessed wrong for the one
+ * route that takes arguments. That left the player unable to recognise itself and the app
+ * chrome drawn over full-screen playback.
+ */
+private fun NavDestination?.matches(route: KClass<*>): Boolean {
+    if (this == null) return false
+    return hierarchy.any { it.hasRoute(route) }
 }
 
 /** The top-app-bar title for the destination currently on screen. */
 private fun NavDestination?.titleRes(): Int {
     TopLevelDestination.entries.forEach { destination ->
-        if (matches(destination.route::class.qualifiedName)) return destination.labelRes
+        if (matches(destination.route::class)) return destination.labelRes
     }
-    return if (matches(SettingsRoute::class.qualifiedName)) {
+    return if (matches(SettingsRoute::class)) {
         R.string.destination_settings
     } else {
         R.string.app_name

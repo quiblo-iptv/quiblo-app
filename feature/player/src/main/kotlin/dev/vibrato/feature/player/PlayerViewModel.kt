@@ -21,11 +21,19 @@ package dev.vibrato.feature.player
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dev.vibrato.core.data.ChannelRepository
+import dev.vibrato.core.data.PlayerSettingsRepository
 import dev.vibrato.core.media.PlayableItem
 import dev.vibrato.core.media.PlaybackState
 import dev.vibrato.core.media.PlayerController
+import dev.vibrato.core.model.AspectRatioMode
 import dev.vibrato.core.model.MediaKind
+import dev.vibrato.core.model.PlayerSettings
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
 /**
@@ -40,11 +48,44 @@ import kotlinx.coroutines.launch
 class PlayerViewModel(
     private val controller: PlayerController,
     private val channelRepository: ChannelRepository,
+    settingsRepository: PlayerSettingsRepository,
 ) : ViewModel() {
 
     val state: StateFlow<PlaybackState> = controller.state
 
+    /**
+     * The persisted tuning, pushed into the engine as it changes.
+     *
+     * The UI needs it too — the skip buttons are labelled with the interval — so this is
+     * one flow feeding both rather than the screen reading the store separately and the
+     * two drifting apart.
+     */
+    val settings: StateFlow<PlayerSettings> = settingsRepository.settings
+        .onEach(controller::applySettings)
+        .stateIn(viewModelScope, SharingStarted.Eagerly, PlayerSettings())
+
+    /**
+     * How the video is fitted to the screen.
+     *
+     * Deliberately not persisted. It is a response to how one particular stream is framed —
+     * a 4:3 channel pillarboxed inside a 16:9 transport, say — so carrying the choice over
+     * to the next channel would be wrong more often than right.
+     */
+    private val _aspectRatioMode = MutableStateFlow(AspectRatioMode.FIT)
+    val aspectRatioMode: StateFlow<AspectRatioMode> = _aspectRatioMode.asStateFlow()
+
     private var loadedChannelId: Long? = null
+
+    fun cycleAspectRatio() {
+        val modes = AspectRatioMode.entries
+        _aspectRatioMode.value = modes[(_aspectRatioMode.value.ordinal + 1) % modes.size]
+    }
+
+    /** Skips by the configured interval, clamped so a rewind cannot run past the start. */
+    fun skipBy(direction: Int) {
+        val delta = settings.value.seekInterval.millis * direction
+        controller.seekTo((state.value.positionMillis + delta).coerceAtLeast(0L))
+    }
 
     /**
      * Loads the channel with [channelId] if it is not already loaded, or prepares custom stream details.

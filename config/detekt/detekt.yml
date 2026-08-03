@@ -11,6 +11,10 @@ style:
     ignorePropertyDeclaration: true
     ignoreCompanionObjectPropertyDeclaration: true
     ignoreAnnotated: [ 'Composable' ]
+    # An enum entry carrying its own value already *is* the named constant this rule asks
+    # for: `THIRTY(30)` is not a magic number, and hoisting it to a companion object above
+    # the entry that uses it would only put the name further from the value.
+    ignoreEnums: true
   # Compose screen composables legitimately take many parameters via hoisting.
   UnusedPrivateMember:
     active: true
@@ -33,6 +37,12 @@ complexity:
     # is meant to catch.
     ignorePrivate: true
     thresholdInClasses: 14
+    # PlayerController is deliberately a wide seam. Concentrating every engine operation
+    # behind one interface is what keeps Media3 out of the feature modules
+    # (docs/FREEZE.md §4.4), so counting its methods measures the design working rather
+    # than a class doing too much. Splitting it to satisfy the default would scatter the
+    # boundary this rule would then not be watching at all.
+    thresholdInInterfaces: 14
   # A @Composable is a declarative tree, not imperative logic: its length tracks how much
   # UI it describes, which is not the complexity this rule exists to catch. Extracting
   # sub-composables purely to satisfy a line count produces worse code, not better.

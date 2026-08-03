@@ -26,12 +26,17 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.TrackSelectionOverride
+import androidx.media3.common.TrackSelectionParameters
 import androidx.media3.common.Tracks
+import androidx.media3.common.VideoSize
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.exoplayer.upstream.DefaultLoadErrorHandlingPolicy
+import dev.vibrato.core.model.BufferMode
+import dev.vibrato.core.model.MaxBitrateCap
+import dev.vibrato.core.model.PlayerSettings
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -77,7 +82,22 @@ class Media3PlayerController(
      */
     private var hasEverBeenReady = false
 
-    private val player: ExoPlayer = ExoPlayer.Builder(appContext)
+    private var settings = PlayerSettings()
+
+    /**
+     * The buffer mode the live engine was built with.
+     *
+     * Tracked separately from [settings] because `LoadControl` is fixed at build time, so
+     * the two legitimately disagree between a settings change and the next [prepare].
+     */
+    private var builtWithBufferMode = settings.bufferMode
+
+    /** Kept so the surface can be rebound after the engine is rebuilt. */
+    private var attachedSurface: SurfaceView? = null
+
+    private var player: ExoPlayer = buildPlayer(builtWithBufferMode)
+
+    private fun buildPlayer(bufferMode: BufferMode): ExoPlayer = ExoPlayer.Builder(appContext)
         .setMediaSourceFactory(
             DefaultMediaSourceFactory(appContext).setLoadErrorHandlingPolicy(
                 // ExoPlayer's default policy retries a failed load several times, with its
@@ -91,10 +111,10 @@ class Media3PlayerController(
         .setLoadControl(
             DefaultLoadControl.Builder()
                 .setBufferDurationsMs(
-                    MIN_BUFFER_MILLIS,
-                    MAX_BUFFER_MILLIS,
-                    BUFFER_FOR_PLAYBACK_MILLIS,
-                    BUFFER_FOR_REPLAY_MILLIS,
+                    bufferMode.minBufferMillis,
+                    bufferMode.maxBufferMillis,
+                    bufferMode.bufferForPlaybackMillis,
+                    bufferMode.bufferForReplayMillis,
                 )
                 .build(),
         )
@@ -110,11 +130,40 @@ class Media3PlayerController(
                 HANDLE_AUDIO_FOCUS,
             )
             addListener(PlayerListener())
+            trackSelectionParameters = trackSelectionParameters.buildUpon()
+                .applyBitrateCap(settings.maxBitrate)
+                .build()
         }
+
+    override fun applySettings(settings: PlayerSettings) {
+        this.settings = settings
+
+        // Takes effect on the next adaptive selection, so mid-stream and without a rebuild.
+        player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
+            .applyBitrateCap(settings.maxBitrate)
+            .build()
+    }
+
+    /**
+     * Swaps in an engine built with the current buffer mode.
+     *
+     * Only called from [prepare], where a rebuild is invisible: playback is about to
+     * restart anyway. Doing it while something is playing would black the screen out.
+     */
+    private fun rebuildForBufferModeIfNeeded() {
+        if (settings.bufferMode == builtWithBufferMode) return
+
+        progressJob?.cancel()
+        player.release()
+        player = buildPlayer(settings.bufferMode)
+        builtWithBufferMode = settings.bufferMode
+        attachedSurface?.let(player::setVideoSurfaceView)
+    }
 
     override fun prepare(item: PlayableItem) {
         retryJob?.cancel()
         hasEverBeenReady = false
+        rebuildForBufferModeIfNeeded()
         _state.value = PlaybackState(status = PlaybackStatus.BUFFERING, item = item)
         startWatchdog()
 
@@ -159,10 +208,12 @@ class Media3PlayerController(
     override fun selectTextTrack(trackId: String?) = selectTrack(C.TRACK_TYPE_TEXT, trackId)
 
     override fun attachSurface(surfaceView: SurfaceView) {
+        attachedSurface = surfaceView
         player.setVideoSurfaceView(surfaceView)
     }
 
     override fun detachSurface() {
+        attachedSurface = null
         player.clearVideoSurface()
     }
 
@@ -325,10 +376,30 @@ class Media3PlayerController(
             )
         }
 
+        override fun onVideoSizeChanged(videoSize: VideoSize) {
+            // The bare SurfaceView the UI hands us has no aspect handling of its own, so
+            // the frame size has to reach the UI for it to fit the video to the screen.
+            _state.value = _state.value.copy(
+                videoWidth = videoSize.width,
+                videoHeight = videoSize.height,
+            )
+        }
+
         override fun onPlayerError(error: PlaybackException) {
             scheduleRetry(error.toPlaybackError())
         }
     }
+
+    /**
+     * Constrains adaptive selection to renditions at or below the cap.
+     *
+     * [MaxBitrateCap.UNLIMITED] clears the constraint rather than setting a huge number, so
+     * the engine's own logic is left alone rather than merely bounded very high.
+     */
+    private fun TrackSelectionParameters.Builder.applyBitrateCap(
+        cap: MaxBitrateCap,
+    ): TrackSelectionParameters.Builder =
+        setMaxVideoBitrate(cap.bitsPerSecond ?: Int.MAX_VALUE)
 
     private fun Tracks.toOptions(trackType: @C.TrackType Int): List<TrackOption> =
         groups.filter { it.type == trackType && it.length > 0 }
@@ -358,13 +429,6 @@ class Media3PlayerController(
 
         /** AC-PLAY-05: a dead stream must surface an error inside this budget. */
         const val INITIAL_LOAD_TIMEOUT_MILLIS = 12_000L
-
-        // Kept modest so a dead stream surfaces an error well inside the 15 second
-        // budget in AC-PLAY-05 rather than buffering indefinitely.
-        const val MIN_BUFFER_MILLIS = 15_000
-        const val MAX_BUFFER_MILLIS = 30_000
-        const val BUFFER_FOR_PLAYBACK_MILLIS = 1_500
-        const val BUFFER_FOR_REPLAY_MILLIS = 3_000
     }
 }
 

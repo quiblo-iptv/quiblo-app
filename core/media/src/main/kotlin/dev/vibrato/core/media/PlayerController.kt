@@ -19,6 +19,7 @@
 package dev.vibrato.core.media
 
 import android.view.SurfaceView
+import dev.vibrato.core.model.PlayerSettings
 import kotlinx.coroutines.flow.StateFlow
 
 /**
@@ -53,6 +54,15 @@ interface PlayerController {
     fun selectAudioTrack(trackId: String?)
 
     fun selectTextTrack(trackId: String?)
+
+    /**
+     * Applies user tuning.
+     *
+     * The bitrate cap takes effect immediately. The buffer mode cannot: the engine fixes
+     * its buffering policy when it is built, so a change there applies from the next
+     * [prepare] onward. Callers should not pretend otherwise in the UI.
+     */
+    fun applySettings(settings: PlayerSettings)
 
     /** Binds the video output. Call again after a surface is recreated. */
     fun attachSurface(surfaceView: SurfaceView)
@@ -128,7 +138,24 @@ data class PlaybackState(
     val retryAttempt: Int = 0,
     val audioTracks: List<TrackOption> = emptyList(),
     val textTracks: List<TrackOption> = emptyList(),
+    /**
+     * The decoded frame size, or zero before the first frame is decoded.
+     *
+     * Reported so the UI can fit the video to the screen itself. The surface handed to the
+     * engine is a bare [SurfaceView] with no aspect handling of its own, which is the price
+     * of keeping Media3's view classes out of the feature modules.
+     */
+    val videoWidth: Int = 0,
+    val videoHeight: Int = 0,
 ) {
     val isPlaying: Boolean get() = status == PlaybackStatus.PLAYING
     val hasTrackChoice: Boolean get() = audioTracks.size > 1 || textTracks.isNotEmpty()
+
+    /** Width over height, or null until the first frame has been decoded. */
+    val videoAspectRatio: Float?
+        get() = if (videoWidth > 0 && videoHeight > 0) {
+            videoWidth.toFloat() / videoHeight.toFloat()
+        } else {
+            null
+        }
 }

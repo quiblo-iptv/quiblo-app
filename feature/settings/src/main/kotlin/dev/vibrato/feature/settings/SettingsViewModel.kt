@@ -20,11 +20,18 @@ package dev.vibrato.feature.settings
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import dev.vibrato.core.data.PlayerSettingsRepository
 import dev.vibrato.core.data.backup.BackupRepository
 import dev.vibrato.core.data.backup.ImportResult
+import dev.vibrato.core.model.BufferMode
+import dev.vibrato.core.model.MaxBitrateCap
+import dev.vibrato.core.model.PlayerSettings
+import dev.vibrato.core.model.SeekInterval
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
 /** What the export/import controls are currently reporting. */
@@ -49,10 +56,26 @@ sealed interface BackupUiState {
 
 class SettingsViewModel(
     private val backupRepository: BackupRepository,
+    private val playerSettingsRepository: PlayerSettingsRepository,
 ) : ViewModel() {
 
     private val _backupState = MutableStateFlow<BackupUiState>(BackupUiState.Idle)
     val backupState: StateFlow<BackupUiState> = _backupState.asStateFlow()
+
+    val playerSettings: StateFlow<PlayerSettings> = playerSettingsRepository.settings
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(SUBSCRIPTION_TIMEOUT_MILLIS), PlayerSettings())
+
+    fun setSeekInterval(value: SeekInterval) = viewModelScope.launch {
+        playerSettingsRepository.setSeekInterval(value)
+    }
+
+    fun setBufferMode(value: BufferMode) = viewModelScope.launch {
+        playerSettingsRepository.setBufferMode(value)
+    }
+
+    fun setMaxBitrate(value: MaxBitrateCap) = viewModelScope.launch {
+        playerSettingsRepository.setMaxBitrate(value)
+    }
 
     /**
      * Produces the export payload and hands it to [write].
@@ -99,5 +122,10 @@ class SettingsViewModel(
 
     fun dismiss() {
         _backupState.value = BackupUiState.Idle
+    }
+
+    private companion object {
+        /** Outlives a rotation, so the chips do not flicker back to defaults and settle. */
+        const val SUBSCRIPTION_TIMEOUT_MILLIS = 5_000L
     }
 }

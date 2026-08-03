@@ -19,27 +19,40 @@
 package dev.vibrato.feature.player
 
 import android.view.SurfaceView
+import androidx.annotation.StringRes
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.VolumeUp
+import androidx.compose.material.icons.filled.AspectRatio
+import androidx.compose.material.icons.filled.BrightnessMedium
 import androidx.compose.material.icons.filled.ClosedCaption
+import androidx.compose.material.icons.filled.FastForward
+import androidx.compose.material.icons.filled.FastRewind
 import androidx.compose.material.icons.filled.Forward10
+import androidx.compose.material.icons.filled.Forward30
+import androidx.compose.material.icons.filled.Forward5
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.LockOpen
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Replay
 import androidx.compose.material.icons.filled.Replay10
+import androidx.compose.material.icons.filled.Replay30
+import androidx.compose.material.icons.filled.Replay5
 import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
@@ -57,25 +70,31 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.vibrato.core.media.PlaybackState
 import dev.vibrato.core.media.PlaybackStatus
+import dev.vibrato.core.model.AspectRatioMode
+import dev.vibrato.core.model.SeekInterval
 import kotlinx.coroutines.delay
 import org.koin.androidx.compose.koinViewModel
 
 private const val CONTROLS_TIMEOUT_MILLIS = 3_000L
-
-/** How far the skip buttons jump. One constant so the label and the seek cannot disagree. */
-private const val SKIP_SECONDS = 10
-private const val SKIP_MILLIS = SKIP_SECONDS * 1_000L
 
 /**
  * Full-screen playback.
@@ -94,7 +113,34 @@ fun PlayerScreen(
     viewModel: PlayerViewModel = koinViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val settings by viewModel.settings.collectAsStateWithLifecycle()
+    val aspectRatioMode by viewModel.aspectRatioMode.collectAsStateWithLifecycle()
     var controlsVisible by remember { mutableStateOf(true) }
+
+    val context = LocalContext.current
+    val brightness = remember(context) { ScreenBrightness(context.findActivity()) }
+    val volume = remember(context) { MediaVolume(context) }
+    var gestureFeedback by remember { mutableStateOf<GestureFeedback?>(null) }
+
+    // Brightness is a window override, so it must be handed back when this screen goes
+    // away or the whole app inherits whatever the last drag left behind.
+    DisposableEffect(brightness) {
+        onDispose { brightness.reset() }
+    }
+
+    // Immersive playback: the status and navigation bars go away for the duration and come
+    // back on the way out. Restoring them in onDispose rather than on back specifically is
+    // what keeps the rest of the app usable if playback ends any other way.
+    val view = LocalView.current
+    DisposableEffect(view) {
+        val window = (view.context.findActivity())?.window
+        val insets = window?.let { WindowCompat.getInsetsController(it, view) }
+        insets?.apply {
+            hide(WindowInsetsCompat.Type.systemBars())
+            systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+        }
+        onDispose { insets?.show(WindowInsetsCompat.Type.systemBars()) }
+    }
 
     LaunchedEffect(channelId, streamUrl, title) {
         viewModel.load(channelId, customUrl = streamUrl, customTitle = title)
@@ -128,9 +174,21 @@ fun PlayerScreen(
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
-            ) { controlsVisible = !controlsVisible },
+            ) { controlsVisible = !controlsVisible }
+            .playerVolumeBrightnessGestures(
+                onFeedback = { gestureFeedback = it },
+                onBrightnessDelta = brightness::adjustBy,
+                onVolumeDelta = volume::adjustBy,
+                currentBrightness = brightness::current,
+                currentVolume = volume::current,
+            ),
     ) {
-        VideoSurface(viewModel = viewModel, modifier = Modifier.fillMaxSize())
+        VideoSurface(
+            viewModel = viewModel,
+            videoAspectRatio = state.videoAspectRatio,
+            mode = aspectRatioMode,
+            modifier = Modifier.fillMaxSize(),
+        )
 
         when {
             state.status == PlaybackStatus.ERROR -> PlaybackErrorMessage(
@@ -142,15 +200,35 @@ fun PlayerScreen(
             state.status == PlaybackStatus.BUFFERING -> BufferingIndicator(state)
         }
 
+        // Shown whenever playback is paused, independently of the control bars, so a
+        // paused stream always offers an obvious way to resume even after the controls
+        // have auto-hidden.
+        if (state.status == PlaybackStatus.PAUSED) {
+            TapToPlay(onPlay = {
+                viewModel.togglePlayPause()
+                controlsVisible = true
+            })
+        }
+
         if (controlsVisible && state.status != PlaybackStatus.ERROR) {
             PlayerControls(
                 state = state,
+                seekInterval = settings.seekInterval,
+                aspectRatioMode = aspectRatioMode,
                 onBack = onBack,
                 onPlayPause = {
                     viewModel.togglePlayPause()
                     controlsVisible = true
                 },
                 onSeek = viewModel::seekTo,
+                onSkip = {
+                    viewModel.skipBy(it)
+                    controlsVisible = true
+                },
+                onCycleAspectRatio = {
+                    viewModel.cycleAspectRatio()
+                    controlsVisible = true
+                },
                 onCycleSubtitles = {
                     val next = state.textTracks.firstOrNull { !it.isSelected }
                     viewModel.selectTextTrack(next?.id)
@@ -158,8 +236,71 @@ fun PlayerScreen(
                 },
             )
         }
+
+        gestureFeedback?.let { GestureIndicator(it) }
     }
 }
+
+/**
+ * The large centred play button shown while paused.
+ *
+ * Deliberately outside [PlayerControls]: the control bars auto-hide after three seconds
+ * (AC-PLAY-10), and a paused video with no visible way to resume reads as a frozen app.
+ */
+@Composable
+private fun TapToPlay(onPlay: () -> Unit) {
+    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        IconButton(
+            onClick = onPlay,
+            modifier = Modifier
+                .size(88.dp)
+                .background(Color.Black.copy(alpha = 0.55f), CircleShape),
+        ) {
+            Icon(
+                imageVector = Icons.Filled.PlayArrow,
+                contentDescription = stringResource(R.string.player_play),
+                tint = Color.White,
+                modifier = Modifier.size(56.dp),
+            )
+        }
+    }
+}
+
+/** Transient readout while a volume or brightness drag is in progress. */
+@Composable
+private fun GestureIndicator(feedback: GestureFeedback) {
+    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier
+                .background(Color.Black.copy(alpha = 0.6f), RoundedCornerShape(12.dp))
+                .padding(horizontal = 24.dp, vertical = 16.dp),
+        ) {
+            Icon(
+                imageVector = when (feedback.target) {
+                    DragTarget.BRIGHTNESS -> Icons.Filled.BrightnessMedium
+                    DragTarget.VOLUME -> Icons.AutoMirrored.Filled.VolumeUp
+                },
+                contentDescription = stringResource(
+                    when (feedback.target) {
+                        DragTarget.BRIGHTNESS -> R.string.player_brightness
+                        DragTarget.VOLUME -> R.string.player_volume
+                    },
+                ),
+                tint = Color.White,
+                modifier = Modifier.size(32.dp),
+            )
+            Text(
+                text = "${(feedback.fraction * PERCENT).toInt()}%",
+                color = Color.White,
+                style = MaterialTheme.typography.labelLarge,
+                modifier = Modifier.padding(top = 8.dp),
+            )
+        }
+    }
+}
+
+private const val PERCENT = 100
 
 /**
  * The video output.
@@ -168,17 +309,76 @@ fun PlayerScreen(
  * rather than through the GPU, which matters for battery on long viewing sessions.
  */
 @Composable
-private fun VideoSurface(viewModel: PlayerViewModel, modifier: Modifier = Modifier) {
+private fun VideoSurface(
+    viewModel: PlayerViewModel,
+    videoAspectRatio: Float?,
+    mode: AspectRatioMode,
+    modifier: Modifier = Modifier,
+) {
     val controller = remember { viewModel.controllerHandle() }
-    AndroidView(
-        modifier = modifier,
-        factory = { context ->
-            SurfaceView(context).also(controller::attachSurface)
-        },
-    )
+
+    BoxWithConstraints(modifier = modifier.clipToBounds()) {
+        // A bare SurfaceView stretches the frame to its bounds, so "fill the container"
+        // is the starting point and every mode is expressed as a correction to it.
+        val scale = remember(videoAspectRatio, mode, maxWidth, maxHeight) {
+            videoScale(
+                videoAspectRatio = videoAspectRatio,
+                containerAspectRatio = if (maxHeight > 0.dp) maxWidth / maxHeight else 1f,
+                mode = mode,
+            )
+        }
+
+        AndroidView(
+            modifier = Modifier
+                .fillMaxSize()
+                .graphicsLayer {
+                    scaleX = scale.first
+                    scaleY = scale.second
+                },
+            factory = { context ->
+                SurfaceView(context).also(controller::attachSurface)
+            },
+        )
+    }
+
     DisposableEffect(Unit) {
         onDispose { controller.detachSurface() }
     }
+}
+
+/**
+ * Scale factors that turn the stretched-to-fill surface into the requested framing.
+ *
+ * Returns 1:1 until the first frame has been decoded, because the correct correction is
+ * unknowable without the frame size — and guessing produces a visible jump when the real
+ * size arrives.
+ */
+internal fun videoScale(
+    videoAspectRatio: Float?,
+    containerAspectRatio: Float,
+    mode: AspectRatioMode,
+): Pair<Float, Float> {
+    if (mode == AspectRatioMode.STRETCH) return 1f to 1f
+    val video = videoAspectRatio ?: return 1f to 1f
+    if (video <= 0f || containerAspectRatio <= 0f) return 1f to 1f
+
+    val ratio = video / containerAspectRatio
+    val isWiderThanContainer = ratio > 1f
+
+    val base = when (mode) {
+        // Contain: shrink whichever axis is overfilled, leaving bars on the other.
+        AspectRatioMode.FIT ->
+            if (isWiderThanContainer) 1f to (1f / ratio) else ratio to 1f
+
+        // Cover: grow whichever axis is underfilled, cropping the overflow.
+        AspectRatioMode.FILL, AspectRatioMode.ZOOM ->
+            if (isWiderThanContainer) ratio to 1f else 1f to (1f / ratio)
+
+        AspectRatioMode.STRETCH -> 1f to 1f
+    }
+
+    val extra = mode.extraScale
+    return (base.first * extra) to (base.second * extra)
 }
 
 @Composable
@@ -229,9 +429,13 @@ private fun PlaybackErrorMessage(
 @Composable
 private fun PlayerControls(
     state: PlaybackState,
+    seekInterval: SeekInterval,
+    aspectRatioMode: AspectRatioMode,
     onBack: () -> Unit,
     onPlayPause: () -> Unit,
     onSeek: (Long) -> Unit,
+    onSkip: (Int) -> Unit,
+    onCycleAspectRatio: () -> Unit,
     onCycleSubtitles: () -> Unit,
 ) {
     var isLocked by remember { mutableStateOf(false) }
@@ -298,6 +502,19 @@ private fun PlayerControls(
                         )
                     }
 
+                    // Cycles Fit → Fill → Zoom → Stretch. The label names the mode being
+                    // applied now, not the one a tap would move to.
+                    IconButton(onClick = onCycleAspectRatio) {
+                        Icon(
+                            imageVector = Icons.Filled.AspectRatio,
+                            contentDescription = stringResource(
+                                R.string.player_aspect_ratio,
+                                stringResource(aspectRatioMode.labelRes()),
+                            ),
+                            tint = Color.White,
+                        )
+                    }
+
                     if (state.textTracks.isNotEmpty()) {
                         IconButton(onClick = onCycleSubtitles) {
                             Icon(
@@ -309,15 +526,27 @@ private fun PlayerControls(
                     }
                 }
 
-                Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
+                // fillMaxWidth is load-bearing. `weight` in a Column only claims height, so
+                // without it this Box wrapped its content and `Alignment.Center` centred the
+                // transport controls inside a box the width of the controls — leaving them
+                // pinned to the left edge of the screen.
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth(),
+                    contentAlignment = Alignment.Center,
+                ) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(24.dp),
                     ) {
-                        IconButton(onClick = { onSeek((state.positionMillis - SKIP_MILLIS).coerceAtLeast(0L)) }) {
+                        IconButton(onClick = { onSkip(-1) }) {
                             Icon(
-                                imageVector = Icons.Filled.Replay10,
-                                contentDescription = stringResource(R.string.player_skip_back, SKIP_SECONDS),
+                                imageVector = seekInterval.replayIcon(),
+                                contentDescription = stringResource(
+                                    R.string.player_skip_back,
+                                    seekInterval.seconds,
+                                ),
                                 tint = Color.White,
                                 modifier = Modifier.size(40.dp),
                             )
@@ -334,10 +563,13 @@ private fun PlayerControls(
                             )
                         }
 
-                        IconButton(onClick = { onSeek(state.positionMillis + SKIP_MILLIS) }) {
+                        IconButton(onClick = { onSkip(1) }) {
                             Icon(
-                                imageVector = Icons.Filled.Forward10,
-                                contentDescription = stringResource(R.string.player_skip_forward, SKIP_SECONDS),
+                                imageVector = seekInterval.forwardIcon(),
+                                contentDescription = stringResource(
+                                    R.string.player_skip_forward,
+                                    seekInterval.seconds,
+                                ),
                                 tint = Color.White,
                                 modifier = Modifier.size(40.dp),
                             )
@@ -376,6 +608,32 @@ private fun PlayerControls(
             }
         }
     }
+}
+
+/**
+ * Icons that carry the interval, falling back to a plain arrow where Material has no
+ * numbered glyph. Better a generic icon than one that says 10 while skipping 15.
+ */
+private fun SeekInterval.replayIcon(): ImageVector = when (this) {
+    SeekInterval.FIVE -> Icons.Filled.Replay5
+    SeekInterval.TEN -> Icons.Filled.Replay10
+    SeekInterval.THIRTY -> Icons.Filled.Replay30
+    SeekInterval.FIFTEEN -> Icons.Filled.FastRewind
+}
+
+private fun SeekInterval.forwardIcon(): ImageVector = when (this) {
+    SeekInterval.FIVE -> Icons.Filled.Forward5
+    SeekInterval.TEN -> Icons.Filled.Forward10
+    SeekInterval.THIRTY -> Icons.Filled.Forward30
+    SeekInterval.FIFTEEN -> Icons.Filled.FastForward
+}
+
+@StringRes
+private fun AspectRatioMode.labelRes(): Int = when (this) {
+    AspectRatioMode.FIT -> R.string.player_aspect_fit
+    AspectRatioMode.FILL -> R.string.player_aspect_fill
+    AspectRatioMode.ZOOM -> R.string.player_aspect_zoom
+    AspectRatioMode.STRETCH -> R.string.player_aspect_stretch
 }
 
 private const val MILLIS_PER_SECOND = 1000

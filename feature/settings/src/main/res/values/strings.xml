@@ -36,4 +36,22 @@
     <string name="settings_licenses_summary">Vibrato is free software under the GNU General Public License v3.0 or later. It ships the following third-party components.</string>
     <string name="settings_licenses_show">Show licenses</string>
     <string name="settings_licenses_hide">Hide licenses</string>
+    <string name="settings_playback_title">Playback</string>
+
+    <string name="settings_playback_skip">Skip interval</string>
+    <string name="settings_playback_skip_summary">How far the skip buttons jump.</string>
+    <string name="settings_seconds">%1$d s</string>
+
+    <string name="settings_playback_buffer">Buffering</string>
+    <string name="settings_playback_buffer_summary">More buffer rides out a poor connection but starts slower. Applies to the next stream you open, not the one already playing.</string>
+    <string name="settings_buffer_low">Low latency</string>
+    <string name="settings_buffer_balanced">Balanced</string>
+    <string name="settings_buffer_high">Stable</string>
+
+    <string name="settings_playback_bitrate">Maximum quality</string>
+    <string name="settings_playback_bitrate_summary">Caps video bitrate on streams that offer several qualities. Streams with only one quality are unaffected.</string>
+    <string name="settings_bitrate_unlimited">Unlimited</string>
+    <string name="settings_bitrate_8">8 Mbps</string>
+    <string name="settings_bitrate_4">4 Mbps</string>
+    <string name="settings_bitrate_2">2 Mbps</string>
 </resources>

@@ -94,8 +94,16 @@ fun TvPosterRows(
     // Grouped here rather than queried per category: one query already returns everything
     // for this kind in the provider's order, and issuing one query per category would turn
     // a single read into dozens.
-    val rows = remember(state.items) {
-        state.items.groupBy { it.groupTitle }.entries.toList()
+    //
+    // Favourites holds every kind at once, so it groups by kind instead — "Live TV" and
+    // "Movies" are the distinction that matters there, and the provider's categories are
+    // not even loaded for it.
+    val rows = remember(state.items, favouritesOnly) {
+        if (favouritesOnly) {
+            state.items.groupBy { it.kind.name }.entries.toList()
+        } else {
+            state.items.groupBy { it.groupTitle }.entries.toList()
+        }
     }
 
     when {
@@ -161,6 +169,10 @@ private fun CategoryRow(
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun Poster(channel: Channel, onClick: () -> Unit) {
+    // A live channel's artwork is a small wide logo, not a poster. Cropping one to 2:3
+    // shows a corner of a logo — the exact mistake PLAN-TV.md §3.3 exists to avoid — so a
+    // live item keeps its whole logo inside the same tile instead.
+    val isLogo = channel.kind == MediaKind.LIVE
     val interactionSource = remember { MutableInteractionSource() }
     val isFocused by interactionSource.collectIsFocusedAsState()
 
@@ -195,8 +207,10 @@ private fun Poster(channel: Channel, onClick: () -> Unit) {
                 SubcomposeAsyncImage(
                     model = channel.logoUrl,
                     contentDescription = null,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize(),
+                    contentScale = if (isLogo) ContentScale.Fit else ContentScale.Crop,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(if (isLogo) LOGO_PADDING else 0.dp),
                     loading = { ArtworkPlaceholder() },
                     error = { ArtworkPlaceholder() },
                 )
@@ -240,3 +254,4 @@ private fun ArtworkPlaceholder() {
 private val POSTER_WIDTH = 150.dp
 private const val POSTER_ASPECT_RATIO = 2f / 3f
 private const val FOCUSED_SCALE = 1.1f
+private val LOGO_PADDING = 12.dp

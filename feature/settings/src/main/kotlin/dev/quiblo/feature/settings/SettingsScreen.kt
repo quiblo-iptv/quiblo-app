@@ -72,6 +72,7 @@ fun SettingsScreen(
     val tmdbCheck by viewModel.tmdbCheck.collectAsStateWithLifecycle()
     val categoryKind by viewModel.selectedCategoryKind.collectAsStateWithLifecycle()
     val categories by viewModel.categories.collectAsStateWithLifecycle()
+    val appearance by viewModel.appearance.collectAsStateWithLifecycle()
     val context = LocalContext.current
 
     // SAF, so the file lands wherever the user chooses and the app needs no storage
@@ -117,6 +118,14 @@ fun SettingsScreen(
             isWorking = backupState is BackupUiState.Working,
             onExport = { exportLauncher.launch(defaultFilename) },
             onImport = { importLauncher.launch(arrayOf(BACKUP_MIME_TYPE, ANY_MIME_TYPE)) },
+        )
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        AppearanceSettingsCard(
+            appearance = appearance,
+            onThemeMode = viewModel::setThemeMode,
+            onDynamicColor = viewModel::setDynamicColor,
         )
 
         Spacer(modifier = Modifier.height(16.dp))

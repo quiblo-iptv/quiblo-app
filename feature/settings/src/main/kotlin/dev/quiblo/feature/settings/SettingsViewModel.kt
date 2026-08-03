@@ -26,12 +26,14 @@ import dev.quiblo.core.data.PlayerSettingsRepository
 import dev.quiblo.core.data.SourceRepository
 import dev.quiblo.core.data.backup.BackupRepository
 import dev.quiblo.core.data.backup.ImportResult
+import dev.quiblo.core.model.Appearance
 import dev.quiblo.core.model.BufferMode
 import dev.quiblo.core.model.Category
 import dev.quiblo.core.model.MaxBitrateCap
 import dev.quiblo.core.model.MediaKind
 import dev.quiblo.core.model.PlayerSettings
 import dev.quiblo.core.model.SeekInterval
+import dev.quiblo.core.model.ThemeMode
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -166,6 +168,17 @@ class SettingsViewModel(
 
     fun setMaxBitrate(value: MaxBitrateCap) = viewModelScope.launch {
         playerSettingsRepository.setMaxBitrate(value)
+    }
+
+    val appearance: StateFlow<Appearance> = playerSettingsRepository.appearance
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(SUBSCRIPTION_TIMEOUT_MILLIS), Appearance())
+
+    fun setThemeMode(value: ThemeMode) = viewModelScope.launch {
+        playerSettingsRepository.setThemeMode(value)
+    }
+
+    fun setDynamicColor(enabled: Boolean) = viewModelScope.launch {
+        playerSettingsRepository.setDynamicColor(enabled)
     }
 
     /**

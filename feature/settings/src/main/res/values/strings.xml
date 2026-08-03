@@ -82,4 +82,12 @@
     <string name="settings_categories_save">Save</string>
     <string name="settings_categories_reset">Use provider name</string>
     <string name="settings_categories_cancel">Cancel</string>
+
+    <string name="settings_appearance_title">Theme</string>
+    <string name="settings_appearance_summary">Follow your device, or pick one and keep it.</string>
+    <string name="settings_theme_system">Follow system</string>
+    <string name="settings_theme_light">Light</string>
+    <string name="settings_theme_dark">Dark</string>
+    <string name="settings_appearance_dynamic">Match my wallpaper</string>
+    <string name="settings_appearance_dynamic_summary">Android 12 and later. Off keeps the app&#8217;s own colours.</string>
 </resources>

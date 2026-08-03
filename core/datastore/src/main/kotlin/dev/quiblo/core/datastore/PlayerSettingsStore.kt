@@ -21,13 +21,16 @@ package dev.quiblo.core.datastore
 import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import dev.quiblo.core.model.Appearance
 import dev.quiblo.core.model.BufferMode
 import dev.quiblo.core.model.MaxBitrateCap
 import dev.quiblo.core.model.PlayerSettings
 import dev.quiblo.core.model.SeekInterval
+import dev.quiblo.core.model.ThemeMode
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 
@@ -64,6 +67,25 @@ class PlayerSettingsStore(context: Context) {
 
     suspend fun setMaxBitrate(value: MaxBitrateCap) = put(MAX_BITRATE, value.name)
 
+    /**
+     * Appearance, in the same store as the playback tuning.
+     *
+     * Both are ordinary preferences with nothing sensitive in them, so they share a file.
+     * The TMDB key does not, and that distinction is deliberate — see [TmdbKeyStore].
+     */
+    val appearance: Flow<Appearance> = dataStore.data.map { preferences ->
+        Appearance(
+            themeMode = preferences.readEnum(THEME_MODE, ThemeMode.entries, Appearance().themeMode),
+            dynamicColor = preferences[DYNAMIC_COLOR] ?: Appearance().dynamicColor,
+        )
+    }
+
+    suspend fun setThemeMode(value: ThemeMode) = put(THEME_MODE, value.name)
+
+    suspend fun setDynamicColor(enabled: Boolean) {
+        dataStore.edit { it[DYNAMIC_COLOR] = enabled }
+    }
+
     private suspend fun put(key: Preferences.Key<String>, value: String) {
         dataStore.edit { it[key] = value }
     }
@@ -81,5 +103,7 @@ class PlayerSettingsStore(context: Context) {
         val SEEK_INTERVAL = stringPreferencesKey("seek_interval")
         val BUFFER_MODE = stringPreferencesKey("buffer_mode")
         val MAX_BITRATE = stringPreferencesKey("max_bitrate")
+        val THEME_MODE = stringPreferencesKey("theme_mode")
+        val DYNAMIC_COLOR = booleanPreferencesKey("dynamic_color")
     }
 }

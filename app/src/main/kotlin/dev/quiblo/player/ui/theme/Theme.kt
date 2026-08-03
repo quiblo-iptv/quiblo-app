@@ -27,6 +27,8 @@ import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.platform.LocalContext
+import dev.quiblo.core.model.Appearance
+import dev.quiblo.core.model.ThemeMode
 
 private val LightColors = lightColorScheme(
     primary = QuibloPrimaryLight,
@@ -72,15 +74,21 @@ private val DarkColors = darkColorScheme(
  * Honours the system dark/light setting by default (AC-NFR-09) and opts into dynamic
  * colour on Android 12+, falling back to the static palette in [Color.kt] elsewhere.
  *
- * @param darkTheme whether to use the dark scheme; defaults to the system setting.
- * @param dynamicColor whether to derive the scheme from the device wallpaper where supported.
+ * @param appearance the user's stored preference. [ThemeMode.SYSTEM] follows the device,
+ *   which is the default and what AC-NFR-09 requires to keep working.
  */
 @Composable
 fun QuibloTheme(
-    darkTheme: Boolean = isSystemInDarkTheme(),
-    dynamicColor: Boolean = true,
+    appearance: Appearance = Appearance(),
     content: @Composable () -> Unit,
 ) {
+    val darkTheme = when (appearance.themeMode) {
+        ThemeMode.SYSTEM -> isSystemInDarkTheme()
+        ThemeMode.LIGHT -> false
+        ThemeMode.DARK -> true
+    }
+    val dynamicColor = appearance.dynamicColor
+
     val colorScheme = when {
         dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
             val context = LocalContext.current

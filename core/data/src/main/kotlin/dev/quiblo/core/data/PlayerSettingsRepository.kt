@@ -19,10 +19,12 @@
 package dev.quiblo.core.data
 
 import dev.quiblo.core.datastore.PlayerSettingsStore
+import dev.quiblo.core.model.Appearance
 import dev.quiblo.core.model.BufferMode
 import dev.quiblo.core.model.MaxBitrateCap
 import dev.quiblo.core.model.PlayerSettings
 import dev.quiblo.core.model.SeekInterval
+import dev.quiblo.core.model.ThemeMode
 import kotlinx.coroutines.flow.Flow
 
 /**
@@ -42,4 +44,10 @@ class PlayerSettingsRepository(private val store: PlayerSettingsStore) {
     suspend fun setBufferMode(value: BufferMode) = store.setBufferMode(value)
 
     suspend fun setMaxBitrate(value: MaxBitrateCap) = store.setMaxBitrate(value)
+
+    val appearance: Flow<Appearance> = store.appearance
+
+    suspend fun setThemeMode(value: ThemeMode) = store.setThemeMode(value)
+
+    suspend fun setDynamicColor(enabled: Boolean) = store.setDynamicColor(enabled)
 }

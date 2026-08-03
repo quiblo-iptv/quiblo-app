@@ -26,7 +26,9 @@ import dev.quiblo.core.database.entity.FavoriteEntity
 import dev.quiblo.core.database.entity.ResumePositionEntity
 import dev.quiblo.core.model.Channel
 import dev.quiblo.core.model.MediaKind
+import dev.quiblo.core.model.SeriesDetails
 import dev.quiblo.core.model.SourceKind
+import dev.quiblo.core.model.VodDetails
 import dev.quiblo.source.api.MediaSource
 import dev.quiblo.source.api.SeriesDetailsResult
 import dev.quiblo.source.api.SeriesSource
@@ -36,6 +38,7 @@ import dev.quiblo.source.api.VodDetailsResult
 import dev.quiblo.source.api.VodSource
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import java.util.concurrent.ConcurrentHashMap
 
 /**
  * Read access to a source's content, for the browse screens.
@@ -140,7 +143,10 @@ class ChannelRepository(
         return getSeriesDetails(channel)
     }
 
-    suspend fun getSeriesDetails(channel: Channel): SeriesDetailsResult {
+    suspend fun getSeriesDetails(channel: Channel): SeriesDetailsResult =
+        seriesCache[channel.id]?.let { SeriesDetailsResult.Success(it) } ?: fetchSeriesDetails(channel)
+
+    private suspend fun fetchSeriesDetails(channel: Channel): SeriesDetailsResult {
         val seriesId = channel.providerStreamId ?: return SeriesDetailsResult.Failure(SourceError.NotFound)
         val sourceDao = sourceDao ?: return SeriesDetailsResult.Failure(SourceError.NotFound)
         val source = sourceDao.findById(channel.sourceId)?.toDomain()
@@ -151,7 +157,7 @@ class ChannelRepository(
         return seriesSource.seriesDetails(
             request = SourceRequest(channel.sourceId, source.url),
             seriesId = seriesId,
-        )
+        ).also { if (it is SeriesDetailsResult.Success) seriesCache[channel.id] = it.details }
     }
 
     /**
@@ -161,7 +167,10 @@ class ChannelRepository(
      * an M3U playlist carries no plot, so there is nothing to fetch rather than something
      * that went wrong. Callers show the artwork and title they already have.
      */
-    suspend fun getVodDetails(channelId: Long): VodDetailsResult {
+    suspend fun getVodDetails(channelId: Long): VodDetailsResult =
+        vodCache[channelId]?.let { VodDetailsResult.Success(it) } ?: fetchVodDetails(channelId)
+
+    private suspend fun fetchVodDetails(channelId: Long): VodDetailsResult {
         val channel = findById(channelId) ?: return VodDetailsResult.Failure(SourceError.NotFound)
         val vodId = channel.providerStreamId ?: return VodDetailsResult.Failure(SourceError.NotFound)
         val sourceDao = sourceDao ?: return VodDetailsResult.Failure(SourceError.NotFound)
@@ -173,6 +182,21 @@ class ChannelRepository(
         return vodSource.vodDetails(
             request = SourceRequest(channel.sourceId, source.url),
             vodId = vodId,
-        )
+        ).also { if (it is VodDetailsResult.Success) vodCache[channelId] = it.details }
     }
+
+    /**
+     * Details already fetched this session, so re-opening an item costs nothing.
+     *
+     * Held in memory rather than in the database on purpose. Unlike film metadata, these
+     * come from the user's own panel and describe what it is serving *now* — an episode
+     * list can gain an episode, and a stale one persisted across weeks would be wrong in a
+     * way nobody could clear. A session is the honest lifetime: long enough that browsing
+     * back and forth is free, short enough that a relaunch re-reads the truth.
+     *
+     * Failures are deliberately not cached. A blocked panel recovers, and remembering a
+     * refusal would keep a working account looking broken until the app was restarted.
+     */
+    private val seriesCache = ConcurrentHashMap<Long, SeriesDetails>()
+    private val vodCache = ConcurrentHashMap<Long, VodDetails>()
 }

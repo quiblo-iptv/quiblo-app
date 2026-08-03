@@ -39,4 +39,11 @@ class PlayerConfigTest {
         assertEquals(4_000, MaxBitrateCap.MEDIUM_720P.bitrateKbps)
         assertEquals(1_500, MaxBitrateCap.LOW_480P.bitrateKbps)
     }
+
+    @Test
+    fun `aspect ratio modes contain expected scaling labels`() {
+        assertEquals(5, AspectRatioMode.entries.size)
+        assertEquals("Fit", AspectRatioMode.FIT.label)
+        assertEquals("16:9", AspectRatioMode.RATIO_16_9.label)
+    }
 }

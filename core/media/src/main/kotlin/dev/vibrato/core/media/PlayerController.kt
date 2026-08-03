@@ -128,6 +128,7 @@ data class PlaybackState(
     val retryAttempt: Int = 0,
     val audioTracks: List<TrackOption> = emptyList(),
     val textTracks: List<TrackOption> = emptyList(),
+    val aspectRatioMode: AspectRatioMode = AspectRatioMode.FIT,
 ) {
     val isPlaying: Boolean get() = status == PlaybackStatus.PLAYING
     val hasTrackChoice: Boolean get() = audioTracks.size > 1 || textTracks.isNotEmpty()
@@ -144,4 +145,12 @@ enum class MaxBitrateCap(val bitrateKbps: Int) {
     HIGH_1080P(bitrateKbps = 8_000),
     MEDIUM_720P(bitrateKbps = 4_000),
     LOW_480P(bitrateKbps = 1_500),
+}
+
+enum class AspectRatioMode(val label: String) {
+    FIT("Fit"),
+    CROP("Crop / Zoom"),
+    STRETCH("Stretch"),
+    RATIO_16_9("16:9"),
+    RATIO_4_3("4:3"),
 }

@@ -34,4 +34,12 @@
     <string name="tv_sources_username">Username (Xtream only)</string>
     <string name="tv_sources_password">Password (Xtream only)</string>
     <string name="tv_sources_form_hint">Leave the username and password empty for an M3U playlist.</string>
+
+    <string name="tv_no_content">Nothing here yet.</string>
+    <string name="tv_player_live">LIVE</string>
+    <string name="tv_player_hint_play">OK to play</string>
+    <string name="tv_player_hint_pause">OK to pause</string>
+    <string name="tv_player_hint_seek">◀ ▶ to skip %1$d s</string>
+    <string name="tv_player_hint_zap">▲ to change channel</string>
+    <string name="tv_player_hint_aspect">Aspect: %1$s</string>
 </resources>

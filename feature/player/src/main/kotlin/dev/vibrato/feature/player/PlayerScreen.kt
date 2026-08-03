@@ -93,6 +93,7 @@ import dev.vibrato.core.media.PlaybackState
 import dev.vibrato.core.media.PlaybackStatus
 import dev.vibrato.core.model.AspectRatioMode
 import dev.vibrato.core.model.SeekInterval
+import dev.vibrato.core.model.videoScale
 import kotlinx.coroutines.delay
 import org.koin.androidx.compose.koinViewModel
 
@@ -423,41 +424,6 @@ private fun VideoSurface(
     DisposableEffect(Unit) {
         onDispose { controller.detachSurface() }
     }
-}
-
-/**
- * Scale factors that turn the stretched-to-fill surface into the requested framing.
- *
- * Returns 1:1 until the first frame has been decoded, because the correct correction is
- * unknowable without the frame size — and guessing produces a visible jump when the real
- * size arrives.
- */
-internal fun videoScale(
-    videoAspectRatio: Float?,
-    containerAspectRatio: Float,
-    mode: AspectRatioMode,
-): Pair<Float, Float> {
-    if (mode == AspectRatioMode.STRETCH) return 1f to 1f
-    val video = videoAspectRatio ?: return 1f to 1f
-    if (video <= 0f || containerAspectRatio <= 0f) return 1f to 1f
-
-    val ratio = video / containerAspectRatio
-    val isWiderThanContainer = ratio > 1f
-
-    val base = when (mode) {
-        // Contain: shrink whichever axis is overfilled, leaving bars on the other.
-        AspectRatioMode.FIT ->
-            if (isWiderThanContainer) 1f to (1f / ratio) else ratio to 1f
-
-        // Cover: grow whichever axis is underfilled, cropping the overflow.
-        AspectRatioMode.FILL, AspectRatioMode.ZOOM ->
-            if (isWiderThanContainer) ratio to 1f else 1f to (1f / ratio)
-
-        AspectRatioMode.STRETCH -> 1f to 1f
-    }
-
-    val extra = mode.extraScale
-    return (base.first * extra) to (base.second * extra)
 }
 
 @Composable

@@ -44,6 +44,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -56,8 +57,12 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import dev.vibrato.core.model.Channel
+import dev.vibrato.core.model.MediaKind
 import dev.vibrato.tv.R
+import dev.vibrato.tv.ui.browse.TvPosterRows
 import dev.vibrato.tv.ui.live.TvLiveScreen
+import dev.vibrato.tv.ui.player.TvPlayerScreen
 import dev.vibrato.tv.ui.sources.TvSourcesScreen
 
 /**
@@ -71,6 +76,23 @@ import dev.vibrato.tv.ui.sources.TvSourcesScreen
 @Composable
 fun TvApp() {
     var selectedTab by remember { mutableIntStateOf(TvTab.LIVE.ordinal) }
+
+    // Playing replaces the whole shell rather than sitting inside it: a television plays
+    // full screen, and leaving the bar drawn over video would be the same mistake the phone
+    // app made for a fortnight.
+    var playing: Channel? by remember { mutableStateOf(null) }
+
+    playing?.let { channel ->
+        TvPlayerScreen(
+            channel = channel,
+            onBack = { playing = null },
+            // Zapping is not implemented past the notice: it needs the surrounding channel
+            // list, which belongs to whichever screen launched playback. Wired as a no-op
+            // rather than pretending, so nothing silently does nothing.
+            onZap = { },
+        )
+        return
+    }
 
     // Focus starts in the bar, so the first thing a viewer sees is where they are. An app
     // that opens with nothing focused leaves the remote apparently dead.
@@ -93,7 +115,9 @@ fun TvApp() {
                 .padding(start = SCREEN_PADDING, end = SCREEN_PADDING, bottom = SCREEN_PADDING),
         ) {
             when (TvTab.entries[selectedTab]) {
-                TvTab.LIVE -> TvLiveScreen(onChannelClick = { })
+                TvTab.LIVE -> TvLiveScreen(onChannelClick = { playing = it })
+                TvTab.MOVIES -> TvPosterRows(kind = MediaKind.VOD, onItemClick = { playing = it })
+                TvTab.SERIES -> TvPosterRows(kind = MediaKind.SERIES, onItemClick = { playing = it })
                 TvTab.SOURCES -> TvSourcesScreen()
                 else -> Placeholder(tab = TvTab.entries[selectedTab])
             }

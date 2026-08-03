@@ -33,9 +33,11 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.ClosedCaption
+import androidx.compose.material.icons.filled.Forward10
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.PictureInPictureAlt
+import androidx.compose.material.icons.filled.Replay10
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -266,15 +268,38 @@ private fun PlayerControls(
         }
 
         Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
-            IconButton(onClick = onPlayPause, modifier = Modifier.size(72.dp)) {
-                Icon(
-                    imageVector = if (state.isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
-                    contentDescription = stringResource(
-                        if (state.isPlaying) R.string.player_pause else R.string.player_play,
-                    ),
-                    tint = Color.White,
-                    modifier = Modifier.size(56.dp),
-                )
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(24.dp),
+            ) {
+                IconButton(onClick = { onSeek((state.positionMillis - 10_000L).coerceAtLeast(0L)) }) {
+                    Icon(
+                        imageVector = Icons.Filled.Replay10,
+                        contentDescription = "Skip Backward 10s",
+                        tint = Color.White,
+                        modifier = Modifier.size(40.dp),
+                    )
+                }
+
+                IconButton(onClick = onPlayPause, modifier = Modifier.size(72.dp)) {
+                    Icon(
+                        imageVector = if (state.isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
+                        contentDescription = stringResource(
+                            if (state.isPlaying) R.string.player_pause else R.string.player_play,
+                        ),
+                        tint = Color.White,
+                        modifier = Modifier.size(56.dp),
+                    )
+                }
+
+                IconButton(onClick = { onSeek(state.positionMillis + 10_000L) }) {
+                    Icon(
+                        imageVector = Icons.Filled.Forward10,
+                        contentDescription = "Skip Forward 10s",
+                        tint = Color.White,
+                        modifier = Modifier.size(40.dp),
+                    )
+                }
             }
         }
 

@@ -154,3 +154,11 @@ enum class AspectRatioMode(val label: String) {
     RATIO_16_9("16:9"),
     RATIO_4_3("4:3"),
 }
+
+enum class SeekInterval(val seconds: Int) {
+    SEEK_5(5),
+    SEEK_10(10),
+    SEEK_15(15),
+    SEEK_30(30),
+    SEEK_60(60),
+}

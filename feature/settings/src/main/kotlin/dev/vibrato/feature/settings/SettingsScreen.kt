@@ -162,5 +162,38 @@ fun SettingsScreen(modifier: Modifier = Modifier) {
                 }
             }
         }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // Seek Skip Seconds Section
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Text(
+                    text = "Player Skip Forward / Backward Seconds",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                Text(
+                    text = "Adjust default seek jump interval for media controls (max 60 seconds).",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 4.dp, bottom = 12.dp),
+                )
+
+                Row(modifier = Modifier.fillMaxWidth()) {
+                    dev.vibrato.core.media.SeekInterval.entries.forEach { interval ->
+                        FilterChip(
+                            selected = interval == dev.vibrato.core.media.SeekInterval.SEEK_10,
+                            onClick = { },
+                            label = { Text("${interval.seconds}s") },
+                            modifier = Modifier.padding(end = 8.dp),
+                        )
+                    }
+                }
+            }
+        }
     }
 }

@@ -7,4 +7,17 @@
 <resources>
     <string name="feature_series_title">Series</string>
     <string name="feature_series_empty">No series in your source.</string>
+
+    <!-- AC-PL-07: every failure gets a specific, human-readable message. -->
+    <string name="series_error_no_network">No internet connection. Check your network and try again.</string>
+    <string name="series_error_timeout">Your provider took too long to answer. Try again in a moment.</string>
+    <string name="series_error_unreachable">Could not reach your provider. Check your connection.</string>
+    <string name="series_error_provider_blocked">Your provider is temporarily refusing requests from this account. Wait a few minutes and try again, or contact your provider if it continues.</string>
+    <string name="series_error_unauthorized">Your provider rejected this account. Check the source credentials in Sources.</string>
+    <string name="series_error_expired">That subscription has expired. Contact whoever provides it.</string>
+    <string name="series_error_disabled">That account is disabled or banned on the server.</string>
+    <string name="series_error_not_found">Your provider has no episode list for this series.</string>
+    <string name="series_error_http_status">Your provider responded with an error (%1$d).</string>
+    <string name="series_error_unknown">Could not load this series. Please try again.</string>
+    <string name="series_error_retry">Try again</string>
 </resources>

@@ -26,6 +26,7 @@ import dev.vibrato.core.model.SourceKind
 import dev.vibrato.source.api.GuideResult
 import dev.vibrato.source.api.GuideSource
 import dev.vibrato.source.api.MediaSource
+import dev.vibrato.source.api.SourceError
 import dev.vibrato.source.api.SourceRequest
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -67,6 +68,7 @@ class GuideRepository(
      */
     suspend fun refreshGuideFor(channel: Channel): Boolean {
         val streamId = channel.providerStreamId ?: return false
+        if (now() < blockedUntilEpochMillis) return false
         val source = sourceDao.findById(channel.sourceId)?.toDomain() ?: return false
         val guideSource = mediaSources[source.kind] as? GuideSource ?: return false
 
@@ -77,7 +79,16 @@ class GuideRepository(
         )
 
         return when (result) {
-            is GuideResult.Failure -> false
+            is GuideResult.Failure -> {
+                // The guide is the one thing the app fetches in bulk, so it is the one
+                // thing that can keep a panel's anti-flood rule tripped. When the panel
+                // says it is refusing us, back off entirely rather than continuing to
+                // fire a request per visible row and extending the block.
+                if (result.error == SourceError.ProviderBlocked) {
+                    blockedUntilEpochMillis = now() + BLOCK_BACKOFF_MILLIS
+                }
+                false
+            }
 
             is GuideResult.Success -> {
                 // Replaced wholesale rather than merged: the panel's answer is the truth,
@@ -100,7 +111,20 @@ class GuideRepository(
         programmeDao.deleteFinished(now() - RETENTION_MILLIS)
     }
 
+    /**
+     * When background guide fetching may resume after a panel refused one.
+     *
+     * Deliberately in-memory and not persisted: a block is a transient state of the
+     * provider, and carrying it across launches would leave a user with no guide long
+     * after the panel started answering again.
+     */
+    @Volatile
+    private var blockedUntilEpochMillis: Long = 0L
+
     private companion object {
         const val RETENTION_MILLIS = 24L * 60L * 60L * 1000L
+
+        /** Long enough for a panel's flood window to clear, short enough to self-heal. */
+        const val BLOCK_BACKOFF_MILLIS = 15L * 60L * 1000L
     }
 }

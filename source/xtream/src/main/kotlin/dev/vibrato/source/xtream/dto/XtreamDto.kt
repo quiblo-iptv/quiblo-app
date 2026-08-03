@@ -18,8 +18,16 @@
 
 package dev.vibrato.source.xtream.dto
 
+import kotlinx.serialization.KSerializer
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.descriptors.SerialDescriptor
+import kotlinx.serialization.descriptors.buildClassSerialDescriptor
+import kotlinx.serialization.encoding.Decoder
+import kotlinx.serialization.encoding.Encoder
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonDecoder
+import kotlinx.serialization.json.JsonObject
 
 /**
  * Wire types for the Xtream Codes API.
@@ -180,12 +188,67 @@ internal data class EpgListingDto(
     val epgId: String? = null,
 )
 
-@Serializable
+@Serializable(with = SeriesInfoResponseSerializer::class)
 internal data class SeriesInfoResponse(
     val seasons: List<SeasonDto> = emptyList(),
     val info: SeriesInfoDto? = null,
     val episodes: Map<String, List<EpisodeDto>> = emptyMap(),
 )
+
+internal object SeriesInfoResponseSerializer : KSerializer<SeriesInfoResponse> {
+    override val descriptor: SerialDescriptor =
+        buildClassSerialDescriptor("SeriesInfoResponse")
+
+    override fun deserialize(decoder: Decoder): SeriesInfoResponse {
+        val input = decoder as? JsonDecoder ?: return SeriesInfoResponse()
+        val jsonElement = input.decodeJsonElement() as? JsonObject ?: return SeriesInfoResponse()
+        val json = input.json
+
+        val infoElement = jsonElement["info"]
+        val infoObj: SeriesInfoDto? = if (infoElement is JsonObject) {
+            try { json.decodeFromJsonElement(SeriesInfoDto.serializer(), infoElement) } catch (_: Exception) { null }
+        } else null
+
+        val seasonsElement = jsonElement["seasons"]
+        val seasonsList: List<SeasonDto> = when (seasonsElement) {
+            is JsonArray -> seasonsElement.mapNotNull { elem ->
+                if (elem is JsonObject) try { json.decodeFromJsonElement(SeasonDto.serializer(), elem) } catch (_: Exception) { null } else null
+            }
+            is JsonObject -> seasonsElement.values.mapNotNull { elem ->
+                if (elem is JsonObject) try { json.decodeFromJsonElement(SeasonDto.serializer(), elem) } catch (_: Exception) { null } else null
+            }
+            else -> emptyList()
+        }
+
+        val episodesElement = jsonElement["episodes"]
+        val episodesMap: Map<String, List<EpisodeDto>> = when (episodesElement) {
+            is JsonObject -> episodesElement.mapValues { (_, value) ->
+                if (value is JsonArray) {
+                    value.mapNotNull { item ->
+                        if (item is JsonObject) try { json.decodeFromJsonElement(EpisodeDto.serializer(), item) } catch (_: Exception) { null } else null
+                    }
+                } else emptyList()
+            }
+            is JsonArray -> {
+                val allEpisodes = episodesElement.mapNotNull { item ->
+                    if (item is JsonObject) try { json.decodeFromJsonElement(EpisodeDto.serializer(), item) } catch (_: Exception) { null } else null
+                }
+                allEpisodes.groupBy { (it.season ?: 1).toString() }
+            }
+            else -> emptyMap()
+        }
+
+        return SeriesInfoResponse(
+            seasons = seasonsList,
+            info = infoObj,
+            episodes = episodesMap,
+        )
+    }
+
+    override fun serialize(encoder: Encoder, value: SeriesInfoResponse) {
+        // Unused for responses
+    }
+}
 
 @Serializable
 internal data class SeriesInfoDto(

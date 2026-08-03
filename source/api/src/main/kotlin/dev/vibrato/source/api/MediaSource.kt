@@ -155,6 +155,17 @@ sealed interface SourceError {
     data object AccountDisabled : SourceError
 
     /**
+     * The panel's firewall refused the request rather than the credentials.
+     *
+     * Xtream panels answer their anti-flood and anti-share rules with private status
+     * codes in the 46x range (and occasionally 429) — the account still exists and its
+     * streams may still play, but the API is shut to this client for a while. That is a
+     * different problem from [Unauthorized] or [AccountDisabled] and needs a different
+     * instruction to the user, so hammering the panel is not the remedy.
+     */
+    data object ProviderBlocked : SourceError
+
+    /**
      * Anything not otherwise classified.
      *
      * [technicalDetail] is for logs and bug reports only and must never be rendered as

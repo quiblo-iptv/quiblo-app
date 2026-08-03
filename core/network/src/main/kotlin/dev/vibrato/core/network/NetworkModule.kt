@@ -45,9 +45,13 @@ fun createHttpClient(): HttpClient = HttpClient(OkHttp) {
     }
 
     install(UserAgent) {
-        // Neutral and honest. Carries no device identifier and nothing that could be used
-        // to fingerprint the user.
-        agent = "Vibrato"
+        // Some panels gate their API on a recognised player agent. Note this does not by
+        // itself avoid an XC_VM 46x firewall response: a panel that has flagged an account
+        // answers the same way whatever agent is sent. Request volume is what that
+        // responds to, which is handled in GuideRepository rather than here.
+        //
+        // Carries no device identifier and nothing that could fingerprint the user.
+        agent = "IPTVSmartersPlayer"
     }
 }
 

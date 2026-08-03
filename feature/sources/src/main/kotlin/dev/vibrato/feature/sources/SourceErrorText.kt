@@ -40,6 +40,7 @@ internal fun SourceError.messageRes(): Int = when (this) {
     SourceError.Unauthorized -> R.string.source_error_unauthorized
     SourceError.SubscriptionExpired -> R.string.source_error_expired
     SourceError.AccountDisabled -> R.string.source_error_disabled
+    SourceError.ProviderBlocked -> R.string.source_error_provider_blocked
     is SourceError.HttpStatus -> R.string.source_error_http_status
     is SourceError.Unknown -> R.string.source_error_unknown
 }

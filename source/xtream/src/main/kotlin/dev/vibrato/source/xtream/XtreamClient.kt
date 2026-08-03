@@ -107,6 +107,9 @@ internal class XtreamClient(
             response.status == HttpStatusCode.NotFound ->
                 ApiResult.Err(SourceError.NotFound)
 
+            response.status.value in PROVIDER_BLOCK_STATUSES ->
+                ApiResult.Err(SourceError.ProviderBlocked)
+
             !response.status.isSuccess() ->
                 ApiResult.Err(SourceError.HttpStatus(response.status.value))
 
@@ -127,6 +130,15 @@ internal class XtreamClient(
     }
 
     companion object {
+        /**
+         * Statuses that mean "the panel is refusing this client", not "the request was wrong".
+         *
+         * 429 is the standard one. The 46x codes are private to Xtream panels — XC_VM
+         * serves 462 and 469 from its nginx firewall when anti-flood or anti-share trips —
+         * and are indistinguishable from a generic failure unless named here.
+         */
+        val PROVIDER_BLOCK_STATUSES = setOf(429, 460, 461, 462, 463, 469)
+
         /**
          * Lenient on purpose. Unknown keys are ignored because panels add fields freely,
          * and malformed values coerce to defaults rather than aborting the parse

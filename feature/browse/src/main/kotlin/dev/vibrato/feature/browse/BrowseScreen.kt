@@ -140,8 +140,10 @@ fun BrowseScreen(
                 verticalArrangement = Arrangement.spacedBy(8.dp),
                 modifier = Modifier.fillMaxSize(),
             ) {
+                // No guide prefetch here on purpose: a grid card shows no programme, and
+                // a grid fits several times more items on screen than a list. Fetching
+                // for each one is a burst of requests whose results nothing renders.
                 items(items = state.items, key = { it.id }) { item ->
-                    LaunchedEffect(item.id) { viewModel.onRowVisible(item) }
                     ChannelGridCard(
                         channel = item,
                         onClick = { onItemClick(item) },

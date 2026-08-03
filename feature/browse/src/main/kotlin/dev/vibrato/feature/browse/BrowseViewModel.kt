@@ -128,8 +128,15 @@ class BrowseViewModel(
      *
      * Guide data is fetched for what the user can actually see rather than for the whole
      * account, because a 20,000-channel account would otherwise mean 20,000 requests.
+     *
+     * Only live channels have a guide. Series carry a `providerStreamId` too — it is the
+     * series id, not a stream id — so without the [MediaKind] check, scrolling the Series
+     * tab fires a `get_short_epg` per row that can only ever come back empty. Panels
+     * count those against their anti-flood rules and start refusing the account, which
+     * takes series details and refresh down with it.
      */
     fun onRowVisible(channel: Channel) {
+        if (channel.kind != MediaKind.LIVE) return
         if (channel.providerStreamId == null) return
         if (!guideRequested.add(channel.stableKey)) return
 

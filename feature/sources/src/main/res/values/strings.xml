@@ -50,4 +50,5 @@
     <string name="source_error_unauthorized">Those credentials were rejected. Check the username and password.</string>
     <string name="source_error_expired">That subscription has expired. Contact whoever provides it.</string>
     <string name="source_error_disabled">That account is disabled or banned on the server.</string>
+    <string name="source_error_provider_blocked">Your provider is temporarily refusing requests from this account. Wait a few minutes and try again, or contact your provider if it continues.</string>
 </resources>

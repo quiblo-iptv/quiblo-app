@@ -134,8 +134,10 @@ class ChannelRepository(
     suspend fun getSeriesDetails(channel: Channel): SeriesDetailsResult {
         val seriesId = channel.providerStreamId ?: return SeriesDetailsResult.Failure(SourceError.NotFound)
         val sourceDao = sourceDao ?: return SeriesDetailsResult.Failure(SourceError.NotFound)
-        val source = sourceDao.findById(channel.sourceId)?.toDomain() ?: return SeriesDetailsResult.Failure(SourceError.UnreachableHost)
-        val seriesSource = mediaSources[source.kind] as? SeriesSource ?: return SeriesDetailsResult.Failure(SourceError.NotFound)
+        val source = sourceDao.findById(channel.sourceId)?.toDomain()
+            ?: return SeriesDetailsResult.Failure(SourceError.UnreachableHost)
+        val seriesSource = mediaSources[source.kind] as? SeriesSource
+            ?: return SeriesDetailsResult.Failure(SourceError.NotFound)
 
         return seriesSource.seriesDetails(
             request = SourceRequest(channel.sourceId, source.url),

@@ -40,6 +40,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Tv
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -60,7 +61,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -69,6 +72,7 @@ import dev.vibrato.core.model.Channel
 import dev.vibrato.core.model.Episode
 import dev.vibrato.core.model.Season
 import dev.vibrato.core.model.SeriesDetails
+import dev.vibrato.source.api.SourceError
 import org.koin.androidx.compose.koinViewModel
 import org.koin.core.parameter.parametersOf
 
@@ -115,13 +119,10 @@ fun SeriesDetailScreen(
                 }
 
                 is SeriesDetailUiState.Error -> {
-                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Text(
-                            text = "Failed to load series details",
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = MaterialTheme.colorScheme.error,
-                        )
-                    }
+                    SeriesDetailError(
+                        error = state.error,
+                        onRetry = viewModel::loadDetails,
+                    )
                 }
 
                 is SeriesDetailUiState.Success -> {
@@ -131,6 +132,42 @@ fun SeriesDetailScreen(
                         onEpisodeClick = onEpisodeClick,
                     )
                 }
+            }
+        }
+    }
+}
+
+/**
+ * The failure state.
+ *
+ * Carries the specific reason and a way to act on it. A retry matters here because the
+ * most common failure — a provider throttling the account — clears on its own, and
+ * without a button the only way back is to leave the screen and come in again.
+ */
+@Composable
+private fun SeriesDetailError(
+    error: SourceError,
+    onRetry: () -> Unit,
+) {
+    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier.padding(horizontal = 32.dp),
+        ) {
+            val arg = error.seriesMessageArg()
+            Text(
+                text = if (arg != null) {
+                    stringResource(error.seriesMessageRes(), arg)
+                } else {
+                    stringResource(error.seriesMessageRes())
+                },
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.error,
+                textAlign = TextAlign.Center,
+            )
+            Spacer(modifier = Modifier.height(16.dp))
+            Button(onClick = onRetry) {
+                Text(text = stringResource(R.string.series_error_retry))
             }
         }
     }

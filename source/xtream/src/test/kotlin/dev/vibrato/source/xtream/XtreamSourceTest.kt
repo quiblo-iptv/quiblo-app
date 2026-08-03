@@ -287,4 +287,55 @@ class XtreamSourceTest {
         assertEquals("77", channels[0].providerStreamId)
         assertEquals("http://img.png", channels[0].logoUrl)
     }
+
+    @Test
+    fun `series details handles empty array for episodes gracefully`() = runTest {
+        val seriesInfoJson = """
+            {
+              "seasons": [],
+              "info": {"name": "Empty Series"},
+              "episodes": []
+            }
+        """.trimIndent()
+
+        val source = sourceServing(
+            mapOf("get_series_info" to seriesInfoJson),
+        )
+
+        val result = source.seriesDetails(request, seriesId = "10")
+        val details = assertInstanceOf(dev.vibrato.source.api.SeriesDetailsResult.Success::class.java, result).details
+        assertEquals("Empty Series", details.title)
+        assertTrue(details.seasons.isEmpty())
+    }
+
+    /**
+     * A panel firewall answering 469 is not a generic HTTP failure. Reported as one, it
+     * reaches the user as "the server responded with an error (469)", which tells them
+     * nothing they can act on, and nothing in the app knows to stop retrying.
+     */
+    @Test
+    @DisplayName("AC-PL-07 — a panel firewall status maps to ProviderBlocked, not a raw status")
+    fun `series details reports a firewall status as provider blocked`() = runTest {
+        val source = sourceServing(
+            bodies = emptyMap(),
+            status = HttpStatusCode(469, "Blocked"),
+        )
+
+        val result = source.seriesDetails(request, seriesId = "10")
+
+        val failure = assertInstanceOf(dev.vibrato.source.api.SeriesDetailsResult.Failure::class.java, result)
+        assertEquals(SourceError.ProviderBlocked, failure.error)
+    }
+
+    @Test
+    @DisplayName("AC-PL-07 — a refresh blocked by the panel firewall is distinguishable too")
+    fun `load reports a firewall status as provider blocked`() = runTest {
+        val result = sourceServing(
+            bodies = mapOf(null to authOk),
+            status = HttpStatusCode(462, "Blocked"),
+        ).load(request)
+
+        val failure = assertInstanceOf(SourceResult.Failure::class.java, result)
+        assertEquals(SourceError.ProviderBlocked, failure.error)
+    }
 }

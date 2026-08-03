@@ -29,10 +29,13 @@ import dev.vibrato.source.xtream.dto.VodStreamDto
 import io.ktor.client.HttpClient
 import io.ktor.client.request.get
 import io.ktor.client.request.parameter
-import io.ktor.client.statement.bodyAsText
+import io.ktor.client.statement.bodyAsChannel
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.isSuccess
+import io.ktor.utils.io.jvm.javaio.toInputStream
+import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.decodeFromStream
 
 /** A typed result carrying either a value or a [SourceError]. */
 internal sealed interface ApiResult<out T> {
@@ -78,6 +81,7 @@ internal class XtreamClient(
     suspend fun shortEpg(base: String, credentials: Credentials, streamId: String): ApiResult<EpgResponse> =
         request(base, credentials, "get_short_epg") { parameter("stream_id", streamId) }
 
+    @OptIn(ExperimentalSerializationApi::class)
     private suspend inline fun <reified T> request(
         base: String,
         credentials: Credentials,
@@ -102,13 +106,16 @@ internal class XtreamClient(
                 ApiResult.Err(SourceError.HttpStatus(response.status.value))
 
             else -> {
-                val body = response.bodyAsText()
-                // Panels return an HTML error page with status 200 more often than they
-                // should; treat that the same as a malformed playlist (AC-PL-07).
-                if (body.trimStart().startsWith("<")) {
+                val stream = response.bodyAsChannel().toInputStream().buffered()
+                stream.mark(1024)
+                val peekBuffer = ByteArray(1024)
+                val readBytes = stream.read(peekBuffer, 0, 1024)
+                stream.reset()
+                val peekText = if (readBytes > 0) String(peekBuffer, 0, readBytes) else ""
+                if (peekText.trimStart().startsWith("<")) {
                     ApiResult.Err(SourceError.NotAPlaylist)
                 } else {
-                    ApiResult.Ok(json.decodeFromString<T>(body))
+                    ApiResult.Ok(json.decodeFromStream<T>(stream))
                 }
             }
         }
@@ -142,9 +149,12 @@ internal inline fun <T> runCatchingApi(block: () -> ApiResult<T>): ApiResult<T> 
     ApiResult.Err(mapThrowable(error))
 }
 
-internal fun mapThrowable(error: Throwable): SourceError = when (error::class.simpleName) {
-    "HttpRequestTimeoutException", "SocketTimeoutException", "ConnectTimeoutException" -> SourceError.Timeout
-    "UnresolvedAddressException", "UnknownHostException" -> SourceError.UnreachableHost
-    "SerializationException", "JsonConvertException", "IllegalArgumentException" -> SourceError.NotAPlaylist
-    else -> SourceError.Unknown(error::class.simpleName)
+internal fun mapThrowable(error: Throwable): SourceError = when {
+    error is kotlinx.serialization.SerializationException -> SourceError.NotAPlaylist
+    else -> when (error::class.simpleName) {
+        "HttpRequestTimeoutException", "SocketTimeoutException", "ConnectTimeoutException" -> SourceError.Timeout
+        "UnresolvedAddressException", "UnknownHostException" -> SourceError.UnreachableHost
+        "SerializationException", "JsonConvertException", "IllegalArgumentException", "JsonDecodingException" -> SourceError.NotAPlaylist
+        else -> SourceError.Unknown(error::class.simpleName)
+    }
 }

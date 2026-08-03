@@ -18,6 +18,11 @@
 
 package dev.vibrato.feature.browse
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
@@ -35,6 +40,7 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
@@ -96,7 +102,7 @@ fun BrowseScreen(
 
     Column(modifier = modifier.fillMaxSize()) {
         if (showSearch) {
-            SearchField(query = query, onQueryChange = viewModel::search)
+            ExpandableSearchHeader(query = query, onQueryChange = viewModel::search)
         }
 
         if (state.categories.isNotEmpty()) {
@@ -141,27 +147,60 @@ fun BrowseScreen(
 }
 
 @Composable
-private fun SearchField(query: String, onQueryChange: (String) -> Unit) {
-    OutlinedTextField(
-        value = query,
-        onValueChange = onQueryChange,
-        singleLine = true,
-        label = { Text(stringResource(R.string.browse_search)) },
-        leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
-        trailingIcon = {
-            if (query.isNotEmpty()) {
-                IconButton(onClick = { onQueryChange("") }) {
-                    Icon(
-                        imageVector = Icons.Filled.Clear,
-                        contentDescription = stringResource(R.string.browse_search_clear),
-                    )
-                }
+private fun ExpandableSearchHeader(query: String, onQueryChange: (String) -> Unit) {
+    var isExpanded by remember(query) { mutableStateOf(query.isNotEmpty()) }
+
+    AnimatedVisibility(
+        visible = isExpanded,
+        enter = fadeIn() + expandVertically(),
+        exit = fadeOut() + shrinkVertically(),
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            OutlinedTextField(
+                value = query,
+                onValueChange = onQueryChange,
+                singleLine = true,
+                label = { Text(stringResource(R.string.browse_search)) },
+                leadingIcon = {
+                    IconButton(onClick = {
+                        if (query.isEmpty()) isExpanded = false else onQueryChange("")
+                    }) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Close search")
+                    }
+                },
+                trailingIcon = {
+                    if (query.isNotEmpty()) {
+                        IconButton(onClick = { onQueryChange("") }) {
+                            Icon(
+                                imageVector = Icons.Filled.Clear,
+                                contentDescription = stringResource(R.string.browse_search_clear),
+                            )
+                        }
+                    }
+                },
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+    }
+
+    if (!isExpanded) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 2.dp),
+            horizontalArrangement = Arrangement.End,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            IconButton(onClick = { isExpanded = true }) {
+                Icon(Icons.Filled.Search, contentDescription = stringResource(R.string.browse_search))
             }
-        },
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 8.dp),
-    )
+        }
+    }
 }
 
 @Composable

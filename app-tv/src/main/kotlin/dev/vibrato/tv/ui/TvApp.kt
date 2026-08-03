@@ -57,6 +57,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.vibrato.tv.R
+import dev.vibrato.tv.ui.live.TvLiveScreen
 
 /**
  * The television shell: a text tab bar across the top, content beneath it.
@@ -85,12 +86,16 @@ fun TvApp() {
             focusRequester = barFocusRequester,
         )
 
-        TabContent(
-            tab = TvTab.entries[selectedTab],
+        Box(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = SCREEN_PADDING),
-        )
+                .padding(start = SCREEN_PADDING, end = SCREEN_PADDING, bottom = SCREEN_PADDING),
+        ) {
+            when (TvTab.entries[selectedTab]) {
+                TvTab.LIVE -> TvLiveScreen(onChannelClick = { })
+                else -> Placeholder(tab = TvTab.entries[selectedTab])
+            }
+        }
     }
 }
 
@@ -225,30 +230,18 @@ private fun BarIcon(icon: androidx.compose.ui.graphics.vector.ImageVector, conte
 }
 
 /**
- * Placeholder content for T0.
+ * Stand-in for a tab that has no screen yet.
  *
- * Focusable on purpose: without something below the bar that can take focus, pressing down
- * does nothing and the bar cannot be proven to hand focus over — which is half of what this
- * milestone exists to demonstrate.
+ * Drawn straight onto the background with no card behind it. A surface around the content
+ * area boxes the screen in and reads as a panel inside a page; the reference has content
+ * sitting directly on black, and so does this.
  */
 @Composable
-private fun TabContent(tab: TvTab, modifier: Modifier = Modifier) {
-    val interactionSource = remember { MutableInteractionSource() }
-    val isFocused by interactionSource.collectIsFocusedAsState()
-
-    Box(
-        modifier = modifier
-            .padding(bottom = SCREEN_PADDING)
-            .background(
-                color = if (isFocused) Color.White.copy(alpha = 0.10f) else Color.White.copy(alpha = 0.04f),
-                shape = RoundedCornerShape(12.dp),
-            )
-            .focusable(interactionSource = interactionSource),
-        contentAlignment = Alignment.Center,
-    ) {
+private fun Placeholder(tab: TvTab) {
+    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         Text(
             text = stringResource(R.string.tv_placeholder, stringResource(tab.labelRes)),
-            color = Color.White.copy(alpha = if (isFocused) 1f else IDLE_ALPHA),
+            color = Color.White.copy(alpha = IDLE_ALPHA),
             style = MaterialTheme.typography.headlineSmall,
         )
     }

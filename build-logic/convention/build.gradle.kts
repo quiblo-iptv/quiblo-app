@@ -1,3 +1,6 @@
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
+
 /*
  * Vibrato — a free, open source IPTV player.
  * Copyright (C) 2026 The Vibrato Authors
@@ -27,6 +30,12 @@ group = "dev.vibrato.buildlogic"
 // instead. Requesting a toolchain would force a second JDK download.
 tasks.withType<JavaCompile>().configureEach {
     options.release.set(17)
+}
+
+tasks.withType<KotlinCompile>().configureEach {
+    compilerOptions {
+        jvmTarget.set(JvmTarget.JVM_17)
+    }
 }
 
 dependencies {

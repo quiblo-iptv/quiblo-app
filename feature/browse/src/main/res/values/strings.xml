@@ -15,4 +15,9 @@
     <string name="browse_no_favorites">Tap the heart on anything to keep it here.</string>
     <string name="browse_no_source">Add a playlist in Sources to see content here.</string>
     <string name="browse_empty_kind">Nothing of this type in your source.</string>
+    <string name="browse_now">Now</string>
+    <string name="browse_next">Next</string>
+    <string name="browse_no_guide">No guide information for this channel.</string>
+    <string name="browse_guide_time">%1$s – %2$s</string>
+    <string name="browse_close">Close</string>
 </resources>

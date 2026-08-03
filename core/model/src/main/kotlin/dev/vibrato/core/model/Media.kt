@@ -112,6 +112,13 @@ data class Channel(
     val logoUrl: String? = null,
     val groupTitle: String = Category.UNGROUPED_TITLE,
     val isFavorite: Boolean = false,
+    /**
+     * The provider's own stream identifier, when it has one.
+     *
+     * Xtream needs this to be asked for a channel's guide. M3U supplies nothing
+     * equivalent, which is precisely why an M3U source shows no guide (AC-EPG-04).
+     */
+    val providerStreamId: String? = null,
 ) {
     /**
      * The identity used to match this item across refreshes.

@@ -35,4 +35,5 @@ val databaseModule: Module = module {
     single { get<VibratoDatabase>().channelDao() }
     single { get<VibratoDatabase>().resumePositionDao() }
     single { get<VibratoDatabase>().favoriteDao() }
+    single { get<VibratoDatabase>().programmeDao() }
 }

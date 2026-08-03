@@ -76,6 +76,8 @@ data class ChannelEntity(
     val stableKey: String,
     /** Preserves playlist order so the list renders as the provider intended. */
     val sortIndex: Int,
+    /** The provider's stream id, used to request this channel's guide. */
+    val providerStreamId: String? = null,
 )
 
 /**
@@ -113,4 +115,33 @@ data class ResumePositionEntity(
     @PrimaryKey val stableKey: String,
     val positionMillis: Long,
     val updatedAtEpochMillis: Long,
+)
+
+/**
+ * One programme in the guide.
+ *
+ * Source-agnostic by design. Only Xtream supplies programme data in v1
+ * (docs/FREEZE.md 3), but nothing here is Xtream-specific, so adding XMLTV later
+ * needs no schema migration (FREEZE 4.3).
+ *
+ * Times are UTC milliseconds. Panels report a local formatted string alongside a Unix
+ * timestamp and only the timestamp is trustworthy; conversion to the device's zone
+ * happens at render time (AC-EPG-03).
+ */
+@Entity(
+    tableName = "programmes",
+    indices = [
+        Index("sourceId", "channelKey", "startEpochMillis"),
+        Index("sourceId", "channelKey", "endEpochMillis"),
+    ],
+)
+data class ProgrammeEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0L,
+    val sourceId: Long,
+    /** Matches ChannelEntity.stableKey, so the guide survives a playlist refresh. */
+    val channelKey: String,
+    val title: String,
+    val description: String? = null,
+    val startEpochMillis: Long,
+    val endEpochMillis: Long,
 )

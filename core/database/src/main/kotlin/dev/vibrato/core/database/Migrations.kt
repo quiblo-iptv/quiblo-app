@@ -44,3 +44,34 @@ val MIGRATION_1_2 = object : Migration(1, 2) {
         )
     }
 }
+
+/**
+ * Adds the electronic programme guide (AC-EPG-*) and the provider stream id that a
+ * panel needs in order to be asked for one.
+ */
+val MIGRATION_2_3 = object : Migration(2, 3) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE `channels` ADD COLUMN `providerStreamId` TEXT")
+        db.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS `programmes` (
+                `id` INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+                `sourceId` INTEGER NOT NULL,
+                `channelKey` TEXT NOT NULL,
+                `title` TEXT NOT NULL,
+                `description` TEXT,
+                `startEpochMillis` INTEGER NOT NULL,
+                `endEpochMillis` INTEGER NOT NULL
+            )
+            """.trimIndent(),
+        )
+        db.execSQL(
+            "CREATE INDEX IF NOT EXISTS `index_programmes_sourceId_channelKey_startEpochMillis` " +
+                "ON `programmes` (`sourceId`, `channelKey`, `startEpochMillis`)",
+        )
+        db.execSQL(
+            "CREATE INDEX IF NOT EXISTS `index_programmes_sourceId_channelKey_endEpochMillis` " +
+                "ON `programmes` (`sourceId`, `channelKey`, `endEpochMillis`)",
+        )
+    }
+}

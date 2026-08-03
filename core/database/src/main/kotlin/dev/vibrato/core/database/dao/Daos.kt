@@ -28,6 +28,7 @@ import androidx.room.Transaction
 import androidx.room.Update
 import dev.vibrato.core.database.entity.ChannelEntity
 import dev.vibrato.core.database.entity.FavoriteEntity
+import dev.vibrato.core.database.entity.ProgrammeEntity
 import dev.vibrato.core.database.entity.ResumePositionEntity
 import dev.vibrato.core.database.entity.SourceEntity
 import kotlinx.coroutines.flow.Flow
@@ -187,4 +188,54 @@ interface FavoriteDao {
 
     @Query("SELECT COUNT(*) FROM favorites WHERE sourceId = :sourceId")
     suspend fun countFor(sourceId: Long): Int
+}
+
+@Dao
+interface ProgrammeDao {
+
+    /**
+     * The programme airing at [nowEpochMillis] on one channel, and the one after it.
+     *
+     * Ordered by start time and limited to two, which is exactly now and next
+     * (AC-EPG-02). Uses the end-time index so the query stays cheap per row.
+     */
+    @Query(
+        """
+        SELECT * FROM programmes
+        WHERE sourceId = :sourceId AND channelKey = :channelKey AND endEpochMillis > :nowEpochMillis
+        ORDER BY startEpochMillis ASC
+        LIMIT 2
+        """,
+    )
+    fun observeNowNext(sourceId: Long, channelKey: String, nowEpochMillis: Long): Flow<List<ProgrammeEntity>>
+
+    /** Whatever is on now across a whole source, for rendering list rows (AC-EPG-01). */
+    @Query(
+        """
+        SELECT * FROM programmes
+        WHERE sourceId = :sourceId
+          AND startEpochMillis <= :nowEpochMillis
+          AND endEpochMillis > :nowEpochMillis
+        """,
+    )
+    fun observeNowPlaying(sourceId: Long, nowEpochMillis: Long): Flow<List<ProgrammeEntity>>
+
+    @Query("SELECT COUNT(*) FROM programmes WHERE sourceId = :sourceId AND channelKey = :channelKey")
+    suspend fun countFor(sourceId: Long, channelKey: String): Int
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertAll(programmes: List<ProgrammeEntity>)
+
+    @Query("DELETE FROM programmes WHERE sourceId = :sourceId AND channelKey = :channelKey")
+    suspend fun deleteFor(sourceId: Long, channelKey: String)
+
+    /** Drops guide data that has already finished, so the table cannot grow without end. */
+    @Query("DELETE FROM programmes WHERE endEpochMillis < :beforeEpochMillis")
+    suspend fun deleteFinished(beforeEpochMillis: Long)
+
+    @Transaction
+    suspend fun replaceFor(sourceId: Long, channelKey: String, programmes: List<ProgrammeEntity>) {
+        deleteFor(sourceId, channelKey)
+        insertAll(programmes)
+    }
 }

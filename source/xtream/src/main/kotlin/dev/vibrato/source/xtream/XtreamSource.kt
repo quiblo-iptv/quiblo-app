@@ -21,9 +21,12 @@ package dev.vibrato.source.xtream
 import dev.vibrato.core.model.Category
 import dev.vibrato.core.model.Channel
 import dev.vibrato.core.model.MediaKind
+import dev.vibrato.core.model.Programme
 import dev.vibrato.core.model.SourceKind
 import dev.vibrato.source.api.CredentialStore
 import dev.vibrato.source.api.Credentials
+import dev.vibrato.source.api.GuideResult
+import dev.vibrato.source.api.GuideSource
 import dev.vibrato.source.api.MediaSource
 import dev.vibrato.source.api.SourceError
 import dev.vibrato.source.api.SourceReport
@@ -31,7 +34,9 @@ import dev.vibrato.source.api.SourceRequest
 import dev.vibrato.source.api.SourceResult
 import dev.vibrato.source.xtream.dto.AuthResponse
 import dev.vibrato.source.xtream.dto.CategoryDto
+import dev.vibrato.source.xtream.dto.EpgListingDto
 import io.ktor.client.HttpClient
+import java.util.Base64
 
 /**
  * Builds an Xtream [MediaSource].
@@ -42,7 +47,7 @@ import io.ktor.client.HttpClient
 fun createXtreamSource(
     httpClient: HttpClient,
     credentialStore: CredentialStore,
-): MediaSource = XtreamSource(XtreamClient(httpClient), credentialStore)
+): XtreamSource = XtreamSource(XtreamClient(httpClient), credentialStore)
 
 /**
  * The Xtream Codes implementation of [MediaSource].
@@ -53,7 +58,7 @@ fun createXtreamSource(
 class XtreamSource internal constructor(
     private val client: XtreamClient,
     private val credentialStore: CredentialStore,
-) : MediaSource {
+) : MediaSource, GuideSource {
 
     override val kind: SourceKind = SourceKind.XTREAM
 
@@ -143,6 +148,7 @@ class XtreamSource internal constructor(
                     tvgId = dto.epgChannelId?.takeIf { it.isNotBlank() } ?: "xtream-live-$id",
                     logoUrl = dto.streamIcon,
                     groupTitle = categories.titleFor(dto.categoryId),
+                    providerStreamId = id,
                 )
             }
         }
@@ -210,6 +216,77 @@ class XtreamSource internal constructor(
         return Batch(channels, skipped)
     }
 
+    /**
+     * Fetches now/next for one channel.
+     *
+     * Panels base64-encode programme titles and descriptions, though not always, so the
+     * decode is attempted and falls back to the raw text rather than showing mojibake.
+     *
+     * Only `start_timestamp`/`stop_timestamp` are used. Panels also send pre-formatted
+     * local strings, which carry no offset and cannot be converted safely — storing UTC
+     * and formatting at render time is what makes AC-EPG-03 hold.
+     */
+    override suspend fun guideFor(
+        request: SourceRequest,
+        channelKey: String,
+        providerStreamId: String,
+    ): GuideResult {
+        val base = XtreamUrl.normalize(request.location)
+            ?: return GuideResult.Failure(SourceError.UnreachableHost)
+        val credentials = credentialStore.credentials(request.sourceId)
+            ?: return GuideResult.Failure(SourceError.Unauthorized)
+
+        return when (val result = client.shortEpg(base, credentials, providerStreamId)) {
+            is ApiResult.Err -> GuideResult.Failure(result.error)
+
+            is ApiResult.Ok -> GuideResult.Success(
+                result.value.listings.mapNotNull { it.toProgramme(request.sourceId, channelKey) },
+            )
+        }
+    }
+
+    /**
+     * Converts one listing, dropping anything unusable.
+     *
+     * A programme with no title, no timestamps, or a stop before its start is not worth
+     * showing and would render as a broken row.
+     */
+    private fun EpgListingDto.toProgramme(sourceId: Long, channelKey: String): Programme? {
+        val start = startEpochSeconds ?: return null
+        val end = stopEpochSeconds ?: return null
+        if (end <= start) return null
+        val name = title?.decodeMaybeBase64()?.takeIf { it.isNotBlank() } ?: return null
+
+        return Programme(
+            id = 0L,
+            sourceId = sourceId,
+            channelKey = channelKey,
+            title = name,
+            description = description?.decodeMaybeBase64()?.takeIf { it.isNotBlank() },
+            startEpochMillis = start * MILLIS_PER_SECOND,
+            endEpochMillis = end * MILLIS_PER_SECOND,
+        )
+    }
+
+    /**
+     * Decodes base64 when the value actually is base64, otherwise returns it unchanged.
+     *
+     * Panels usually base64-encode programme titles, but not all of them do, and some do
+     * it inconsistently within one response. Decoding blindly turns plain text into
+     * mojibake, so a decode that yields control characters is rejected as a false
+     * positive and the original is kept.
+     */
+    @Suppress("SwallowedException", "TooGenericExceptionCaught")
+    private fun String.decodeMaybeBase64(): String = try {
+        val decoded = String(Base64.getDecoder().decode(this), Charsets.UTF_8)
+        val looksLikeText = decoded.none { it.isISOControl() && it != '\n' && it != '\r' && it != '\t' }
+        if (looksLikeText) decoded else this
+    } catch (_: IllegalArgumentException) {
+        this
+    } catch (_: Exception) {
+        this
+    }
+
     private fun ApiResult<List<CategoryDto>>.orEmpty(): List<CategoryDto> =
         (this as? ApiResult.Ok)?.value ?: emptyList()
 
@@ -218,4 +295,8 @@ class XtreamSource internal constructor(
             ?.categoryName
             ?.takeIf { it.isNotBlank() }
             ?: Category.UNGROUPED_TITLE
+
+    private companion object {
+        const val MILLIS_PER_SECOND = 1000L
+    }
 }

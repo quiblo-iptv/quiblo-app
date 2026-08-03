@@ -20,10 +20,12 @@ package dev.vibrato.core.data
 
 import dev.vibrato.core.database.dao.CategoryCount
 import dev.vibrato.core.database.entity.ChannelEntity
+import dev.vibrato.core.database.entity.ProgrammeEntity
 import dev.vibrato.core.database.entity.SourceEntity
 import dev.vibrato.core.model.Category
 import dev.vibrato.core.model.Channel
 import dev.vibrato.core.model.MediaKind
+import dev.vibrato.core.model.Programme
 import dev.vibrato.core.model.Source
 import dev.vibrato.core.model.SourceKind
 
@@ -55,6 +57,7 @@ internal fun ChannelEntity.toDomain(isFavorite: Boolean = false): Channel = Chan
     logoUrl = logoUrl,
     groupTitle = groupTitle,
     isFavorite = isFavorite,
+    providerStreamId = providerStreamId,
 )
 
 /**
@@ -72,6 +75,7 @@ internal fun Channel.toEntity(sortIndex: Int): ChannelEntity = ChannelEntity(
     groupTitle = groupTitle,
     stableKey = stableKey,
     sortIndex = sortIndex,
+    providerStreamId = providerStreamId,
 )
 
 internal fun CategoryCount.toDomain(sourceId: Long): Category = Category(
@@ -79,4 +83,24 @@ internal fun CategoryCount.toDomain(sourceId: Long): Category = Category(
     sourceId = sourceId,
     title = groupTitle,
     itemCount = itemCount,
+)
+
+internal fun ProgrammeEntity.toDomain(): Programme = Programme(
+    id = id,
+    sourceId = sourceId,
+    channelKey = channelKey,
+    title = title,
+    description = description,
+    startEpochMillis = startEpochMillis,
+    endEpochMillis = endEpochMillis,
+)
+
+internal fun Programme.toEntity(): ProgrammeEntity = ProgrammeEntity(
+    id = 0L,
+    sourceId = sourceId,
+    channelKey = channelKey,
+    title = title,
+    description = description,
+    startEpochMillis = startEpochMillis,
+    endEpochMillis = endEpochMillis,
 )

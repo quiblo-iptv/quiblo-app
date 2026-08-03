@@ -18,8 +18,9 @@
 
 package dev.vibrato.feature.browse
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -43,11 +44,16 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -60,6 +66,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.compose.SubcomposeAsyncImage
 import dev.vibrato.core.model.Category
 import dev.vibrato.core.model.Channel
+import dev.vibrato.core.model.Programme
 
 /**
  * The list UI shared by Live, Movies, Series and Favourites.
@@ -80,6 +87,7 @@ fun BrowseScreen(
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val query by viewModel.currentQuery.collectAsStateWithLifecycle()
+    var guideFor: Channel? by remember { mutableStateOf(null) }
 
     if (!state.hasSource) {
         CentredMessage(stringResource(R.string.browse_no_source), modifier)
@@ -107,15 +115,28 @@ fun BrowseScreen(
 
             else -> LazyColumn(modifier = Modifier.fillMaxSize()) {
                 items(items = state.items, key = { it.id }) { item ->
+                    // Fetching as rows appear is what keeps a 20,000-channel account from
+                    // becoming 20,000 guide requests.
+                    LaunchedEffect(item.id) { viewModel.onRowVisible(item) }
                     ChannelRow(
                         channel = item,
+                        nowPlaying = state.nowPlaying[item.stableKey],
                         onClick = { onItemClick(item) },
+                        onLongClick = { guideFor = item },
                         onToggleFavorite = { viewModel.toggleFavorite(item) },
                     )
                     HorizontalDivider()
                 }
             }
         }
+    }
+
+    guideFor?.let { channel ->
+        GuideSheet(
+            channel = channel,
+            nowNext = viewModel.nowNextFor(channel),
+            onDismiss = { guideFor = null },
+        )
     }
 }
 
@@ -176,29 +197,42 @@ private fun CategoryFilter(
 private fun Category.displayTitle(): String =
     if (title == Category.UNGROUPED_TITLE) stringResource(R.string.browse_category_ungrouped) else title
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun ChannelRow(
     channel: Channel,
+    nowPlaying: Programme?,
     onClick: () -> Unit,
+    onLongClick: () -> Unit,
     onToggleFavorite: () -> Unit,
 ) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick)
+            // Tap plays; long press opens the guide. Playing is what a user wants
+            // almost every time, so it keeps the cheaper gesture.
+            .combinedClickable(onClick = onClick, onLongClick = onLongClick)
             .padding(start = 16.dp, top = 6.dp, bottom = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         ChannelLogo(channel.logoUrl)
-        Text(
-            text = channel.name,
-            style = MaterialTheme.typography.bodyLarge,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
+        Column(
             modifier = Modifier
                 .weight(1f)
                 .padding(start = 12.dp),
-        )
+        ) {
+            Text(
+                text = channel.name,
+                style = MaterialTheme.typography.bodyLarge,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            // Nothing at all when there is no guide, rather than an empty placeholder.
+            // An M3U source has no guide by construction (AC-EPG-04).
+            if (nowPlaying != null) {
+                NowPlayingLine(nowPlaying)
+            }
+        }
         IconButton(onClick = onToggleFavorite) {
             Icon(
                 imageVector = if (channel.isFavorite) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,
@@ -213,6 +247,30 @@ private fun ChannelRow(
             )
         }
     }
+}
+
+/**
+ * The current programme and how far through it we are (AC-EPG-01).
+ *
+ * The progress value is recomputed from the programme's own times rather than ticking a
+ * timer per row, so a long list costs nothing extra to keep roughly accurate.
+ */
+@Composable
+private fun NowPlayingLine(programme: Programme) {
+    val now = System.currentTimeMillis()
+    Text(
+        text = programme.title,
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
+    )
+    LinearProgressIndicator(
+        progress = { programme.progressAt(now) },
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 2.dp, end = 8.dp),
+    )
 }
 
 /**

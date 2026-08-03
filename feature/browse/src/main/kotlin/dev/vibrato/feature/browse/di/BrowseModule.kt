@@ -38,6 +38,7 @@ val browseModule: Module = module {
             favoritesOnly = favoritesOnly,
             sourceRepository = get(),
             channelRepository = get(),
+            guideRepository = get(),
         )
     }
 }

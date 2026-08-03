@@ -21,10 +21,12 @@ package dev.vibrato.feature.browse
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dev.vibrato.core.data.ChannelRepository
+import dev.vibrato.core.data.GuideRepository
 import dev.vibrato.core.data.SourceRepository
 import dev.vibrato.core.model.Category
 import dev.vibrato.core.model.Channel
 import dev.vibrato.core.model.MediaKind
+import dev.vibrato.core.model.Programme
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -38,6 +40,9 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
+import java.util.concurrent.ConcurrentHashMap
 
 /** What a browse screen renders. */
 data class BrowseUiState(
@@ -46,6 +51,8 @@ data class BrowseUiState(
     val selectedCategory: String? = null,
     val items: List<Channel> = emptyList(),
     val query: String = "",
+    /** What is airing now, keyed by channel identity. Empty for sources with no guide. */
+    val nowPlaying: Map<String, Programme> = emptyMap(),
 )
 
 /**
@@ -60,7 +67,19 @@ class BrowseViewModel(
     private val favoritesOnly: Boolean,
     sourceRepository: SourceRepository,
     private val channelRepository: ChannelRepository,
+    private val guideRepository: GuideRepository,
 ) : ViewModel() {
+
+    /**
+     * Channels whose guide has already been requested this session.
+     *
+     * Rows are re-composed constantly while scrolling; without this the same channel
+     * would be fetched dozens of times.
+     */
+    private val guideRequested = ConcurrentHashMap.newKeySet<String>()
+
+    /** Caps concurrent guide requests so scrolling cannot stampede a panel. */
+    private val guideLimiter = Semaphore(MAX_CONCURRENT_GUIDE_FETCHES)
 
     private val selectedCategory = MutableStateFlow<String?>(null)
     private val query = MutableStateFlow("")
@@ -92,16 +111,39 @@ class BrowseViewModel(
         } else {
             channelRepository.observeBrowse(sourceId, kind, selected, searchText)
         }
-        items.map { list ->
+        combine(items, guideRepository.observeNowPlaying(sourceId)) { list, guide ->
             BrowseUiState(
                 hasSource = true,
                 categories = if (favoritesOnly) emptyList() else categories,
                 selectedCategory = selected,
                 items = list,
                 query = searchText,
+                nowPlaying = guide,
             )
         }
     }
+
+    /**
+     * Called as a row scrolls into view.
+     *
+     * Guide data is fetched for what the user can actually see rather than for the whole
+     * account, because a 20,000-channel account would otherwise mean 20,000 requests.
+     */
+    fun onRowVisible(channel: Channel) {
+        if (channel.providerStreamId == null) return
+        if (!guideRequested.add(channel.stableKey)) return
+
+        viewModelScope.launch {
+            guideLimiter.withPermit {
+                if (!guideRepository.hasGuideFor(channel.sourceId, channel.stableKey)) {
+                    guideRepository.refreshGuideFor(channel)
+                }
+            }
+        }
+    }
+
+    /** Now and next for one channel, for the detail sheet (AC-EPG-02). */
+    fun nowNextFor(channel: Channel) = guideRepository.observeNowNext(channel.sourceId, channel.stableKey)
 
     fun selectCategory(groupTitle: String?) {
         selectedCategory.value = groupTitle
@@ -118,5 +160,6 @@ class BrowseViewModel(
     private companion object {
         const val STOP_TIMEOUT_MILLIS = 5_000L
         const val SEARCH_DEBOUNCE_MILLIS = 120L
+        const val MAX_CONCURRENT_GUIDE_FETCHES = 3
     }
 }

@@ -39,4 +39,15 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
+
+    override fun onUserLeaveHint() {
+        super.onUserLeaveHint()
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+            try {
+                enterPictureInPictureMode(android.app.PictureInPictureParams.Builder().build())
+            } catch (_: Exception) {
+                // Device or activity configuration might disable PiP
+            }
+        }
+    }
 }

@@ -35,6 +35,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.ClosedCaption
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.PictureInPictureAlt
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -221,6 +222,7 @@ private fun PlayerControls(
     onPlayPause: () -> Unit,
     onSeek: (Long) -> Unit,
     onCycleSubtitles: () -> Unit,
+    onPictureInPictureClick: () -> Unit = {},
 ) {
     Column(modifier = Modifier.fillMaxSize()) {
         Row(
@@ -253,6 +255,13 @@ private fun PlayerControls(
                         tint = Color.White,
                     )
                 }
+            }
+            IconButton(onClick = onPictureInPictureClick) {
+                Icon(
+                    imageVector = Icons.Filled.PictureInPictureAlt,
+                    contentDescription = "Picture in Picture",
+                    tint = Color.White,
+                )
             }
         }
 

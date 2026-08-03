@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Vibrato — a free, open source IPTV player.
+  Copyright (C) 2026 The Vibrato Authors
+  Licensed under the GNU General Public License v3.0 or later. See LICENSE.
+-->
+<resources>
+    <!--
+      Always dark. A television is watched in a dim room at a distance, and the light theme
+      the phone app offers would be glaring rather than merely bright.
+    -->
+    <style name="Theme.VibratoTv" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@android:color/black</item>
+    </style>
+</resources>

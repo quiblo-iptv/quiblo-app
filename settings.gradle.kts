@@ -50,6 +50,7 @@ rootProject.name = "vibrato"
 enableFeaturePreview("TYPESAFE_PROJECT_ACCESSORS")
 
 include(":app")
+include(":app-tv")
 
 // Pure Kotlin / Android core. Never depends on :feature:* and never imports Compose.
 include(":core:model")

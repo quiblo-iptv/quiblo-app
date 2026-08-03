@@ -17,6 +17,7 @@ room = "2.8.4"
 datastore = "1.2.1"
 securityCrypto = "1.1.0"
 media3 = "1.10.1"
+tvMaterial = "1.0.1"
 
 # Libraries
 koin = "4.2.2"
@@ -52,6 +53,8 @@ compose-material-icons = { module = "androidx.compose.material:material-icons-ex
 androidx-core-ktx = { module = "androidx.core:core-ktx", version.ref = "coreKtx" }
 androidx-activity-compose = { module = "androidx.activity:activity-compose", version.ref = "activityCompose" }
 androidx-navigation-compose = { module = "androidx.navigation:navigation-compose", version.ref = "navigationCompose" }
+# Compose for TV: focus-aware surfaces, tabs and lists built for a D-pad.
+androidx-tv-material = { module = "androidx.tv:tv-material", version.ref = "tvMaterial" }
 androidx-lifecycle-viewmodel-compose = { module = "androidx.lifecycle:lifecycle-viewmodel-compose", version.ref = "lifecycle" }
 androidx-lifecycle-runtime-compose = { module = "androidx.lifecycle:lifecycle-runtime-compose", version.ref = "lifecycle" }
 androidx-lifecycle-viewmodel-ktx = { module = "androidx.lifecycle:lifecycle-viewmodel-ktx", version.ref = "lifecycle" }

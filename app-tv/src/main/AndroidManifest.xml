@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Vibrato — a free, open source IPTV player.
+  Copyright (C) 2026 The Vibrato Authors
+  Licensed under the GNU General Public License v3.0 or later. See LICENSE.
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
+    <!--
+      A television has no touchscreen and Android assumes one unless told otherwise, so
+      without this the app is filtered off every TV in the store. leanback is what makes it
+      a TV app; leanback_only would exclude tablets, and there is no reason to.
+    -->
+    <uses-feature
+        android:name="android.software.leanback"
+        android:required="true" />
+    <uses-feature
+        android:name="android.hardware.touchscreen"
+        android:required="false" />
+
+    <application
+        android:name=".VibratoTvApplication"
+        android:allowBackup="false"
+        android:banner="@drawable/tv_banner"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/tv_app_name"
+        android:networkSecurityConfig="@xml/network_security_config"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.VibratoTv">
+
+        <activity
+            android:name=".TvMainActivity"
+            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|smallestScreenSize|uiMode"
+            android:exported="true"
+            android:label="@string/tv_app_name"
+            android:screenOrientation="landscape"
+            android:theme="@style/Theme.VibratoTv">
+            <!--
+              LEANBACK_LAUNCHER, not LAUNCHER. This is the category the TV home screen
+              reads; an app with only LAUNCHER installs on a television and then cannot be
+              found from its own launcher.
+            -->
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+    </application>
+
+</manifest>

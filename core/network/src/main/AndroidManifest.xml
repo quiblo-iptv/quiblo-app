@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Vibrato — a free, open source IPTV player.
+  Copyright (C) 2026 The Vibrato Authors
+  Licensed under the GNU General Public License v3.0 or later. See LICENSE.
+
+  This module declares the permissions it actually uses, so that any consumer of
+  :core:network inherits them through manifest merging rather than having to know.
+  Both are also declared in :app; the merger de-duplicates them.
+
+  AC-NFR-04 caps the app at exactly these two. Adding a third here would silently widen
+  the app's permission set, so treat this file as part of that budget.
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
+</manifest>

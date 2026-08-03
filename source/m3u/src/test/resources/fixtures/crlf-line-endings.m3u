@@ -1,0 +1,5 @@
+#EXTM3U
+#EXTINF:-1 tvg-id="crlf.1" group-title="General",CRLF Channel
+http://stream.example.invalid/live/crlf.m3u8
+#EXTINF:-1 tvg-id="crlf.2" group-title="General",CRLF Two
+http://stream.example.invalid/live/crlf2.m3u8

@@ -39,9 +39,12 @@ dependencies {
     add("implementation", libs.findLibrary("compose-ui-graphics").get())
     add("implementation", libs.findLibrary("compose-ui-tooling-preview").get())
     add("implementation", libs.findLibrary("compose-material3").get())
+    add("implementation", libs.findLibrary("compose-material-icons").get())
     add("implementation", libs.findLibrary("androidx-lifecycle-runtime-compose").get())
     add("implementation", libs.findLibrary("androidx-lifecycle-viewmodel-compose").get())
+    add("implementation", libs.findLibrary("androidx-lifecycle-viewmodel-ktx").get())
     add("implementation", libs.findLibrary("androidx-navigation-compose").get())
+    add("implementation", libs.findLibrary("androidx-activity-compose").get())
     // Koin artifacts carry no version of their own; the BOM supplies them.
     add("implementation", platform(libs.findLibrary("koin-bom").get()))
     add("implementation", libs.findLibrary("koin-android").get())

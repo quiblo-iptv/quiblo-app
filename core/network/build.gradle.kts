@@ -26,6 +26,7 @@ android {
 
 dependencies {
     api(projects.core.model)
+    api(projects.source.api)
     implementation(projects.core.common)
     implementation(libs.ktor.client.core)
     implementation(libs.ktor.client.okhttp)
@@ -33,4 +34,9 @@ dependencies {
     implementation(libs.ktor.serialization.json)
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.kotlinx.coroutines.core)
+    implementation(platform(libs.koin.bom))
+    implementation(libs.koin.core)
+    implementation(libs.androidx.core.ktx)
+
+    testImplementation(libs.ktor.client.mock)
 }

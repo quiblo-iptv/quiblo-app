@@ -1,0 +1,4 @@
+#EXTM3U
+#EXTINF:-1 tvg-id="ok.1" group-title="General",Complete Entry
+http://stream.example.invalid/live/ok1.m3u8
+#EXTINF:-1 tvg-id="trunc.1" group-title="General",Truncated Entry

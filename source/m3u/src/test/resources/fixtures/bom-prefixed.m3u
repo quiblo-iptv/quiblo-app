@@ -1,0 +1,3 @@
+﻿#EXTM3U
+#EXTINF:-1 tvg-id="bom.1" group-title="General",BOM Channel
+http://stream.example.invalid/live/bom.m3u8

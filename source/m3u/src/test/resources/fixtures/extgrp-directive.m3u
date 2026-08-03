@@ -1,0 +1,7 @@
+#EXTM3U
+#EXTINF:-1 tvg-id="grp.1",Grouped By Directive
+#EXTGRP:Kids
+http://stream.example.invalid/live/grp1.m3u8
+#EXTINF:-1 tvg-id="grp.2" group-title="Attribute Wins",Attribute Beats Directive
+#EXTGRP:Kids
+http://stream.example.invalid/live/grp2.m3u8

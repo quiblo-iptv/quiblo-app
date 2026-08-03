@@ -16,14 +16,14 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-package dev.vibrato.core.database
+package dev.vibrato.feature.live.di
 
-/**
- * Module marker for `:core:database`.
- *
- * Room entities, DAOs and migrations land here in M1. KSP is wired in when the first @Dao appears.
- *
- * The module exists from M0 so the dependency graph and the AC-NFR-06 Compose
- * check are wired and enforced from the first commit (docs/PLAN.md §3).
- */
-internal object CoreDatabaseMarker
+import dev.vibrato.feature.live.LiveViewModel
+import org.koin.core.module.Module
+import org.koin.core.module.dsl.viewModelOf
+import org.koin.dsl.module
+
+/** Wiring owned by `:feature:live`. Aggregated by `:app`. */
+val liveModule: Module = module {
+    viewModelOf(::LiveViewModel)
+}

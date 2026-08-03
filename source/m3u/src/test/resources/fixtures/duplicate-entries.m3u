@@ -1,0 +1,5 @@
+#EXTM3U
+#EXTINF:-1 tvg-id="dup.1" group-title="General",Duplicate One
+http://stream.example.invalid/live/dup.m3u8
+#EXTINF:-1 tvg-id="dup.1" group-title="General",Duplicate One Again
+http://stream.example.invalid/live/dup.m3u8

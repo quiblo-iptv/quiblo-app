@@ -1,0 +1,15 @@
+#EXTM3U
+
+this line is not a directive and not a url
+
+#EXTVLCOPT:network-caching=1000
+#EXTINF:-1 tvg-id="mix.1" group-title="General",Good One
+http://stream.example.invalid/live/mix1.m3u8
+#EXTINF:-1 tvg-id="mix.bad" group-title="General",Missing URL Follows
+#EXTINF:-1 tvg-id="mix.2" group-title="General",Good Two
+http://stream.example.invalid/live/mix2.m3u8
+#EXTINF:this-duration-is-not-a-number tvg-id="mix.3",Bad Duration Still Usable
+http://stream.example.invalid/live/mix3.m3u8
+
+#EXTINF:-1,
+http://stream.example.invalid/live/noname.m3u8

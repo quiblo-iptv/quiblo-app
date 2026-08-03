@@ -23,7 +23,9 @@ import org.gradle.api.Project
 import org.gradle.api.artifacts.VersionCatalog
 import org.gradle.api.artifacts.VersionCatalogsExtension
 import org.gradle.api.artifacts.component.ModuleComponentSelector
+import org.gradle.api.tasks.testing.Test
 import org.gradle.kotlin.dsl.getByType
+import org.gradle.kotlin.dsl.withType
 
 /** The single source of truth for dependency versions. See gradle/libs.versions.toml. */
 val Project.libs: VersionCatalog
@@ -35,6 +37,22 @@ fun Project.catalogInt(alias: String): Int =
 
 /** The JVM target every module compiles against. */
 const val JVM_TARGET = 17
+
+/**
+ * Shared test configuration for every module.
+ *
+ * Note for Windows: AGP launches unit tests with `-Djava.library.path` copied from the
+ * Gradle daemon's own library path, which the JVM derives from `PATH` at startup. A stray
+ * double quote anywhere in the system `PATH` therefore breaks command-line tokenisation
+ * and the test JVM dies with "Could not find or load main class <fragment of your PATH>".
+ * No task-level configuration can repair that — the value is already mangled before the
+ * build starts. Fix the `PATH` entry itself, then restart the daemon.
+ */
+fun Project.configureTests() {
+    tasks.withType<Test>().configureEach {
+        useJUnitPlatform()
+    }
+}
 
 /**
  * Enforces architectural invariant 1 of docs/FREEZE.md and AC-NFR-06: no Compose in

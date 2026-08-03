@@ -1,0 +1,5 @@
+#EXTM3U
+#EXTINF:-1 tvg-id="comma.1" group-title="Docs",History, Science, and More
+http://stream.example.invalid/live/comma1.m3u8
+#EXTINF:-1 group-title="Movies",Wait, What?, The Sequel
+http://stream.example.invalid/vod/comma2.mp4

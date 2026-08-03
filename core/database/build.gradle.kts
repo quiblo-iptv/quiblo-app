@@ -18,16 +18,27 @@
 
 plugins {
     id("vibrato.android.core")
+    alias(libs.plugins.ksp)
 }
 
 android {
     namespace = "dev.vibrato.core.database"
 }
 
+ksp {
+    // Emits the schema JSON that Room migration tests diff against, from M1 onward.
+    arg("room.schemaLocation", "$projectDir/schemas")
+    arg("room.generateKotlin", "true")
+}
+
 dependencies {
+    ksp(libs.room.compiler)
+    testImplementation(libs.room.testing)
     api(projects.core.model)
     implementation(projects.core.common)
     implementation(libs.room.runtime)
     implementation(libs.room.ktx)
     implementation(libs.kotlinx.coroutines.core)
+    implementation(platform(libs.koin.bom))
+    implementation(libs.koin.core)
 }

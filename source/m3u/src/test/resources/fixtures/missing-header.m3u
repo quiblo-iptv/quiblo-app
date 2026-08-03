@@ -1,0 +1,4 @@
+#EXTINF:-1 tvg-id="nohdr.1" group-title="General",No Header One
+http://stream.example.invalid/live/nohdr1.m3u8
+#EXTINF:-1 tvg-id="nohdr.2" group-title="General",No Header Two
+http://stream.example.invalid/live/nohdr2.m3u8

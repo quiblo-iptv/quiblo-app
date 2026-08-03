@@ -16,14 +16,14 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-package dev.vibrato.source.api
+package dev.vibrato.feature.sources.di
 
-/**
- * Module marker for `:source:api`.
- *
- * The MediaSource interface and shared DTO contract land here in M1.
- *
- * The module exists from M0 so the dependency graph and the AC-NFR-06 Compose
- * check are wired and enforced from the first commit (docs/PLAN.md §3).
- */
-internal object SourceApiMarker
+import dev.vibrato.feature.sources.SourcesViewModel
+import org.koin.core.module.Module
+import org.koin.core.module.dsl.viewModelOf
+import org.koin.dsl.module
+
+/** Wiring owned by `:feature:sources`. Aggregated by `:app`. */
+val sourcesModule: Module = module {
+    viewModelOf(::SourcesViewModel)
+}

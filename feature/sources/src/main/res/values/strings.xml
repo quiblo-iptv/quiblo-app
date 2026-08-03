@@ -6,5 +6,39 @@
 -->
 <resources>
     <string name="feature_sources_title">Sources</string>
-    <string name="feature_sources_empty">Add an M3U playlist or Xtream account to get started.</string>
+    <string name="feature_sources_empty">Add an M3U playlist to get started.</string>
+
+    <string name="sources_add">Add playlist</string>
+    <string name="sources_add_title">Add M3U playlist</string>
+    <string name="sources_name_label">Name (optional)</string>
+    <string name="sources_url_label">Playlist URL</string>
+    <string name="sources_pick_file">Choose a file instead</string>
+    <string name="sources_confirm">Add</string>
+    <string name="sources_cancel">Cancel</string>
+    <string name="sources_delete">Delete</string>
+    <string name="sources_refresh">Refresh</string>
+    <string name="sources_never_loaded">Not loaded yet</string>
+    <string name="sources_working">Loading…</string>
+
+    <plurals name="sources_channel_count">
+        <item quantity="one">%d channel</item>
+        <item quantity="other">%d channels</item>
+    </plurals>
+    <plurals name="sources_skipped_count">
+        <item quantity="one">%d entry could not be read and was skipped.</item>
+        <item quantity="other">%d entries could not be read and were skipped.</item>
+    </plurals>
+    <string name="sources_added">Loaded %1$s.</string>
+    <string name="sources_dismiss">OK</string>
+
+    <!-- AC-PL-07: every failure gets a specific, human-readable message. -->
+    <string name="source_error_no_network">No internet connection. Check your network and try again.</string>
+    <string name="source_error_timeout">The server took too long to respond. It may be busy or unreachable.</string>
+    <string name="source_error_unreachable">Could not reach that address. Check the URL for typos.</string>
+    <string name="source_error_not_found">That playlist was not found (404). The link may have moved or expired.</string>
+    <string name="source_error_not_a_playlist">That address returned a web page, not a playlist. Check that you copied the playlist link itself.</string>
+    <string name="source_error_empty">That playlist loaded but contains no channels.</string>
+    <string name="source_error_file_unreadable">That file could not be read. Try choosing it again.</string>
+    <string name="source_error_http_status">The server responded with an error (%1$d).</string>
+    <string name="source_error_unknown">Something went wrong loading that playlist. Please try again.</string>
 </resources>

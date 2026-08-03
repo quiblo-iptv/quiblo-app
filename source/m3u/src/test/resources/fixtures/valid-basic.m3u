@@ -1,0 +1,7 @@
+#EXTM3U
+#EXTINF:-1 tvg-id="alpha.1" tvg-name="Alpha One" tvg-logo="http://logos.example.invalid/alpha.png" group-title="News",Alpha One
+http://stream.example.invalid/live/alpha1.m3u8
+#EXTINF:-1 tvg-id="beta.2" tvg-logo="http://logos.example.invalid/beta.png" group-title="Sports",Beta Two
+http://stream.example.invalid/live/beta2.m3u8
+#EXTINF:-1 tvg-id="gamma.3" group-title="News",Gamma Three
+http://stream.example.invalid/live/gamma3.ts

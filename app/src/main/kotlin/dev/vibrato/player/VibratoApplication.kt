@@ -19,7 +19,7 @@
 package dev.vibrato.player
 
 import android.app.Application
-import dev.vibrato.player.di.appModule
+import dev.vibrato.player.di.appModules
 import org.koin.android.ext.koin.androidContext
 import org.koin.android.ext.koin.androidLogger
 import org.koin.core.context.startKoin
@@ -40,7 +40,7 @@ class VibratoApplication : Application() {
         startKoin {
             androidLogger(if (BuildConfig.DEBUG) Level.ERROR else Level.NONE)
             androidContext(this@VibratoApplication)
-            modules(appModule)
+            modules(appModules)
         }
     }
 }

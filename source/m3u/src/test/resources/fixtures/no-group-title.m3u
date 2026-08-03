@@ -1,0 +1,5 @@
+#EXTM3U
+#EXTINF:-1 tvg-id="ung.1",Ungrouped One
+http://stream.example.invalid/live/ung1.m3u8
+#EXTINF:-1,Ungrouped Two
+http://stream.example.invalid/live/ung2.m3u8

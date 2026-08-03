@@ -14,6 +14,12 @@ style:
   # Compose screen composables legitimately take many parameters via hoisting.
   UnusedPrivateMember:
     active: true
+  ReturnCount:
+    active: true
+    max: 2
+    # Guard clauses at the top of a function are idiomatic Kotlin and read better than
+    # the nested alternative. This rule exists to catch tangled control flow, not these.
+    excludeGuardClauses: true
 
 complexity:
   LongParameterList:

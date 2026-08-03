@@ -17,6 +17,7 @@
  */
 
 import dev.vibrato.buildlogic.JVM_TARGET
+import dev.vibrato.buildlogic.configureTests
 import dev.vibrato.buildlogic.enforceNoCompose
 import dev.vibrato.buildlogic.libs
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
@@ -48,9 +49,7 @@ dependencies {
     add("testRuntimeOnly", libs.findLibrary("junit-platform-launcher").get())
 }
 
-tasks.withType<Test>().configureEach {
-    useJUnitPlatform()
-}
+configureTests()
 
 // :core:model and :source:* are plain JVM modules precisely so that Compose and the
 // Android framework cannot reach them. Assert it rather than assume it (AC-NFR-06).

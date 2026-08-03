@@ -16,14 +16,21 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-package dev.vibrato.core.data
+package dev.vibrato.core.database.di
+
+import android.content.Context
+import dev.vibrato.core.database.VibratoDatabase
+import org.koin.core.module.Module
+import org.koin.dsl.module
 
 /**
- * Module marker for `:core:data`.
+ * Wiring owned by `:core:database`.
  *
- * Repositories land here in M1. This is the only layer :feature:* modules are allowed to talk to.
- *
- * The module exists from M0 so the dependency graph and the AC-NFR-06 Compose
- * check are wired and enforced from the first commit (docs/PLAN.md §3).
+ * The database is constructed here rather than in `:core:data` so that Room stays an
+ * implementation detail of this module and never leaks onto a consumer's classpath.
  */
-internal object CoreDataMarker
+val databaseModule: Module = module {
+    single { VibratoDatabase.create(get<Context>()) }
+    single { get<VibratoDatabase>().sourceDao() }
+    single { get<VibratoDatabase>().channelDao() }
+}

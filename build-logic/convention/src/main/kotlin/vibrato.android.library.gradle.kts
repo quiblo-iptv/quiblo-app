@@ -18,6 +18,7 @@
 
 import com.android.build.api.dsl.LibraryExtension
 import dev.vibrato.buildlogic.catalogInt
+import dev.vibrato.buildlogic.configureTests
 import dev.vibrato.buildlogic.libs
 
 plugins {
@@ -57,6 +58,4 @@ dependencies {
     add("androidTestImplementation", libs.findLibrary("androidx-test-junit").get())
 }
 
-tasks.withType<Test>().configureEach {
-    useJUnitPlatform()
-}
+configureTests()

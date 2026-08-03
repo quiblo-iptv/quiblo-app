@@ -14,6 +14,11 @@
 # The Gradle wrapper script is executed by /bin/sh on CI. Never CRLF.
 gradlew text eol=lf
 
+# Test fixtures encode their line endings and byte-order marks on purpose: the CRLF and
+# BOM cases in AC-PL-04 only test anything if git leaves the bytes alone. Never normalise.
+source/m3u/src/test/resources/fixtures/** -text
+source/xtream/src/test/resources/fixtures/** -text
+
 # Binary assets git must not touch.
 *.jar      binary
 *.png      binary

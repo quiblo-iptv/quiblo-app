@@ -18,6 +18,7 @@
 
 import com.android.build.api.dsl.ApplicationExtension
 import dev.vibrato.buildlogic.catalogInt
+import dev.vibrato.buildlogic.configureTests
 
 plugins {
     // AGP 9 compiles Kotlin itself; org.jetbrains.kotlin.android must not be applied.
@@ -57,6 +58,4 @@ extensions.configure<ApplicationExtension> {
     }
 }
 
-tasks.withType<Test>().configureEach {
-    useJUnitPlatform()
-}
+configureTests()

@@ -18,16 +18,23 @@
 
 package dev.vibrato.player.di
 
+import dev.vibrato.core.data.di.dataModule
+import dev.vibrato.core.database.di.databaseModule
+import dev.vibrato.core.network.di.networkModule
+import dev.vibrato.feature.live.di.liveModule
+import dev.vibrato.feature.sources.di.sourcesModule
 import org.koin.core.module.Module
-import org.koin.dsl.module
 
 /**
- * Root Koin module.
+ * Every module's wiring, aggregated.
  *
- * Empty at M0. Per-layer modules (`:core:database`, `:core:network`, `:core:data`,
- * `:source:*`) are declared in their own modules and aggregated here as they land,
- * keeping `:app` the single assembly point (docs/PLAN.md §2).
+ * Each layer declares its own Koin module and `:app` is the single assembly point
+ * (docs/PLAN.md §2). Adding Xtream in M4 means adding one entry to this list.
  */
-val appModule: Module = module {
-    // Intentionally empty until M1 introduces the first repository.
-}
+val appModules: List<Module> = listOf(
+    databaseModule,
+    networkModule,
+    dataModule,
+    sourcesModule,
+    liveModule,
+)

@@ -48,5 +48,8 @@ fun VodScreen(
         onItemClick = onItemClick,
         emptyMessage = stringResource(R.string.feature_vod_empty),
         modifier = modifier,
+        // Movie artwork is poster art, so the grid shows it full-bleed rather than as a
+        // thumbnail beside a label.
+        showArtworkCards = true,
     )
 }

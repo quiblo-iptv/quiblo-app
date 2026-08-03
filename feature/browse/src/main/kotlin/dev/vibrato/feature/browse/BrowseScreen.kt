@@ -100,6 +100,15 @@ fun BrowseScreen(
     emptyMessage: String,
     modifier: Modifier = Modifier,
     showSearch: Boolean = true,
+    /**
+     * Renders grid items as poster cards — artwork edge to edge with the title over a
+     * gradient — instead of a logo and a label.
+     *
+     * Opt-in rather than the default because it only suits content whose artwork *is* a
+     * poster. Live channel logos are small wide badges, and cropping one into a portrait
+     * card shows you a corner of a logo.
+     */
+    showArtworkCards: Boolean = false,
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val query by viewModel.currentQuery.collectAsStateWithLifecycle()
@@ -133,7 +142,8 @@ fun BrowseScreen(
             state.items.isEmpty() -> CentredMessage(emptyMessage)
 
             isGridView -> LazyVerticalGrid(
-                columns = GridCells.Adaptive(minSize = 150.dp),
+                // Posters are portrait and read fine narrower, so they get more per row.
+                columns = GridCells.Adaptive(minSize = if (showArtworkCards) 120.dp else 150.dp),
                 contentPadding = PaddingValues(12.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -143,11 +153,19 @@ fun BrowseScreen(
                 // a grid fits several times more items on screen than a list. Fetching
                 // for each one is a burst of requests whose results nothing renders.
                 items(items = state.items, key = { it.id }) { item ->
-                    ChannelGridCard(
-                        channel = item,
-                        onClick = { onItemClick(item) },
-                        onToggleFavorite = { viewModel.toggleFavorite(item) },
-                    )
+                    if (showArtworkCards) {
+                        ChannelArtCard(
+                            channel = item,
+                            onClick = { onItemClick(item) },
+                            onToggleFavorite = { viewModel.toggleFavorite(item) },
+                        )
+                    } else {
+                        ChannelGridCard(
+                            channel = item,
+                            onClick = { onItemClick(item) },
+                            onToggleFavorite = { viewModel.toggleFavorite(item) },
+                        )
+                    }
                 }
             }
 

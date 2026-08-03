@@ -26,6 +26,7 @@ import dev.vibrato.core.model.Programme
 import dev.vibrato.core.model.Season
 import dev.vibrato.core.model.SeriesDetails
 import dev.vibrato.core.model.SourceKind
+import dev.vibrato.core.model.VodDetails
 import dev.vibrato.source.api.CredentialStore
 import dev.vibrato.source.api.Credentials
 import dev.vibrato.source.api.GuideResult
@@ -37,6 +38,8 @@ import dev.vibrato.source.api.SourceError
 import dev.vibrato.source.api.SourceReport
 import dev.vibrato.source.api.SourceRequest
 import dev.vibrato.source.api.SourceResult
+import dev.vibrato.source.api.VodDetailsResult
+import dev.vibrato.source.api.VodSource
 import dev.vibrato.source.xtream.dto.AuthResponse
 import dev.vibrato.source.xtream.dto.CategoryDto
 import dev.vibrato.source.xtream.dto.EpgListingDto
@@ -64,11 +67,36 @@ fun createXtreamSource(
 class XtreamSource internal constructor(
     private val client: XtreamClient,
     private val credentialStore: CredentialStore,
-) : MediaSource, GuideSource, SeriesSource {
+    private val now: () -> Long = System::currentTimeMillis,
+) : MediaSource, GuideSource, SeriesSource, VodSource {
 
     override val kind: SourceKind = SourceKind.XTREAM
 
+    /**
+     * When the panel last refused us, plus a cooling-off period.
+     *
+     * A panel that has tripped its anti-flood rule answers everything with a block, and
+     * every further request while blocked is another strike — so continuing to ask is how
+     * a short block becomes a long one. This gate lives here, on the one class that talks
+     * to the panel, so it covers the catalogue refresh, the guide, series details and film
+     * details alike. It used to exist only around the guide, which left the other three
+     * free to keep knocking.
+     */
+    private var blockedUntilEpochMillis: Long = 0L
+
+    private val isBlocked: Boolean get() = now() < blockedUntilEpochMillis
+
+    /** Records a block so the other call paths stop too, and passes the error through. */
+    private fun <T> noteBlocked(error: SourceError, failure: (SourceError) -> T): T {
+        if (error == SourceError.ProviderBlocked) {
+            blockedUntilEpochMillis = now() + BLOCK_BACKOFF_MILLIS
+        }
+        return failure(error)
+    }
+
     override suspend fun load(request: SourceRequest): SourceResult {
+        if (isBlocked) return SourceResult.Failure(SourceError.ProviderBlocked)
+
         val base = XtreamUrl.normalize(request.location)
             ?: return SourceResult.Failure(SourceError.UnreachableHost)
 
@@ -76,7 +104,7 @@ class XtreamSource internal constructor(
             ?: return SourceResult.Failure(SourceError.Unauthorized)
 
         return when (val auth = client.authenticate(base, credentials)) {
-            is ApiResult.Err -> SourceResult.Failure(auth.error)
+            is ApiResult.Err -> noteBlocked(auth.error, SourceResult::Failure)
             is ApiResult.Ok -> authorised(auth.value)?.let { SourceResult.Failure(it) }
                 ?: collect(base, credentials, request.sourceId)
         }
@@ -101,7 +129,7 @@ class XtreamSource internal constructor(
 
         val live = when (val result = client.liveStreams(base, credentials)) {
             // Live is the point of the account. If it fails, the load failed.
-            is ApiResult.Err -> return SourceResult.Failure(result.error)
+            is ApiResult.Err -> return noteBlocked(result.error, SourceResult::Failure)
             is ApiResult.Ok -> mapLive(result.value, ctx, client.liveCategories(base, credentials).orEmpty())
         }
 
@@ -238,13 +266,15 @@ class XtreamSource internal constructor(
         channelKey: String,
         providerStreamId: String,
     ): GuideResult {
+        if (isBlocked) return GuideResult.Failure(SourceError.ProviderBlocked)
+
         val base = XtreamUrl.normalize(request.location)
             ?: return GuideResult.Failure(SourceError.UnreachableHost)
         val credentials = credentialStore.credentials(request.sourceId)
             ?: return GuideResult.Failure(SourceError.Unauthorized)
 
         return when (val result = client.shortEpg(base, credentials, providerStreamId)) {
-            is ApiResult.Err -> GuideResult.Failure(result.error)
+            is ApiResult.Err -> noteBlocked(result.error, GuideResult::Failure)
 
             is ApiResult.Ok -> GuideResult.Success(
                 result.value.listings.mapNotNull { it.toProgramme(request.sourceId, channelKey) },
@@ -256,15 +286,45 @@ class XtreamSource internal constructor(
         request: SourceRequest,
         seriesId: String,
     ): SeriesDetailsResult {
+        if (isBlocked) return SeriesDetailsResult.Failure(SourceError.ProviderBlocked)
+
         val base = XtreamUrl.normalize(request.location)
             ?: return SeriesDetailsResult.Failure(SourceError.UnreachableHost)
         val credentials = credentialStore.credentials(request.sourceId)
             ?: return SeriesDetailsResult.Failure(SourceError.Unauthorized)
 
         return when (val result = client.seriesInfo(base, credentials, seriesId)) {
-            is ApiResult.Err -> SeriesDetailsResult.Failure(result.error)
+            is ApiResult.Err -> noteBlocked(result.error, SeriesDetailsResult::Failure)
             is ApiResult.Ok -> SeriesDetailsResult.Success(
                 result.value.toSeriesDetails(base, credentials, seriesId),
+            )
+        }
+    }
+
+    override suspend fun vodDetails(
+        request: SourceRequest,
+        vodId: String,
+    ): VodDetailsResult {
+        if (isBlocked) return VodDetailsResult.Failure(SourceError.ProviderBlocked)
+
+        val base = XtreamUrl.normalize(request.location)
+            ?: return VodDetailsResult.Failure(SourceError.UnreachableHost)
+        val credentials = credentialStore.credentials(request.sourceId)
+            ?: return VodDetailsResult.Failure(SourceError.Unauthorized)
+
+        return when (val result = client.vodInfo(base, credentials, vodId)) {
+            is ApiResult.Err -> noteBlocked(result.error, VodDetailsResult::Failure)
+            is ApiResult.Ok -> VodDetailsResult.Success(
+                VodDetails(
+                    vodId = vodId,
+                    title = result.value.movieData?.name?.takeIf { it.isNotBlank() }.orEmpty(),
+                    overview = result.value.info?.effectivePlot,
+                    coverUrl = result.value.info?.effectiveCover,
+                    releaseDate = result.value.info?.effectiveReleaseDate,
+                    genre = result.value.info?.genre,
+                    rating = result.value.info?.rating,
+                    durationSeconds = result.value.info?.durationSeconds,
+                ),
             )
         }
     }
@@ -378,5 +438,13 @@ class XtreamSource internal constructor(
 
     private companion object {
         const val MILLIS_PER_SECOND = 1000L
+
+        /**
+         * How long to stop asking after the panel refuses us.
+         *
+         * Long enough that an anti-flood counter has time to decay, short enough that a
+         * user who waits a moment and retries is not told to come back tomorrow.
+         */
+        const val BLOCK_BACKOFF_MILLIS = 15L * 60L * 1000L
     }
 }

@@ -57,12 +57,24 @@ data object SourcesRoute
 @Serializable
 data object SettingsRoute
 
+/** One film: artwork, overview, and how to start it. */
+@Serializable
+data class MovieDetailRoute(val channelId: Long)
+
 /** Full-screen playback of one item. */
 @Serializable
 data class PlayerRoute(
     val channelId: Long,
     val streamUrl: String? = null,
     val title: String? = null,
+    /**
+     * Where to start, overriding the saved resume point.
+     *
+     * Null means "decide for me", which is what a tap straight from a list wants. The
+     * movie screen sets it explicitly so that Start from beginning can override a resume
+     * position rather than being silently ignored.
+     */
+    val startPositionMillis: Long? = null,
 )
 
 /**

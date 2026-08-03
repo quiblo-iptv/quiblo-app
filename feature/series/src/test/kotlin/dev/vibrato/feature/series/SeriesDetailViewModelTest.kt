@@ -37,6 +37,7 @@ import kotlinx.coroutines.test.setMain
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertInstanceOf
+import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 
@@ -88,9 +89,42 @@ class SeriesDetailViewModelTest {
     }
 
     @Test
+    fun `offers the last watched episode for resume`() = runTest(testDispatcher) {
+        coEvery { channelRepository.findById(10L) } returns sampleChannel
+        coEvery { channelRepository.getSeriesDetails(sampleChannel) } returns SeriesDetailsResult.Success(sampleDetails)
+        // Resume points are keyed by the episode's stream URL, because that is what the
+        // player records against when it is handed a custom URL.
+        coEvery { channelRepository.mostRecentlyWatched(any()) } returns
+            ("http://stream.example.invalid/501.mp4" to 900_000L)
+
+        val viewModel = SeriesDetailViewModel(10L, channelRepository)
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        val state = assertInstanceOf(SeriesDetailUiState.Success::class.java, viewModel.uiState.value)
+        assertEquals("501", state.resumeEpisode?.id)
+        assertEquals(900_000L, state.resumePositionMillis)
+    }
+
+    @Test
+    fun `a resume key that matches no episode leaves nothing to resume`() = runTest(testDispatcher) {
+        coEvery { channelRepository.findById(10L) } returns sampleChannel
+        coEvery { channelRepository.getSeriesDetails(sampleChannel) } returns SeriesDetailsResult.Success(sampleDetails)
+        // A stale position from an episode the provider has since removed must not crash
+        // or resurrect a button pointing at nothing.
+        coEvery { channelRepository.mostRecentlyWatched(any()) } returns ("http://gone.invalid/9.mp4" to 60_000L)
+
+        val viewModel = SeriesDetailViewModel(10L, channelRepository)
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        val state = assertInstanceOf(SeriesDetailUiState.Success::class.java, viewModel.uiState.value)
+        assertNull(state.resumeEpisode)
+    }
+
+    @Test
     fun `loads series details successfully`() = runTest(testDispatcher) {
         coEvery { channelRepository.findById(10L) } returns sampleChannel
         coEvery { channelRepository.getSeriesDetails(sampleChannel) } returns SeriesDetailsResult.Success(sampleDetails)
+        coEvery { channelRepository.mostRecentlyWatched(any()) } returns null
 
         val viewModel = SeriesDetailViewModel(10L, channelRepository)
         testDispatcher.scheduler.advanceUntilIdle()
@@ -98,6 +132,8 @@ class SeriesDetailViewModelTest {
         val state = assertInstanceOf(SeriesDetailUiState.Success::class.java, viewModel.uiState.value)
         assertEquals(sampleChannel, state.channel)
         assertEquals(sampleDetails, state.details)
+        // Nothing watched yet, so nothing to resume — the button must not appear.
+        assertNull(state.resumeEpisode)
         assertEquals(1, state.details.seasons.size)
         assertEquals("Pilot", state.details.seasons[0].episodes[0].title)
     }

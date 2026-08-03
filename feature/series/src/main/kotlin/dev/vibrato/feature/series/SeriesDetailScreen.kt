@@ -129,12 +129,54 @@ fun SeriesDetailScreen(
                     SeriesDetailContent(
                         channel = state.channel,
                         details = state.details,
+                        resumeEpisode = state.resumeEpisode,
+                        resumePositionMillis = state.resumePositionMillis,
                         onEpisodeClick = onEpisodeClick,
                     )
                 }
             }
         }
     }
+}
+
+/** Continues the series from the episode last watched. */
+@Composable
+private fun ResumeButton(
+    episode: Episode,
+    positionMillis: Long,
+    onClick: () -> Unit,
+) {
+    Button(
+        onClick = onClick,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+    ) {
+        Icon(imageVector = Icons.Filled.PlayArrow, contentDescription = null)
+        Text(
+            text = stringResource(
+                R.string.series_resume,
+                episode.seasonNumber,
+                episode.episodeNumber,
+                positionMillis.asResumeClock(),
+            ),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.padding(start = 8.dp),
+        )
+    }
+}
+
+private const val MILLIS_PER_SECOND = 1000
+private const val SECONDS_PER_MINUTE = 60
+private const val MINUTES_PER_HOUR = 60
+
+/** h:mm, or minutes below an hour. Seconds are noise on a resume label. */
+private fun Long.asResumeClock(): String {
+    val totalMinutes = this / MILLIS_PER_SECOND / SECONDS_PER_MINUTE
+    val hours = totalMinutes / MINUTES_PER_HOUR
+    val minutes = totalMinutes % MINUTES_PER_HOUR
+    return if (hours > 0) "%d:%02d".format(hours, minutes) else "%d min".format(minutes)
 }
 
 /**
@@ -177,6 +219,8 @@ private fun SeriesDetailError(
 private fun SeriesDetailContent(
     channel: Channel,
     details: SeriesDetails,
+    resumeEpisode: Episode?,
+    resumePositionMillis: Long,
     onEpisodeClick: (Episode, Channel) -> Unit,
 ) {
     var selectedSeasonIndex by remember { mutableIntStateOf(0) }
@@ -192,6 +236,18 @@ private fun SeriesDetailContent(
     ) {
         item {
             SeriesHeader(channel = channel, details = details)
+        }
+
+        // Only when there is something to resume. An always-present button that sometimes
+        // starts episode one is worse than no button, because it stops meaning anything.
+        if (resumeEpisode != null) {
+            item {
+                ResumeButton(
+                    episode = resumeEpisode,
+                    positionMillis = resumePositionMillis,
+                    onClick = { onEpisodeClick(resumeEpisode, channel) },
+                )
+            }
         }
 
         if (seasons.size > 1) {

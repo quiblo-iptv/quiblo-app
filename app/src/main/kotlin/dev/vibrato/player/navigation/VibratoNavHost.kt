@@ -31,6 +31,7 @@ import dev.vibrato.feature.series.SeriesDetailScreen
 import dev.vibrato.feature.series.SeriesScreen
 import dev.vibrato.feature.settings.SettingsScreen
 import dev.vibrato.feature.sources.SourcesScreen
+import dev.vibrato.feature.vod.MovieDetailScreen
 import dev.vibrato.feature.vod.VodScreen
 
 /**
@@ -54,7 +55,22 @@ fun VibratoNavHost(
         }
 
         composable<LiveRoute> { LiveScreen(onItemClick = play) }
-        composable<VodRoute> { VodScreen(onItemClick = play) }
+        // Movies open a detail screen rather than playing immediately: resuming should be
+        // a choice, and there is nowhere else to offer a plot.
+        composable<VodRoute> {
+            VodScreen(onItemClick = { channel -> navController.navigate(MovieDetailRoute(channel.id)) })
+        }
+        composable<MovieDetailRoute> { entry ->
+            MovieDetailScreen(
+                channelId = entry.toRoute<MovieDetailRoute>().channelId,
+                onBack = { navController.popBackStack() },
+                onPlay = { channel, startMillis ->
+                    navController.navigate(
+                        PlayerRoute(channelId = channel.id, startPositionMillis = startMillis),
+                    )
+                },
+            )
+        }
         composable<SeriesRoute> {
             SeriesScreen(
                 onItemClick = { channel ->
@@ -87,6 +103,7 @@ fun VibratoNavHost(
                 channelId = route.channelId,
                 streamUrl = route.streamUrl,
                 title = route.title,
+                startPositionMillis = route.startPositionMillis,
                 onBack = { navController.popBackStack() },
             )
         }

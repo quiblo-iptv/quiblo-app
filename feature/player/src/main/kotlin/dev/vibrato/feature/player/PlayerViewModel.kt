@@ -93,7 +93,12 @@ class PlayerViewModel(
      * Guarded so a recomposition, or a rotation that re-runs the effect, does not restart
      * a stream that is already playing (AC-PLAY-07).
      */
-    fun load(channelId: Long, customUrl: String? = null, customTitle: String? = null) {
+    fun load(
+        channelId: Long,
+        customUrl: String? = null,
+        customTitle: String? = null,
+        startPositionMillis: Long? = null,
+    ) {
         if (loadedChannelId == channelId && customUrl == null) return
         loadedChannelId = channelId
 
@@ -107,10 +112,13 @@ class PlayerViewModel(
                     title = playTitle,
                     url = playUrl,
                     isLive = channel.kind == MediaKind.LIVE,
-                    startPositionMillis = if (channel.kind == MediaKind.LIVE) {
-                        0L
-                    } else {
-                        channelRepository.resumePosition(customUrl ?: channel.stableKey)
+                    // An explicit position wins over the saved one, which is what makes
+                    // "Start from beginning" different from "Resume" for an item that has
+                    // a resume point. Live has no meaningful position either way.
+                    startPositionMillis = when {
+                        channel.kind == MediaKind.LIVE -> 0L
+                        startPositionMillis != null -> startPositionMillis
+                        else -> channelRepository.resumePosition(customUrl ?: channel.stableKey)
                     },
                 ),
             )

@@ -316,3 +316,62 @@ internal data class EpisodeInfoDto(
     @Serializable(FlexibleStringSerializer::class)
     val movieImage: String? = null,
 )
+
+/**
+ * `get_vod_info` — details for one film.
+ *
+ * Panels put almost everything under `info`, but not consistently: the container extension
+ * that makes the stream URL playable lives beside it under `movie_data` on most, and
+ * inside `info` on some. Both are read.
+ */
+@Serializable
+internal data class VodInfoResponse(
+    val info: VodInfoDto? = null,
+    @SerialName("movie_data") val movieData: VodMovieDataDto? = null,
+)
+
+@Serializable
+internal data class VodInfoDto(
+    @Serializable(FlexibleStringSerializer::class)
+    val plot: String? = null,
+    @Serializable(FlexibleStringSerializer::class)
+    val description: String? = null,
+    @SerialName("movie_image")
+    @Serializable(FlexibleStringSerializer::class)
+    val movieImage: String? = null,
+    @SerialName("cover_big")
+    @Serializable(FlexibleStringSerializer::class)
+    val coverBig: String? = null,
+    @Serializable(FlexibleStringSerializer::class)
+    val genre: String? = null,
+    @Serializable(FlexibleStringSerializer::class)
+    val rating: String? = null,
+    @SerialName("releasedate")
+    @Serializable(FlexibleStringSerializer::class)
+    val releaseDate: String? = null,
+    @SerialName("release_date")
+    @Serializable(FlexibleStringSerializer::class)
+    val releaseDateAlt: String? = null,
+    @SerialName("duration_secs")
+    @Serializable(FlexibleIntSerializer::class)
+    val durationSeconds: Int? = null,
+) {
+    /** Panels use either key for the same field, and some send both with one blank. */
+    val effectivePlot: String? get() = plot?.takeIf { it.isNotBlank() }
+        ?: description?.takeIf { it.isNotBlank() }
+
+    val effectiveCover: String? get() = coverBig?.takeIf { it.isNotBlank() }
+        ?: movieImage?.takeIf { it.isNotBlank() }
+
+    val effectiveReleaseDate: String? get() = releaseDate?.takeIf { it.isNotBlank() }
+        ?: releaseDateAlt?.takeIf { it.isNotBlank() }
+}
+
+@Serializable
+internal data class VodMovieDataDto(
+    @SerialName("stream_id")
+    @Serializable(FlexibleStringSerializer::class)
+    val streamId: String? = null,
+    @Serializable(FlexibleStringSerializer::class)
+    val name: String? = null,
+)

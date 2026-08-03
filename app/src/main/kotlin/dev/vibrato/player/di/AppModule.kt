@@ -28,6 +28,7 @@ import dev.vibrato.feature.player.di.playerModule
 import dev.vibrato.feature.series.di.seriesModule
 import dev.vibrato.feature.settings.di.settingsModule
 import dev.vibrato.feature.sources.di.sourcesModule
+import dev.vibrato.feature.vod.di.vodModule
 import org.koin.core.module.Module
 
 /**
@@ -47,4 +48,5 @@ val appModules: List<Module> = listOf(
     seriesModule,
     playerModule,
     settingsModule,
+    vodModule,
 )

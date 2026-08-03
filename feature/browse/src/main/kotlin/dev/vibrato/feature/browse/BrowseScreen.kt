@@ -114,7 +114,9 @@ fun BrowseScreen(
     val query by viewModel.currentQuery.collectAsStateWithLifecycle()
     var guideFor: Channel? by remember { mutableStateOf(null) }
     var showCategorySheet by remember { mutableStateOf(false) }
-    var isGridView by remember { mutableStateOf(false) }
+    // Grid by default: artwork is the point of a catalogue, and the list view remains one
+    // tap away for anyone who wants density instead.
+    var isGridView by remember { mutableStateOf(true) }
 
     if (!state.hasSource) {
         CentredMessage(stringResource(R.string.browse_no_source), modifier)

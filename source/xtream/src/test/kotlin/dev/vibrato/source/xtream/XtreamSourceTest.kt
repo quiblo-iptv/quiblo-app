@@ -54,6 +54,9 @@ class XtreamSourceTest {
         override suspend fun clear(sourceId: Long) = Unit
     }
 
+    /** Counts how many HTTP calls actually left the client. */
+    private var requestCount = 0
+
     /** Routes each `action` to a canned body. */
     private fun sourceServing(
         bodies: Map<String?, String>,
@@ -62,6 +65,7 @@ class XtreamSourceTest {
     ) = createXtreamSource(
         HttpClient(
             MockEngine { request ->
+                requestCount++
                 val action = request.url.parameters["action"]
                 respond(
                     content = bodies[action] ?: "[]",
@@ -449,5 +453,107 @@ class XtreamSourceTest {
 
         val failure = assertInstanceOf(GuideResult.Failure::class.java, result)
         assertEquals(SourceError.ProviderBlocked, failure.error)
+    }
+
+    // --- Film details --------------------------------------------------------------------
+
+    @Test
+    fun `vodDetails maps a film`() = runTest {
+        val source = sourceServing(
+            mapOf(
+                null to authOk,
+                "get_vod_info" to """
+                    {"info":{"plot":"A plot.","cover_big":"http://art.invalid/b.jpg","genre":"Drama",
+                     "duration_secs":5400},"movie_data":{"stream_id":42,"name":"A Film"}}
+                """.trimIndent(),
+            ),
+        )
+
+        val result = source.vodDetails(request, vodId = "42")
+
+        val success = assertInstanceOf(dev.vibrato.source.api.VodDetailsResult.Success::class.java, result)
+        assertEquals("42", success.details.vodId)
+        assertEquals("A Film", success.details.title)
+        assertEquals("A plot.", success.details.overview)
+        assertEquals("http://art.invalid/b.jpg", success.details.coverUrl)
+        assertEquals(5400, success.details.durationSeconds)
+    }
+
+    @Test
+    fun `vodDetails survives a panel that returns almost nothing`() = runTest {
+        // A film with no metadata is a normal case, not a failure: the screen still has
+        // the artwork and title it came in with.
+        val source = sourceServing(mapOf(null to authOk, "get_vod_info" to "{}"))
+
+        val result = source.vodDetails(request, vodId = "42")
+
+        val success = assertInstanceOf(dev.vibrato.source.api.VodDetailsResult.Success::class.java, result)
+        assertNull(success.details.overview)
+        assertEquals("", success.details.title)
+    }
+
+    @Test
+    fun `vodDetails reports missing credentials without calling the panel`() = runTest {
+        val source = sourceServing(mapOf(null to authOk), store = FakeStore(null))
+
+        val result = source.vodDetails(request, vodId = "42")
+
+        val failure = assertInstanceOf(dev.vibrato.source.api.VodDetailsResult.Failure::class.java, result)
+        assertEquals(SourceError.Unauthorized, failure.error)
+    }
+
+    // --- Anti-flood backoff --------------------------------------------------------------
+
+    @Test
+    @DisplayName("a block on one path stops every other path too")
+    fun `blocking is remembered across call types`() = runTest {
+        val source = sourceServing(
+            bodies = mapOf(null to authOk),
+            status = HttpStatusCode(462, "Blocked"),
+        )
+
+        // First call takes the block from the panel.
+        assertEquals(
+            SourceError.ProviderBlocked,
+            assertInstanceOf(SourceResult.Failure::class.java, source.load(request)).error,
+        )
+        val afterFirst = requestCount
+
+        // Everything else must now refuse locally. Continuing to ask a panel that is
+        // already refusing is what turns a short block into a long one.
+        assertEquals(
+            SourceError.ProviderBlocked,
+            assertInstanceOf(GuideResult.Failure::class.java, source.guideFor(request, "ch-1", "101")).error,
+        )
+        assertEquals(
+            SourceError.ProviderBlocked,
+            assertInstanceOf(
+                dev.vibrato.source.api.SeriesDetailsResult.Failure::class.java,
+                source.seriesDetails(request, "10"),
+            ).error,
+        )
+        assertEquals(
+            SourceError.ProviderBlocked,
+            assertInstanceOf(
+                dev.vibrato.source.api.VodDetailsResult.Failure::class.java,
+                source.vodDetails(request, "20"),
+            ).error,
+        )
+        assertEquals(
+            SourceError.ProviderBlocked,
+            assertInstanceOf(SourceResult.Failure::class.java, source.load(request)).error,
+        )
+
+        // The point of the whole exercise: not one further byte went to the panel.
+        assertEquals(afterFirst, requestCount, "requests were still sent while blocked")
+    }
+
+    @Test
+    fun `an unblocked source still reaches the panel`() = runTest {
+        val source = sourceServing(mapOf(null to authOk, "get_short_epg" to epgListings))
+
+        source.guideFor(request, channelKey = "ch-1", providerStreamId = "101")
+
+        assertTrue(requestCount > 0, "a healthy source must not be gated")
     }
 }

@@ -19,6 +19,7 @@
 package dev.vibrato.feature.player
 
 import android.view.SurfaceView
+import android.view.WindowManager
 import androidx.annotation.StringRes
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -111,6 +112,7 @@ fun PlayerScreen(
     modifier: Modifier = Modifier,
     streamUrl: String? = null,
     title: String? = null,
+    startPositionMillis: Long? = null,
     viewModel: PlayerViewModel = koinViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -138,6 +140,13 @@ fun PlayerScreen(
     // Immersive playback: the status and navigation bars go away for the duration and come
     // back on the way out. Restoring them in onDispose rather than on back specifically is
     // what keeps the rest of the app usable if playback ends any other way.
+    //
+    // The same effect holds the screen awake. Nothing else does: watching a film involves
+    // no touch input, so the display timeout treats a viewer as an idle user and dims the
+    // screen mid-scene. FLAG_KEEP_SCREEN_ON is the declaration that this window is being
+    // watched rather than ignored, and it is scoped to the player window so it lapses on
+    // its own the moment playback is left — a wake lock this app never has to remember to
+    // release.
     val view = LocalView.current
     DisposableEffect(view) {
         val window = (view.context.findActivity())?.window
@@ -146,11 +155,21 @@ fun PlayerScreen(
             hide(WindowInsetsCompat.Type.systemBars())
             systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
         }
-        onDispose { insets?.show(WindowInsetsCompat.Type.systemBars()) }
+        window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+
+        onDispose {
+            insets?.show(WindowInsetsCompat.Type.systemBars())
+            window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        }
     }
 
-    LaunchedEffect(channelId, streamUrl, title) {
-        viewModel.load(channelId, customUrl = streamUrl, customTitle = title)
+    LaunchedEffect(channelId, streamUrl, title, startPositionMillis) {
+        viewModel.load(
+            channelId,
+            customUrl = streamUrl,
+            customTitle = title,
+            startPositionMillis = startPositionMillis,
+        )
     }
 
     // AC-PLAY-10: controls auto-hide after three seconds of inactivity. Restarted on

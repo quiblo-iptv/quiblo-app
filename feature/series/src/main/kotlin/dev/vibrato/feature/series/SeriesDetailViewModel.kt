@@ -22,6 +22,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dev.vibrato.core.data.ChannelRepository
 import dev.vibrato.core.model.Channel
+import dev.vibrato.core.model.Episode
 import dev.vibrato.core.model.SeriesDetails
 import dev.vibrato.source.api.SeriesDetailsResult
 import dev.vibrato.source.api.SourceError
@@ -32,7 +33,18 @@ import kotlinx.coroutines.launch
 
 sealed interface SeriesDetailUiState {
     data object Loading : SeriesDetailUiState
-    data class Success(val channel: Channel, val details: SeriesDetails) : SeriesDetailUiState
+
+    /**
+     * @property resumeEpisode the episode most recently watched, if any, with where it
+     *   stopped. Drives the Resume button — a series is watched episode by episode, so
+     *   "continue" means the last one touched rather than the furthest through.
+     */
+    data class Success(
+        val channel: Channel,
+        val details: SeriesDetails,
+        val resumeEpisode: Episode? = null,
+        val resumePositionMillis: Long = 0L,
+    ) : SeriesDetailUiState
     data class Error(val error: SourceError) : SeriesDetailUiState
 }
 
@@ -59,7 +71,18 @@ class SeriesDetailViewModel(
 
             when (val result = channelRepository.getSeriesDetails(channel)) {
                 is SeriesDetailsResult.Failure -> _uiState.value = SeriesDetailUiState.Error(result.error)
-                is SeriesDetailsResult.Success -> _uiState.value = SeriesDetailUiState.Success(channel, result.details)
+                is SeriesDetailsResult.Success -> {
+                    val episodes = result.details.seasons.flatMap { it.episodes }
+                    // Resume keys are the episode stream URLs, because that is what the
+                    // player records against when it is handed a custom URL.
+                    val watched = channelRepository.mostRecentlyWatched(episodes.map { it.streamUrl })
+                    _uiState.value = SeriesDetailUiState.Success(
+                        channel = channel,
+                        details = result.details,
+                        resumeEpisode = watched?.let { (key, _) -> episodes.firstOrNull { it.streamUrl == key } },
+                        resumePositionMillis = watched?.second ?: 0L,
+                    )
+                }
             }
         }
     }

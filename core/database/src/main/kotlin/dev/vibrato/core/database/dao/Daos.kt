@@ -174,6 +174,18 @@ interface ResumePositionDao {
     @Query("SELECT positionMillis FROM resume_positions WHERE stableKey = :stableKey")
     suspend fun positionFor(stableKey: String): Long?
 
+    /**
+     * The most recently watched of [stableKeys], for resuming a series where it was left.
+     *
+     * Ordered by when it was watched rather than by position: the furthest-through episode
+     * is not the one a viewer was last on.
+     */
+    @Query(
+        "SELECT * FROM resume_positions WHERE stableKey IN (:stableKeys) " +
+            "ORDER BY updatedAtEpochMillis DESC LIMIT 1",
+    )
+    suspend fun mostRecentOf(stableKeys: List<String>): ResumePositionEntity?
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(position: ResumePositionEntity)
 }

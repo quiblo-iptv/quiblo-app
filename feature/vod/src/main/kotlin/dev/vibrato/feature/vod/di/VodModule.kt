@@ -16,18 +16,14 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-plugins {
-    id("vibrato.android.feature")
-}
+package dev.vibrato.feature.vod.di
 
-android {
-    namespace = "dev.vibrato.feature.vod"
-}
+import dev.vibrato.feature.vod.MovieDetailViewModel
+import org.koin.core.module.Module
+import org.koin.core.module.dsl.viewModel
+import org.koin.dsl.module
 
-dependencies {
-    implementation(projects.core.data)
-    implementation(projects.core.model)
-    implementation(projects.feature.browse)
-    implementation(libs.coil.compose)
-    implementation(libs.coil.network.okhttp)
+/** Wiring owned by `:feature:vod`. Aggregated by `:app`. */
+val vodModule: Module = module {
+    viewModel { (channelId: Long) -> MovieDetailViewModel(channelId, get()) }
 }

@@ -313,6 +313,84 @@ class XtreamDtoTest {
         }
     }
 
+    @Nested
+    @DisplayName("film details")
+    inner class VodInfo {
+
+        @Test
+        fun `parses plot, artwork and metadata`() {
+            val parsed = json.decodeFromString<VodInfoResponse>(
+                """
+                {
+                  "info": {
+                    "plot": "A chemistry teacher turns to crime.",
+                    "cover_big": "http://art.invalid/big.jpg",
+                    "movie_image": "http://art.invalid/small.jpg",
+                    "genre": "Drama",
+                    "rating": "8.5",
+                    "releasedate": "2008-01-20",
+                    "duration_secs": "3600"
+                  },
+                  "movie_data": {"stream_id": 42, "name": "Breaking Bad: The Movie"}
+                }
+                """.trimIndent(),
+            )
+
+            assertEquals("A chemistry teacher turns to crime.", parsed.info?.effectivePlot)
+            // cover_big wins: it is the larger of the two and this is a detail screen.
+            assertEquals("http://art.invalid/big.jpg", parsed.info?.effectiveCover)
+            assertEquals("2008-01-20", parsed.info?.effectiveReleaseDate)
+            assertEquals(3600, parsed.info?.durationSeconds)
+            assertEquals("42", parsed.movieData?.streamId)
+            assertEquals("Breaking Bad: The Movie", parsed.movieData?.name)
+        }
+
+        @Test
+        fun `falls back from plot to description and from cover to movie_image`() {
+            val parsed = json.decodeFromString<VodInfoResponse>(
+                """{"info":{"description":"Only a description.","movie_image":"http://art.invalid/s.jpg"}}""",
+            )
+
+            assertEquals("Only a description.", parsed.info?.effectivePlot)
+            assertEquals("http://art.invalid/s.jpg", parsed.info?.effectiveCover)
+        }
+
+        @Test
+        fun `prefers a populated plot over a blank one`() {
+            val parsed = json.decodeFromString<VodInfoResponse>(
+                """{"info":{"plot":"   ","description":"The real one."}}""",
+            )
+
+            assertEquals("The real one.", parsed.info?.effectivePlot)
+        }
+
+        @Test
+        fun `reads the alternate release_date spelling`() {
+            val parsed = json.decodeFromString<VodInfoResponse>(
+                """{"info":{"release_date":"1999-03-31"}}""",
+            )
+
+            assertEquals("1999-03-31", parsed.info?.effectiveReleaseDate)
+        }
+
+        @Test
+        fun `a film with no details at all still parses`() {
+            val parsed = json.decodeFromString<VodInfoResponse>("{}")
+
+            assertNull(parsed.info)
+            assertNull(parsed.movieData)
+        }
+
+        @Test
+        fun `an empty info block yields nulls rather than blanks`() {
+            val parsed = json.decodeFromString<VodInfoResponse>("""{"info":{}}""")
+
+            assertNull(parsed.info?.effectivePlot)
+            assertNull(parsed.info?.effectiveCover)
+            assertNull(parsed.info?.effectiveReleaseDate)
+        }
+    }
+
     /**
      * Regression cover for 916f271. Panels disagree on which key carries a series' id,
      * name and artwork, and picking the wrong one silently produced an unopenable series.

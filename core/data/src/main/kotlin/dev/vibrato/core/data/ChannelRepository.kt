@@ -33,6 +33,8 @@ import dev.vibrato.source.api.SeriesDetailsResult
 import dev.vibrato.source.api.SeriesSource
 import dev.vibrato.source.api.SourceError
 import dev.vibrato.source.api.SourceRequest
+import dev.vibrato.source.api.VodDetailsResult
+import dev.vibrato.source.api.VodSource
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 
@@ -116,6 +118,18 @@ class ChannelRepository(
     /** Where the user got to in this item, or 0 if it has never been played (AC-PLAY-03). */
     suspend fun resumePosition(stableKey: String): Long = resumePositionDao.positionFor(stableKey) ?: 0L
 
+    /**
+     * The most recently watched of [stableKeys], with where it stopped.
+     *
+     * Used to offer "resume" for a container — a series — whose parts are tracked
+     * individually. Returns null when none of them has ever been played.
+     */
+    suspend fun mostRecentlyWatched(stableKeys: List<String>): Pair<String, Long>? {
+        if (stableKeys.isEmpty()) return null
+        val entity = resumePositionDao.mostRecentOf(stableKeys) ?: return null
+        return entity.stableKey to entity.positionMillis
+    }
+
     suspend fun saveResumePosition(stableKey: String, positionMillis: Long) {
         resumePositionDao.upsert(
             ResumePositionEntity(
@@ -142,6 +156,28 @@ class ChannelRepository(
         return seriesSource.seriesDetails(
             request = SourceRequest(channel.sourceId, source.url),
             seriesId = seriesId,
+        )
+    }
+
+    /**
+     * Details for one film.
+     *
+     * Fails with [SourceError.NotFound] when the source cannot describe films at all —
+     * an M3U playlist carries no plot, so there is nothing to fetch rather than something
+     * that went wrong. Callers show the artwork and title they already have.
+     */
+    suspend fun getVodDetails(channelId: Long): VodDetailsResult {
+        val channel = findById(channelId) ?: return VodDetailsResult.Failure(SourceError.NotFound)
+        val vodId = channel.providerStreamId ?: return VodDetailsResult.Failure(SourceError.NotFound)
+        val sourceDao = sourceDao ?: return VodDetailsResult.Failure(SourceError.NotFound)
+        val source = sourceDao.findById(channel.sourceId)?.toDomain()
+            ?: return VodDetailsResult.Failure(SourceError.UnreachableHost)
+        val vodSource = mediaSources[source.kind] as? VodSource
+            ?: return VodDetailsResult.Failure(SourceError.NotFound)
+
+        return vodSource.vodDetails(
+            request = SourceRequest(channel.sourceId, source.url),
+            vodId = vodId,
         )
     }
 }

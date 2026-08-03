@@ -29,6 +29,7 @@ dependencies {
     implementation(projects.core.common)
     implementation(libs.media3.exoplayer)
     implementation(libs.media3.exoplayer.hls)
+    implementation(libs.media3.exoplayer.dash)
     implementation(libs.media3.common)
     implementation(libs.kotlinx.coroutines.core)
     implementation(platform(libs.koin.bom))

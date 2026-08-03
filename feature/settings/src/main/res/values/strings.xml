@@ -67,4 +67,19 @@
     <string name="settings_metadata_on">Film information is on.</string>
     <string name="settings_metadata_off">Off. No requests are made to The Movie Database.</string>
     <string name="settings_metadata_attribution">This product uses the TMDB API but is not endorsed or certified by TMDB.</string>
+
+    <string name="settings_categories_title">Categories</string>
+    <string name="settings_categories_summary">Turn categories off to hide them from browsing, or rename them. Both are local — nothing is sent to your provider, and hiding removes nothing.</string>
+    <string name="settings_categories_live">Live TV</string>
+    <string name="settings_categories_movies">Movies</string>
+    <string name="settings_categories_series">Series</string>
+    <string name="settings_categories_empty">No categories in this section yet.</string>
+    <string name="settings_categories_count">%1$d items</string>
+    <string name="settings_categories_renamed_from">Provider name: %1$s</string>
+    <string name="settings_categories_rename">Rename</string>
+    <string name="settings_categories_new_name">Name</string>
+    <string name="settings_categories_rename_hint">Your provider calls this "%1$s". Renaming changes only what you see.</string>
+    <string name="settings_categories_save">Save</string>
+    <string name="settings_categories_reset">Use provider name</string>
+    <string name="settings_categories_cancel">Cancel</string>
 </resources>

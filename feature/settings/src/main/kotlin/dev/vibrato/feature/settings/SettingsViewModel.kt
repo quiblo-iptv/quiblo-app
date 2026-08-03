@@ -20,18 +20,26 @@ package dev.vibrato.feature.settings
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import dev.vibrato.core.data.CategoryRepository
 import dev.vibrato.core.data.MovieMetadataRepository
 import dev.vibrato.core.data.PlayerSettingsRepository
+import dev.vibrato.core.data.SourceRepository
 import dev.vibrato.core.data.backup.BackupRepository
 import dev.vibrato.core.data.backup.ImportResult
 import dev.vibrato.core.model.BufferMode
+import dev.vibrato.core.model.Category
 import dev.vibrato.core.model.MaxBitrateCap
+import dev.vibrato.core.model.MediaKind
 import dev.vibrato.core.model.PlayerSettings
 import dev.vibrato.core.model.SeekInterval
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -68,7 +76,40 @@ class SettingsViewModel(
     private val backupRepository: BackupRepository,
     private val playerSettingsRepository: PlayerSettingsRepository,
     private val metadataRepository: MovieMetadataRepository,
+    private val categoryRepository: CategoryRepository,
+    private val sourceRepository: SourceRepository,
 ) : ViewModel() {
+
+    private val categoryKind = MutableStateFlow(MediaKind.LIVE)
+    val selectedCategoryKind: StateFlow<MediaKind> = categoryKind.asStateFlow()
+
+    /**
+     * Every category of the chosen kind, hidden ones included.
+     *
+     * The editing screen is the one place hidden categories must still appear — hiding one
+     * somewhere it can never be un-hidden would be a trap rather than a setting.
+     */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val categories: StateFlow<List<Category>> = combine(
+        sourceRepository.observeSources(),
+        categoryKind,
+    ) { sources, kind -> sources.firstOrNull()?.id to kind }
+        .flatMapLatest { (sourceId, kind) ->
+            if (sourceId == null) flowOf(emptyList()) else categoryRepository.observeAllCategories(sourceId, kind)
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(SUBSCRIPTION_TIMEOUT_MILLIS), emptyList())
+
+    fun selectCategoryKind(kind: MediaKind) {
+        categoryKind.value = kind
+    }
+
+    fun setCategoryHidden(category: Category, hidden: Boolean) = viewModelScope.launch {
+        categoryRepository.setCategoryHidden(categoryKind.value, category.title, hidden)
+    }
+
+    fun renameCategory(category: Category, name: String?) = viewModelScope.launch {
+        categoryRepository.renameCategory(categoryKind.value, category.title, name)
+    }
 
     init {
         viewModelScope.launch { metadataRepository.load() }

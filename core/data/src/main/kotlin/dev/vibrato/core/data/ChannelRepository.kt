@@ -24,7 +24,6 @@ import dev.vibrato.core.database.dao.ResumePositionDao
 import dev.vibrato.core.database.dao.SourceDao
 import dev.vibrato.core.database.entity.FavoriteEntity
 import dev.vibrato.core.database.entity.ResumePositionEntity
-import dev.vibrato.core.model.Category
 import dev.vibrato.core.model.Channel
 import dev.vibrato.core.model.MediaKind
 import dev.vibrato.core.model.SourceKind
@@ -83,10 +82,6 @@ class ChannelRepository(
     fun observeFavorites(sourceId: Long, query: String = ""): Flow<List<Channel>> =
         channelDao.observeFavorites(sourceId, query.trim())
             .map { rows -> rows.map { it.channel.toDomain(isFavorite = true) } }
-
-    fun observeCategories(sourceId: Long, kind: MediaKind): Flow<List<Category>> =
-        channelDao.observeCategoriesByKind(sourceId, kind.name)
-            .map { counts -> counts.map { it.toDomain(sourceId) } }
 
     /**
      * Marks or unmarks a favourite.

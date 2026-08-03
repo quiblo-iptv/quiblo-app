@@ -26,6 +26,7 @@ import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Transaction
 import androidx.room.Update
+import dev.vibrato.core.database.entity.CategoryOverrideEntity
 import dev.vibrato.core.database.entity.ChannelEntity
 import dev.vibrato.core.database.entity.FavoriteEntity
 import dev.vibrato.core.database.entity.MovieMetadataEntity
@@ -282,4 +283,20 @@ interface MovieMetadataDao {
     /** Emptied when the key changes: a different key can return different answers. */
     @Query("DELETE FROM movie_metadata")
     suspend fun clear()
+}
+
+@Dao
+interface CategoryOverrideDao {
+
+    @Query("SELECT * FROM category_overrides WHERE kind = :kind")
+    fun observeForKind(kind: String): Flow<List<CategoryOverrideEntity>>
+
+    @Query("SELECT originalTitle FROM category_overrides WHERE kind = :kind AND isHidden = 1")
+    fun observeHiddenTitles(kind: String): Flow<List<String>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsert(entity: CategoryOverrideEntity)
+
+    @Query("DELETE FROM category_overrides WHERE kind = :kind AND originalTitle = :originalTitle")
+    suspend fun clear(kind: String, originalTitle: String)
 }

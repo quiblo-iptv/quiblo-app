@@ -69,6 +69,37 @@ class TmdbTest {
         }
 
         @Test
+        @DisplayName("strips release, codec and audio markers")
+        fun `cleans the wider vocabulary panels use`() {
+            assertEquals("The Matrix", "The Matrix 4K PURE REMUX".cleanedForSearch())
+            assertEquals("Arrival", "Arrival WEB-DL x265 DTS".cleanedForSearch())
+            assertEquals("Sicario", "Sicario BluRay 10bit MULTI".cleanedForSearch())
+        }
+
+        @Test
+        @DisplayName("a non-Latin title cleans to nothing rather than searching in vain")
+        fun `drops non latin script`() {
+            // TMDB is queried in English, so an Arabic title returns nothing however it is
+            // spelled. Cleaning it to blank means the request is never sent at all, which
+            // spends none of the user's rate limit on a call that could not have matched.
+            assertTrue("مسلسل الاختيار".cleanedForSearch().isBlank())
+            assertTrue("Гарри Поттер".cleanedForSearch().isBlank())
+        }
+
+        @Test
+        fun `keeps the Latin part of a mixed title`() {
+            assertEquals("Oppenheimer", "أوبنهايمر Oppenheimer 4K".cleanedForSearch())
+        }
+
+        @Test
+        fun `does not eat title words that merely resemble markers`() {
+            // "Dune" and "Cast" are not release markers; over-eager stripping costs a word
+            // of the title, which is a worse failure than a leftover marker.
+            assertEquals("Dune Part Two", "Dune Part Two".cleanedForSearch())
+            assertEquals("Cast Away", "Cast Away".cleanedForSearch())
+        }
+
+        @Test
         fun `reads the year when the title carries one`() {
             assertEquals(1999, "The Matrix (1999)".yearInTitle())
             assertEquals(2024, "Dune Part Two 2024 4K".yearInTitle())

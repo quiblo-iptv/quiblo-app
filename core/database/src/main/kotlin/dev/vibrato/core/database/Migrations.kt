@@ -111,3 +111,20 @@ val MIGRATION_4_5 = object : Migration(4, 5) {
         )
     }
 }
+
+/** Adds the user's local category edits. Empty by default: no edit means no row. */
+val MIGRATION_5_6 = object : Migration(5, 6) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS `category_overrides` (
+                `kind` TEXT NOT NULL,
+                `originalTitle` TEXT NOT NULL,
+                `customName` TEXT,
+                `isHidden` INTEGER NOT NULL DEFAULT 0,
+                PRIMARY KEY(`kind`, `originalTitle`)
+            )
+            """.trimIndent(),
+        )
+    }
+}

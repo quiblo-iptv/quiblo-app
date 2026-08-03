@@ -33,6 +33,7 @@ val databaseModule: Module = module {
     single { VibratoDatabase.create(get<Context>()) }
     single { get<VibratoDatabase>().sourceDao() }
     single { get<VibratoDatabase>().movieMetadataDao() }
+    single { get<VibratoDatabase>().categoryOverrideDao() }
     single { get<VibratoDatabase>().channelDao() }
     single { get<VibratoDatabase>().resumePositionDao() }
     single { get<VibratoDatabase>().favoriteDao() }

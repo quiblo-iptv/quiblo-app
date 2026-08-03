@@ -68,7 +68,12 @@ fun CategoryPickerSheet(
         if (filterQuery.isBlank()) {
             categories
         } else {
-            categories.filter { it.title.contains(filterQuery, ignoreCase = true) }
+            categories.filter {
+                // Searches the renamed and the original alike: a user who renamed a category
+                // may well look for it by either.
+                it.displayTitle.contains(filterQuery, ignoreCase = true) ||
+                    it.title.contains(filterQuery, ignoreCase = true)
+            }
         }
     }
 
@@ -134,7 +139,7 @@ fun CategoryPickerSheet(
                     val displayTitle = if (category.title == Category.UNGROUPED_TITLE) {
                         stringResource(R.string.browse_category_ungrouped)
                     } else {
-                        category.title
+                        category.displayTitle
                     }
                     CategoryRow(
                         title = displayTitle,

@@ -19,6 +19,7 @@
 package dev.vibrato.core.data.di
 
 import android.content.Context
+import dev.vibrato.core.data.CategoryRepository
 import dev.vibrato.core.data.ChannelRepository
 import dev.vibrato.core.data.GuideRepository
 import dev.vibrato.core.data.LocalFileContentFetcher
@@ -63,6 +64,7 @@ val dataModule: Module = module {
 
     single { SourceRepository(get(), get(), get(), get()) }
     single { ChannelRepository(get(), get(), get(), get(), get()) }
+    single { CategoryRepository(get(), get()) }
     single { GuideRepository(get(), get(), get()) }
     single { BackupRepository(get(), get()) }
     single { PlayerSettingsRepository(get()) }

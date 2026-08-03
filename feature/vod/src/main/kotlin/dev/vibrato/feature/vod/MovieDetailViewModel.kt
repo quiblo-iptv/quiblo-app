@@ -48,6 +48,15 @@ sealed interface MovieDetailUiState {
         val resumePositionMillis: Long = 0L,
         /** From TMDB, when the user has enabled it and a match was found. */
         val metadata: MovieMetadata? = null,
+        /**
+         * True while the description is still being fetched.
+         *
+         * Needed because "we have not asked yet" and "we asked and there is nothing" look
+         * identical in the data and must not look identical on screen. Without it the
+         * screen asserted "no description" for the fraction of a second before the answer
+         * arrived, which reads as a wrong answer rather than a pending one.
+         */
+        val isEnriching: Boolean = false,
     ) : MovieDetailUiState {
 
         val canResume: Boolean get() = resumePositionMillis > RESUME_THRESHOLD_MILLIS
@@ -108,6 +117,7 @@ class MovieDetailViewModel(
             _uiState.value = MovieDetailUiState.Ready(
                 channel = channel,
                 resumePositionMillis = channelRepository.resumePosition(channel.stableKey),
+                isEnriching = true,
             )
 
             val details = (channelRepository.getVodDetails(channelId) as? VodDetailsResult.Success)?.details
@@ -118,7 +128,9 @@ class MovieDetailViewModel(
             // for. Returns null when the feature is off, which is the default.
             metadataRepository.load()
             val metadata = metadataRepository.forTitle(channel.name)
-            (_uiState.value as? MovieDetailUiState.Ready)?.let { _uiState.value = it.copy(metadata = metadata) }
+            (_uiState.value as? MovieDetailUiState.Ready)?.let {
+                _uiState.value = it.copy(metadata = metadata, isEnriching = false)
+            }
         }
     }
 }

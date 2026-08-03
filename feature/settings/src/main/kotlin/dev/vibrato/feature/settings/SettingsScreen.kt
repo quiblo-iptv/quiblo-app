@@ -70,6 +70,8 @@ fun SettingsScreen(
     val playerSettings by viewModel.playerSettings.collectAsStateWithLifecycle()
     val tmdbKey by viewModel.tmdbApiKey.collectAsStateWithLifecycle()
     val tmdbCheck by viewModel.tmdbCheck.collectAsStateWithLifecycle()
+    val categoryKind by viewModel.selectedCategoryKind.collectAsStateWithLifecycle()
+    val categories by viewModel.categories.collectAsStateWithLifecycle()
     val context = LocalContext.current
 
     // SAF, so the file lands wherever the user chooses and the app needs no storage
@@ -124,6 +126,16 @@ fun SettingsScreen(
             onSeekInterval = viewModel::setSeekInterval,
             onBufferMode = viewModel::setBufferMode,
             onMaxBitrate = viewModel::setMaxBitrate,
+        )
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        CategorySettingsCard(
+            selectedKind = categoryKind,
+            categories = categories,
+            onSelectKind = viewModel::selectCategoryKind,
+            onSetHidden = viewModel::setCategoryHidden,
+            onRename = viewModel::renameCategory,
         )
 
         Spacer(modifier = Modifier.height(16.dp))

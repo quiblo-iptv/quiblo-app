@@ -77,9 +77,16 @@ data class Source(
 data class Category(
     val id: Long,
     val sourceId: Long,
+    /** The provider's own name. The stable identity, and what an override is keyed by. */
     val title: String,
     val itemCount: Int = 0,
+    /** A local rename, or null to use the provider's name. Never sent anywhere. */
+    val customName: String? = null,
+    val isHidden: Boolean = false,
 ) {
+    /** What to put on screen. */
+    val displayTitle: String get() = customName?.takeIf { it.isNotBlank() } ?: title
+
     companion object {
         /**
          * The single bucket for entries with no `group-title`.

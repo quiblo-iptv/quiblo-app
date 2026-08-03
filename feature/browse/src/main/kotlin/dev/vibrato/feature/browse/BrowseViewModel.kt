@@ -20,6 +20,7 @@ package dev.vibrato.feature.browse
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import dev.vibrato.core.data.CategoryRepository
 import dev.vibrato.core.data.ChannelRepository
 import dev.vibrato.core.data.GuideRepository
 import dev.vibrato.core.data.SourceRepository
@@ -76,6 +77,7 @@ class BrowseViewModel(
     private val favoritesOnly: Boolean,
     sourceRepository: SourceRepository,
     private val channelRepository: ChannelRepository,
+    private val categoryRepository: CategoryRepository,
     private val guideRepository: GuideRepository,
 ) : ViewModel() {
 
@@ -126,7 +128,7 @@ class BrowseViewModel(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS), BrowseUiState())
 
     private fun feedFor(sourceId: Long) = combine(
-        channelRepository.observeCategories(sourceId, kind),
+        categoryRepository.observeCategories(sourceId, kind),
         selectedCategory,
         // Debounced so a fast typist does not issue a query per keystroke. Short enough
         // to stay well inside the 200ms budget in AC-FAV-05.

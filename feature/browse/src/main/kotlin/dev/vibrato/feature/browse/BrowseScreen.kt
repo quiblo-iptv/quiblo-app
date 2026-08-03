@@ -135,7 +135,12 @@ fun BrowseScreen(
             onQueryChange = viewModel::search,
             showSearch = showSearch,
             showCategory = state.categories.isNotEmpty(),
+            // The chip shows the local name, while the state keeps the provider's title —
+            // renaming must not change what the filter matches on.
             selectedCategory = state.selectedCategory,
+            selectedCategoryLabel = state.categories
+                .firstOrNull { it.title == state.selectedCategory }
+                ?.displayTitle,
             isGridView = isGridView,
             onToggleGridView = { isGridView = !isGridView },
             onCategoryClick = { showCategorySheet = true },
@@ -227,6 +232,7 @@ private fun BrowseHeader(
     showSearch: Boolean,
     showCategory: Boolean,
     selectedCategory: String?,
+    selectedCategoryLabel: String?,
     isGridView: Boolean,
     onToggleGridView: () -> Unit,
     onCategoryClick: () -> Unit,
@@ -272,7 +278,11 @@ private fun BrowseHeader(
             )
         } else {
             if (showCategory) {
-                CategoryChip(selectedCategory = selectedCategory, onClick = onCategoryClick)
+                CategoryChip(
+                    selectedCategory = selectedCategory,
+                    label = selectedCategoryLabel,
+                    onClick = onCategoryClick,
+                )
             }
 
             Spacer(modifier = Modifier.weight(1f))
@@ -294,11 +304,11 @@ private fun BrowseHeader(
 }
 
 @Composable
-private fun CategoryChip(selectedCategory: String?, onClick: () -> Unit) {
+private fun CategoryChip(selectedCategory: String?, label: String?, onClick: () -> Unit) {
     val displayLabel = when (selectedCategory) {
         null -> stringResource(R.string.browse_category_all)
         Category.UNGROUPED_TITLE -> stringResource(R.string.browse_category_ungrouped)
-        else -> selectedCategory
+        else -> label ?: selectedCategory
     }
 
     FilterChip(

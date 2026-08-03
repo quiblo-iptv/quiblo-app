@@ -37,7 +37,7 @@ These are non-goals. Rejecting them is a decision, not an oversight.
 | minSdk | **30** (Android 11) |
 | Sources | **M3U/M3U8** (remote URL + local file) and **Xtream Codes API** |
 | EPG | **Xtream API only.** M3U playlists have no guide in v1. |
-| Formats | **HLS, raw MPEG-TS, progressive MP4/MKV.** No DRM. |
+| Formats | **HLS, DASH, raw MPEG-TS, progressive MP4/MKV.** No DRM. *(DASH added by Amendment 2.)* |
 | Content types | **Live TV, VOD, Series** |
 | Storage | **Local only** (Room), with manual export/import to a file |
 | Distribution | **GitHub Releases (APK)** |
@@ -103,3 +103,17 @@ should be re-read before anyone treats a green phone build as a release candidat
 **What does not change.** Every other non-goal in §2 stands — no backend, no accounts, no
 DRM, no bundled content, no recording. The TV app is the same player with a different
 frontend, not a different product. Plan: [`PLAN-TV.md`](PLAN-TV.md).
+
+### Amendment 2 — DASH joins the supported formats (2026-08-04)
+
+**Decision.** §3's format list gains DASH. `media3-exoplayer-dash` is on the player's
+classpath alongside the HLS extractor.
+
+**Rationale.** The parser is small and the omission was arbitrary rather than principled:
+HLS, TS and progressive were chosen because that is what IPTV panels serve, and a provider
+that happens to serve DASH would otherwise hit "format not supported" for no better reason
+than a missing dependency.
+
+**What this does not change.** Still no DRM. A DASH stream carrying Widevine or PlayReady
+will fail at the licence step exactly as it did before, and that remains correct behaviour
+for v1 rather than a bug to chase — see §2.

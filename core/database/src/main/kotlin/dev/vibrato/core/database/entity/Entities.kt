@@ -180,3 +180,20 @@ data class MovieMetadataEntity(
      */
     val isMiss: Boolean = false,
 )
+
+/**
+ * A user's local edits to one provider category.
+ *
+ * Keyed by kind and the provider's own title rather than by any id, because a category has
+ * no id — it is derived by grouping channels — and because the provider's title is what
+ * survives a refresh. Renaming is local only: nothing is sent anywhere, and the original
+ * title is retained as the key so the edit reattaches after every reload.
+ */
+@Entity(tableName = "category_overrides", primaryKeys = ["kind", "originalTitle"])
+data class CategoryOverrideEntity(
+    val kind: String,
+    val originalTitle: String,
+    /** Null means "use the provider's name". Absence and a blank rename are the same thing. */
+    val customName: String? = null,
+    val isHidden: Boolean = false,
+)

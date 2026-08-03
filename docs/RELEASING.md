@@ -1,6 +1,6 @@
 <!--
-  Vibrato — a free, open source IPTV player.
-  Copyright (C) 2026 The Vibrato Authors
+  Quiblo — a free, open source IPTV player.
+  Copyright (C) 2026 The Quiblo Authors
   Licensed under the GNU General Public License v3.0 or later. See LICENSE.
 -->
 
@@ -19,8 +19,8 @@ Create one once:
 
 ```bash
 keytool -genkeypair -v \
-  -keystore vibrato-release.jks \
-  -alias vibrato \
+  -keystore quiblo-release.jks \
+  -alias quiblo \
   -keyalg RSA -keysize 4096 -validity 10000
 ```
 
@@ -33,9 +33,9 @@ Create `keystore.properties` in the repository root — it is gitignored, along 
 and `*.keystore`:
 
 ```properties
-storeFile=/absolute/path/to/vibrato-release.jks
+storeFile=/absolute/path/to/quiblo-release.jks
 storePassword=…
-keyAlias=vibrato
+keyAlias=quiblo
 keyPassword=…
 ```
 
@@ -59,10 +59,10 @@ Required repository secrets:
 
 | Secret | What it holds |
 |---|---|
-| `VIBRATO_KEYSTORE_BASE64` | The `.jks`, base64-encoded (`base64 -w0 vibrato-release.jks`) |
-| `VIBRATO_KEYSTORE_PASSWORD` | Keystore password |
-| `VIBRATO_KEY_ALIAS` | Key alias |
-| `VIBRATO_KEY_PASSWORD` | Key password |
+| `QUIBLO_KEYSTORE_BASE64` | The `.jks`, base64-encoded (`base64 -w0 quiblo-release.jks`) |
+| `QUIBLO_KEYSTORE_PASSWORD` | Keystore password |
+| `QUIBLO_KEY_ALIAS` | Key alias |
+| `QUIBLO_KEY_PASSWORD` | Key password |
 
 The decoded keystore is written to the runner's temp directory, outside the workspace, and
 deleted in an `always()` step so it is removed even when a build fails.

@@ -65,7 +65,7 @@ individual is officially representing the community in public spaces.
 
 Instances of abusive, harassing, or otherwise unacceptable behavior may be reported to
 the community leaders responsible for enforcement by opening a
-[private report](https://github.com/vibrato-tv/vibrato/security/advisories) or by
+[private report](https://github.com/quiblo-tv/quiblo/security/advisories) or by
 contacting the maintainers directly through GitHub.
 
 > A dedicated conduct email address is not yet published. Until it is, please use GitHub

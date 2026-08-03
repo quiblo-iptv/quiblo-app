@@ -1,6 +1,6 @@
 <!--
-  Vibrato — a free, open source IPTV player.
-  Copyright (C) 2026 The Vibrato Authors
+  Quiblo — a free, open source IPTV player.
+  Copyright (C) 2026 The Quiblo Authors
   Licensed under the GNU General Public License v3.0 or later. See LICENSE.
 -->
 
@@ -27,7 +27,7 @@ tagging v1.0.0 — do not tag while anything in §5 or §6 is unchecked.
 | Device | OS | Notes |
 |---|---|---|
 | Lenovo TB305XU | Android 15 (API 35), arm64, 3.7 GB RAM | Neither DoD row. Low-RAM mid-range, so a fair cold-start target |
-| `vibrato_api30` emulator | **Android 11 (API 30)**, Pixel 5, x86_64 | The minSdk row, but an emulator — does not satisfy the DoD's "physical device" |
+| `quiblo_api30` emulator | **Android 11 (API 30)**, Pixel 5, x86_64 | The minSdk row, but an emulator — does not satisfy the DoD's "physical device" |
 | Pixel Tablet emulator | Android 15 | Desktop-fast; treat its numbers as upper bounds only |
 
 **Android 14 has not been tested at all, and Android 11 only on an emulator.** Both DoD
@@ -49,12 +49,12 @@ by hand on the devices.
 |---|---|---|
 | AC-NFR-02 | **Pass** — 4.87 MB against a 25 MB budget | `assembleRelease`; the release workflow also fails above the budget |
 | AC-NFR-05 | **Pass** | `./gradlew build detektAll coverageAll lint` green, 2026-08-03 |
-| AC-NFR-06 | **Pass** | `enforceNoCompose()` in `vibrato.jvm.library`; no `:core:*`/`:source:*` build file references Compose or a feature module |
+| AC-NFR-06 | **Pass** | `enforceNoCompose()` in `quiblo.jvm.library`; no `:core:*`/`:source:*` build file references Compose or a feature module |
 | AC-NFR-07 | **Pass** — `:source:m3u` 98.0%, `:source:xtream` 83.9% | `./gradlew coverageAll`, threshold 80 |
 | AC-LEGAL-01 | **Pass** | `LICENSE` is the unmodified GPLv3 text |
 | AC-LEGAL-02 | **Pass** — 81/81 `.kt` files | header check across `app core source feature build-logic` |
 | AC-LEGAL-04 | **Pass** | CI greps for provider URLs and the forbidden brand string; all test payloads are synthetic |
-| AC-LEGAL-05 | **Pass** | README "Vibrato supplies no content" |
+| AC-LEGAL-05 | **Pass** | README "Quiblo supplies no content" |
 
 ## 2. Verified on hardware (Lenovo TB305XU, Android 15)
 
@@ -120,9 +120,9 @@ breakage would show — scoped storage, SAF, and the permission model all change
 |---|---|---|
 | AC-PL-01, AC-PL-04 | **Pass** | Byte-identical outcome to Android 15: "Loaded 20002 channels. 2 entries could not be read and were skipped" |
 | AC-NFR-01 | **Pass** | 20,002 channels loaded: 329 / 350 / 462 / 328 / 327 / 323 ms, **median 328 ms** |
-| AC-DATA (export) | **Pass** | SAF create-document opens, defaults to `vibrato-backup.json` in Downloads, writes valid JSON with `schema_version: 1` and snake_case keys |
+| AC-DATA (export) | **Pass** | SAF create-document opens, defaults to `quiblo-backup.json` in Downloads, writes valid JSON with `schema_version: 1` and snake_case keys |
 | AC-DATA (import, valid) | **Pass** | Re-importing the app's own export is idempotent: "Nothing to restore — everything in that file is already set up" |
-| AC-DATA (import, rejection) | **Pass** | A hand-edited `schema_version: 99` file is refused with "That backup was written by a newer version of Vibrato (format 99, this build reads 1). Update the app and try again" — it names both versions rather than failing vaguely |
+| AC-DATA (import, rejection) | **Pass** | A hand-edited `schema_version: 99` file is refused with "That backup was written by a newer version of Quiblo (format 99, this build reads 1). Update the app and try again" — it names both versions rather than failing vaguely |
 | AC-LEGAL-03 | **Pass** | Settings carries an "Open source licenses" section with a Show licenses screen |
 
 The backup copy states, on screen, that "Passwords are never written to the file — you will
@@ -204,7 +204,7 @@ and network state only." The merged release manifest contains four:
 android.permission.INTERNET
 android.permission.ACCESS_NETWORK_STATE
 android.permission.WAKE_LOCK                              ← from Media3
-dev.vibrato.player.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION ← from androidx.core
+dev.quiblo.player.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION ← from androidx.core
 ```
 
 Neither extra is declared by this project; both arrive transitively. `WAKE_LOCK` is what

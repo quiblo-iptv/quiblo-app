@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  Vibrato — a free, open source IPTV player.
-  Copyright (C) 2026 The Vibrato Authors
+  Quiblo — a free, open source IPTV player.
+  Copyright (C) 2026 The Quiblo Authors
   Licensed under the GNU General Public License v3.0 or later. See LICENSE.
 -->
 <resources>
@@ -13,11 +13,11 @@
     <string name="settings_backup_summary">Save your sources and favourites to a file, or restore them from one. Passwords are never written to the file — you will re-enter them after importing.</string>
     <string name="settings_backup_export">Export</string>
     <string name="settings_backup_import">Import</string>
-    <string name="settings_backup_default_filename">vibrato-backup.json</string>
+    <string name="settings_backup_default_filename">quiblo-backup.json</string>
     <string name="settings_backup_working">Working…</string>
     <string name="settings_backup_exported">Backup saved.</string>
-    <string name="settings_backup_failed">That file could not be read as a Vibrato backup.</string>
-    <string name="settings_backup_rejected">That backup was written by a newer version of Vibrato (format %1$d, this build reads %2$d). Update the app and try again.</string>
+    <string name="settings_backup_failed">That file could not be read as a Quiblo backup.</string>
+    <string name="settings_backup_rejected">That backup was written by a newer version of Quiblo (format %1$d, this build reads %2$d). Update the app and try again.</string>
     <string name="settings_backup_dismiss">OK</string>
 
     <plurals name="settings_backup_sources_restored">
@@ -33,7 +33,7 @@
 
     <!-- Licences: AC-LEGAL-03 -->
     <string name="settings_licenses_title">Open source licenses</string>
-    <string name="settings_licenses_summary">Vibrato is free software under the GNU General Public License v3.0 or later. It ships the following third-party components.</string>
+    <string name="settings_licenses_summary">Quiblo is free software under the GNU General Public License v3.0 or later. It ships the following third-party components.</string>
     <string name="settings_licenses_show">Show licenses</string>
     <string name="settings_licenses_hide">Hide licenses</string>
     <string name="settings_playback_title">Playback</string>
@@ -56,7 +56,7 @@
     <string name="settings_bitrate_2">2 Mbps</string>
 
     <string name="settings_metadata_title">Film information</string>
-    <string name="settings_metadata_summary">Optionally show a description, genres, rating, certificate, director and cast on movie screens, using your own account with The Movie Database. Off by default — Vibrato ships no key of its own and contacts nothing until you add one.</string>
+    <string name="settings_metadata_summary">Optionally show a description, genres, rating, certificate, director and cast on movie screens, using your own account with The Movie Database. Off by default — Quiblo ships no key of its own and contacts nothing until you add one.</string>
     <string name="settings_metadata_key">TMDB API key or read access token</string>
     <string name="settings_metadata_save">Save and check</string>
     <string name="settings_metadata_clear">Turn off</string>

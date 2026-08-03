@@ -1,17 +1,17 @@
 <!--
-  Vibrato — a free, open source IPTV player.
-  Copyright (C) 2026 The Vibrato Authors
+  Quiblo — a free, open source IPTV player.
+  Copyright (C) 2026 The Quiblo Authors
   Licensed under the GNU General Public License v3.0 or later. See LICENSE.
 -->
 
-# Vibrato
+# Quiblo
 
 **A free, open source IPTV player for Android. Bring your own playlist.**
 
-[![CI](https://github.com/vibrato-tv/vibrato/actions/workflows/ci.yml/badge.svg)](https://github.com/vibrato-tv/vibrato/actions/workflows/ci.yml)
+[![CI](https://github.com/quiblo-tv/quiblo/actions/workflows/ci.yml/badge.svg)](https://github.com/quiblo-tv/quiblo/actions/workflows/ci.yml)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
 
-Vibrato plays Live TV, movies, and series from playlists **you** supply — an M3U/M3U8
+Quiblo plays Live TV, movies, and series from playlists **you** supply — an M3U/M3U8
 URL or file, or an Xtream Codes account. No ads, no accounts, no tracking, no backend.
 
 > **Status: release candidate.** Milestones M0–M6 are complete: sources, playback,
@@ -20,7 +20,7 @@ URL or file, or an Xtream Codes account. No ads, no accounts, no tracking, no ba
 > ([`docs/ACCEPTANCE.md`](docs/ACCEPTANCE.md)). See [`docs/PLAN.md`](docs/PLAN.md) for the
 > roadmap.
 
-## Vibrato supplies no content
+## Quiblo supplies no content
 
 **This app ships with no playlists, no channel list, no provider directory, and no way to
 find any.** It is a player, in the same category as VLC or mpv. It has no knowledge of
@@ -59,10 +59,10 @@ in [`docs/PLAN.md`](docs/PLAN.md) §6.
 
 ## Privacy
 
-Vibrato has no telemetry, no analytics, no crash-reporting SDK, and no update check
+Quiblo has no telemetry, no analytics, no crash-reporting SDK, and no update check
 against any project-controlled server. The only outbound connections are to the hosts you
 configure yourself — your playlist or Xtream provider, and The Movie Database only if you
-have entered your own API key for it. Vibrato ships no key of its own, so with the setting
+have entered your own API key for it. Quiblo ships no key of its own, so with the setting
 untouched nothing ever contacts that service. This is verifiable by packet capture on a clean install, and is a
 release criterion (AC-NFR-03).
 
@@ -78,8 +78,8 @@ Requires **JDK 17+** and the **Android SDK** (platform 37, build-tools 37.0.0). 
 Studio is not required.
 
 ```bash
-git clone https://github.com/vibrato-tv/vibrato.git
-cd vibrato
+git clone https://github.com/quiblo-tv/quiblo.git
+cd quiblo
 ./gradlew build          # compile, test, detekt, lint
 ./gradlew :app:installDebug
 ```
@@ -116,7 +116,7 @@ See [`docs/PLAN.md`](docs/PLAN.md) §2.
 
 GPLv3-or-later. See [`LICENSE`](LICENSE).
 
-Vibrato is free software: you can redistribute it and/or modify it under the terms of the
+Quiblo is free software: you can redistribute it and/or modify it under the terms of the
 GNU General Public License as published by the Free Software Foundation, either version 3
 of the License, or (at your option) any later version. It is distributed in the hope that
 it will be useful, but **without any warranty**; without even the implied warranty of

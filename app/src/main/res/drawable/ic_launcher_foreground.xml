@@ -1,25 +1,37 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+  Quiblo — a free, open source IPTV player.
+  Copyright (C) 2026 The Quiblo Authors
+  Licensed under the GNU General Public License v3.0 or later. See LICENSE.
+
+  A Q built from a play mark: the ring reads as the letter, the triangle as a player,
+  and the tail finishes the Q. Drawn inside the adaptive-icon safe zone — an adaptive
+  launcher can mask this to a circle, a squircle or a rounded square, and anything
+  outside the middle 66dp is liable to be cropped away by the launcher's shape.
+-->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
+
+    <!-- The ring: the body of the Q. -->
     <path
         android:strokeColor="#FFFFFF"
-        android:strokeWidth="4"
-        android:strokeLineCap="round"
+        android:strokeWidth="5"
         android:fillColor="#00000000"
-        android:pathData="M34,54 q5,-13 10,0 t10,0 t10,0 t10,0" />
+        android:pathData="M36,54 a18,18 0 1,0 36,0 a18,18 0 1,0 -36,0" />
+
+    <!-- The tail, breaking the ring at the lower right. -->
     <path
         android:strokeColor="#FFFFFF"
-        android:strokeWidth="4"
+        android:strokeWidth="5"
         android:strokeLineCap="round"
         android:fillColor="#00000000"
-        android:pathData="M38,64 q4,-6 8,0 t8,0 t8,0" />
+        android:pathData="M64,64 L74,74" />
+
+    <!-- The play mark. -->
     <path
-        android:strokeColor="#FFFFFF"
-        android:strokeWidth="4"
-        android:strokeLineCap="round"
-        android:fillColor="#00000000"
-        android:pathData="M38,44 q4,-6 8,0 t8,0 t8,0" />
+        android:fillColor="#FFFFFF"
+        android:pathData="M49,45 L49,63 L65,54 Z" />
 </vector>

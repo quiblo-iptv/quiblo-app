@@ -1,6 +1,6 @@
-# Contributing to Vibrato
+# Contributing to Quiblo
 
-Thanks for considering a contribution. Vibrato is a free, open source IPTV **client**
+Thanks for considering a contribution. Quiblo is a free, open source IPTV **client**
 licensed under the GPLv3.
 
 Before anything else, read [`docs/FREEZE.md`](docs/FREEZE.md). It is the canonical
@@ -20,7 +20,7 @@ fixture, not in a comment, not in a screenshot, not in a log paste.
 This applies to issues, pull requests, discussions, and commit messages. Violations are
 removed and the account is blocked on the first offence. There is no warning.
 
-This is not squeamishness. Vibrato is a general-purpose media player in the same category
+This is not squeamishness. Quiblo is a general-purpose media player in the same category
 as VLC. Its legal position depends on the project having no knowledge of, and no
 involvement in, what any user's playlist contains. A single provider URL in the issue
 tracker undermines that for everyone. See `docs/ACCEPTANCE.md`, AC-LEGAL-04.
@@ -51,8 +51,8 @@ Each of these is a deliberate decision, not an oversight. See `docs/FREEZE.md` �
 - No Android Studio required — IntelliJ IDEA works, and so does the command line
 
 ```bash
-git clone https://github.com/vibrato-tv/vibrato.git
-cd vibrato
+git clone https://github.com/quiblo-tv/quiblo.git
+cd quiblo
 ./gradlew build
 ```
 
@@ -111,7 +111,7 @@ test passes.
 
 ## Licensing of contributions
 
-Vibrato is GPLv3. By contributing you agree your work is licensed under
+Quiblo is GPLv3. By contributing you agree your work is licensed under
 [GPL-3.0-or-later](LICENSE). There is no CLA and no copyright assignment; you keep your
 copyright.
 
@@ -121,7 +121,7 @@ GPLv2 (`docs/FREEZE.md` §3).
 
 ## Reporting bugs
 
-Include: device and Android version, Vibrato version, source type (M3U or Xtream — **not
+Include: device and Android version, Quiblo version, source type (M3U or Xtream — **not
 the source itself**), what you expected, what happened, and a synthetic reproduction where
 possible.
 

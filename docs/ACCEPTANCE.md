@@ -1,4 +1,4 @@
-# Acceptance Criteria — Vibrato v1.0
+# Acceptance Criteria — Quiblo v1.0
 
 Every criterion is binary: it passes or it does not. "Mostly works" is a fail.
 IDs are stable — reference them in commits and issues (`fix: AC-PL-04 crash on BOM-prefixed M3U`).

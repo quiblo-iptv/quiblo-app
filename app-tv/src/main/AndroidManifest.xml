@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  Vibrato — a free, open source IPTV player.
-  Copyright (C) 2026 The Vibrato Authors
+  Quiblo — a free, open source IPTV player.
+  Copyright (C) 2026 The Quiblo Authors
   Licensed under the GNU General Public License v3.0 or later. See LICENSE.
 -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
@@ -22,14 +22,14 @@
         android:required="false" />
 
     <application
-        android:name=".VibratoTvApplication"
+        android:name=".QuibloTvApplication"
         android:allowBackup="false"
         android:banner="@drawable/tv_banner"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/tv_app_name"
         android:networkSecurityConfig="@xml/network_security_config"
         android:supportsRtl="true"
-        android:theme="@style/Theme.VibratoTv">
+        android:theme="@style/Theme.QuibloTv">
 
         <activity
             android:name=".TvMainActivity"
@@ -37,7 +37,7 @@
             android:exported="true"
             android:label="@string/tv_app_name"
             android:screenOrientation="landscape"
-            android:theme="@style/Theme.VibratoTv">
+            android:theme="@style/Theme.QuibloTv">
             <!--
               LEANBACK_LAUNCHER, not LAUNCHER. This is the category the TV home screen
               reads; an app with only LAUNCHER installs on a television and then cannot be

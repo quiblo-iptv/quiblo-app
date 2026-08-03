@@ -1,6 +1,6 @@
 /*
- * Vibrato — a free, open source IPTV player.
- * Copyright (C) 2026 The Vibrato Authors
+ * Quiblo — a free, open source IPTV player.
+ * Copyright (C) 2026 The Quiblo Authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -19,7 +19,7 @@
 import java.util.Properties
 
 plugins {
-    id("vibrato.android.application")
+    id("quiblo.android.application")
     alias(libs.plugins.kotlin.serialization)
 }
 
@@ -32,10 +32,10 @@ val keystoreProperties = Properties().apply {
 fun signingValue(key: String, env: String): String? =
     keystoreProperties.getProperty(key) ?: System.getenv(env)
 
-val releaseStoreFile: String? = signingValue("storeFile", "VIBRATO_KEYSTORE_FILE")
-val releaseStorePassword: String? = signingValue("storePassword", "VIBRATO_KEYSTORE_PASSWORD")
-val releaseKeyAlias: String? = signingValue("keyAlias", "VIBRATO_KEY_ALIAS")
-val releaseKeyPassword: String? = signingValue("keyPassword", "VIBRATO_KEY_PASSWORD")
+val releaseStoreFile: String? = signingValue("storeFile", "QUIBLO_KEYSTORE_FILE")
+val releaseStorePassword: String? = signingValue("storePassword", "QUIBLO_KEYSTORE_PASSWORD")
+val releaseKeyAlias: String? = signingValue("keyAlias", "QUIBLO_KEY_ALIAS")
+val releaseKeyPassword: String? = signingValue("keyPassword", "QUIBLO_KEY_PASSWORD")
 val hasReleaseSigning: Boolean = listOf(
     releaseStoreFile,
     releaseStorePassword,
@@ -44,12 +44,12 @@ val hasReleaseSigning: Boolean = listOf(
 ).all { !it.isNullOrBlank() }
 
 android {
-    namespace = "dev.vibrato.tv"
+    namespace = "dev.quiblo.tv"
 
     defaultConfig {
         // A separate application id, not a flavour of the phone app. They are two installs
         // with two databases, and a user may well have both — a phone and a television.
-        applicationId = "dev.vibrato.tv"
+        applicationId = "dev.quiblo.tv"
         versionCode = 1
         versionName = "0.1.0-alpha01"
     }

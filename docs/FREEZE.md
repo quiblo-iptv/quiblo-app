@@ -1,8 +1,8 @@
-# Freeze Prompt — Vibrato
+# Freeze Prompt — Quiblo
 
 **Tagline:** a vibe-coded IPTV player. Free, open source, GPLv3. Bring your own playlist.
-**Repo / org:** `vibrato-tv`
-**Application ID:** `dev.vibrato.player`
+**Repo / org:** `quiblo-tv`
+**Application ID:** `dev.quiblo.player`
 **Status:** FROZEN for v1.0
 **Date:** 2026-08-03
 **Purpose:** This is the canonical description of the project. Any new contributor, or any AI agent asked to work on this codebase, is given this document first. Nothing outside this scope is built until v1.0 ships. Scope changes require an explicit amendment at the bottom of this file.
@@ -11,7 +11,7 @@
 
 ## 1. One-sentence definition
 
-**Vibrato** is a free, open-source, GPLv3-licensed Android IPTV **client** that plays Live TV, VOD, and Series from playlists the user supplies themselves.
+**Quiblo** is a free, open-source, GPLv3-licensed Android IPTV **client** that plays Live TV, VOD, and Series from playlists the user supplies themselves.
 
 **Naming note:** the name was chosen deliberately to avoid the "VIPTV" / "VIP TV" namespace, which is saturated with paid subscription resellers. Do not reintroduce that string in the package ID, repo name, store listing, or documentation — the distance from that space is a legal and reputational asset, not an accident.
 
@@ -117,3 +117,22 @@ than a missing dependency.
 **What this does not change.** Still no DRM. A DASH stream carrying Widevine or PlayReady
 will fail at the licence step exactly as it did before, and that remains correct behaviour
 for v1 rather than a bug to chase — see §2.
+
+### Amendment 3 — the project is renamed to Quiblo (2026-08-04)
+
+**Decision.** "Quiblo" replaces "Vibrato" everywhere: application ids `dev.quiblo.player` and
+`dev.quiblo.tv`, the `dev.quiblo.*` namespace, the database, the launcher label and the
+documentation.
+
+**Rationale.** Vibrato is a musical term, but the first syllable carries an unfortunate
+second reading, and a name a user is reluctant to say aloud is a bad name for a consumer
+app regardless of its etymology. §1's reasoning about distancing the project from the
+reseller namespace is unchanged and Quiblo satisfies it equally.
+
+**Why now.** Android identifies an app by its application id, so changing it after a release
+means existing installs cannot be upgraded — they see a different app. Nothing has been
+released, which makes this the only free moment to do it.
+
+**Consequences.** The database file is renamed with everything else. On any device carrying a
+test build, the new build is a separate install with an empty database; sources must be added
+again. That is a one-off cost of the rename and not a defect.

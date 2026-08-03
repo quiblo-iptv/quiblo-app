@@ -1,6 +1,6 @@
 # Mandatory Development Workflow Rule
 
-This rule defines the mandatory development, testing, and documentation standards for Vibrato TV.
+This rule defines the mandatory development, testing, and documentation standards for Quiblo TV.
 
 ## 1. Branching Strategy (GitFlow)
 - **Separate Branches**: Every feature, bugfix, or hotfix MUST be developed on its own dedicated Git branch before merging into `main`:

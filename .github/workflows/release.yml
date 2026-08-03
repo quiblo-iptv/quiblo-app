@@ -1,5 +1,5 @@
-# Vibrato — a free, open source IPTV player.
-# Copyright (C) 2026 The Vibrato Authors
+# Quiblo — a free, open source IPTV player.
+# Copyright (C) 2026 The Quiblo Authors
 # Licensed under the GNU General Public License v3.0 or later. See LICENSE.
 
 name: Release
@@ -52,26 +52,26 @@ jobs:
       # removed in an always() step below whatever happens.
       - name: Decode signing keystore
         env:
-          KEYSTORE_BASE64: ${{ secrets.VIBRATO_KEYSTORE_BASE64 }}
+          KEYSTORE_BASE64: ${{ secrets.QUIBLO_KEYSTORE_BASE64 }}
         run: |
           set -euo pipefail
           if [ -z "${KEYSTORE_BASE64:-}" ]; then
-            echo "::error::VIBRATO_KEYSTORE_BASE64 is not set. A release must be signed."
+            echo "::error::QUIBLO_KEYSTORE_BASE64 is not set. A release must be signed."
             exit 1
           fi
-          echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/vibrato-release.jks"
+          echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/quiblo-release.jks"
 
       - name: Assemble signed release
         env:
-          VIBRATO_KEYSTORE_FILE: ${{ runner.temp }}/vibrato-release.jks
-          VIBRATO_KEYSTORE_PASSWORD: ${{ secrets.VIBRATO_KEYSTORE_PASSWORD }}
-          VIBRATO_KEY_ALIAS: ${{ secrets.VIBRATO_KEY_ALIAS }}
-          VIBRATO_KEY_PASSWORD: ${{ secrets.VIBRATO_KEY_PASSWORD }}
+          QUIBLO_KEYSTORE_FILE: ${{ runner.temp }}/quiblo-release.jks
+          QUIBLO_KEYSTORE_PASSWORD: ${{ secrets.QUIBLO_KEYSTORE_PASSWORD }}
+          QUIBLO_KEY_ALIAS: ${{ secrets.QUIBLO_KEY_ALIAS }}
+          QUIBLO_KEY_PASSWORD: ${{ secrets.QUIBLO_KEY_PASSWORD }}
         run: ./gradlew :app:assembleRelease
 
       - name: Remove keystore
         if: always()
-        run: rm -f "$RUNNER_TEMP/vibrato-release.jks"
+        run: rm -f "$RUNNER_TEMP/quiblo-release.jks"
 
       # AC-NFR-02. Enforced rather than reported: a release that quietly grew past the
       # budget is exactly the kind of regression nobody notices until it ships.
@@ -98,8 +98,8 @@ jobs:
           cd app/build/outputs/apk/release
           APK=$(find . -name '*.apk' ! -name '*unsigned*' | head -n 1)
           TAG="${{ github.event.inputs.tag || github.ref_name }}"
-          cp "$APK" "vibrato-${TAG}.apk"
-          sha256sum "vibrato-${TAG}.apk" > "vibrato-${TAG}.apk.sha256"
+          cp "$APK" "quiblo-${TAG}.apk"
+          sha256sum "quiblo-${TAG}.apk" > "quiblo-${TAG}.apk.sha256"
 
       - name: Publish release
         uses: softprops/action-gh-release@v2
@@ -108,5 +108,5 @@ jobs:
           draft: true
           generate_release_notes: true
           files: |
-            app/build/outputs/apk/release/vibrato-*.apk
-            app/build/outputs/apk/release/vibrato-*.apk.sha256
+            app/build/outputs/apk/release/quiblo-*.apk
+            app/build/outputs/apk/release/quiblo-*.apk.sha256

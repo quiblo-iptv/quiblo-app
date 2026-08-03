@@ -6,7 +6,7 @@
 
 Report it privately through GitHub's private vulnerability reporting:
 
-1. Go to the [Security tab](https://github.com/vibrato-tv/vibrato/security/advisories) of this repository.
+1. Go to the [Security tab](https://github.com/quiblo-tv/quiblo/security/advisories) of this repository.
 2. Choose **Report a vulnerability**.
 3. Describe the issue, the affected version, and how to reproduce it.
 
@@ -29,7 +29,7 @@ paste it into the report. See `docs/ACCEPTANCE.md`, AC-LEGAL-04.
 
 ## Supported versions
 
-Vibrato is pre-1.0. Only the latest release on the `main` branch receives security fixes.
+Quiblo is pre-1.0. Only the latest release on the `main` branch receives security fixes.
 
 | Version | Supported |
 |---|---|
@@ -50,14 +50,14 @@ In scope:
 
 Out of scope:
 
-- The content, legality, or availability of any playlist a user configures. Vibrato
+- The content, legality, or availability of any playlist a user configures. Quiblo
   supplies no content and exercises no control over user-supplied sources.
 - Vulnerabilities in a provider's panel or server software.
 - Issues that require a rooted device and physical access to exploit.
 
 ## Our commitments
 
-- Vibrato has no backend, no telemetry, no analytics, and no crash-reporting SDK. There
+- Quiblo has no backend, no telemetry, no analytics, and no crash-reporting SDK. There
   is no server-side component to attack and no data held by the project.
 - Credentials never leave the device (`docs/FREEZE.md` §4.6).
 - We will credit reporters in the release notes unless asked not to.

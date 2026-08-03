@@ -1,6 +1,6 @@
 /*
- * Vibrato — a free, open source IPTV player.
- * Copyright (C) 2026 The Vibrato Authors
+ * Quiblo — a free, open source IPTV player.
+ * Copyright (C) 2026 The Quiblo Authors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -17,12 +17,12 @@
  */
 
 plugins {
-    id("vibrato.android.core")
+    id("quiblo.android.core")
     alias(libs.plugins.kotlin.serialization)
 }
 
 android {
-    namespace = "dev.vibrato.core.data"
+    namespace = "dev.quiblo.core.data"
 }
 
 dependencies {

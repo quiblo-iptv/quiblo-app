@@ -1,10 +1,10 @@
 <!--
-  Vibrato — a free, open source IPTV player.
-  Copyright (C) 2026 The Vibrato Authors
+  Quiblo — a free, open source IPTV player.
+  Copyright (C) 2026 The Quiblo Authors
   Licensed under the GNU General Public License v3.0 or later. See LICENSE.
 -->
 
-# Execution Plan — Vibrato for Android TV / Google TV
+# Execution Plan — Quiblo for Android TV / Google TV
 
 **Status:** approved for v1.0 by `FREEZE.md` Amendment 1. Target device confirmed. Not started.
 **Date:** 2026-08-03.

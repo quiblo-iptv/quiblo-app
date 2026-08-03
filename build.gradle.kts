@@ -24,6 +24,7 @@ plugins {
     alias(libs.plugins.compose.compiler) apply false
     alias(libs.plugins.ksp) apply false
     alias(libs.plugins.detekt) apply false
+    alias(libs.plugins.kover) apply false
 }
 
 /**
@@ -33,5 +34,23 @@ plugins {
 tasks.register("detektAll") {
     group = "verification"
     description = "Runs detekt on all modules."
-    dependsOn(subprojects.map { "${it.path}:detekt" })
+    // Only real modules. `:core`, `:source` and `:feature` exist as projects because their
+    // children are nested under them, but they carry no build file and so no detekt task —
+    // depending on them by name fails configuration outright.
+    dependsOn(subprojects.filter { it.buildFile.exists() }.map { "${it.path}:detekt" })
+}
+
+/**
+ * Aggregate entry point used by CI: `./gradlew coverageAll`.
+ *
+ * Only the parser modules are covered, because AC-NFR-07 only asks for the parsers. They
+ * are also the only modules where a coverage number means anything: they are pure
+ * functions over text, so a covered line is genuinely an exercised line. Applying the same
+ * gate to UI modules would measure how much Compose got instantiated, not how much
+ * behaviour got tested, and the number would be gamed within a week.
+ */
+tasks.register("coverageAll") {
+    group = "verification"
+    description = "Verifies parser coverage against the AC-NFR-07 threshold."
+    dependsOn(":source:m3u:koverVerify", ":source:xtream:koverVerify")
 }

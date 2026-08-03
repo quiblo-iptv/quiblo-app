@@ -22,6 +22,7 @@ import dev.vibrato.core.model.Category
 import dev.vibrato.core.model.MediaKind
 import dev.vibrato.source.api.CredentialStore
 import dev.vibrato.source.api.Credentials
+import dev.vibrato.source.api.GuideResult
 import dev.vibrato.source.api.SourceError
 import dev.vibrato.source.api.SourceRequest
 import dev.vibrato.source.api.SourceResult
@@ -34,6 +35,7 @@ import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertInstanceOf
+import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
@@ -336,6 +338,116 @@ class XtreamSourceTest {
         ).load(request)
 
         val failure = assertInstanceOf(SourceResult.Failure::class.java, result)
+        assertEquals(SourceError.ProviderBlocked, failure.error)
+    }
+
+    // --- Guide (AC-EPG-*) ---------------------------------------------------------------
+
+    private fun guideServing(body: String) = sourceServing(
+        mapOf(null to authOk, "get_short_epg" to body),
+    )
+
+    /** "Morning News" / "Weather" / "The Late Show", base64 as panels send them. */
+    private val epgListings = """
+        {"epg_listings":[
+          {"id":"1","title":"TW9ybmluZyBOZXdz","description":"SGVhZGxpbmVz",
+           "start_timestamp":"1700000000","stop_timestamp":"1700003600"},
+          {"id":"2","title":"V2VhdGhlcg==","start_timestamp":1700003600,"stop_timestamp":1700005400}
+        ]}
+    """.trimIndent()
+
+    @Test
+    @DisplayName("AC-EPG-01 — listings map to programmes with decoded titles")
+    fun `guide returns decoded programmes`() = runTest {
+        val result = guideServing(epgListings).guideFor(request, channelKey = "ch-1", providerStreamId = "101")
+
+        val success = assertInstanceOf(GuideResult.Success::class.java, result)
+        assertEquals(2, success.programmes.size)
+
+        val first = success.programmes.first()
+        assertEquals("Morning News", first.title)
+        assertEquals("Headlines", first.description)
+        assertEquals("ch-1", first.channelKey)
+        assertEquals(5L, first.sourceId)
+        // Seconds in, milliseconds out.
+        assertEquals(1_700_000_000_000L, first.startEpochMillis)
+        assertEquals(1_700_003_600_000L, first.endEpochMillis)
+        assertNull(success.programmes[1].description)
+    }
+
+    @Test
+    @DisplayName("a title that is not base64 is left alone")
+    fun `guide keeps plain text titles`() = runTest {
+        // Decoding this blindly would yield mojibake rather than a title.
+        val result = guideServing(
+            """{"epg_listings":[{"title":"Live Football","start_timestamp":1,"stop_timestamp":2}]}""",
+        ).guideFor(request, channelKey = "ch-1", providerStreamId = "101")
+
+        val success = assertInstanceOf(GuideResult.Success::class.java, result)
+        assertEquals("Live Football", success.programmes.single().title)
+    }
+
+    @Test
+    @DisplayName("AC-EPG-04 — unusable listings are dropped, not rendered broken")
+    fun `guide drops listings it cannot render`() = runTest {
+        val result = guideServing(
+            """
+            {"epg_listings":[
+              {"title":"VGl0bGU=","stop_timestamp":2},
+              {"title":"VGl0bGU=","start_timestamp":1},
+              {"title":"VGl0bGU=","start_timestamp":5,"stop_timestamp":5},
+              {"title":"VGl0bGU=","start_timestamp":9,"stop_timestamp":4},
+              {"start_timestamp":1,"stop_timestamp":2},
+              {"title":"","start_timestamp":1,"stop_timestamp":2},
+              {"title":"S2VwdA==","start_timestamp":1,"stop_timestamp":2}
+            ]}
+            """.trimIndent(),
+        ).guideFor(request, channelKey = "ch-1", providerStreamId = "101")
+
+        val success = assertInstanceOf(GuideResult.Success::class.java, result)
+        assertEquals("Kept", success.programmes.single().title)
+    }
+
+    @Test
+    fun `guide returns an empty list when the panel has no data for the channel`() = runTest {
+        val result = guideServing("""{"epg_listings":[]}""")
+            .guideFor(request, channelKey = "ch-1", providerStreamId = "101")
+
+        val success = assertInstanceOf(GuideResult.Success::class.java, result)
+        assertTrue(success.programmes.isEmpty())
+    }
+
+    @Test
+    fun `guide reports missing credentials rather than calling the panel`() = runTest {
+        val source = sourceServing(mapOf(null to authOk), store = FakeStore(null))
+
+        val result = source.guideFor(request, channelKey = "ch-1", providerStreamId = "101")
+
+        val failure = assertInstanceOf(GuideResult.Failure::class.java, result)
+        assertEquals(SourceError.Unauthorized, failure.error)
+    }
+
+    @Test
+    fun `guide reports an unusable location as an unreachable host`() = runTest {
+        val result = guideServing(epgListings).guideFor(
+            SourceRequest(sourceId = 5L, location = "   "),
+            channelKey = "ch-1",
+            providerStreamId = "101",
+        )
+
+        val failure = assertInstanceOf(GuideResult.Failure::class.java, result)
+        assertEquals(SourceError.UnreachableHost, failure.error)
+    }
+
+    @Test
+    @DisplayName("a panel block surfaces on the guide path too")
+    fun `guide reports provider blocked`() = runTest {
+        val result = sourceServing(
+            bodies = mapOf(null to authOk),
+            status = HttpStatusCode(462, "Blocked"),
+        ).guideFor(request, channelKey = "ch-1", providerStreamId = "101")
+
+        val failure = assertInstanceOf(GuideResult.Failure::class.java, result)
         assertEquals(SourceError.ProviderBlocked, failure.error)
     }
 }

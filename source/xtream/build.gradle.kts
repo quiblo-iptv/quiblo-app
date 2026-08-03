@@ -19,6 +19,7 @@
 plugins {
     id("vibrato.jvm.library")
     alias(libs.plugins.kotlin.serialization)
+    alias(libs.plugins.kover)
 }
 
 dependencies {
@@ -31,4 +32,17 @@ dependencies {
     implementation(libs.ktor.serialization.json)
 
     testImplementation(libs.ktor.client.mock)
+}
+
+// AC-NFR-07, as in :source:m3u. The DTO layer is deliberately in scope: the lenient
+// field-key mapping is exactly the part that panels break (see 916f271), so it is the
+// part that most needs the tests.
+kover {
+    reports {
+        verify {
+            rule {
+                minBound(80)
+            }
+        }
+    }
 }

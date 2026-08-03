@@ -18,10 +18,24 @@
 
 plugins {
     id("vibrato.jvm.library")
+    alias(libs.plugins.kover)
 }
 
 dependencies {
     implementation(projects.source.api)
     implementation(projects.core.model)
     implementation(libs.kotlinx.coroutines.core)
+}
+
+// AC-NFR-07: the parser must stay above 80% line coverage, including the malformed-input
+// cases in AC-PL-04. This fails the build rather than printing a number, because a
+// coverage report nobody is forced to read is a coverage report nobody reads.
+kover {
+    reports {
+        verify {
+            rule {
+                minBound(80)
+            }
+        }
+    }
 }

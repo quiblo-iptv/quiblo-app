@@ -27,6 +27,7 @@ coil = "3.5.0"
 
 # Quality
 detekt = "1.23.8"
+kover = "0.9.2"
 
 # Test
 junit = "5.14.4"
@@ -121,3 +122,4 @@ kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", versi
 compose-compiler = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
 ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
 detekt = { id = "io.gitlab.arturbosch.detekt", version.ref = "detekt" }
+kover = { id = "org.jetbrains.kotlinx.kover", version.ref = "kover" }

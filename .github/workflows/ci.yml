@@ -71,6 +71,9 @@ jobs:
       - name: detekt
         run: ./gradlew detektAll --stacktrace
 
+      - name: Parser coverage (AC-NFR-07)
+        run: ./gradlew coverageAll --stacktrace
+
       - name: Android Lint
         run: ./gradlew lint --stacktrace
 

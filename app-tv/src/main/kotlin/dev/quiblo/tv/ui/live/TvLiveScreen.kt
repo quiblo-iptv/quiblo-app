@@ -79,7 +79,8 @@ import org.koin.androidx.compose.koinViewModel
  */
 @Composable
 fun TvLiveScreen(
-    onChannelClick: (Channel) -> Unit,
+    /** Hands over the whole list, not just the item: the player needs it to zap. */
+    onPlay: (List<Channel>, Int) -> Unit,
     modifier: Modifier = Modifier,
     viewModel: BrowseViewModel = koinViewModel(
         key = "tv-live",
@@ -131,7 +132,7 @@ fun TvLiveScreen(
                     channel = channel,
                     nowPlaying = state.nowPlaying[channel.stableKey],
                     onFocused = { focusedChannel = channel },
-                    onClick = { onChannelClick(channel) },
+                    onClick = { onPlay(state.items, index) },
                 )
             }
         }

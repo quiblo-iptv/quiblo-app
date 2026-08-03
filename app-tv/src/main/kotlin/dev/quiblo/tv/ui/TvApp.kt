@@ -36,10 +36,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -80,16 +78,24 @@ fun TvApp() {
     // Playing replaces the whole shell rather than sitting inside it: a television plays
     // full screen, and leaving the bar drawn over video would be the same mistake the phone
     // app made for a fortnight.
-    var playing: Channel? by remember { mutableStateOf(null) }
+    //
+    // The queue travels with the selection because zapping needs it. Up and down on a
+    // television move through the list you came from, and the player cannot know what that
+    // was — only the screen that launched it does.
+    var queue: List<Channel> by remember { mutableStateOf(emptyList()) }
+    var playingIndex by remember { mutableIntStateOf(-1) }
 
-    playing?.let { channel ->
+    val playing = queue.getOrNull(playingIndex)
+    if (playing != null) {
         TvPlayerScreen(
-            channel = channel,
-            onBack = { playing = null },
-            // Zapping is not implemented past the notice: it needs the surrounding channel
-            // list, which belongs to whichever screen launched playback. Wired as a no-op
-            // rather than pretending, so nothing silently does nothing.
-            onZap = { },
+            channel = playing,
+            onBack = { playingIndex = -1 },
+            onZap = { direction ->
+                // Wraps, as a television does: past the last channel is the first. Stopping
+                // dead at the end of a 20,000-channel list would feel like a fault.
+                val size = queue.size
+                if (size > 0) playingIndex = ((playingIndex + direction) % size + size) % size
+            },
         )
         return
     }
@@ -115,11 +121,39 @@ fun TvApp() {
                 .padding(start = SCREEN_PADDING, end = SCREEN_PADDING, bottom = SCREEN_PADDING),
         ) {
             when (TvTab.entries[selectedTab]) {
-                TvTab.LIVE -> TvLiveScreen(onChannelClick = { playing = it })
-                TvTab.MOVIES -> TvPosterRows(kind = MediaKind.VOD, onItemClick = { playing = it })
-                TvTab.SERIES -> TvPosterRows(kind = MediaKind.SERIES, onItemClick = { playing = it })
+                TvTab.LIVE -> TvLiveScreen(
+                    onPlay = { channels, index ->
+                        queue = channels
+                        playingIndex = index
+                    },
+                )
+
+                TvTab.MOVIES -> TvPosterRows(
+                    kind = MediaKind.VOD,
+                    onPlay = { items, index ->
+                        queue = items
+                        playingIndex = index
+                    },
+                )
+
+                TvTab.SERIES -> TvPosterRows(
+                    kind = MediaKind.SERIES,
+                    onPlay = { items, index ->
+                        queue = items
+                        playingIndex = index
+                    },
+                )
+
+                TvTab.FAVOURITES -> TvPosterRows(
+                    kind = MediaKind.VOD,
+                    favouritesOnly = true,
+                    onPlay = { items, index ->
+                        queue = items
+                        playingIndex = index
+                    },
+                )
+
                 TvTab.SOURCES -> TvSourcesScreen()
-                else -> Placeholder(tab = TvTab.entries[selectedTab])
             }
         }
     }
@@ -149,11 +183,6 @@ private fun TvTopBar(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(28.dp),
     ) {
-        BarIcon(
-            icon = Icons.Filled.Search,
-            contentDescription = stringResource(R.string.tv_tab_search),
-        )
-
         TvTab.entries.forEachIndexed { index, tab ->
             TextTab(
                 label = stringResource(tab.labelRes),
@@ -251,24 +280,6 @@ private fun BarIcon(icon: androidx.compose.ui.graphics.vector.ImageVector, conte
             contentDescription = contentDescription,
             tint = Color.White.copy(alpha = if (isFocused) 1f else IDLE_ALPHA),
             modifier = Modifier.size(24.dp),
-        )
-    }
-}
-
-/**
- * Stand-in for a tab that has no screen yet.
- *
- * Drawn straight onto the background with no card behind it. A surface around the content
- * area boxes the screen in and reads as a panel inside a page; the reference has content
- * sitting directly on black, and so does this.
- */
-@Composable
-private fun Placeholder(tab: TvTab) {
-    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        Text(
-            text = stringResource(R.string.tv_placeholder, stringResource(tab.labelRes)),
-            color = Color.White.copy(alpha = IDLE_ALPHA),
-            style = MaterialTheme.typography.headlineSmall,
         )
     }
 }

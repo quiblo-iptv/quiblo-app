@@ -78,12 +78,16 @@ import org.koin.androidx.compose.koinViewModel
 @Composable
 fun TvPosterRows(
     kind: MediaKind,
-    onItemClick: (Channel) -> Unit,
+    /** Hands over the whole list, not just the item: the player needs it to zap. */
+    onPlay: (List<Channel>, Int) -> Unit,
     modifier: Modifier = Modifier,
+    favouritesOnly: Boolean = false,
 ) {
     val viewModel: BrowseViewModel = koinViewModel(
-        key = "tv-${kind.name}",
-        parameters = { browseParams(kind, favoritesOnly = false) },
+        // Favourites is a different feed of the same kind, so it needs its own ViewModel
+        // rather than sharing one and fighting over the filter.
+        key = if (favouritesOnly) "tv-favourites" else "tv-${kind.name}",
+        parameters = { browseParams(kind, favoritesOnly = favouritesOnly) },
     )
     val state by viewModel.uiState.collectAsStateWithLifecycle()
 
@@ -112,7 +116,13 @@ fun TvPosterRows(
             verticalArrangement = Arrangement.spacedBy(28.dp),
         ) {
             items(items = rows, key = { it.key }) { (category, items) ->
-                CategoryRow(category = category, items = items, onItemClick = onItemClick)
+                CategoryRow(
+                    category = category,
+                    items = items,
+                    // Indexed against the flat list so zapping walks every item on screen,
+                    // not just the row the viewer happened to start in.
+                    onItemClick = { item -> onPlay(state.items, state.items.indexOf(item)) },
+                )
             }
         }
     }

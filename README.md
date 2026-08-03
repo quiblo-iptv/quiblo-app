@@ -101,6 +101,7 @@ See [`docs/PLAN.md`](docs/PLAN.md) §2.
 | [`docs/FREEZE.md`](docs/FREEZE.md) | The canonical, frozen scope for v1.0. Read this first. |
 | [`docs/ACCEPTANCE.md`](docs/ACCEPTANCE.md) | Definition of done, as numbered binary criteria |
 | [`docs/PLAN.md`](docs/PLAN.md) | Stack, module structure, milestones |
+| [`docs/RELEASING.md`](docs/RELEASING.md) | Signing key handling and the release process |
 | [`CONTRIBUTING.md`](CONTRIBUTING.md) | How to contribute, and what will get you banned |
 | [`SECURITY.md`](SECURITY.md) | Private vulnerability disclosure |
 

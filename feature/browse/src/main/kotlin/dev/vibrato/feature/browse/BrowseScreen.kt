@@ -26,6 +26,7 @@ import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -33,11 +34,16 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -45,8 +51,12 @@ import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
+import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.LiveTv
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.ViewList
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -96,6 +106,7 @@ fun BrowseScreen(
     val query by viewModel.currentQuery.collectAsStateWithLifecycle()
     var guideFor: Channel? by remember { mutableStateOf(null) }
     var showCategorySheet by remember { mutableStateOf(false) }
+    var isGridView by remember { mutableStateOf(false) }
 
     if (!state.hasSource) {
         CentredMessage(stringResource(R.string.browse_no_source), modifier)
@@ -110,6 +121,8 @@ fun BrowseScreen(
         if (state.categories.isNotEmpty()) {
             CategoryPillHeader(
                 selectedCategory = state.selectedCategory,
+                isGridView = isGridView,
+                onToggleGridView = { isGridView = !isGridView },
                 onClick = { showCategorySheet = true },
             )
         }
@@ -120,10 +133,25 @@ fun BrowseScreen(
 
             state.items.isEmpty() -> CentredMessage(emptyMessage)
 
+            isGridView -> LazyVerticalGrid(
+                columns = GridCells.Adaptive(minSize = 150.dp),
+                contentPadding = PaddingValues(12.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.fillMaxSize(),
+            ) {
+                items(items = state.items, key = { it.id }) { item ->
+                    LaunchedEffect(item.id) { viewModel.onRowVisible(item) }
+                    ChannelGridCard(
+                        channel = item,
+                        onClick = { onItemClick(item) },
+                        onToggleFavorite = { viewModel.toggleFavorite(item) },
+                    )
+                }
+            }
+
             else -> LazyColumn(modifier = Modifier.fillMaxSize()) {
                 items(items = state.items, key = { it.id }) { item ->
-                    // Fetching as rows appear is what keeps a 20,000-channel account from
-                    // becoming 20,000 guide requests.
                     LaunchedEffect(item.id) { viewModel.onRowVisible(item) }
                     ChannelRow(
                         channel = item,
@@ -216,6 +244,8 @@ private fun ExpandableSearchHeader(query: String, onQueryChange: (String) -> Uni
 @Composable
 private fun CategoryPillHeader(
     selectedCategory: String?,
+    isGridView: Boolean,
+    onToggleGridView: () -> Unit,
     onClick: () -> Unit,
 ) {
     val displayLabel = if (selectedCategory == null) {
@@ -231,6 +261,7 @@ private fun CategoryPillHeader(
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 2.dp),
         verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween,
     ) {
         FilterChip(
             selected = selectedCategory != null,
@@ -238,6 +269,59 @@ private fun CategoryPillHeader(
             label = { Text(text = "Category: $displayLabel") },
             trailingIcon = { Icon(Icons.Filled.ArrowDropDown, contentDescription = null) },
         )
+
+        IconButton(onClick = onToggleGridView) {
+            Icon(
+                imageVector = if (isGridView) Icons.Filled.ViewList else Icons.Filled.GridView,
+                contentDescription = "Toggle Grid/List view",
+            )
+        }
+    }
+}
+
+@Composable
+private fun ChannelGridCard(
+    channel: Channel,
+    onClick: () -> Unit,
+    onToggleFavorite: () -> Unit,
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(140.dp)
+            .clickable(onClick = onClick),
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(10.dp),
+            verticalArrangement = Arrangement.SpaceBetween,
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.Top,
+            ) {
+                ChannelLogo(channel.logoUrl)
+                IconButton(onClick = onToggleFavorite, modifier = Modifier.size(24.dp)) {
+                    Icon(
+                        imageVector = if (channel.isFavorite) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,
+                        contentDescription = "Favorite",
+                        tint = if (channel.isFavorite) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+
+            Text(
+                text = channel.name,
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.Bold,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
     }
 }
 

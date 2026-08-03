@@ -14,9 +14,10 @@
 Vibrato plays Live TV, movies, and series from playlists **you** supply — an M3U/M3U8
 URL or file, or an Xtream Codes account. No ads, no accounts, no tracking, no backend.
 
-> **Status: alpha.** Milestones M0–M4 are complete: sources, playback, browse,
-> favourites, Xtream and EPG all work. M5 (settings, export/import, polish) and M6
-> (release engineering) are outstanding. See [`docs/PLAN.md`](docs/PLAN.md) for the
+> **Status: release candidate.** Milestones M0–M6 are complete: sources, playback,
+> browse, favourites, Xtream, EPG, export/import, and release engineering. What remains
+> before v1.0.0 is the full acceptance sweep on physical devices
+> ([`docs/ACCEPTANCE.md`](docs/ACCEPTANCE.md)). See [`docs/PLAN.md`](docs/PLAN.md) for the
 > roadmap.
 
 ## Vibrato supplies no content
@@ -45,12 +46,13 @@ immediate ban — see [`CONTRIBUTING.md`](CONTRIBUTING.md).
 | **Theme & Design** | Material 3 Expressive, dark and light |
 | **Resume** | Playback position remembered per item |
 | **Favourites** | Survive playlist refresh |
+| **Backup** | Versioned export and import of sources and favourites, to a file you choose |
 | **Storage & Privacy** | Entirely on-device with zero telemetry |
 
-Not yet implemented, in rough priority order: settings persistence, export/import,
-aspect-ratio modes, configurable buffer and seek intervals, an EPG time-grid, a quick-zap
-overlay, a continue-watching carousel, catchup/timeshift, and picture-in-picture. Several
-are Phase 2 in [`docs/PLAN.md`](docs/PLAN.md) §6.
+Not yet implemented, in rough priority order: aspect-ratio modes, configurable buffer and
+seek intervals, an EPG time-grid, a quick-zap overlay, a continue-watching carousel,
+catchup/timeshift, and picture-in-picture. Several are Phase 2 in
+[`docs/PLAN.md`](docs/PLAN.md) §6.
 
 ## Privacy
 

@@ -32,3 +32,6 @@ Thumbs.db
 # Reports
 build/reports/
 config/detekt/baseline.xml.tmp
+
+# Databases pulled off a device for debugging
+*_temp.db

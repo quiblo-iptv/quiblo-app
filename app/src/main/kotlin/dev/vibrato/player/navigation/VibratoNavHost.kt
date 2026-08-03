@@ -27,6 +27,7 @@ import androidx.navigation.toRoute
 import dev.vibrato.feature.favorites.FavoritesScreen
 import dev.vibrato.feature.live.LiveScreen
 import dev.vibrato.feature.player.PlayerScreen
+import dev.vibrato.feature.series.SeriesDetailScreen
 import dev.vibrato.feature.series.SeriesScreen
 import dev.vibrato.feature.settings.SettingsScreen
 import dev.vibrato.feature.sources.SourcesScreen
@@ -54,13 +55,38 @@ fun VibratoNavHost(
 
         composable<LiveRoute> { LiveScreen(onItemClick = play) }
         composable<VodRoute> { VodScreen(onItemClick = play) }
-        composable<SeriesRoute> { SeriesScreen(onItemClick = play) }
+        composable<SeriesRoute> {
+            SeriesScreen(
+                onItemClick = { channel ->
+                    navController.navigate(SeriesDetailRoute(channel.id))
+                },
+            )
+        }
+        composable<SeriesDetailRoute> { entry ->
+            val route = entry.toRoute<SeriesDetailRoute>()
+            SeriesDetailScreen(
+                channelId = route.channelId,
+                onBack = { navController.popBackStack() },
+                onEpisodeClick = { episode, seriesChannel ->
+                    navController.navigate(
+                        PlayerRoute(
+                            channelId = seriesChannel.id,
+                            streamUrl = episode.streamUrl,
+                            title = "${seriesChannel.name} - ${episode.title}",
+                        ),
+                    )
+                },
+            )
+        }
         composable<FavoritesRoute> { FavoritesScreen(onItemClick = play) }
         composable<SourcesRoute> { SourcesScreen() }
         composable<SettingsRoute> { SettingsScreen() }
         composable<PlayerRoute> { entry ->
+            val route = entry.toRoute<PlayerRoute>()
             PlayerScreen(
-                channelId = entry.toRoute<PlayerRoute>().channelId,
+                channelId = route.channelId,
+                streamUrl = route.streamUrl,
+                title = route.title,
                 onBack = { navController.popBackStack() },
             )
         }

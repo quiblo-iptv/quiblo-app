@@ -46,6 +46,9 @@ data object VodRoute
 data object SeriesRoute
 
 @Serializable
+data class SeriesDetailRoute(val channelId: Long)
+
+@Serializable
 data object FavoritesRoute
 
 @Serializable
@@ -56,7 +59,11 @@ data object SettingsRoute
 
 /** Full-screen playback of one item. */
 @Serializable
-data class PlayerRoute(val channelId: Long)
+data class PlayerRoute(
+    val channelId: Long,
+    val streamUrl: String? = null,
+    val title: String? = null,
+)
 
 /**
  * The destinations reachable from the bottom navigation bar.

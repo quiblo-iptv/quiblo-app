@@ -21,11 +21,18 @@ package dev.vibrato.core.data
 import dev.vibrato.core.database.dao.ChannelDao
 import dev.vibrato.core.database.dao.FavoriteDao
 import dev.vibrato.core.database.dao.ResumePositionDao
+import dev.vibrato.core.database.dao.SourceDao
 import dev.vibrato.core.database.entity.FavoriteEntity
 import dev.vibrato.core.database.entity.ResumePositionEntity
 import dev.vibrato.core.model.Category
 import dev.vibrato.core.model.Channel
 import dev.vibrato.core.model.MediaKind
+import dev.vibrato.core.model.SourceKind
+import dev.vibrato.source.api.MediaSource
+import dev.vibrato.source.api.SeriesDetailsResult
+import dev.vibrato.source.api.SeriesSource
+import dev.vibrato.source.api.SourceError
+import dev.vibrato.source.api.SourceRequest
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 
@@ -44,6 +51,8 @@ class ChannelRepository(
     private val channelDao: ChannelDao,
     private val resumePositionDao: ResumePositionDao,
     private val favoriteDao: FavoriteDao,
+    private val sourceDao: SourceDao? = null,
+    private val mediaSources: Map<SourceKind, MediaSource> = emptyMap(),
     private val now: () -> Long = System::currentTimeMillis,
 ) {
 
@@ -114,6 +123,23 @@ class ChannelRepository(
                 positionMillis = positionMillis,
                 updatedAtEpochMillis = now(),
             ),
+        )
+    }
+
+    suspend fun getSeriesDetails(channelId: Long): SeriesDetailsResult {
+        val channel = findById(channelId) ?: return SeriesDetailsResult.Failure(SourceError.NotFound)
+        return getSeriesDetails(channel)
+    }
+
+    suspend fun getSeriesDetails(channel: Channel): SeriesDetailsResult {
+        val seriesId = channel.providerStreamId ?: return SeriesDetailsResult.Failure(SourceError.NotFound)
+        val sourceDao = sourceDao ?: return SeriesDetailsResult.Failure(SourceError.NotFound)
+        val source = sourceDao.findById(channel.sourceId)?.toDomain() ?: return SeriesDetailsResult.Failure(SourceError.UnreachableHost)
+        val seriesSource = mediaSources[source.kind] as? SeriesSource ?: return SeriesDetailsResult.Failure(SourceError.NotFound)
+
+        return seriesSource.seriesDetails(
+            request = SourceRequest(channel.sourceId, source.url),
+            seriesId = seriesId,
         )
     }
 }

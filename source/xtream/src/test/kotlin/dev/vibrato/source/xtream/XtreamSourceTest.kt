@@ -234,4 +234,36 @@ class XtreamSourceTest {
         assertFalse(rendered.contains("alice"))
         assertFalse(rendered.contains("hunter2"))
     }
+
+    @Test
+    fun `fetches series details and episode stream urls`() = runTest {
+        val seriesInfoJson = """
+            {
+              "seasons": [{"season_number": 1, "name": "Season 1"}],
+              "info": {"name": "Breaking Bad", "plot": "A chemistry teacher..."},
+              "episodes": {
+                "1": [
+                  {"id": "501", "episode_num": 1, "title": "Pilot", "container_extension": "mp4"}
+                ]
+              }
+            }
+        """.trimIndent()
+
+        val source = sourceServing(
+            mapOf("get_series_info" to seriesInfoJson),
+        )
+
+        val result = source.seriesDetails(request, seriesId = "99")
+        val details = assertInstanceOf(dev.vibrato.source.api.SeriesDetailsResult.Success::class.java, result).details
+        assertEquals("Breaking Bad", details.title)
+        assertEquals("A chemistry teacher...", details.overview)
+        assertEquals(1, details.seasons.size)
+        assertEquals("Season 1", details.seasons[0].name)
+
+        val episode = details.seasons[0].episodes[0]
+        assertEquals("501", episode.id)
+        assertEquals("Pilot", episode.title)
+        assertEquals(1, episode.episodeNumber)
+        assertTrue(episode.streamUrl.endsWith("/series/user/pass/501.mp4"))
+    }
 }

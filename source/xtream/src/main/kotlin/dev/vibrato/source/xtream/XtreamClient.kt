@@ -25,6 +25,7 @@ import dev.vibrato.source.xtream.dto.CategoryDto
 import dev.vibrato.source.xtream.dto.EpgResponse
 import dev.vibrato.source.xtream.dto.LiveStreamDto
 import dev.vibrato.source.xtream.dto.SeriesDto
+import dev.vibrato.source.xtream.dto.SeriesInfoResponse
 import dev.vibrato.source.xtream.dto.VodStreamDto
 import io.ktor.client.HttpClient
 import io.ktor.client.request.get
@@ -80,6 +81,10 @@ internal class XtreamClient(
     /** Short-range guide for one channel. */
     suspend fun shortEpg(base: String, credentials: Credentials, streamId: String): ApiResult<EpgResponse> =
         request(base, credentials, "get_short_epg") { parameter("stream_id", streamId) }
+
+    /** Detailed info including seasons and episodes for one series. */
+    suspend fun seriesInfo(base: String, credentials: Credentials, seriesId: String): ApiResult<SeriesInfoResponse> =
+        request(base, credentials, "get_series_info") { parameter("series_id", seriesId) }
 
     @OptIn(ExperimentalSerializationApi::class)
     private suspend inline fun <reified T> request(

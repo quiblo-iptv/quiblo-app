@@ -47,27 +47,29 @@ class PlayerViewModel(
     private var loadedChannelId: Long? = null
 
     /**
-     * Loads the channel with [channelId] if it is not already loaded.
+     * Loads the channel with [channelId] if it is not already loaded, or prepares custom stream details.
      *
      * Guarded so a recomposition, or a rotation that re-runs the effect, does not restart
      * a stream that is already playing (AC-PLAY-07).
      */
-    fun load(channelId: Long) {
-        if (loadedChannelId == channelId) return
+    fun load(channelId: Long, customUrl: String? = null, customTitle: String? = null) {
+        if (loadedChannelId == channelId && customUrl == null) return
         loadedChannelId = channelId
 
         viewModelScope.launch {
             val channel = channelRepository.findById(channelId) ?: return@launch
+            val playUrl = customUrl ?: channel.streamUrl
+            val playTitle = customTitle ?: channel.name
             controller.prepare(
                 PlayableItem(
-                    id = channel.stableKey,
-                    title = channel.name,
-                    url = channel.streamUrl,
+                    id = customUrl ?: channel.stableKey,
+                    title = playTitle,
+                    url = playUrl,
                     isLive = channel.kind == MediaKind.LIVE,
                     startPositionMillis = if (channel.kind == MediaKind.LIVE) {
                         0L
                     } else {
-                        channelRepository.resumePosition(channel.stableKey)
+                        channelRepository.resumePosition(customUrl ?: channel.stableKey)
                     },
                 ),
             )

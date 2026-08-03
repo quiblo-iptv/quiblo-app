@@ -79,12 +79,14 @@ fun PlayerScreen(
     channelId: Long,
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
+    streamUrl: String? = null,
+    title: String? = null,
     viewModel: PlayerViewModel = koinViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     var controlsVisible by remember { mutableStateOf(true) }
 
-    LaunchedEffect(channelId) { viewModel.load(channelId) }
+    LaunchedEffect(channelId, streamUrl, title) { viewModel.load(channelId, customUrl = streamUrl, customTitle = title) }
 
     // AC-PLAY-10: controls auto-hide after three seconds of inactivity. Restarted on
     // every reveal, and suppressed while paused so the user is never left with a

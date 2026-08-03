@@ -158,3 +158,58 @@ internal data class EpgListingDto(
     @Serializable(FlexibleStringSerializer::class)
     val epgId: String? = null,
 )
+
+@Serializable
+internal data class SeriesInfoResponse(
+    val seasons: List<SeasonDto> = emptyList(),
+    val info: SeriesInfoDto? = null,
+    val episodes: Map<String, List<EpisodeDto>> = emptyMap(),
+)
+
+@Serializable
+internal data class SeriesInfoDto(
+    @Serializable(FlexibleStringSerializer::class)
+    val name: String? = null,
+    @Serializable(FlexibleStringSerializer::class)
+    val cover: String? = null,
+    @Serializable(FlexibleStringSerializer::class)
+    val plot: String? = null,
+)
+
+@Serializable
+internal data class SeasonDto(
+    @SerialName("season_number")
+    @Serializable(FlexibleIntSerializer::class)
+    val seasonNumber: Int? = null,
+    @Serializable(FlexibleStringSerializer::class)
+    val name: String? = null,
+    @Serializable(FlexibleStringSerializer::class)
+    val overview: String? = null,
+    @Serializable(FlexibleStringSerializer::class)
+    val cover: String? = null,
+)
+
+@Serializable
+internal data class EpisodeDto(
+    @Serializable(FlexibleStringSerializer::class)
+    val id: String? = null,
+    @SerialName("episode_num")
+    @Serializable(FlexibleIntSerializer::class)
+    val episodeNum: Int? = null,
+    @Serializable(FlexibleStringSerializer::class)
+    val title: String? = null,
+    @SerialName("container_extension")
+    @Serializable(FlexibleStringSerializer::class)
+    val containerExtension: String? = null,
+    @SerialName("season")
+    @Serializable(FlexibleIntSerializer::class)
+    val season: Int? = null,
+    val info: EpisodeInfoDto? = null,
+)
+
+@Serializable
+internal data class EpisodeInfoDto(
+    @SerialName("movie_image")
+    @Serializable(FlexibleStringSerializer::class)
+    val movieImage: String? = null,
+)

@@ -16,18 +16,13 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-plugins {
-    id("vibrato.android.feature")
-}
+package dev.vibrato.feature.series.di
 
-android {
-    namespace = "dev.vibrato.feature.series"
-}
+import dev.vibrato.feature.series.SeriesDetailViewModel
+import org.koin.core.module.Module
+import org.koin.core.module.dsl.viewModel
+import org.koin.dsl.module
 
-dependencies {
-    implementation(projects.core.data)
-    implementation(projects.core.model)
-    implementation(projects.feature.browse)
-    implementation(libs.coil.compose)
-    implementation(libs.coil.network.okhttp)
+val seriesModule: Module = module {
+    viewModel { (channelId: Long) -> SeriesDetailViewModel(channelId, get()) }
 }

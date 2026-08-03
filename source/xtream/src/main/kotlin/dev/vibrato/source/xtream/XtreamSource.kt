@@ -20,14 +20,19 @@ package dev.vibrato.source.xtream
 
 import dev.vibrato.core.model.Category
 import dev.vibrato.core.model.Channel
+import dev.vibrato.core.model.Episode
 import dev.vibrato.core.model.MediaKind
 import dev.vibrato.core.model.Programme
+import dev.vibrato.core.model.Season
+import dev.vibrato.core.model.SeriesDetails
 import dev.vibrato.core.model.SourceKind
 import dev.vibrato.source.api.CredentialStore
 import dev.vibrato.source.api.Credentials
 import dev.vibrato.source.api.GuideResult
 import dev.vibrato.source.api.GuideSource
 import dev.vibrato.source.api.MediaSource
+import dev.vibrato.source.api.SeriesDetailsResult
+import dev.vibrato.source.api.SeriesSource
 import dev.vibrato.source.api.SourceError
 import dev.vibrato.source.api.SourceReport
 import dev.vibrato.source.api.SourceRequest
@@ -35,6 +40,7 @@ import dev.vibrato.source.api.SourceResult
 import dev.vibrato.source.xtream.dto.AuthResponse
 import dev.vibrato.source.xtream.dto.CategoryDto
 import dev.vibrato.source.xtream.dto.EpgListingDto
+import dev.vibrato.source.xtream.dto.SeriesInfoResponse
 import io.ktor.client.HttpClient
 import java.util.Base64
 
@@ -58,7 +64,7 @@ fun createXtreamSource(
 class XtreamSource internal constructor(
     private val client: XtreamClient,
     private val credentialStore: CredentialStore,
-) : MediaSource, GuideSource {
+) : MediaSource, GuideSource, SeriesSource {
 
     override val kind: SourceKind = SourceKind.XTREAM
 
@@ -210,6 +216,7 @@ class XtreamSource internal constructor(
                     tvgId = "xtream-series-$id",
                     logoUrl = dto.cover,
                     groupTitle = categories.titleFor(dto.categoryId),
+                    providerStreamId = id,
                 )
             }
         }
@@ -243,6 +250,79 @@ class XtreamSource internal constructor(
                 result.value.listings.mapNotNull { it.toProgramme(request.sourceId, channelKey) },
             )
         }
+    }
+
+    override suspend fun seriesDetails(
+        request: SourceRequest,
+        seriesId: String,
+    ): SeriesDetailsResult {
+        val base = XtreamUrl.normalize(request.location)
+            ?: return SeriesDetailsResult.Failure(SourceError.UnreachableHost)
+        val credentials = credentialStore.credentials(request.sourceId)
+            ?: return SeriesDetailsResult.Failure(SourceError.Unauthorized)
+
+        return when (val result = client.seriesInfo(base, credentials, seriesId)) {
+            is ApiResult.Err -> SeriesDetailsResult.Failure(result.error)
+            is ApiResult.Ok -> SeriesDetailsResult.Success(
+                result.value.toSeriesDetails(base, credentials, seriesId),
+            )
+        }
+    }
+
+    private fun SeriesInfoResponse.toSeriesDetails(
+        base: String,
+        credentials: Credentials,
+        seriesId: String,
+    ): SeriesDetails {
+        val seriesTitle = info?.name.orEmpty()
+        val coverUrl = info?.cover
+        val overview = info?.plot
+
+        val seasonsMap = mutableMapOf<Int, MutableList<Episode>>()
+
+        episodes.forEach { (seasonKey, dtoList) ->
+            val seasonNum = seasonKey.toIntOrNull() ?: 1
+            val episodeList = seasonsMap.getOrPut(seasonNum) { mutableListOf() }
+            dtoList.forEach { dto ->
+                val epId = dto.id ?: return@forEach
+                val epNum = dto.episodeNum ?: (episodeList.size + 1)
+                val epTitle = dto.title?.takeIf { it.isNotBlank() } ?: "Episode $epNum"
+                val ext = dto.containerExtension.orEmpty()
+                val streamUrl = XtreamUrl.seriesStream(base, credentials.username, credentials.password, epId, ext)
+                val logo = dto.info?.movieImage
+
+                episodeList.add(
+                    Episode(
+                        id = epId,
+                        title = epTitle,
+                        seasonNumber = seasonNum,
+                        episodeNumber = epNum,
+                        streamUrl = streamUrl,
+                        logoUrl = logo,
+                    )
+                )
+            }
+        }
+
+        val seasonsList = seasons.map { seasonDto ->
+            val num = seasonDto.seasonNumber ?: 1
+            val name = seasonDto.name?.takeIf { it.isNotBlank() } ?: "Season $num"
+            val eps = seasonsMap[num]?.sortedBy { it.episodeNumber }.orEmpty()
+            Season(seasonNumber = num, name = name, episodes = eps)
+        }.ifEmpty {
+            seasonsMap.keys.sorted().map { num ->
+                val eps = seasonsMap[num]?.sortedBy { it.episodeNumber }.orEmpty()
+                Season(seasonNumber = num, name = "Season $num", episodes = eps)
+            }
+        }
+
+        return SeriesDetails(
+            seriesId = seriesId,
+            title = seriesTitle,
+            overview = overview,
+            coverUrl = coverUrl,
+            seasons = seasonsList,
+        )
     }
 
     /**

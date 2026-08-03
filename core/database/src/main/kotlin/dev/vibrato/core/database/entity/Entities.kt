@@ -78,6 +78,8 @@ data class ChannelEntity(
     val sortIndex: Int,
     /** The provider's stream id, used to request this channel's guide. */
     val providerStreamId: String? = null,
+    /** Where this item's category sat in the provider's category list, when it supplies one. */
+    val categoryIndex: Int? = null,
 )
 
 /**

@@ -119,6 +119,16 @@ data class Channel(
      * equivalent, which is precisely why an M3U source shows no guide (AC-EPG-04).
      */
     val providerStreamId: String? = null,
+    /**
+     * Where this item's category sat in the provider's own category list.
+     *
+     * Kept because a category's position cannot be recovered from the items in it. Panels
+     * return their category list in a deliberate order, then return the *streams* in some
+     * other order entirely, so inferring category order from the first item of each group
+     * gets films and series wrong. Null when the source has no category list of its own —
+     * an M3U invents groups from `group-title` as it reads.
+     */
+    val categoryIndex: Int? = null,
 ) {
     /**
      * The identity used to match this item across refreshes.

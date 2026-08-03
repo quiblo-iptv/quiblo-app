@@ -56,6 +56,7 @@ internal fun ChannelEntity.toDomain(isFavorite: Boolean = false): Channel = Chan
     tvgId = tvgId,
     logoUrl = logoUrl,
     groupTitle = groupTitle,
+    categoryIndex = categoryIndex,
     isFavorite = isFavorite,
     providerStreamId = providerStreamId,
 )
@@ -75,6 +76,7 @@ internal fun Channel.toEntity(sortIndex: Int): ChannelEntity = ChannelEntity(
     groupTitle = groupTitle,
     stableKey = stableKey,
     sortIndex = sortIndex,
+    categoryIndex = categoryIndex,
     providerStreamId = providerStreamId,
 )
 

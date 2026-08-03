@@ -182,6 +182,7 @@ class XtreamSource internal constructor(
                     tvgId = dto.epgChannelId?.takeIf { it.isNotBlank() } ?: "xtream-live-$id",
                     logoUrl = dto.streamIcon,
                     groupTitle = categories.titleFor(dto.categoryId),
+                    categoryIndex = categories.indexFor(dto.categoryId),
                     providerStreamId = id,
                 )
             }
@@ -214,6 +215,7 @@ class XtreamSource internal constructor(
                     tvgId = "xtream-vod-$id",
                     logoUrl = dto.streamIcon,
                     groupTitle = categories.titleFor(dto.categoryId),
+                    categoryIndex = categories.indexFor(dto.categoryId),
                 )
             }
         }
@@ -244,6 +246,7 @@ class XtreamSource internal constructor(
                     tvgId = "xtream-series-$id",
                     logoUrl = dto.effectiveCover,
                     groupTitle = categories.titleFor(dto.categoryId),
+                    categoryIndex = categories.indexFor(dto.categoryId),
                     providerStreamId = id,
                 )
             }
@@ -429,6 +432,17 @@ class XtreamSource internal constructor(
 
     private fun ApiResult<List<CategoryDto>>.orEmpty(): List<CategoryDto> =
         (this as? ApiResult.Ok)?.value ?: emptyList()
+
+    /**
+     * Where this category sat in the provider's list, or null when it is not in it.
+     *
+     * This is the ordering the panel intends. It cannot be recovered from the streams,
+     * because `get_vod_streams` and `get_series` return items in an order unrelated to the
+     * category list — which is why films and series came out alphabetical while live,
+     * whose streams happen to arrive grouped, looked correct.
+     */
+    private fun List<CategoryDto>.indexFor(categoryId: String?): Int? =
+        indexOfFirst { it.categoryId == categoryId }.takeIf { it >= 0 }
 
     private fun List<CategoryDto>.titleFor(categoryId: String?): String =
         firstOrNull { it.categoryId == categoryId }

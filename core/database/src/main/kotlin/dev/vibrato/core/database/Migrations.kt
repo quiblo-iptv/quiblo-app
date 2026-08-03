@@ -75,3 +75,15 @@ val MIGRATION_2_3 = object : Migration(2, 3) {
         )
     }
 }
+
+/**
+ * Adds the provider's category ordering.
+ *
+ * Nullable with no default: existing rows genuinely do not know where their category sat,
+ * and the query falls back to item order for them. The next refresh fills it in.
+ */
+val MIGRATION_3_4 = object : Migration(3, 4) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE `channels` ADD COLUMN `categoryIndex` INTEGER")
+    }
+}

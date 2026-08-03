@@ -130,17 +130,18 @@ interface ChannelDao {
     /**
      * Categories in the provider's own order, not alphabetically.
      *
-     * There is no stored category order to sort by — categories are derived by grouping
-     * channels — so the first channel in each group stands in for it. That is faithful,
-     * because the ingest numbers channels in the order the provider returned them, and a
-     * provider that lists a category first lists its channels first.
+     * Ordered by the position the provider gave the category, falling back to the position
+     * of its first item. The fallback is not equivalent and is only for sources that supply
+     * no category list of their own: panels return their categories in one order and their
+     * *streams* in another, so inferring category order from the streams is right for live
+     * — where the two happen to agree — and wrong for films and series, where they do not.
      */
     @Query(
         """
         SELECT groupTitle, COUNT(*) AS itemCount FROM channels
         WHERE sourceId = :sourceId AND kind = :kind
         GROUP BY groupTitle
-        ORDER BY MIN(sortIndex) ASC
+        ORDER BY MIN(COALESCE(categoryIndex, 2147483647)) ASC, MIN(sortIndex) ASC
         """,
     )
     fun observeCategoriesByKind(sourceId: Long, kind: String): Flow<List<CategoryCount>>

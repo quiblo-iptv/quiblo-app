@@ -455,6 +455,48 @@ class XtreamSourceTest {
         assertEquals(SourceError.ProviderBlocked, failure.error)
     }
 
+    // --- Category ordering ---------------------------------------------------------------
+
+    @Test
+    @DisplayName("category order comes from the panel's category list, not from the streams")
+    fun `films carry the provider category order`() = runTest {
+        // The panel lists categories deliberately — Action, then Drama — but returns the
+        // streams in an unrelated order. Inferring category order from the streams gets
+        // this backwards, which is exactly what it did.
+        val result = sourceServing(
+            mapOf(
+                null to authOk,
+                "get_vod_categories" to
+                    """[{"category_id":"9","category_name":"Action"},""" +
+                    """{"category_id":"4","category_name":"Drama"}]""",
+                "get_vod_streams" to
+                    """[{"stream_id":1,"name":"A Drama","category_id":"4"},""" +
+                    """{"stream_id":2,"name":"An Action","category_id":"9"}]""",
+                "get_live_streams" to "[]",
+            ),
+        ).load(request)
+
+        val success = assertInstanceOf(SourceResult.Success::class.java, result)
+        val byName = success.channels.associateBy { it.name }
+        assertEquals(0, byName["An Action"]?.categoryIndex, "Action is first in the category list")
+        assertEquals(1, byName["A Drama"]?.categoryIndex, "Drama is second")
+    }
+
+    @Test
+    fun `a stream in no listed category has no category index`() = runTest {
+        val result = sourceServing(
+            mapOf(
+                null to authOk,
+                "get_vod_categories" to """[{"category_id":"9","category_name":"Action"}]""",
+                "get_vod_streams" to """[{"stream_id":1,"name":"Orphan","category_id":"77"}]""",
+                "get_live_streams" to "[]",
+            ),
+        ).load(request)
+
+        val success = assertInstanceOf(SourceResult.Success::class.java, result)
+        assertNull(success.channels.single { it.name == "Orphan" }.categoryIndex)
+    }
+
     // --- Film details --------------------------------------------------------------------
 
     @Test

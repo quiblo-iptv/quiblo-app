@@ -45,7 +45,7 @@ import dev.vibrato.core.database.entity.SourceEntity
         ResumePositionEntity::class,
         ProgrammeEntity::class,
     ],
-    version = 3,
+    version = 4,
     exportSchema = true,
 )
 abstract class VibratoDatabase : RoomDatabase() {
@@ -73,7 +73,7 @@ abstract class VibratoDatabase : RoomDatabase() {
          */
         fun create(context: Context): VibratoDatabase =
             Room.databaseBuilder(context, VibratoDatabase::class.java, NAME)
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
                 .build()
     }
 }

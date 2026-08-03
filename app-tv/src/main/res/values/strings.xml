@@ -16,4 +16,22 @@
 
     <string name="tv_placeholder">%1$s content appears here.</string>
     <string name="tv_no_channels">No channels yet. Add a playlist on your phone and import it here.</string>
+
+    <string name="tv_tab_sources">Sources</string>
+    <string name="tv_sources_add">Add a playlist or account</string>
+    <string name="tv_sources_empty">No sources yet.</string>
+    <string name="tv_sources_working">Loading…</string>
+    <string name="tv_sources_added">Loaded %1$d channels.</string>
+    <string name="tv_sources_failed">That source could not be loaded.</string>
+    <string name="tv_sources_kind_m3u">M3U playlist</string>
+    <string name="tv_sources_kind_xtream">Xtream account</string>
+    <string name="tv_sources_refresh">Refresh</string>
+    <string name="tv_sources_delete">Remove</string>
+    <string name="tv_sources_save">Save</string>
+    <string name="tv_sources_cancel">Cancel</string>
+    <string name="tv_sources_name">Name (optional)</string>
+    <string name="tv_sources_url">Playlist URL, or Xtream server address</string>
+    <string name="tv_sources_username">Username (Xtream only)</string>
+    <string name="tv_sources_password">Password (Xtream only)</string>
+    <string name="tv_sources_form_hint">Leave the username and password empty for an M3U playlist.</string>
 </resources>

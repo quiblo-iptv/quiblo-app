@@ -58,6 +58,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.vibrato.tv.R
 import dev.vibrato.tv.ui.live.TvLiveScreen
+import dev.vibrato.tv.ui.sources.TvSourcesScreen
 
 /**
  * The television shell: a text tab bar across the top, content beneath it.
@@ -93,6 +94,7 @@ fun TvApp() {
         ) {
             when (TvTab.entries[selectedTab]) {
                 TvTab.LIVE -> TvLiveScreen(onChannelClick = { })
+                TvTab.SOURCES -> TvSourcesScreen()
                 else -> Placeholder(tab = TvTab.entries[selectedTab])
             }
         }

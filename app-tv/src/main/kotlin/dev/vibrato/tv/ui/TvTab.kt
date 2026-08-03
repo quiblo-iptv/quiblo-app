@@ -27,4 +27,5 @@ internal enum class TvTab(@param:StringRes val labelRes: Int) {
     MOVIES(R.string.tv_tab_movies),
     SERIES(R.string.tv_tab_series),
     FAVOURITES(R.string.tv_tab_favourites),
+    SOURCES(R.string.tv_tab_sources),
 }

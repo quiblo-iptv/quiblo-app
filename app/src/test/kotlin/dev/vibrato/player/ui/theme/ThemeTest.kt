@@ -18,9 +18,9 @@
 
 package dev.vibrato.player.ui.theme
 
-import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.Assertions.assertNotNull
-import org.junit.jupiter.api.Test
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
+import org.junit.Test
 
 class ThemeTest {
 
@@ -29,5 +29,12 @@ class ThemeTest {
         assertNotNull(VibratoPrimaryDark)
         assertNotNull(VibratoBackgroundDark)
         assertEquals(0xFF0C0E14, VibratoBackgroundDark.value.toLong() shr 32 or (VibratoBackgroundDark.value.toLong() and 0xFFFFFFFFL))
+    }
+
+    @Test
+    fun `theme palettes contain all 5 accent presets`() {
+        assertEquals(5, ThemePalette.entries.size)
+        assertEquals("Electric Violet", ThemePalette.ELECTRIC_VIOLET.displayName)
+        assertEquals("Midnight Blue", ThemePalette.MIDNIGHT_BLUE.displayName)
     }
 }

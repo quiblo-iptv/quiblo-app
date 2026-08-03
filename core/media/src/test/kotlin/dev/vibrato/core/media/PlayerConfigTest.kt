@@ -46,4 +46,13 @@ class PlayerConfigTest {
         assertEquals("Fit", AspectRatioMode.FIT.label)
         assertEquals("16:9", AspectRatioMode.RATIO_16_9.label)
     }
+
+    @Test
+    fun `seek intervals are positive and capped at 60 seconds`() {
+        SeekInterval.entries.forEach { interval ->
+            assertTrue(interval.seconds in 1..60, "Seek interval must be between 1s and 60s for ${interval.name}")
+        }
+        assertEquals(5, SeekInterval.entries.size)
+        assertEquals(10, SeekInterval.SEEK_10.seconds)
+    }
 }

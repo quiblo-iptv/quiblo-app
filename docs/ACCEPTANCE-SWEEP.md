@@ -11,18 +11,20 @@ on a physical Android 11 device and a physical Android 14 device, with both an M
 Xtream source configured, on a fresh install and on an upgrade.
 
 This file records what has been verified so far, how, and what is left. It is the gate on
-tagging v1.0.0 — do not tag while anything in §3 is unchecked.
+tagging v1.0.0 — do not tag while anything in §5 or §6 is unchecked.
 
-**Last updated:** 2026-08-03, at commit `6d5b4e8`.
+**Last updated:** 2026-08-03, at commit `3494da5`.
 
 **Devices used so far:**
 
 | Device | OS | Notes |
 |---|---|---|
 | Lenovo TB305XU | Android 15 (API 35), arm64, 3.7 GB RAM | Neither DoD row. Low-RAM mid-range, so a fair cold-start target |
+| `vibrato_api30` emulator | **Android 11 (API 30)**, Pixel 5, x86_64 | The minSdk row, but an emulator — does not satisfy the DoD's "physical device" |
 | Pixel Tablet emulator | Android 15 | Desktop-fast; treat its numbers as upper bounds only |
 
-**Neither Android 11 nor Android 14 has been tested at all.** Both DoD rows are still open.
+**Android 14 has not been tested at all, and Android 11 only on an emulator.** Both DoD
+rows are still open.
 
 ---
 
@@ -96,7 +98,32 @@ the 16.7 ms frame budget. No criterion sets a jank threshold so nothing fails, b
 a 20k list is exactly the risk PLAN.md §5 calls out, and this is the number to compare
 against after any change to the browse list.
 
-## 3. Emulator baseline
+## 3. Verified on Android 11 (API 30 emulator)
+
+The minSdk row. An emulator, so it does not satisfy the DoD, but it is where OS-version
+breakage would show — scoped storage, SAF, and the permission model all changed after 11.
+**Nothing behaved differently from Android 15.**
+
+| ID | Result | Evidence |
+|---|---|---|
+| AC-PL-01, AC-PL-04 | **Pass** | Byte-identical outcome to Android 15: "Loaded 20002 channels. 2 entries could not be read and were skipped" |
+| AC-NFR-01 | **Pass** | 20,002 channels loaded: 329 / 350 / 462 / 328 / 327 / 323 ms, **median 328 ms** |
+| AC-DATA (export) | **Pass** | SAF create-document opens, defaults to `vibrato-backup.json` in Downloads, writes valid JSON with `schema_version: 1` and snake_case keys |
+| AC-DATA (import, valid) | **Pass** | Re-importing the app's own export is idempotent: "Nothing to restore — everything in that file is already set up" |
+| AC-DATA (import, rejection) | **Pass** | A hand-edited `schema_version: 99` file is refused with "That backup was written by a newer version of Vibrato (format 99, this build reads 1). Update the app and try again" — it names both versions rather than failing vaguely |
+| AC-LEGAL-03 | **Pass** | Settings carries an "Open source licenses" section with a Show licenses screen |
+
+The backup copy states, on screen, that "Passwords are never written to the file — you will
+re-enter them after importing", and the exported JSON contains no credential field. That is
+the AC-XT-04 posture holding across the export path, though it wants one more check against
+an actual Xtream source once an account is available.
+
+**Driving note for whoever repeats this.** In the SAF picker, `input tap` silently does
+nothing on a file row — the tap lands but no selection occurs. `KEYCODE_DPAD_DOWN` then
+`KEYCODE_ENTER` works. That cost twenty minutes to find; do not assume a failed tap means a
+broken app.
+
+## 4. Emulator baseline
 
 Superseded by §2 for anything the tablet covered; kept as a comparison point. Release
 build, Pixel Tablet emulator, Android 15, **empty** database: 462 / 663 / 499 / 678 / 538 /
@@ -105,7 +132,7 @@ build, Pixel Tablet emulator, Android 15, **empty** database: 462 / 663 / 499 / 
 Note that the emulator on an empty database was *slower* than the tablet on 20,002 channels.
 That is the clearest evidence that database size does not touch startup cost here.
 
-## 4. Requires physical devices
+## 5. Requires physical devices
 
 Nothing below has been executed. Run each on **Android 11** and **Android 14**, with an M3U
 source and an Xtream source configured, on a fresh install and again over an upgrade.
@@ -115,11 +142,11 @@ source and an Xtream source configured, on a fresh install and again over an upg
 - **Guide** — AC-EPG-01 … AC-EPG-05
 - **Playback** — AC-PLAY-01 … AC-PLAY-10
 - **Favourites** — AC-FAV-01 … AC-FAV-05 (survival across refresh covered in §2)
-- **Export / import** — AC-DATA-01 … AC-DATA-05 — **not started.** Both directions go
-  through the SAF file picker, which is the one flow that resists adb driving
+- **Export / import** — AC-DATA-01 … AC-DATA-05 covered on Android 11 in §3; needs a
+  confirming pass on hardware, and one round-trip carrying an Xtream source
 - **Cold start** — AC-NFR-01, to confirm §2 on the two DoD OS versions
 - **No unconfigured network traffic** — AC-NFR-03, by packet capture on a clean install
-- **Permissions** — AC-NFR-04, see §5
+- **Permissions** — AC-NFR-04, see §6
 - **Strings** — AC-NFR-08; the RTL half is covered in §2, but no screen has been read for
   hardcoded strings on-device
 - **Licences screen** — AC-LEGAL-03
@@ -134,7 +161,7 @@ sweep.
 The "upgrade from the previous release" half of the Definition of Done cannot apply to
 v1.0.0, since there is no previous release to upgrade from. It becomes live at v1.0.1.
 
-## 5. Open — needs a decision before tagging
+## 6. Open — needs a decision before tagging
 
 **AC-NFR-04 does not pass as written.** The criterion says "Permissions requested: INTERNET
 and network state only." The merged release manifest contains four:

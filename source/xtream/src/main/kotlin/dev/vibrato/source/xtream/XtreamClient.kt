@@ -115,9 +115,9 @@ internal class XtreamClient(
 
             else -> {
                 val stream = response.bodyAsChannel().toInputStream().buffered()
-                stream.mark(1024)
-                val peekBuffer = ByteArray(1024)
-                val readBytes = stream.read(peekBuffer, 0, 1024)
+                stream.mark(PEEK_BYTES)
+                val peekBuffer = ByteArray(PEEK_BYTES)
+                val readBytes = stream.read(peekBuffer, 0, PEEK_BYTES)
                 stream.reset()
                 val peekText = if (readBytes > 0) String(peekBuffer, 0, readBytes) else ""
                 if (peekText.trimStart().startsWith("<")) {
@@ -130,6 +130,14 @@ internal class XtreamClient(
     }
 
     companion object {
+        /**
+         * How much of the body to sniff before committing to a JSON parse.
+         *
+         * Enough to see past whitespace and any preamble to the first real character,
+         * and small enough to stay inside the buffer's mark limit.
+         */
+        const val PEEK_BYTES = 1024
+
         /**
          * Statuses that mean "the panel is refusing this client", not "the request was wrong".
          *
@@ -171,7 +179,9 @@ internal fun mapThrowable(error: Throwable): SourceError = when {
     else -> when (error::class.simpleName) {
         "HttpRequestTimeoutException", "SocketTimeoutException", "ConnectTimeoutException" -> SourceError.Timeout
         "UnresolvedAddressException", "UnknownHostException" -> SourceError.UnreachableHost
-        "SerializationException", "JsonConvertException", "IllegalArgumentException", "JsonDecodingException" -> SourceError.NotAPlaylist
+        "SerializationException", "JsonConvertException",
+        "IllegalArgumentException", "JsonDecodingException",
+        -> SourceError.NotAPlaylist
         else -> SourceError.Unknown(error::class.simpleName)
     }
 }

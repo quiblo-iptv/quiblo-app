@@ -19,6 +19,7 @@
 import com.android.build.api.dsl.ApplicationExtension
 import dev.vibrato.buildlogic.catalogInt
 import dev.vibrato.buildlogic.configureTests
+import dev.vibrato.buildlogic.libs
 
 plugins {
     // AGP 9 compiles Kotlin itself; org.jetbrains.kotlin.android must not be applied.
@@ -56,6 +57,18 @@ extensions.configure<ApplicationExtension> {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
         }
     }
+}
+
+dependencies {
+    // Same set as vibrato.android.library. Without these, `:app` has no test framework on
+    // its classpath at all, and any test added under app/src/test simply fails to compile.
+    add("testImplementation", platform(libs.findLibrary("junit-bom").get()))
+    add("testImplementation", libs.findLibrary("junit-jupiter").get())
+    add("testImplementation", libs.findLibrary("kotlinx-coroutines-test").get())
+    add("testImplementation", libs.findLibrary("turbine").get())
+    add("testImplementation", libs.findLibrary("mockk").get())
+    add("testRuntimeOnly", libs.findLibrary("junit-platform-launcher").get())
+    add("androidTestImplementation", libs.findLibrary("androidx-test-junit").get())
 }
 
 configureTests()

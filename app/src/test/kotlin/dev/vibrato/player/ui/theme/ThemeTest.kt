@@ -18,16 +18,23 @@
 
 package dev.vibrato.player.ui.theme
 
-import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNotNull
-import org.junit.Test
+import androidx.compose.ui.graphics.Color
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Test
 
 class ThemeTest {
 
+    /**
+     * Guards the dark scheme against a partial edit.
+     *
+     * Comparing against the literal ARGB is the only assertion here worth making: a
+     * `Color` constant can never be null, so a not-null check on one passes whatever the
+     * value is.
+     */
     @Test
-    fun `expressive theme color values are defined`() {
-        assertNotNull(VibratoPrimaryDark)
-        assertNotNull(VibratoBackgroundDark)
-        assertEquals(0xFF0C0E14, VibratoBackgroundDark.value.toLong() shr 32 or (VibratoBackgroundDark.value.toLong() and 0xFFFFFFFFL))
+    fun `dark theme colours keep their defined ARGB values`() {
+        assertEquals(Color(0xFF0C0E14), VibratoBackgroundDark)
+        assertEquals(Color(0xFF12141C), VibratoSurfaceDark)
+        assertEquals(Color(0xFFE4E5F1), VibratoOnBackgroundDark)
     }
 }

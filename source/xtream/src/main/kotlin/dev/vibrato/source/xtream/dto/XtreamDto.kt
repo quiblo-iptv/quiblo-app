@@ -25,8 +25,10 @@ import kotlinx.serialization.descriptors.SerialDescriptor
 import kotlinx.serialization.descriptors.buildClassSerialDescriptor
 import kotlinx.serialization.encoding.Decoder
 import kotlinx.serialization.encoding.Encoder
+import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonDecoder
+import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 
 /**
@@ -195,59 +197,76 @@ internal data class SeriesInfoResponse(
     val episodes: Map<String, List<EpisodeDto>> = emptyMap(),
 )
 
+/**
+ * Reads `get_series_info`, whose shape varies more than most.
+ *
+ * `seasons` arrives as an array on some panels and as an object keyed by season number on
+ * others. `episodes` is usually an object keyed by season, but a panel with no episodes
+ * frequently sends `[]` instead of `{}` — and a generated serializer rejects the whole
+ * response for that alone, losing the series title and artwork with it. Every element is
+ * decoded independently so one malformed episode costs only that episode.
+ */
 internal object SeriesInfoResponseSerializer : KSerializer<SeriesInfoResponse> {
     override val descriptor: SerialDescriptor =
         buildClassSerialDescriptor("SeriesInfoResponse")
 
     override fun deserialize(decoder: Decoder): SeriesInfoResponse {
         val input = decoder as? JsonDecoder ?: return SeriesInfoResponse()
-        val jsonElement = input.decodeJsonElement() as? JsonObject ?: return SeriesInfoResponse()
+        val root = input.decodeJsonElement() as? JsonObject ?: return SeriesInfoResponse()
         val json = input.json
 
-        val infoElement = jsonElement["info"]
-        val infoObj: SeriesInfoDto? = if (infoElement is JsonObject) {
-            try { json.decodeFromJsonElement(SeriesInfoDto.serializer(), infoElement) } catch (_: Exception) { null }
-        } else null
-
-        val seasonsElement = jsonElement["seasons"]
-        val seasonsList: List<SeasonDto> = when (seasonsElement) {
-            is JsonArray -> seasonsElement.mapNotNull { elem ->
-                if (elem is JsonObject) try { json.decodeFromJsonElement(SeasonDto.serializer(), elem) } catch (_: Exception) { null } else null
-            }
-            is JsonObject -> seasonsElement.values.mapNotNull { elem ->
-                if (elem is JsonObject) try { json.decodeFromJsonElement(SeasonDto.serializer(), elem) } catch (_: Exception) { null } else null
-            }
-            else -> emptyList()
-        }
-
-        val episodesElement = jsonElement["episodes"]
-        val episodesMap: Map<String, List<EpisodeDto>> = when (episodesElement) {
-            is JsonObject -> episodesElement.mapValues { (_, value) ->
-                if (value is JsonArray) {
-                    value.mapNotNull { item ->
-                        if (item is JsonObject) try { json.decodeFromJsonElement(EpisodeDto.serializer(), item) } catch (_: Exception) { null } else null
-                    }
-                } else emptyList()
-            }
-            is JsonArray -> {
-                val allEpisodes = episodesElement.mapNotNull { item ->
-                    if (item is JsonObject) try { json.decodeFromJsonElement(EpisodeDto.serializer(), item) } catch (_: Exception) { null } else null
-                }
-                allEpisodes.groupBy { (it.season ?: 1).toString() }
-            }
-            else -> emptyMap()
-        }
-
         return SeriesInfoResponse(
-            seasons = seasonsList,
-            info = infoObj,
-            episodes = episodesMap,
+            seasons = json.decodeEach(root["seasons"], SeasonDto.serializer()),
+            info = json.decodeOrNull(root["info"], SeriesInfoDto.serializer()),
+            episodes = json.decodeEpisodes(root["episodes"]),
         )
     }
 
     override fun serialize(encoder: Encoder, value: SeriesInfoResponse) {
-        // Unused for responses
+        // Responses only; the app never sends this type.
+        throw UnsupportedOperationException("SeriesInfoResponse is read-only")
     }
+
+    /** One element, or null when the panel sent something unusable in its place. */
+    @Suppress("SwallowedException", "TooGenericExceptionCaught")
+    private fun <T> Json.decodeOrNull(element: JsonElement?, serializer: KSerializer<T>): T? =
+        if (element is JsonObject) {
+            try {
+                decodeFromJsonElement(serializer, element)
+            } catch (_: Exception) {
+                null
+            }
+        } else {
+            null
+        }
+
+    /** Every element of an array or of an object's values, dropping the unusable ones. */
+    private fun <T> Json.decodeEach(element: JsonElement?, serializer: KSerializer<T>): List<T> {
+        val candidates = when (element) {
+            is JsonArray -> element
+            is JsonObject -> element.values
+            else -> emptyList()
+        }
+        return candidates.mapNotNull { decodeOrNull(it, serializer) }
+    }
+
+    /**
+     * Episodes keyed by season.
+     *
+     * An array is accepted as well, grouped by each episode's own season field, because a
+     * panel that flattens the map still carries the season on every entry.
+     */
+    private fun Json.decodeEpisodes(element: JsonElement?): Map<String, List<EpisodeDto>> =
+        when (element) {
+            is JsonObject -> element.mapValues { (_, value) ->
+                decodeEach(value, EpisodeDto.serializer())
+            }
+
+            is JsonArray -> decodeEach(element, EpisodeDto.serializer())
+                .groupBy { (it.season ?: 1).toString() }
+
+            else -> emptyMap()
+        }
 }
 
 @Serializable

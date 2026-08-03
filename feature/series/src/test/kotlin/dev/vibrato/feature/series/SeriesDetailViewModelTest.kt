@@ -116,7 +116,9 @@ class SeriesDetailViewModelTest {
     @Test
     fun `emits error when series details fetch fails`() = runTest(testDispatcher) {
         coEvery { channelRepository.findById(10L) } returns sampleChannel
-        coEvery { channelRepository.getSeriesDetails(sampleChannel) } returns SeriesDetailsResult.Failure(SourceError.UnreachableHost)
+        coEvery {
+            channelRepository.getSeriesDetails(sampleChannel)
+        } returns SeriesDetailsResult.Failure(SourceError.UnreachableHost)
 
         val viewModel = SeriesDetailViewModel(10L, channelRepository)
         testDispatcher.scheduler.advanceUntilIdle()

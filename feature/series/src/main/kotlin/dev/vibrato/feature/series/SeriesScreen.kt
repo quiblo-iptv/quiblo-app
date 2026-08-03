@@ -48,5 +48,7 @@ fun SeriesScreen(
         onItemClick = onItemClick,
         emptyMessage = stringResource(R.string.feature_series_empty),
         modifier = modifier,
+        // Series artwork is poster art, exactly as movie artwork is.
+        showArtworkCards = true,
     )
 }

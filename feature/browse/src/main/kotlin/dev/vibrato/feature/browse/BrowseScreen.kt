@@ -18,11 +18,6 @@
 
 package dev.vibrato.feature.browse
 
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.expandVertically
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -32,6 +27,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -124,18 +120,16 @@ fun BrowseScreen(
     }
 
     Column(modifier = modifier.fillMaxSize()) {
-        if (showSearch) {
-            ExpandableSearchHeader(query = query, onQueryChange = viewModel::search)
-        }
-
-        if (state.categories.isNotEmpty()) {
-            CategoryPillHeader(
-                selectedCategory = state.selectedCategory,
-                isGridView = isGridView,
-                onToggleGridView = { isGridView = !isGridView },
-                onClick = { showCategorySheet = true },
-            )
-        }
+        BrowseHeader(
+            query = query,
+            onQueryChange = viewModel::search,
+            showSearch = showSearch,
+            showCategory = state.categories.isNotEmpty(),
+            selectedCategory = state.selectedCategory,
+            isGridView = isGridView,
+            onToggleGridView = { isGridView = !isGridView },
+            onCategoryClick = { showCategorySheet = true },
+        )
 
         when {
             state.items.isEmpty() && query.isNotBlank() ->
@@ -205,26 +199,45 @@ fun BrowseScreen(
     }
 }
 
+/**
+ * One row: the category filter, the search affordance, and the layout toggle.
+ *
+ * Previously two stacked rows. The collapsed search kept a full row of its own to hold a
+ * single icon, so every browse screen opened with a band of empty space between the app bar
+ * and the first result — on a tablet in landscape that is a meaningful fraction of the
+ * visible catalogue given away to nothing.
+ *
+ * Expanding search takes the row over rather than adding another, so the height never
+ * changes and the content below does not jump.
+ */
 @Composable
-private fun ExpandableSearchHeader(query: String, onQueryChange: (String) -> Unit) {
+private fun BrowseHeader(
+    query: String,
+    onQueryChange: (String) -> Unit,
+    showSearch: Boolean,
+    showCategory: Boolean,
+    selectedCategory: String?,
+    isGridView: Boolean,
+    onToggleGridView: () -> Unit,
+    onCategoryClick: () -> Unit,
+) {
     var isExpanded by remember(query) { mutableStateOf(query.isNotEmpty()) }
 
-    AnimatedVisibility(
-        visible = isExpanded,
-        enter = fadeIn() + expandVertically(),
-        exit = fadeOut() + shrinkVertically(),
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 12.dp, vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 4.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
+        if (isExpanded && showSearch) {
+            // No label, only a placeholder: a floating label makes the field tall enough to
+            // change the row height, which is the thing this layout exists to avoid.
             OutlinedTextField(
                 value = query,
                 onValueChange = onQueryChange,
                 singleLine = true,
-                label = { Text(stringResource(R.string.browse_search)) },
+                placeholder = { Text(stringResource(R.string.browse_search)) },
                 leadingIcon = {
                     IconButton(onClick = {
                         if (query.isEmpty()) isExpanded = false else onQueryChange("")
@@ -245,62 +258,51 @@ private fun ExpandableSearchHeader(query: String, onQueryChange: (String) -> Uni
                         }
                     }
                 },
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.weight(1f),
             )
-        }
-    }
+        } else {
+            if (showCategory) {
+                CategoryChip(selectedCategory = selectedCategory, onClick = onCategoryClick)
+            }
 
-    if (!isExpanded) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 2.dp),
-            horizontalArrangement = Arrangement.End,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            IconButton(onClick = { isExpanded = true }) {
-                Icon(Icons.Filled.Search, contentDescription = stringResource(R.string.browse_search))
+            Spacer(modifier = Modifier.weight(1f))
+
+            if (showSearch) {
+                IconButton(onClick = { isExpanded = true }) {
+                    Icon(Icons.Filled.Search, contentDescription = stringResource(R.string.browse_search))
+                }
+            }
+
+            IconButton(onClick = onToggleGridView) {
+                Icon(
+                    imageVector = if (isGridView) Icons.AutoMirrored.Filled.ViewList else Icons.Filled.GridView,
+                    contentDescription = stringResource(R.string.browse_toggle_view),
+                )
             }
         }
     }
 }
 
 @Composable
-private fun CategoryPillHeader(
-    selectedCategory: String?,
-    isGridView: Boolean,
-    onToggleGridView: () -> Unit,
-    onClick: () -> Unit,
-) {
-    val displayLabel = if (selectedCategory == null) {
-        stringResource(R.string.browse_category_all)
-    } else if (selectedCategory == Category.UNGROUPED_TITLE) {
-        stringResource(R.string.browse_category_ungrouped)
-    } else {
-        selectedCategory
+private fun CategoryChip(selectedCategory: String?, onClick: () -> Unit) {
+    val displayLabel = when (selectedCategory) {
+        null -> stringResource(R.string.browse_category_all)
+        Category.UNGROUPED_TITLE -> stringResource(R.string.browse_category_ungrouped)
+        else -> selectedCategory
     }
 
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 2.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween,
-    ) {
-        FilterChip(
-            selected = selectedCategory != null,
-            onClick = onClick,
-            label = { Text(text = stringResource(R.string.browse_category_label, displayLabel)) },
-            trailingIcon = { Icon(Icons.Filled.ArrowDropDown, contentDescription = null) },
-        )
-
-        IconButton(onClick = onToggleGridView) {
-            Icon(
-                imageVector = if (isGridView) Icons.AutoMirrored.Filled.ViewList else Icons.Filled.GridView,
-                contentDescription = stringResource(R.string.browse_toggle_view),
+    FilterChip(
+        selected = selectedCategory != null,
+        onClick = onClick,
+        label = {
+            Text(
+                text = stringResource(R.string.browse_category_label, displayLabel),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
             )
-        }
-    }
+        },
+        trailingIcon = { Icon(Icons.Filled.ArrowDropDown, contentDescription = null) },
+    )
 }
 
 @Composable

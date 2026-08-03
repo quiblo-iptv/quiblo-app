@@ -18,18 +18,23 @@
 
 package dev.vibrato.feature.vod
 
+import android.content.res.Configuration
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -50,9 +55,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -129,6 +136,13 @@ fun MovieDetailScreen(
     }
 }
 
+/**
+ * Two layouts for the same content.
+ *
+ * Portrait gets a wide backdrop; landscape puts a poster beside the text instead. A
+ * full-width backdrop on a landscape tablet costs most of the visible height before a word
+ * of the description, which is the shape a phone layout takes when it is simply stretched.
+ */
 @Composable
 private fun MovieDetail(
     state: MovieDetailUiState.Ready,
@@ -136,6 +150,37 @@ private fun MovieDetail(
     modifier: Modifier = Modifier,
 ) {
     val artwork = state.details?.coverUrl?.takeIf { it.isNotBlank() } ?: state.channel.logoUrl
+    val isLandscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
+
+    if (isLandscape) {
+        Row(
+            modifier = modifier
+                .fillMaxSize()
+                .padding(16.dp),
+            horizontalArrangement = Arrangement.spacedBy(20.dp),
+        ) {
+            Poster(
+                artworkUrl = artwork,
+                modifier = Modifier
+                    .width(POSTER_WIDTH)
+                    .aspectRatio(POSTER_ASPECT_RATIO),
+            )
+
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .verticalScroll(rememberScrollState()),
+            ) {
+                Text(
+                    text = state.channel.name,
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Bold,
+                )
+                Details(state = state, onPlay = onPlay, modifier = Modifier.padding(top = 12.dp))
+            }
+        }
+        return
+    }
 
     Column(
         modifier = modifier
@@ -143,29 +188,38 @@ private fun MovieDetail(
             .verticalScroll(rememberScrollState()),
     ) {
         Backdrop(artworkUrl = artwork, title = state.channel.name)
+        Details(state = state, onPlay = onPlay, modifier = Modifier.padding(16.dp))
+    }
+}
 
-        Column(modifier = Modifier.padding(16.dp)) {
-            state.details?.let { MetadataLine(it) }
+/** Metadata, buttons and overview — the part both orientations share. */
+@Composable
+private fun Details(
+    state: MovieDetailUiState.Ready,
+    onPlay: (Channel, Long) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(modifier = modifier) {
+        state.details?.let { MetadataLine(it) }
 
-            PlaybackButtons(state = state, onPlay = onPlay)
+        PlaybackButtons(state = state, onPlay = onPlay)
 
-            val overview = state.details?.overview?.takeIf { it.isNotBlank() }
-            if (overview != null) {
-                Text(
-                    text = overview,
-                    style = MaterialTheme.typography.bodyMedium,
-                    modifier = Modifier.padding(top = 20.dp),
-                )
-            } else {
-                // Said plainly rather than left blank: an empty space reads as a screen
-                // that failed to load, and a playlist that carries no plot has not failed.
-                Text(
-                    text = stringResource(R.string.movie_no_overview),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = 20.dp),
-                )
-            }
+        val overview = state.details?.overview?.takeIf { it.isNotBlank() }
+        if (overview != null) {
+            Text(
+                text = overview,
+                style = MaterialTheme.typography.bodyMedium,
+                modifier = Modifier.padding(top = 20.dp),
+            )
+        } else {
+            // Said plainly rather than left blank: an empty space reads as a screen that
+            // failed to load, and a playlist that carries no plot has not failed.
+            Text(
+                text = stringResource(R.string.movie_no_overview),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 20.dp),
+            )
         }
     }
 }
@@ -176,28 +230,18 @@ private fun Backdrop(artworkUrl: String?, title: String) {
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .height(260.dp),
+            .height(BACKDROP_HEIGHT),
     ) {
         if (artworkUrl.isNullOrBlank()) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(MaterialTheme.colorScheme.surfaceVariant),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(
-                    imageVector = Icons.Filled.Movie,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(48.dp),
-                )
-            }
+            ArtworkPlaceholder()
         } else {
             SubcomposeAsyncImage(
                 model = artworkUrl,
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.fillMaxSize(),
+                loading = { ArtworkPlaceholder() },
+                error = { ArtworkPlaceholder() },
             )
         }
 
@@ -208,8 +252,8 @@ private fun Backdrop(artworkUrl: String?, title: String) {
                     Brush.verticalGradient(
                         colorStops = arrayOf(
                             0f to Color.Transparent,
-                            0.45f to Color.Transparent,
-                            1f to Color.Black.copy(alpha = 0.85f),
+                            SCRIM_START to Color.Transparent,
+                            1f to Color.Black.copy(alpha = SCRIM_ALPHA),
                         ),
                     ),
                 ),
@@ -223,6 +267,42 @@ private fun Backdrop(artworkUrl: String?, title: String) {
             modifier = Modifier
                 .align(Alignment.BottomStart)
                 .padding(16.dp),
+        )
+    }
+}
+
+/** The poster used by the landscape layout. */
+@Composable
+private fun Poster(artworkUrl: String?, modifier: Modifier = Modifier) {
+    Box(modifier = modifier.clip(RoundedCornerShape(12.dp))) {
+        if (artworkUrl.isNullOrBlank()) {
+            ArtworkPlaceholder()
+        } else {
+            SubcomposeAsyncImage(
+                model = artworkUrl,
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize(),
+                loading = { ArtworkPlaceholder() },
+                error = { ArtworkPlaceholder() },
+            )
+        }
+    }
+}
+
+@Composable
+private fun ArtworkPlaceholder() {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.surfaceVariant),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            imageVector = Icons.Filled.Movie,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(48.dp),
         )
     }
 }
@@ -284,6 +364,11 @@ private fun PlaybackButtons(
     }
 }
 
+private val POSTER_WIDTH = 200.dp
+private val BACKDROP_HEIGHT = 240.dp
+private const val SCRIM_START = 0.45f
+private const val SCRIM_ALPHA = 0.85f
+private const val POSTER_ASPECT_RATIO = 2f / 3f
 private const val SECONDS_PER_MINUTE = 60
 private const val SEPARATOR = "  ·  "
 private const val MILLIS_PER_SECOND = 1000

@@ -41,7 +41,9 @@ import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import dev.vibrato.player.R
+import dev.vibrato.player.navigation.MovieDetailRoute
 import dev.vibrato.player.navigation.PlayerRoute
+import dev.vibrato.player.navigation.SeriesDetailRoute
 import dev.vibrato.player.navigation.SettingsRoute
 import dev.vibrato.player.navigation.TopLevelDestination
 import dev.vibrato.player.navigation.VibratoNavHost
@@ -61,10 +63,18 @@ fun VibratoApp() {
     val currentDestination = backStackEntry?.destination
     val isPlayer = currentDestination.matches(PlayerRoute::class)
 
+    // Detail screens carry their own app bar, with the item's title and a back arrow. The
+    // shell drawing a second one above them stacked two bars and showed "Vibrato" over a
+    // screen that already said what it was — a whole row of a tablet's height spent
+    // repeating the app's own name.
+    val ownsItsAppBar = isPlayer ||
+        currentDestination.matches(MovieDetailRoute::class) ||
+        currentDestination.matches(SeriesDetailRoute::class)
+
     Scaffold(
         modifier = Modifier.fillMaxSize(),
         topBar = {
-            if (!isPlayer) {
+            if (!ownsItsAppBar) {
                 TopAppBar(
                     title = { Text(text = stringResource(currentDestination.titleRes())) },
                     actions = {

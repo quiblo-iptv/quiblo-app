@@ -41,6 +41,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
@@ -94,6 +95,7 @@ fun BrowseScreen(
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val query by viewModel.currentQuery.collectAsStateWithLifecycle()
     var guideFor: Channel? by remember { mutableStateOf(null) }
+    var showCategorySheet by remember { mutableStateOf(false) }
 
     if (!state.hasSource) {
         CentredMessage(stringResource(R.string.browse_no_source), modifier)
@@ -106,10 +108,9 @@ fun BrowseScreen(
         }
 
         if (state.categories.isNotEmpty()) {
-            CategoryFilter(
-                categories = state.categories,
-                selected = state.selectedCategory,
-                onSelect = viewModel::selectCategory,
+            CategoryPillHeader(
+                selectedCategory = state.selectedCategory,
+                onClick = { showCategorySheet = true },
             )
         }
 
@@ -142,6 +143,15 @@ fun BrowseScreen(
             channel = channel,
             nowNext = viewModel.nowNextFor(channel),
             onDismiss = { guideFor = null },
+        )
+    }
+
+    if (showCategorySheet) {
+        CategoryPickerSheet(
+            categories = state.categories,
+            selectedCategory = state.selectedCategory,
+            onSelectCategory = viewModel::selectCategory,
+            onDismiss = { showCategorySheet = false },
         )
     }
 }
@@ -204,30 +214,30 @@ private fun ExpandableSearchHeader(query: String, onQueryChange: (String) -> Uni
 }
 
 @Composable
-private fun CategoryFilter(
-    categories: List<Category>,
-    selected: String?,
-    onSelect: (String?) -> Unit,
+private fun CategoryPillHeader(
+    selectedCategory: String?,
+    onClick: () -> Unit,
 ) {
-    LazyRow(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
+    val displayLabel = if (selectedCategory == null) {
+        stringResource(R.string.browse_category_all)
+    } else if (selectedCategory == Category.UNGROUPED_TITLE) {
+        stringResource(R.string.browse_category_ungrouped)
+    } else {
+        selectedCategory
+    }
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 2.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        item {
-            FilterChip(
-                selected = selected == null,
-                onClick = { onSelect(null) },
-                label = { Text(stringResource(R.string.browse_category_all)) },
-            )
-        }
-        items(items = categories, key = { it.title }) { category ->
-            FilterChip(
-                selected = selected == category.title,
-                onClick = { onSelect(category.title) },
-                label = { Text(category.displayTitle()) },
-            )
-        }
+        FilterChip(
+            selected = selectedCategory != null,
+            onClick = onClick,
+            label = { Text(text = "Category: $displayLabel") },
+            trailingIcon = { Icon(Icons.Filled.ArrowDropDown, contentDescription = null) },
+        )
     }
 }
 

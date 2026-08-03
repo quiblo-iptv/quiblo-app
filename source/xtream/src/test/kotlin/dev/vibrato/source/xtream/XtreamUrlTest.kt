@@ -83,9 +83,5 @@ class XtreamUrlTest {
         assertEquals("$base/live/user/pass/42.ts", XtreamUrl.liveStream(base, "user", "pass", "42"))
         assertEquals("$base/movie/user/pass/42.mkv", XtreamUrl.vodStream(base, "user", "pass", "42", "mkv"))
         assertEquals("$base/series/user/pass/42.mp4", XtreamUrl.seriesStream(base, "user", "pass", "42", ""))
-        assertEquals(
-            "$base/timeshift/user/pass/60/2026-08-03:06-00/42.ts",
-            XtreamUrl.timeshiftStream(base, "user", "pass", "42", "2026-08-03:06-00", 60),
-        )
     }
 }

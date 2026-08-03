@@ -14,9 +14,10 @@
 Vibrato plays Live TV, movies, and series from playlists **you** supply — an M3U/M3U8
 URL or file, or an Xtream Codes account. No ads, no accounts, no tracking, no backend.
 
-> **Status: pre-alpha.** Milestone M0 (project foundation) is complete: the app builds,
-> installs, and opens. It does not play anything yet. See [`docs/PLAN.md`](docs/PLAN.md)
-> for the roadmap.
+> **Status: alpha.** Milestones M0–M4 are complete: sources, playback, browse,
+> favourites, Xtream and EPG all work. M5 (settings, export/import, polish) and M6
+> (release engineering) are outstanding. See [`docs/PLAN.md`](docs/PLAN.md) for the
+> roadmap.
 
 ## Vibrato supplies no content
 
@@ -32,21 +33,24 @@ Requests for sources, providers, or bundled content are closed without discussio
 a playlist URL, provider hostname, or credential anywhere in this project results in an
 immediate ban — see [`CONTRIBUTING.md`](CONTRIBUTING.md).
 
-## Features Implemented in v1.0
+## Features
 
 | Feature Area | Details |
 |---|---|
 | **Sources** | M3U/M3U8 by URL or local file, and Xtream Codes API |
 | **Content & Series** | Live TV, movies, series with seasons & episode breakdown |
-| **Guide & EPG** | Interactive EPG Time-Grid schedule matrix for live streams |
-| **Catchup & Replay** | Catchup and timeshift replay stream support |
-| **Player Controls** | Quick Zap Bar overlay, Aspect Ratio scaling (Fit, Crop, Stretch, 16:9, 4:3), Picture-in-Picture (PiP) mode, Start Over, Screen Lock & position swap, Volume & Brightness adjustment |
-| **Buffering & Bitrate** | Configurable buffer presets (Low Latency, Balanced, High Stability) & bitrate caps |
-| **Layout & Search** | Expandable search header & List vs Grid view layout toggle |
-| **Theme & Design** | Material 3 Expressive 2026 UI & 5 Theme Accent Color Presets (Violet, Blue, Green, Amber, Red) |
-| **Continue Watching** | Homepage resume carousel with progress tracking |
+| **Guide & EPG** | Now/next per channel, fetched on demand and cached |
+| **Player Controls** | Play/pause, seek, ±10s skip, Start Over, subtitle & audio track selection, screen lock with position swap |
+| **Layout & Search** | Expandable search header, category filter, list/grid view toggle |
+| **Theme & Design** | Material 3 Expressive, dark and light |
+| **Resume** | Playback position remembered per item |
 | **Favourites** | Survive playlist refresh |
-| **Storage & Privacy** | Entirely on-device with zero telemetry or network traffic |
+| **Storage & Privacy** | Entirely on-device with zero telemetry |
+
+Not yet implemented, in rough priority order: settings persistence, export/import,
+aspect-ratio modes, configurable buffer and seek intervals, an EPG time-grid, a quick-zap
+overlay, a continue-watching carousel, catchup/timeshift, and picture-in-picture. Several
+are Phase 2 in [`docs/PLAN.md`](docs/PLAN.md) §6.
 
 ## Privacy
 

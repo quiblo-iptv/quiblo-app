@@ -63,11 +63,3 @@ internal val VibratoSurfaceVariantDark = Color(0xFF1B1E29)
 internal val VibratoOnSurfaceVariantDark = Color(0xFFC7C7D7)
 internal val VibratoErrorDark = Color(0xFFFFB4AB)
 internal val VibratoOnErrorDark = Color(0xFF690005)
-
-enum class ThemePalette(val displayName: String, val primaryColor: Color) {
-    ELECTRIC_VIOLET("Electric Violet", Color(0xFF6C5CE7)),
-    MIDNIGHT_BLUE("Midnight Blue", Color(0xFF1B65D4)),
-    EMERALD_GREEN("Emerald Green", Color(0xFF10B981)),
-    SUNSET_AMBER("Sunset Amber", Color(0xFFF59E0B)),
-    RUBY_RED("Ruby Red", Color(0xFFEF4444)),
-}

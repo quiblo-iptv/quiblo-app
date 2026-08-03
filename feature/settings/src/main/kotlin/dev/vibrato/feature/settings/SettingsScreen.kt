@@ -19,38 +19,30 @@
 package dev.vibrato.feature.settings
 
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import dev.vibrato.core.media.BufferMode
-import dev.vibrato.core.media.MaxBitrateCap
 
-@OptIn(ExperimentalMaterial3Api::class)
+/**
+ * Settings.
+ *
+ * Intentionally near-empty. This screen previously offered theme accent, buffer preset,
+ * bitrate cap and seek interval pickers, none of which were connected to anything: the
+ * chips wrote to `remember` state that was never persisted and never reached the player,
+ * and two of the four had an empty `onClick` with a hardcoded selection. A control that
+ * looks settable and changes nothing is worse than an absent one, so they are gone until
+ * there is something behind them (M5).
+ */
 @Composable
 fun SettingsScreen(modifier: Modifier = Modifier) {
-    var selectedBufferMode by remember { mutableStateOf(BufferMode.BALANCED) }
-    var selectedBitrateCap by remember { mutableStateOf(MaxBitrateCap.AUTO) }
-
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -63,137 +55,5 @@ fun SettingsScreen(modifier: Modifier = Modifier) {
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.onSurface,
         )
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        // Theme Accent Colors Section
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-        ) {
-            Column(modifier = Modifier.padding(16.dp)) {
-                Text(
-                    text = "Theme Accent Color",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold,
-                )
-                Text(
-                    text = "Choose your preferred primary accent color theme.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = 4.dp, bottom = 12.dp),
-                )
-
-                Row(modifier = Modifier.fillMaxWidth()) {
-                    listOf("Violet", "Blue", "Green", "Amber", "Red").forEach { name ->
-                        FilterChip(
-                            selected = name == "Violet",
-                            onClick = { },
-                            label = { Text(name) },
-                            modifier = Modifier.padding(end = 8.dp),
-                        )
-                    }
-                }
-            }
-        }
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        // Playback Buffering Section
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-        ) {
-            Column(modifier = Modifier.padding(16.dp)) {
-                Text(
-                    text = "Player Buffer Presets",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold,
-                )
-                Text(
-                    text = "Configure playback stream buffering duration to prevent stutter or reduce latency.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = 4.dp, bottom = 12.dp),
-                )
-
-                Row(modifier = Modifier.fillMaxWidth()) {
-                    BufferMode.entries.forEach { mode ->
-                        FilterChip(
-                            selected = selectedBufferMode == mode,
-                            onClick = { selectedBufferMode = mode },
-                            label = { Text(mode.name.replace("_", " ")) },
-                            modifier = Modifier.padding(end = 8.dp),
-                        )
-                    }
-                }
-            }
-        }
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        // Bitrate Limit Section
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-        ) {
-            Column(modifier = Modifier.padding(16.dp)) {
-                Text(
-                    text = "Max Bitrate & Quality",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold,
-                )
-                Text(
-                    text = "Cap maximum video stream bitrate for limited connection speeds.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = 4.dp, bottom = 12.dp),
-                )
-
-                Row(modifier = Modifier.fillMaxWidth()) {
-                    MaxBitrateCap.entries.forEach { cap ->
-                        FilterChip(
-                            selected = selectedBitrateCap == cap,
-                            onClick = { selectedBitrateCap = cap },
-                            label = { Text(cap.name.replace("_", " ")) },
-                            modifier = Modifier.padding(end = 8.dp),
-                        )
-                    }
-                }
-            }
-        }
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        // Seek Skip Seconds Section
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-        ) {
-            Column(modifier = Modifier.padding(16.dp)) {
-                Text(
-                    text = "Player Skip Forward / Backward Seconds",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold,
-                )
-                Text(
-                    text = "Adjust default seek jump interval for media controls (max 60 seconds).",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = 4.dp, bottom = 12.dp),
-                )
-
-                Row(modifier = Modifier.fillMaxWidth()) {
-                    dev.vibrato.core.media.SeekInterval.entries.forEach { interval ->
-                        FilterChip(
-                            selected = interval == dev.vibrato.core.media.SeekInterval.SEEK_10,
-                            onClick = { },
-                            label = { Text("${interval.seconds}s") },
-                            modifier = Modifier.padding(end = 8.dp),
-                        )
-                    }
-                }
-            }
-        }
     }
 }

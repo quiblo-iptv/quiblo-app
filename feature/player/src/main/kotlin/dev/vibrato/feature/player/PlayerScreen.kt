@@ -32,18 +32,15 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Brightness6
 import androidx.compose.material.icons.filled.ClosedCaption
 import androidx.compose.material.icons.filled.Forward10
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.LockOpen
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.PictureInPictureAlt
 import androidx.compose.material.icons.filled.Replay
 import androidx.compose.material.icons.filled.Replay10
 import androidx.compose.material.icons.filled.SwapHoriz
-import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -230,14 +227,9 @@ private fun PlayerControls(
     onPlayPause: () -> Unit,
     onSeek: (Long) -> Unit,
     onCycleSubtitles: () -> Unit,
-    onPictureInPictureClick: () -> Unit = {},
 ) {
     var isLocked by remember { mutableStateOf(false) }
     var isLockTopLeft by remember { mutableStateOf(true) }
-    var showVolumeSlider by remember { mutableStateOf(false) }
-    var showBrightnessSlider by remember { mutableStateOf(false) }
-    var volume by remember { mutableStateOf(1.0f) }
-    var brightness by remember { mutableStateOf(1.0f) }
 
     Box(modifier = Modifier.fillMaxSize()) {
         // Floating Lock Button positioned Top-Left or Top-Right
@@ -307,13 +299,6 @@ private fun PlayerControls(
                             )
                         }
                     }
-                    IconButton(onClick = onPictureInPictureClick) {
-                        Icon(
-                            imageVector = Icons.Filled.PictureInPictureAlt,
-                            contentDescription = "Picture in Picture",
-                            tint = Color.White,
-                        )
-                    }
                 }
 
                 Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
@@ -359,22 +344,6 @@ private fun PlayerControls(
                         .padding(horizontal = 16.dp, vertical = 8.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    IconButton(onClick = { showVolumeSlider = !showVolumeSlider }) {
-                        Icon(
-                            imageVector = Icons.Filled.VolumeUp,
-                            contentDescription = "Volume",
-                            tint = Color.White,
-                        )
-                    }
-
-                    IconButton(onClick = { showBrightnessSlider = !showBrightnessSlider }) {
-                        Icon(
-                            imageVector = Icons.Filled.Brightness6,
-                            contentDescription = "Brightness",
-                            tint = Color.White,
-                        )
-                    }
-
                     if (state.isSeekable && state.durationMillis > 0L) {
                         Text(text = state.positionMillis.asClock(), color = Color.White)
                         Slider(

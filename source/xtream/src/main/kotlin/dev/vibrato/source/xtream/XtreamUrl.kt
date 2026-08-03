@@ -87,18 +87,5 @@ object XtreamUrl {
     fun seriesStream(base: String, username: String, password: String, streamId: String, extension: String): String =
         "$base/series/$username/$password/$streamId.${extension.ifBlank { "mp4" }}"
 
-    /**
-     * Timeshift / Catchup stream URL for replaying past broadcasts.
-     * Format: scheme://host:port/timeshift/username/password/duration/start_date_time/stream_id.ts
-     */
-    fun timeshiftStream(
-        base: String,
-        username: String,
-        password: String,
-        streamId: String,
-        startFormatted: String,
-        durationMinutes: Int,
-    ): String = "$base/timeshift/$username/$password/$durationMinutes/$startFormatted/$streamId.ts"
-
     private const val PROTOCOL_SEPARATOR_LENGTH = 3
 }

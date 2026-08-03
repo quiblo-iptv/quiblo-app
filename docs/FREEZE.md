@@ -22,7 +22,7 @@ These are non-goals. Rejecting them is a decision, not an oversight.
 - **Not a content service.** The project hosts, indexes, bundles, aggregates, and distributes zero streams. It ships with no default playlist, no channel directory, no "discover content" feature, and no built-in provider list.
 - **Not a backend.** There is no server component, no user accounts, no telemetry, no cloud sync, no remote configuration.
 - **Not a DRM client.** No Widevine, no ClearKey, no PlayReady in v1.
-- **Not a TV app in v1.** Android TV, Google TV, LG webOS, Linux desktop, and Xbox are explicitly phase 2 or later.
+- **Not a TV app in v1** — *amended 2026-08-03, see Amendment 1. Android TV and Google TV are now in v1.* LG webOS, Linux desktop, and Xbox remain phase 2 or later.
 - **Not a downloader/recorder.** No recording, no catch-up, no timeshift in v1.
 
 ## 3. Locked decisions
@@ -77,8 +77,29 @@ The application is a general-purpose media player, in the same category as VLC o
 
 A user installs the APK, adds either an M3U URL or Xtream credentials, browses categorised Live/VOD/Series content, marks favourites, plays a stream full-screen, and exports their configuration to a file — all offline-tolerant, with no account and no network call to any host they did not enter themselves.
 
+Since Amendment 1, this must hold **on a phone and on a television**, with the television driven by a remote alone.
+
 ---
 
 ## Amendments
 
-_None. Append dated entries below when scope is deliberately changed._
+### Amendment 1 — Android TV and Google TV enter v1 (2026-08-03)
+
+**Decision.** §2's "Not a TV app in v1" is withdrawn for Android TV and Google TV. A second
+application, `:app-tv`, ships as part of v1.0. LG webOS, Tizen, Xbox and desktop are
+unaffected and remain out of scope.
+
+**Rationale.** The architectural invariants in §4 were written so a TV frontend would be
+cheap, and that has now been demonstrated rather than assumed: every `:core:*` and
+`:source:*` module is free of Compose, the ViewModels hold no UI types, and the existing
+engine was confirmed running on the target television — a Google TV on Android 14 — before
+this amendment was written. The TV app is a presentation layer and nothing more.
+
+**What this costs.** v1.0 no longer ships when the phone app is ready. It ships when both
+are, and the Definition of Done in `ACCEPTANCE.md` grows a television alongside the two
+phones. The acceptance sweep roughly doubles. That is the trade being accepted, and it
+should be re-read before anyone treats a green phone build as a release candidate.
+
+**What does not change.** Every other non-goal in §2 stands — no backend, no accounts, no
+DRM, no bundled content, no recording. The TV app is the same player with a different
+frontend, not a different product. Plan: [`PLAN-TV.md`](PLAN-TV.md).

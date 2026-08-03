@@ -6,7 +6,7 @@
 
 # Execution Plan — Vibrato for Android TV / Google TV
 
-**Status:** proposed, not started. Target device confirmed.
+**Status:** approved for v1.0 by `FREEZE.md` Amendment 1. Target device confirmed. Not started.
 **Date:** 2026-08-03.
 
 ## 0. The target device, measured
@@ -41,11 +41,10 @@ manifest implies only `faketouch` and never requires `touchscreen`:
 The APK it accepts does **not** appear in the TV launcher, because it declares no
 `LEANBACK_LAUNCHER` category — which is T0's first task, not a bug.
 
-> **This is outside the v1.0 freeze.** [`FREEZE.md`](FREEZE.md) §2 lists Android TV and
-> Google TV as explicit non-goals — "**Not a TV app in v1**" — and §6 requires scope changes
-> to be a dated amendment rather than a quiet edit. Nothing here should be built until that
-> amendment exists, or until v1.0 ships and the freeze lifts. The plan is written now so the
-> decision can be taken with the cost in front of you.
+> **This is now in v1.0.** [`FREEZE.md`](FREEZE.md) Amendment 1 (2026-08-03) withdrew the
+> "Not a TV app in v1" non-goal for Android TV and Google TV. The consequence to keep in
+> view: **v1.0 no longer ships when the phone app is ready — it ships when both are**, and
+> the acceptance sweep grows a television.
 
 ---
 
@@ -84,39 +83,60 @@ how the panel-block problem in `xtream-provider-block-469` comes back.
 
 ### 3.1 Home — the Google TV shape
 
+Modelled directly on the Google TV home screen.
+
 ```
-┌──────────────────────────────────────────────────────────────┐
-│  ⌕   Live    Movies    Series    Favourites    Sources    ⚙  │  ← top bar, focusable
-├──────────────────────────────────────────────────────────────┤
-│                                                              │
-│   [ content for the selected category ]                      │
-│                                                              │
-└──────────────────────────────────────────────────────────────┘
+┌────────────────────────────────────────────────────────────────────┐
+│  ⌕ Search   Live   Movies   Series   Favourites          ⚙   2:45  │
+│             ─────                                                  │
+├────────────────────────────────────────────────────────────────────┤
+│                                                                    │
+│   Category name                                                    │
+│   ┌──────┐ ┌──────┐ ┌──────┐ ┌──────┐ ┌──────┐ ┌──────┐            │
+│   │      │ │      │ │      │ │      │ │      │ │      │  →         │
+│   └──────┘ └──────┘ └──────┘ └──────┘ └──────┘ └──────┘            │
+│                                                                    │
+│   Another category                                                 │
+│   ┌──────┐ ┌──────┐ ┌──────┐ ┌──────┐ ┌──────┐ ┌──────┐            │
+│   │      │ │      │ │      │ │      │ │      │ │      │  →         │
+│   └──────┘ └──────┘ └──────┘ └──────┘ └──────┘ └──────┘            │
+└────────────────────────────────────────────────────────────────────┘
 ```
 
-- A `TabRow` from the androidx.tv Compose libraries, pinned to the top.
-- **Up from the content focuses the bar; left/right moves between categories; down returns
-  to the content.** That is the whole navigation model and it must work before anything
-  else is built, because every screen sits underneath it.
-- The bar hides on scroll-down and returns on scroll-up, as Google TV's does.
-- Settings is the rightmost item rather than a separate destination, so the bar is the only
-  top-level navigation.
+**The tabs are text, not blocks.** Plain labels in a row, the active one marked by a thin
+underline beneath it and nothing else — no filled pill, no card, no surface behind them.
+The focused tab brightens; the selected tab is underlined. Those are two different states
+and both have to be visible at once, because on a TV the thing you are pointing at and the
+thing you are looking at are frequently not the same.
 
-### 3.2 Movies and Series — poster rows
+Also in the bar, matching the reference: **Search on the far left**, and the settings gear
+and the clock on the far right.
 
-Reuses the phone app's decision that artwork is the interface: 2:3 posters, title over a
-gradient, no separate label row. Differences forced by the ten-foot context:
+**Navigation:** up from the first content row focuses the bar, left/right moves along the
+tabs, down returns to the content. The bar scrolls away as content scrolls up and returns
+on the first scroll down.
 
-- **Focus, not hover.** The focused poster scales up (~1.1) and takes a border; everything
-  else dims. This is the only cue a viewer has about where they are.
-- **Rows by category** rather than one adaptive grid, because a remote traverses a row far
-  more comfortably than it traverses a wrapped grid. The category chips become the row
-  headings.
-- A long title scrolls **while focused** — `basicMarquee` with `WhileFocused`, which is what
-  that API is for. The phone's long-press trigger has no equivalent here.
-- Detail screen keeps the landscape layout the phone app already has: poster left, title,
-  metadata, Play / Resume / Start from beginning, and overview right. It is already the
-  correct shape for a TV.
+### 3.2 Content — scrollable category rows
+
+Below the bar, **one horizontally scrolling row per category**, each under a small heading,
+exactly as the reference stacks "Favourite Apps", "Play Next" and so on. Vertical scrolling
+moves between categories; horizontal scrolling moves within one.
+
+This replaces the phone app's category *filter*. On a phone you pick one category and see a
+grid; on a TV every category is on screen at once and the remote walks through them. The
+category picker sheet does not port.
+
+Row contents by tab:
+
+- **Movies and Series** — 2:3 posters, artwork edge to edge, title beneath. Reuses the
+  phone's decision that artwork is the interface, with focus replacing hover: the focused
+  poster scales up (~1.1) and takes a border, and long titles scroll while focused via
+  `basicMarquee` with `WhileFocused`.
+- **Favourites** — the same posters, one row per kind rather than per category.
+- **Live** — not posters. See §3.3.
+
+Rows are lazy in both directions. A 20,000-item account is many rows of many items, and on
+1.84 GB of RAM (§0) nothing may be composed that is not on screen.
 
 ### 3.3 Live — a channel list, not posters
 
@@ -215,9 +235,11 @@ Each exits on something demonstrable on a real device, not on code existing.
   beyond a password.
 
 ### T5 — Release (week 6)
-- Separate release track, TV-specific store assets, size budget.
-- Full AC sweep on **two physical TV devices**, one Google TV and one Android TV.
-- **Exit:** v1.1.0 tagged with both APKs.
+- Second release track, TV banner and store assets, size budget.
+- Full AC sweep on the television alongside the phone sweep.
+- **Exit:** **v1.0.0 tagged with both APKs.** Since Amendment 1 there is no phone-only
+  v1.0 to ship first — `docs/ACCEPTANCE-SWEEP.md` gains a TV column and the release waits
+  for both.
 
 ## 6. Acceptance criteria to add
 

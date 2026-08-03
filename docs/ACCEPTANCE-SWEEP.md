@@ -33,6 +33,11 @@ tagging v1.0.0 — do not tag while anything in §5 or §6 is unchecked.
 **Android 14 has not been tested at all, and Android 11 only on an emulator.** Both DoD
 rows are still open.
 
+**Since `FREEZE.md` Amendment 1 (2026-08-03) the television is part of v1.0**, so this sweep
+now has a third target: the Haier MatrixTV EE (Google TV, Android 14) recorded in
+`PLAN-TV.md` §0. None of the AC-TV-\* criteria in `PLAN-TV.md` §6 have been run, because the
+TV app does not exist yet. v1.0.0 cannot be tagged on a green phone sweep alone.
+
 ---
 
 ## 1. Verified mechanically

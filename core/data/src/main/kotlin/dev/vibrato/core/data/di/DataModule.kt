@@ -57,5 +57,5 @@ val dataModule: Module = module {
     }
 
     single { SourceRepository(get(), get(), get(), get()) }
-    single { ChannelRepository(get()) }
+    single { ChannelRepository(get(), get()) }
 }

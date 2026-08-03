@@ -16,15 +16,14 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-package dev.vibrato.core.media
+package dev.vibrato.feature.player.di
 
-/**
- * Module marker for `:core:media`.
- *
- * The PlayerController interface and its Media3 implementation land here in M2. Feature
- * code never touches ExoPlayer directly (docs/FREEZE.md §4.4).
- *
- * The module exists from M0 so the dependency graph and the AC-NFR-06 Compose
- * check are wired and enforced from the first commit (docs/PLAN.md §3).
- */
-internal object CoreMediaMarker
+import dev.vibrato.feature.player.PlayerViewModel
+import org.koin.core.module.Module
+import org.koin.core.module.dsl.viewModelOf
+import org.koin.dsl.module
+
+/** Wiring owned by `:feature:player`. Aggregated by `:app`. */
+val playerModule: Module = module {
+    viewModelOf(::PlayerViewModel)
+}

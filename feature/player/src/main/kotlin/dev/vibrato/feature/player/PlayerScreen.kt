@@ -18,45 +18,299 @@
 
 package dev.vibrato.feature.player
 
+import android.view.SurfaceView
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.ClosedCaption
+import androidx.compose.material.icons.filled.Pause
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.viewinterop.AndroidView
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import dev.vibrato.core.media.PlaybackState
+import dev.vibrato.core.media.PlaybackStatus
+import kotlinx.coroutines.delay
+import org.koin.androidx.compose.koinViewModel
+
+private const val CONTROLS_TIMEOUT_MILLIS = 3_000L
 
 /**
- * Empty [PlayerScreen] shell for M0.
+ * Full-screen playback.
  *
- * Real content arrives in a later milestone (docs/PLAN.md §3). The screen exists now so
- * the navigation graph, theming and module wiring are exercised end to end at M0.
+ * The video draws into a plain [SurfaceView] handed to the controller, which is what
+ * keeps every Media3 type on the other side of the `:core:media` boundary
+ * (docs/FREEZE.md §4.4).
  */
 @Composable
-fun PlayerScreen(modifier: Modifier = Modifier) {
-    Column(
+fun PlayerScreen(
+    channelId: Long,
+    onBack: () -> Unit,
+    modifier: Modifier = Modifier,
+    viewModel: PlayerViewModel = koinViewModel(),
+) {
+    val state by viewModel.state.collectAsStateWithLifecycle()
+    var controlsVisible by remember { mutableStateOf(true) }
+
+    LaunchedEffect(channelId) { viewModel.load(channelId) }
+
+    // AC-PLAY-10: controls auto-hide after three seconds of inactivity. Restarted on
+    // every reveal, and suppressed while paused so the user is never left with a
+    // paused frame and no way back.
+    LaunchedEffect(controlsVisible, state.status) {
+        if (controlsVisible && state.status == PlaybackStatus.PLAYING) {
+            delay(CONTROLS_TIMEOUT_MILLIS)
+            controlsVisible = false
+        }
+    }
+
+    // AC-PLAY-09: leaving the foreground stops playback so no audio leaks. There is no
+    // background playback in v1 (docs/FREEZE.md §2).
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_STOP) viewModel.onStopped()
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+
+    Box(
         modifier = modifier
             .fillMaxSize()
-            .padding(24.dp),
+            .background(Color.Black)
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+            ) { controlsVisible = !controlsVisible },
+    ) {
+        VideoSurface(viewModel = viewModel, modifier = Modifier.fillMaxSize())
+
+        when {
+            state.status == PlaybackStatus.ERROR -> PlaybackErrorMessage(
+                state = state,
+                onRetry = viewModel::retry,
+                onBack = onBack,
+            )
+
+            state.status == PlaybackStatus.BUFFERING -> BufferingIndicator(state)
+        }
+
+        if (controlsVisible && state.status != PlaybackStatus.ERROR) {
+            PlayerControls(
+                state = state,
+                onBack = onBack,
+                onPlayPause = {
+                    viewModel.togglePlayPause()
+                    controlsVisible = true
+                },
+                onSeek = viewModel::seekTo,
+                onCycleSubtitles = {
+                    val next = state.textTracks.firstOrNull { !it.isSelected }
+                    viewModel.selectTextTrack(next?.id)
+                    controlsVisible = true
+                },
+            )
+        }
+    }
+}
+
+/**
+ * The video output.
+ *
+ * A [SurfaceView] rather than a `TextureView`: it composites in the display pipeline
+ * rather than through the GPU, which matters for battery on long viewing sessions.
+ */
+@Composable
+private fun VideoSurface(viewModel: PlayerViewModel, modifier: Modifier = Modifier) {
+    val controller = remember { viewModel.controllerHandle() }
+    AndroidView(
+        modifier = modifier,
+        factory = { context ->
+            SurfaceView(context).also(controller::attachSurface)
+        },
+    )
+    DisposableEffect(Unit) {
+        onDispose { controller.detachSurface() }
+    }
+}
+
+@Composable
+private fun BufferingIndicator(state: PlaybackState) {
+    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            CircularProgressIndicator(color = Color.White)
+            if (state.retryAttempt > 0) {
+                Text(
+                    text = stringResource(R.string.player_reconnecting, state.retryAttempt),
+                    color = Color.White,
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.padding(top = 12.dp),
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun PlaybackErrorMessage(
+    state: PlaybackState,
+    onRetry: () -> Unit,
+    onBack: () -> Unit,
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(32.dp),
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Text(
-            text = stringResource(R.string.feature_player_title),
-            style = MaterialTheme.typography.headlineSmall,
-            color = MaterialTheme.colorScheme.onSurface,
-        )
-        Text(
-            text = stringResource(R.string.feature_player_empty),
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            text = stringResource(state.error.messageRes()),
+            color = Color.White,
+            style = MaterialTheme.typography.bodyLarge,
             textAlign = TextAlign.Center,
-            modifier = Modifier.padding(top = 8.dp),
         )
+        Row(modifier = Modifier.padding(top = 20.dp)) {
+            Button(onClick = onRetry) { Text(stringResource(R.string.player_retry)) }
+        }
+        Row(modifier = Modifier.padding(top = 8.dp)) {
+            Button(onClick = onBack) { Text(stringResource(R.string.player_back)) }
+        }
+    }
+}
+
+@Composable
+private fun PlayerControls(
+    state: PlaybackState,
+    onBack: () -> Unit,
+    onPlayPause: () -> Unit,
+    onSeek: (Long) -> Unit,
+    onCycleSubtitles: () -> Unit,
+) {
+    Column(modifier = Modifier.fillMaxSize()) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(Color.Black.copy(alpha = 0.4f))
+                .padding(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            IconButton(onClick = onBack) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                    contentDescription = stringResource(R.string.player_back),
+                    tint = Color.White,
+                )
+            }
+            Text(
+                text = state.item?.title.orEmpty(),
+                color = Color.White,
+                style = MaterialTheme.typography.titleMedium,
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(start = 8.dp),
+            )
+            if (state.textTracks.isNotEmpty()) {
+                IconButton(onClick = onCycleSubtitles) {
+                    Icon(
+                        imageVector = Icons.Filled.ClosedCaption,
+                        contentDescription = stringResource(R.string.player_subtitles),
+                        tint = Color.White,
+                    )
+                }
+            }
+        }
+
+        Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
+            IconButton(onClick = onPlayPause, modifier = Modifier.size(72.dp)) {
+                Icon(
+                    imageVector = if (state.isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
+                    contentDescription = stringResource(
+                        if (state.isPlaying) R.string.player_pause else R.string.player_play,
+                    ),
+                    tint = Color.White,
+                    modifier = Modifier.size(56.dp),
+                )
+            }
+        }
+
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(Color.Black.copy(alpha = 0.4f))
+                .padding(horizontal = 16.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            if (state.isSeekable && state.durationMillis > 0L) {
+                Text(text = state.positionMillis.asClock(), color = Color.White)
+                Slider(
+                    value = state.positionMillis.toFloat(),
+                    onValueChange = { onSeek(it.toLong()) },
+                    valueRange = 0f..state.durationMillis.toFloat(),
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(horizontal = 8.dp),
+                )
+                Text(text = state.durationMillis.asClock(), color = Color.White)
+            } else {
+                // AC-PLAY-02: an unseekable stream shows no seek bar at all, rather than
+                // one that looks interactive and does nothing.
+                Text(
+                    text = stringResource(R.string.player_live),
+                    color = Color.White,
+                    style = MaterialTheme.typography.labelLarge,
+                )
+            }
+        }
+    }
+}
+
+private const val MILLIS_PER_SECOND = 1000
+private const val SECONDS_PER_MINUTE = 60
+private const val SECONDS_PER_HOUR = 3600
+
+/** Formats a position as h:mm:ss, dropping the hour component when it is zero. */
+private fun Long.asClock(): String {
+    val totalSeconds = this / MILLIS_PER_SECOND
+    val hours = totalSeconds / SECONDS_PER_HOUR
+    val minutes = (totalSeconds % SECONDS_PER_HOUR) / SECONDS_PER_MINUTE
+    val seconds = totalSeconds % SECONDS_PER_MINUTE
+    return if (hours > 0) {
+        "%d:%02d:%02d".format(hours, minutes, seconds)
+    } else {
+        "%d:%02d".format(minutes, seconds)
     }
 }

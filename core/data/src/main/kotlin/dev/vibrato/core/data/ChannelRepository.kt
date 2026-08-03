@@ -19,6 +19,8 @@
 package dev.vibrato.core.data
 
 import dev.vibrato.core.database.dao.ChannelDao
+import dev.vibrato.core.database.dao.ResumePositionDao
+import dev.vibrato.core.database.entity.ResumePositionEntity
 import dev.vibrato.core.model.Category
 import dev.vibrato.core.model.Channel
 import dev.vibrato.core.model.MediaKind
@@ -37,6 +39,8 @@ import kotlinx.coroutines.flow.map
  */
 class ChannelRepository(
     private val channelDao: ChannelDao,
+    private val resumePositionDao: ResumePositionDao,
+    private val now: () -> Long = System::currentTimeMillis,
 ) {
 
     fun observeChannels(sourceId: Long, kind: MediaKind): Flow<List<Channel>> =
@@ -52,4 +56,19 @@ class ChannelRepository(
             .map { counts -> counts.map { it.toDomain(sourceId) } }
 
     suspend fun channelCount(sourceId: Long): Int = channelDao.countForSource(sourceId)
+
+    suspend fun findById(channelId: Long): Channel? = channelDao.findById(channelId)?.toDomain()
+
+    /** Where the user got to in this item, or 0 if it has never been played (AC-PLAY-03). */
+    suspend fun resumePosition(stableKey: String): Long = resumePositionDao.positionFor(stableKey) ?: 0L
+
+    suspend fun saveResumePosition(stableKey: String, positionMillis: Long) {
+        resumePositionDao.upsert(
+            ResumePositionEntity(
+                stableKey = stableKey,
+                positionMillis = positionMillis,
+                updatedAtEpochMillis = now(),
+            ),
+        )
+    }
 }

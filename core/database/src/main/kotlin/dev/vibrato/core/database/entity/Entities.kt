@@ -101,3 +101,16 @@ data class FavoriteEntity(
     val stableKey: String,
     val favoritedAtEpochMillis: Long,
 )
+
+/**
+ * Where the user got to in a VOD item.
+ *
+ * Keyed by the provider's stable identity rather than a row id, so a playlist refresh
+ * that renumbers everything does not lose the resume point (AC-PLAY-03).
+ */
+@Entity(tableName = "resume_positions")
+data class ResumePositionEntity(
+    @PrimaryKey val stableKey: String,
+    val positionMillis: Long,
+    val updatedAtEpochMillis: Long,
+)

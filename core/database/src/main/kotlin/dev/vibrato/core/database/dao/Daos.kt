@@ -26,6 +26,7 @@ import androidx.room.Query
 import androidx.room.Transaction
 import androidx.room.Update
 import dev.vibrato.core.database.entity.ChannelEntity
+import dev.vibrato.core.database.entity.ResumePositionEntity
 import dev.vibrato.core.database.entity.SourceEntity
 import kotlinx.coroutines.flow.Flow
 
@@ -63,9 +64,6 @@ data class CategoryCount(
 @Dao
 interface ChannelDao {
 
-    @Query("SELECT * FROM channels WHERE sourceId = :sourceId ORDER BY sortIndex ASC")
-    fun observeBySource(sourceId: Long): Flow<List<ChannelEntity>>
-
     @Query(
         """
         SELECT * FROM channels
@@ -94,27 +92,11 @@ interface ChannelDao {
     )
     fun observeCategoriesByKind(sourceId: Long, kind: String): Flow<List<CategoryCount>>
 
-    @Query(
-        """
-        SELECT * FROM channels
-        WHERE sourceId = :sourceId AND groupTitle = :groupTitle
-        ORDER BY sortIndex ASC
-        """,
-    )
-    fun observeByGroup(sourceId: Long, groupTitle: String): Flow<List<ChannelEntity>>
-
-    @Query(
-        """
-        SELECT groupTitle, COUNT(*) AS itemCount FROM channels
-        WHERE sourceId = :sourceId
-        GROUP BY groupTitle
-        ORDER BY groupTitle ASC
-        """,
-    )
-    fun observeCategories(sourceId: Long): Flow<List<CategoryCount>>
-
     @Query("SELECT COUNT(*) FROM channels WHERE sourceId = :sourceId")
     suspend fun countForSource(sourceId: Long): Int
+
+    @Query("SELECT * FROM channels WHERE id = :id")
+    suspend fun findById(id: Long): ChannelEntity?
 
     @Query("DELETE FROM channels WHERE sourceId = :sourceId")
     suspend fun deleteForSource(sourceId: Long)
@@ -139,4 +121,14 @@ interface ChannelDao {
     companion object {
         private const val INSERT_CHUNK_SIZE = 500
     }
+}
+
+@Dao
+interface ResumePositionDao {
+
+    @Query("SELECT positionMillis FROM resume_positions WHERE stableKey = :stableKey")
+    suspend fun positionFor(stableKey: String): Long?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsert(position: ResumePositionEntity)
 }

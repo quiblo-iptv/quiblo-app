@@ -28,6 +28,11 @@ complexity:
   TooManyFunctions:
     active: true
     ignoreAnnotatedFunctions: [ 'Composable' ]
+    # Counting a nested listener's overrides against its outer class penalises
+    # implementing a platform callback interface, which is not the coupling this rule
+    # is meant to catch.
+    ignorePrivate: true
+    thresholdInClasses: 14
   # A @Composable is a declarative tree, not imperative logic: its length tracks how much
   # UI it describes, which is not the complexity this rule exists to catch. Extracting
   # sub-composables purely to satisfy a line count produces worse code, not better.

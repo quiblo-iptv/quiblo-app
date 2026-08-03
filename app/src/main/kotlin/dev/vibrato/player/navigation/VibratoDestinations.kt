@@ -54,12 +54,9 @@ data object SourcesRoute
 @Serializable
 data object SettingsRoute
 
-/**
- * Full-screen playback. Gains stream identity parameters in M2; kept parameterless at M0
- * so the graph compiles without inventing a contract that docs/FREEZE.md has not fixed.
- */
+/** Full-screen playback of one item. */
 @Serializable
-data object PlayerRoute
+data class PlayerRoute(val channelId: Long)
 
 /**
  * The destinations reachable from the bottom navigation bar.

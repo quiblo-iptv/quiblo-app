@@ -19,6 +19,7 @@
 package dev.vibrato.feature.live
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -63,6 +64,7 @@ import org.koin.androidx.compose.koinViewModel
  */
 @Composable
 fun LiveScreen(
+    onChannelClick: (Long) -> Unit,
     modifier: Modifier = Modifier,
     viewModel: LiveViewModel = koinViewModel(),
 ) {
@@ -84,7 +86,7 @@ fun LiveScreen(
 
         LazyColumn(modifier = Modifier.fillMaxSize()) {
             items(items = state.channels, key = { it.id }) { channel ->
-                ChannelRow(channel)
+                ChannelRow(channel = channel, onClick = { onChannelClick(channel.id) })
                 HorizontalDivider()
             }
         }
@@ -148,10 +150,11 @@ private fun Category.displayTitle(): String =
     if (title == Category.UNGROUPED_TITLE) stringResource(R.string.live_category_ungrouped) else title
 
 @Composable
-private fun ChannelRow(channel: Channel) {
+private fun ChannelRow(channel: Channel, onClick: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .clickable(onClick = onClick)
             .padding(horizontal = 16.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {

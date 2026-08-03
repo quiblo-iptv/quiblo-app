@@ -7,4 +7,25 @@
 <resources>
     <string name="feature_player_title">Player</string>
     <string name="feature_player_empty">Playback opens here.</string>
+
+    <string name="player_play">Play</string>
+    <string name="player_pause">Pause</string>
+    <string name="player_back">Back</string>
+    <string name="player_retry">Try again</string>
+    <string name="player_tracks">Audio and subtitles</string>
+    <string name="player_audio">Audio</string>
+    <string name="player_subtitles">Subtitles</string>
+    <string name="player_subtitles_off">Off</string>
+    <string name="player_close">Close</string>
+    <string name="player_live">LIVE</string>
+    <string name="player_reconnecting">Reconnecting… (attempt %1$d of 3)</string>
+
+    <!-- AC-PLAY-05: a specific message, never a bare "Error" or a stack trace. -->
+    <string name="player_error_network">Lost the connection to this stream.</string>
+    <string name="player_error_unreachable">Could not reach this stream.</string>
+    <string name="player_error_timeout">This stream did not respond in time.</string>
+    <string name="player_error_format">This stream is in a format Vibrato cannot play.</string>
+    <string name="player_error_drm">This stream is copy-protected. Vibrato does not support DRM.</string>
+    <string name="player_error_gone">This stream is no longer available at that address.</string>
+    <string name="player_error_unknown">This stream could not be played.</string>
 </resources>

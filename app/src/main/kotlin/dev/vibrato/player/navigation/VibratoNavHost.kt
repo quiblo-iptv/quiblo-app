@@ -23,6 +23,7 @@ import androidx.compose.ui.Modifier
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
+import androidx.navigation.toRoute
 import dev.vibrato.feature.favorites.FavoritesScreen
 import dev.vibrato.feature.live.LiveScreen
 import dev.vibrato.feature.player.PlayerScreen
@@ -47,12 +48,17 @@ fun VibratoNavHost(
         startDestination = LiveRoute,
         modifier = modifier,
     ) {
-        composable<LiveRoute> { LiveScreen() }
+        composable<LiveRoute> { LiveScreen(onChannelClick = { navController.navigate(PlayerRoute(it)) }) }
         composable<VodRoute> { VodScreen() }
         composable<SeriesRoute> { SeriesScreen() }
         composable<FavoritesRoute> { FavoritesScreen() }
         composable<SourcesRoute> { SourcesScreen() }
         composable<SettingsRoute> { SettingsScreen() }
-        composable<PlayerRoute> { PlayerScreen() }
+        composable<PlayerRoute> { entry ->
+            PlayerScreen(
+                channelId = entry.toRoute<PlayerRoute>().channelId,
+                onBack = { navController.popBackStack() },
+            )
+        }
     }
 }

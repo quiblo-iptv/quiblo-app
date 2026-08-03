@@ -21,8 +21,10 @@ package dev.vibrato.player.di
 import dev.vibrato.core.data.di.dataModule
 import dev.vibrato.core.database.di.databaseModule
 import dev.vibrato.core.datastore.di.datastoreModule
+import dev.vibrato.core.media.di.mediaModule
 import dev.vibrato.core.network.di.networkModule
 import dev.vibrato.feature.live.di.liveModule
+import dev.vibrato.feature.player.di.playerModule
 import dev.vibrato.feature.sources.di.sourcesModule
 import org.koin.core.module.Module
 
@@ -36,7 +38,9 @@ val appModules: List<Module> = listOf(
     databaseModule,
     datastoreModule,
     networkModule,
+    mediaModule,
     dataModule,
     sourcesModule,
     liveModule,
+    playerModule,
 )

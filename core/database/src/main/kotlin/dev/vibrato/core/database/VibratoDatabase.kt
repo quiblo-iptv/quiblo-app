@@ -23,9 +23,11 @@ import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
 import dev.vibrato.core.database.dao.ChannelDao
+import dev.vibrato.core.database.dao.ResumePositionDao
 import dev.vibrato.core.database.dao.SourceDao
 import dev.vibrato.core.database.entity.ChannelEntity
 import dev.vibrato.core.database.entity.FavoriteEntity
+import dev.vibrato.core.database.entity.ResumePositionEntity
 import dev.vibrato.core.database.entity.SourceEntity
 
 /**
@@ -33,8 +35,13 @@ import dev.vibrato.core.database.entity.SourceEntity
  * (docs/FREEZE.md §2).
  */
 @Database(
-    entities = [SourceEntity::class, ChannelEntity::class, FavoriteEntity::class],
-    version = 1,
+    entities = [
+        SourceEntity::class,
+        ChannelEntity::class,
+        FavoriteEntity::class,
+        ResumePositionEntity::class,
+    ],
+    version = 2,
     exportSchema = true,
 )
 abstract class VibratoDatabase : RoomDatabase() {
@@ -42,6 +49,8 @@ abstract class VibratoDatabase : RoomDatabase() {
     abstract fun sourceDao(): SourceDao
 
     abstract fun channelDao(): ChannelDao
+
+    abstract fun resumePositionDao(): ResumePositionDao
 
     companion object {
         const val NAME = "vibrato.db"
@@ -56,6 +65,7 @@ abstract class VibratoDatabase : RoomDatabase() {
          */
         fun create(context: Context): VibratoDatabase =
             Room.databaseBuilder(context, VibratoDatabase::class.java, NAME)
+                .addMigrations(MIGRATION_1_2)
                 .build()
     }
 }

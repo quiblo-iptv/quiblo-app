@@ -83,7 +83,7 @@ fun CategoryPickerSheet(
                 .padding(bottom = 24.dp),
         ) {
             Text(
-                text = "Select Category",
+                text = stringResource(R.string.browse_select_category),
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Bold,
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
@@ -94,12 +94,15 @@ fun CategoryPickerSheet(
                     value = filterQuery,
                     onValueChange = { filterQuery = it },
                     singleLine = true,
-                    placeholder = { Text("Filter categories...") },
+                    placeholder = { Text(stringResource(R.string.browse_filter_categories)) },
                     leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
                     trailingIcon = {
                         if (filterQuery.isNotEmpty()) {
                             IconButton(onClick = { filterQuery = "" }) {
-                                Icon(Icons.Filled.Clear, contentDescription = "Clear filter")
+                                Icon(
+                                    Icons.Filled.Clear,
+                                    contentDescription = stringResource(R.string.browse_clear_filter),
+                                )
                             }
                         }
                     },

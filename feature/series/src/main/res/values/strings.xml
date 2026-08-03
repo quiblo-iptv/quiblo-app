@@ -20,4 +20,10 @@
     <string name="series_error_http_status">Your provider responded with an error (%1$d).</string>
     <string name="series_error_unknown">Could not load this series. Please try again.</string>
     <string name="series_error_retry">Try again</string>
+
+    <string name="series_back">Back</string>
+    <string name="series_no_episodes">No episodes available</string>
+    <string name="series_play">Play</string>
+    <string name="series_episode_label">Episode %1$d: %2$s</string>
+    <string name="series_season_label">Season %1$d</string>
 </resources>

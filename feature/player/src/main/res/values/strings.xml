@@ -28,4 +28,11 @@
     <string name="player_error_drm">This stream is copy-protected. Vibrato does not support DRM.</string>
     <string name="player_error_gone">This stream is no longer available at that address.</string>
     <string name="player_error_unknown">This stream could not be played.</string>
+
+    <string name="player_start_over">Start over</string>
+    <string name="player_swap_lock">Move lock button to the other side</string>
+    <string name="player_lock">Lock screen</string>
+    <string name="player_unlock">Unlock screen</string>
+    <string name="player_skip_back">Skip back %1$d seconds</string>
+    <string name="player_skip_forward">Skip forward %1$d seconds</string>
 </resources>

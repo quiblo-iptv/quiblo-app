@@ -73,6 +73,10 @@ import org.koin.androidx.compose.koinViewModel
 
 private const val CONTROLS_TIMEOUT_MILLIS = 3_000L
 
+/** How far the skip buttons jump. One constant so the label and the seek cannot disagree. */
+private const val SKIP_SECONDS = 10
+private const val SKIP_MILLIS = SKIP_SECONDS * 1_000L
+
 /**
  * Full-screen playback.
  *
@@ -243,7 +247,9 @@ private fun PlayerControls(
         ) {
             Icon(
                 imageVector = if (isLocked) Icons.Filled.Lock else Icons.Filled.LockOpen,
-                contentDescription = if (isLocked) "Unlock screen" else "Lock screen",
+                contentDescription = stringResource(
+                    if (isLocked) R.string.player_unlock else R.string.player_lock,
+                ),
                 tint = Color.White,
                 modifier = Modifier.size(32.dp),
             )
@@ -278,7 +284,7 @@ private fun PlayerControls(
                     IconButton(onClick = { onSeek(0L) }) {
                         Icon(
                             imageVector = Icons.Filled.Replay,
-                            contentDescription = "Start over",
+                            contentDescription = stringResource(R.string.player_start_over),
                             tint = Color.White,
                         )
                     }
@@ -287,7 +293,7 @@ private fun PlayerControls(
                     IconButton(onClick = { isLockTopLeft = !isLockTopLeft }) {
                         Icon(
                             imageVector = Icons.Filled.SwapHoriz,
-                            contentDescription = "Swap lock icon position",
+                            contentDescription = stringResource(R.string.player_swap_lock),
                             tint = Color.White,
                         )
                     }
@@ -308,10 +314,10 @@ private fun PlayerControls(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(24.dp),
                     ) {
-                        IconButton(onClick = { onSeek((state.positionMillis - 10_000L).coerceAtLeast(0L)) }) {
+                        IconButton(onClick = { onSeek((state.positionMillis - SKIP_MILLIS).coerceAtLeast(0L)) }) {
                             Icon(
                                 imageVector = Icons.Filled.Replay10,
-                                contentDescription = "Skip Backward 10s",
+                                contentDescription = stringResource(R.string.player_skip_back, SKIP_SECONDS),
                                 tint = Color.White,
                                 modifier = Modifier.size(40.dp),
                             )
@@ -328,10 +334,10 @@ private fun PlayerControls(
                             )
                         }
 
-                        IconButton(onClick = { onSeek(state.positionMillis + 10_000L) }) {
+                        IconButton(onClick = { onSeek(state.positionMillis + SKIP_MILLIS) }) {
                             Icon(
                                 imageVector = Icons.Filled.Forward10,
-                                contentDescription = "Skip Forward 10s",
+                                contentDescription = stringResource(R.string.player_skip_forward, SKIP_SECONDS),
                                 tint = Color.White,
                                 modifier = Modifier.size(40.dp),
                             )

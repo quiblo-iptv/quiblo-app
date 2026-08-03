@@ -98,7 +98,7 @@ fun SeriesDetailScreen(
                     IconButton(onClick = onBack) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Back",
+                            contentDescription = stringResource(R.string.series_back),
                         )
                     }
                 },
@@ -180,8 +180,9 @@ private fun SeriesDetailContent(
     onEpisodeClick: (Episode, Channel) -> Unit,
 ) {
     var selectedSeasonIndex by remember { mutableIntStateOf(0) }
+    val defaultSeasonName = stringResource(R.string.series_season_label, 1)
     val seasons = details.seasons.ifEmpty {
-        listOf(Season(seasonNumber = 1, name = "Season 1", episodes = emptyList()))
+        listOf(Season(seasonNumber = 1, name = defaultSeasonName, episodes = emptyList()))
     }
     val currentSeason = seasons.getOrNull(selectedSeasonIndex) ?: seasons.first()
 
@@ -231,7 +232,7 @@ private fun SeriesDetailContent(
                     contentAlignment = Alignment.Center,
                 ) {
                     Text(
-                        text = "No episodes available",
+                        text = stringResource(R.string.series_no_episodes),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -338,7 +339,7 @@ private fun EpisodeItem(episode: Episode, onClick: () -> Unit) {
             ) {
                 Icon(
                     imageVector = Icons.Filled.PlayArrow,
-                    contentDescription = "Play",
+                    contentDescription = stringResource(R.string.series_play),
                     tint = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.size(28.dp),
                 )
@@ -350,7 +351,11 @@ private fun EpisodeItem(episode: Episode, onClick: () -> Unit) {
                     .padding(start = 12.dp),
             ) {
                 Text(
-                    text = "Episode ${episode.episodeNumber}: ${episode.title}",
+                    text = stringResource(
+                        R.string.series_episode_label,
+                        episode.episodeNumber,
+                        episode.title,
+                    ),
                     style = MaterialTheme.typography.bodyLarge,
                     fontWeight = FontWeight.Medium,
                     maxLines = 1,

@@ -45,6 +45,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ViewList
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Favorite
@@ -52,7 +53,6 @@ import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.LiveTv
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.ViewList
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FilterChip
@@ -209,7 +209,10 @@ private fun ExpandableSearchHeader(query: String, onQueryChange: (String) -> Uni
                     IconButton(onClick = {
                         if (query.isEmpty()) isExpanded = false else onQueryChange("")
                     }) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Close search")
+                        Icon(
+                            Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = stringResource(R.string.browse_close_search),
+                        )
                     }
                 },
                 trailingIcon = {
@@ -267,14 +270,14 @@ private fun CategoryPillHeader(
         FilterChip(
             selected = selectedCategory != null,
             onClick = onClick,
-            label = { Text(text = "Category: $displayLabel") },
+            label = { Text(text = stringResource(R.string.browse_category_label, displayLabel)) },
             trailingIcon = { Icon(Icons.Filled.ArrowDropDown, contentDescription = null) },
         )
 
         IconButton(onClick = onToggleGridView) {
             Icon(
-                imageVector = if (isGridView) Icons.Filled.ViewList else Icons.Filled.GridView,
-                contentDescription = "Toggle Grid/List view",
+                imageVector = if (isGridView) Icons.AutoMirrored.Filled.ViewList else Icons.Filled.GridView,
+                contentDescription = stringResource(R.string.browse_toggle_view),
             )
         }
     }
@@ -309,7 +312,7 @@ private fun ChannelGridCard(
                 IconButton(onClick = onToggleFavorite, modifier = Modifier.size(24.dp)) {
                     Icon(
                         imageVector = if (channel.isFavorite) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,
-                        contentDescription = "Favorite",
+                        contentDescription = stringResource(R.string.browse_favorite),
                         tint = if (channel.isFavorite) {
                             MaterialTheme.colorScheme.primary
                         } else {

@@ -20,4 +20,12 @@
     <string name="browse_no_guide">No guide information for this channel.</string>
     <string name="browse_guide_time">%1$s – %2$s</string>
     <string name="browse_close">Close</string>
+
+    <string name="browse_close_search">Close search</string>
+    <string name="browse_category_label">Category: %1$s</string>
+    <string name="browse_toggle_view">Toggle grid or list view</string>
+    <string name="browse_favorite">Favourite</string>
+    <string name="browse_select_category">Select category</string>
+    <string name="browse_clear_filter">Clear filter</string>
+    <string name="browse_filter_categories">Filter categories…</string>
 </resources>

@@ -77,6 +77,7 @@ class ChannelRepository(
             groupTitle = groupTitle,
             query = query.trim(),
             favoritesOnly = if (favoritesOnly) 1 else 0,
+            sortByName = if (kind.sortsAlphabetically) 1 else 0,
         ).map { rows -> rows.map { it.channel.toDomain(isFavorite = it.isFavorite) } }
 
     /** Favourites across every content type (AC-FAV-01). */

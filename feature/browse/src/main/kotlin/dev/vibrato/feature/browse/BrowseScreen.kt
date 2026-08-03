@@ -51,6 +51,7 @@ import androidx.compose.material.icons.filled.LiveTv
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -113,6 +114,15 @@ fun BrowseScreen(
     // Grid by default: artwork is the point of a catalogue, and the list view remains one
     // tap away for anyone who wants density instead.
     var isGridView by remember { mutableStateOf(true) }
+
+    // Loading is checked before "no source": they used to be the same branch, so opening a
+    // screen with a perfectly good playlist told the user to go and add one.
+    if (state.isLoading) {
+        Box(modifier = modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            CircularProgressIndicator()
+        }
+        return
+    }
 
     if (!state.hasSource) {
         CentredMessage(stringResource(R.string.browse_no_source), modifier)

@@ -38,6 +38,7 @@ import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Semaphore
@@ -46,6 +47,14 @@ import java.util.concurrent.ConcurrentHashMap
 
 /** What a browse screen renders. */
 data class BrowseUiState(
+    /**
+     * True until the first real answer arrives.
+     *
+     * Distinct from "no source" on purpose. The two were conflated, so every browse screen
+     * opened by telling the user to add a playlist — including when they had one and it was
+     * still loading. Advice that is wrong for the first second is worse than a spinner.
+     */
+    val isLoading: Boolean = true,
     val hasSource: Boolean = false,
     val categories: List<Category> = emptyList(),
     val selectedCategory: String? = null,
@@ -87,13 +96,32 @@ class BrowseViewModel(
     val currentQuery: StateFlow<String> = query.asStateFlow()
 
     /** M3 browses the first configured source. Multi-source selection is post-v1. */
-    private val activeSourceId: StateFlow<Long?> = sourceRepository.observeSources()
-        .map { sources -> sources.firstOrNull()?.id }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS), null)
+    /**
+     * Which source is active, wrapped so "not asked yet" is not indistinguishable from
+     * "there are none". A nullable id cannot express the difference, and that is exactly
+     * the distinction the empty state depends on.
+     */
+    private sealed interface ActiveSource {
+        data object Unknown : ActiveSource
+        data class Resolved(val id: Long?) : ActiveSource
+    }
+
+    private val activeSourceId: StateFlow<ActiveSource> = sourceRepository.observeSources()
+        .map { sources -> ActiveSource.Resolved(sources.firstOrNull()?.id) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS), ActiveSource.Unknown)
 
     val uiState: StateFlow<BrowseUiState> = activeSourceId
-        .flatMapLatest { sourceId ->
-            if (sourceId == null) flowOf(BrowseUiState(hasSource = false)) else feedFor(sourceId)
+        .flatMapLatest { active ->
+            val sourceId = (active as? ActiveSource.Resolved)?.id
+            when {
+                active is ActiveSource.Unknown -> flowOf(BrowseUiState(isLoading = true))
+                sourceId == null -> flowOf(BrowseUiState(isLoading = false, hasSource = false))
+                // Room answers quickly but not instantly, and a 20k list is not instant to
+                // map. Show the spinner until the first page of rows actually exists.
+                else -> feedFor(sourceId).onStart {
+                    emit(BrowseUiState(isLoading = true, hasSource = true))
+                }
+            }
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS), BrowseUiState())
 
@@ -113,6 +141,7 @@ class BrowseViewModel(
         }
         combine(items, guideRepository.observeNowPlaying(sourceId)) { list, guide ->
             BrowseUiState(
+                isLoading = false,
                 hasSource = true,
                 categories = if (favoritesOnly) emptyList() else categories,
                 selectedCategory = selected,

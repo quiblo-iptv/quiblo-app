@@ -11,16 +11,19 @@ on a physical Android 11 device and a physical Android 14 device, with both an M
 Xtream source configured, on a fresh install and on an upgrade.
 
 This file records what has been verified so far, how, and what is left. It is the gate on
-tagging v1.0.0 — do not tag while anything in §5 or §6 is unchecked.
+tagging v1.0.0 — do not tag while anything in §5, §6 or §7 is unchecked.
 
-**Last updated:** 2026-08-03, at commit `7dd52c2`.
+**Last updated:** 2026-08-04, at commit `ebfa928`.
 
-> **The recorded results predate the player and browse work that followed.** Everything in
-> §2 and §3 was measured at `3494da5`. Since then the player gained aspect modes, gesture
-> controls and full-screen; browse moved to poster grids and grid-by-default; and movies
-> and series gained detail screens. Cold start and the parser results are unaffected by
-> any of that, but **AC-PLAY-\*, AC-PL-05 and the scroll-jank baseline want re-running**,
-> and the movie screen adds a network call the sweep never exercised (see §6).
+> **The recorded results predate almost everything built since.** Everything in §2 and §3
+> was measured at `3494da5`. Since then the player gained aspect modes, gesture controls
+> and full-screen; browse moved to poster grids and grid-by-default; movies and series
+> gained detail screens; the project was renamed; DASH and optional TMDB metadata arrived;
+> the theme became settable; and **the whole `:app-tv` television frontend was built**
+> (T0–T4, `a4e9845`…`e317475`). Cold start and the parser results are unaffected by any of
+> that, but **AC-PLAY-\*, AC-PL-05 and the scroll-jank baseline want re-running**, and
+> AC-NFR-02 wants re-measuring against the signed artefacts rather than the 4.87 MB figure
+> from before the rename.
 
 **Devices used so far:**
 
@@ -34,9 +37,11 @@ tagging v1.0.0 — do not tag while anything in §5 or §6 is unchecked.
 rows are still open.
 
 **Since `FREEZE.md` Amendment 1 (2026-08-03) the television is part of v1.0**, so this sweep
-now has a third target: the Haier MatrixTV EE (Google TV, Android 14) recorded in
-`PLAN-TV.md` §0. None of the AC-TV-\* criteria in `PLAN-TV.md` §6 have been run, because the
-TV app does not exist yet. v1.0.0 cannot be tagged on a green phone sweep alone.
+has a third target: the Haier MatrixTV EE (Google TV, Android 14) recorded in `PLAN-TV.md`
+§0. The TV app now exists — T0–T4 are built and were driven on that device during
+development — but **none of AC-TV-01…08 have been run as a sweep**, which is a different
+thing from having watched a feature work while writing it. They are listed in §7. v1.0.0
+cannot be tagged on a green phone sweep alone.
 
 ---
 
@@ -47,12 +52,12 @@ by hand on the devices.
 
 | ID | Result | Evidence |
 |---|---|---|
-| AC-NFR-02 | **Pass** — 4.87 MB against a 25 MB budget | `assembleRelease`; the release workflow also fails above the budget |
-| AC-NFR-05 | **Pass** | `./gradlew build detektAll coverageAll lint` green, 2026-08-03 |
+| AC-NFR-02 | **Pass** — 5.47 MB phone, 4.79 MB TV, against a 25 MB budget | `:app:assembleRelease` and `:app-tv:assembleRelease` at `ebfa928`, unsigned. The release workflow builds and budget-checks both. The TV APK being *smaller* despite depending on every `:feature:*` module confirms R8 strips the phone UI it never references |
+| AC-NFR-05 | **Pass** | `./gradlew build detektAll` green at `ebfa928`, 2026-08-04, with `:app-tv` in the build |
 | AC-NFR-06 | **Pass** | `enforceNoCompose()` in `quiblo.jvm.library`; no `:core:*`/`:source:*` build file references Compose or a feature module |
 | AC-NFR-07 | **Pass** — `:source:m3u` 98.0%, `:source:xtream` 83.9% | `./gradlew coverageAll`, threshold 80 |
 | AC-LEGAL-01 | **Pass** | `LICENSE` is the unmodified GPLv3 text |
-| AC-LEGAL-02 | **Pass** — 81/81 `.kt` files | header check across `app core source feature build-logic` |
+| AC-LEGAL-02 | **Pass** — 117/117 tracked `.kt` files, `:app-tv` included | Now a CI step over `git ls-files '*.kt'`, rather than the by-hand check it was when this row first claimed to be mechanical |
 | AC-LEGAL-04 | **Pass** | CI greps for provider URLs and the forbidden brand string; all test payloads are synthetic |
 | AC-LEGAL-05 | **Pass** | README "Quiblo supplies no content" |
 
@@ -184,8 +189,8 @@ from the code which actions cost anything.
 | Add a source, or the manual refresh button | auth + 6 catalogue calls |
 | Anything else on a browse screen | none — favouriting, scrolling and filtering are local |
 | A live row scrolling into view, in list mode | one `get_short_epg`, once ever per channel, rate-limited and skipped when cached |
-| Opening a series | one `get_series_info`, **uncached** — re-opening the same series fetches again |
-| Opening a movie | one `get_vod_info`, **uncached**, added at `a5de4ee` |
+| Opening a series | one `get_series_info`, cached for the session since `ebfa928` — re-opening the same series costs nothing |
+| Opening a movie | one `get_vod_info`, cached for the session since `ebfa928` |
 
 Nothing refreshes automatically: not on launch, not on tab switch, not on scroll.
 
@@ -194,8 +199,10 @@ call paths. Before `a5de4ee` that backoff existed only around the guide, so a bl
 account kept being asked by the catalogue, series and film paths — which is how a short
 block becomes a lasting one.
 
-**The obvious remaining reduction is caching series and film details for the session**, so
-re-opening the same item costs nothing. Not done yet.
+~~**The obvious remaining reduction is caching series and film details for the session.**~~
+**Done at `ebfa928`**, in memory rather than in the database, and failures are not cached
+at all so a panel coming back out of a block recovers within the session. There is now no
+uncached per-open call to the user's panel.
 
 **AC-NFR-04 does not pass as written.** The criterion says "Permissions requested: INTERNET
 and network state only." The merged release manifest contains four:
@@ -224,3 +231,44 @@ options:
 
 Option 1 is the recommendation. Either way it is a scope decision, and `FREEZE.md` requires
 scope decisions to be dated amendments rather than quiet edits.
+
+---
+
+## 7. Television — not yet swept
+
+The third DoD target: the Haier MatrixTV EE, Google TV, Android 14 (API 34), `armeabi-v7a`,
+1.84 GB RAM, rendering at 1920x1080 @320dpi. `PLAN-TV.md` §0 has the full measurement.
+
+Run the whole of this section **with the remote as the only input device.** Unplug or
+unpair any mouse first — a mouse silently satisfies criteria a D-pad would fail, which is
+the exact defect AC-TV-01 exists to catch.
+
+Install with `adb install -r app-tv/build/outputs/apk/release/…apk` over a pairing brought
+up from the TV's Wireless debugging screen (`adb pair <ip>:<port> <code>`; pairing alone is
+enough, and a subsequent `adb connect <ip>:5555` is refused).
+
+| ID | State | What has to be shown |
+|---|---|---|
+| AC-TV-01 | Not run | Every control on every screen — top bar, rows, detail screens, player, sources, settings — reached and operated with the D-pad |
+| AC-TV-02 | Not run | No screen and no transition leaves nothing focused, including after back, after a list empties, and after a source is deleted |
+| AC-TV-03 | Not run | Back from each screen lands on the category bar; back from the bar exits |
+| AC-TV-04 | Not run | Installs, shows a banner, and appears in the Google TV launcher's app row |
+| AC-TV-05 | Not run | A held D-pad traversal of the 20k list issues guide requests only for rows focus settled on. Count them at the source, not by eye |
+| AC-TV-06 | Not run | D-pad down shows controls, back hides them, playback never pauses for either |
+| AC-TV-07 | Not run | A source restored from a backup file with no typing beyond a password |
+| AC-TV-08 | Not run | Cold start to interactive under 3s, measured the same way as AC-NFR-01 — six runs after `force-stop`, median reported |
+
+The phone criteria apply to the TV build too, and none have been run on it. The ones most
+likely to behave differently, in order: **AC-PL-05** (the 20k list on 1.84 GB of RAM and a
+32-bit ABI — carry over no figure from §2), **AC-PLAY-01…10** (a different player surface
+and a different input device), **AC-DATA-01/02** (SAF on a television), and **AC-NFR-08**
+(the TV screens have their own strings).
+
+Two criteria do not transfer and should be recorded as not applicable rather than failed:
+**AC-PLAY-07** (rotation — the activity is locked to landscape) and **AC-PLAY-10** as
+written, since it specifies a tap; AC-TV-06 is its television form.
+
+The AC-NFR-04 finding in §6 applies unchanged to `:app-tv` — same transitive permissions,
+same resolution — and its merged manifest additionally declares the two `uses-feature`
+entries that make it a TV app. Those are features, not permissions, and are outside what
+the criterion covers.

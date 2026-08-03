@@ -62,6 +62,24 @@ jobs:
           fi
           echo "No provider URLs or forbidden strings found."
 
+      # AC-LEGAL-02. The sweep listed this as "re-checked on every CI run" while it was
+      # in fact only ever run by hand, which is how a new module joins without headers.
+      - name: GPLv3 header on every Kotlin source file
+        run: |
+          set -euo pipefail
+          MISSING=0
+          while IFS= read -r f; do
+            if ! head -n 20 "$f" | grep -q 'GNU General Public License'; then
+              echo "::error file=$f::Missing the GPLv3 header. See AC-LEGAL-02."
+              MISSING=$((MISSING + 1))
+            fi
+          done < <(git ls-files '*.kt')
+          if [ "$MISSING" -gt 0 ]; then
+            echo "::error::$MISSING Kotlin file(s) have no GPLv3 header."
+            exit 1
+          fi
+          echo "All tracked Kotlin files carry the GPLv3 header."
+
       - name: Assemble
         run: ./gradlew assemble --stacktrace
 

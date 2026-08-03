@@ -241,20 +241,11 @@ Each exits on something demonstrable on a real device, not on code existing.
   v1.0 to ship first — `docs/ACCEPTANCE-SWEEP.md` gains a TV column and the release waits
   for both.
 
-## 6. Acceptance criteria to add
+## 6. Acceptance criteria
 
-Written in the style of [`ACCEPTANCE.md`](ACCEPTANCE.md), which the sweep would extend:
-
-| ID | Criterion |
-|---|---|
-| AC-TV-01 | Every interactive element is reachable and operable with a D-pad alone. No control requires touch. |
-| AC-TV-02 | Focus is visible at all times. At no point is there no focused element on screen. |
-| AC-TV-03 | Back from any screen returns to the category bar; back from the bar exits the app. Back never strands the user. |
-| AC-TV-04 | The app is installable from the TV launcher, carries a banner, and appears in the launcher's app row. |
-| AC-TV-05 | A held D-pad scroll through 20,000 live channels issues guide requests only for rows focus settles on. |
-| AC-TV-06 | Playback controls appear on D-pad down and hide on back, without pausing. |
-| AC-TV-07 | Text entry is never required to restore a configuration that exists as a backup file. |
-| AC-TV-08 | Cold start to interactive under 3s on a low-end Android TV box — a looser bound than AC-NFR-01, because the hardware is weaker. |
+~~To add.~~ **Added.** AC-TV-01…08 now live in [`ACCEPTANCE.md`](ACCEPTANCE.md) under
+`AC-TV — Television`, and are tracked in the sweep like every other criterion. They are not
+repeated here: two copies of an acceptance criterion is one copy that goes stale.
 
 ## 7. Risks
 

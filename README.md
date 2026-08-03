@@ -80,26 +80,36 @@ Studio is not required.
 ```bash
 git clone https://github.com/quiblo-tv/quiblo.git
 cd quiblo
-./gradlew build          # compile, test, detekt, lint
-./gradlew :app:installDebug
+./gradlew build             # compile, test, detekt, lint
+./gradlew :app:installDebug     # phone and tablet
+./gradlew :app-tv:installDebug  # Android TV / Google TV
 ```
 
 Minimum supported device: **Android 11 (API 30)**.
+
+**There are two apps, and a release ships both APKs.** `:app` is the phone and tablet build
+(`dev.quiblo.player`); `:app-tv` is the television build (`dev.quiblo.tv`), with a D-pad
+interface and a leanback launcher entry. They are separate application ids, so both can be
+installed at once, and they share every layer below the UI. The phone APK will install on a
+television and then never appear in its launcher — take the TV one there.
 
 ## Architecture
 
 Multi-module Kotlin, Jetpack Compose (Material 3), Media3/ExoPlayer, Room, Ktor, Koin.
 
 ```
-:app                 assembly, navigation graph, DI wiring, theme
+:app                 phone assembly, navigation graph, DI wiring, theme
+:app-tv              television assembly and its D-pad UI
 :core:*              model, common, database, datastore, network, media, data
-:source:*            api, m3u, xtream — the MediaSource abstraction and its implementations
-:feature:*           sources, live, vod, series, player, favorites, settings
+:source:*            api, m3u, xtream, tmdb — the MediaSource abstraction and its implementations
+:feature:*           browse, sources, live, vod, series, player, favorites, settings
 ```
 
 `:core:*` and `:source:*` contain no UI code and never import Compose — enforced by the
-build, not by convention, so an Android TV or desktop frontend can consume them unchanged.
-See [`docs/PLAN.md`](docs/PLAN.md) §2.
+build, not by convention. That is what let the television frontend be a presentation layer
+only: `:app-tv` reuses the same ViewModels rather than forking them, so a behaviour change
+lands in one place and reaches both apps. See [`docs/PLAN.md`](docs/PLAN.md) §2 and
+[`docs/PLAN-TV.md`](docs/PLAN-TV.md) §2.
 
 ## Documentation
 
@@ -108,6 +118,8 @@ See [`docs/PLAN.md`](docs/PLAN.md) §2.
 | [`docs/FREEZE.md`](docs/FREEZE.md) | The canonical, frozen scope for v1.0. Read this first. |
 | [`docs/ACCEPTANCE.md`](docs/ACCEPTANCE.md) | Definition of done, as numbered binary criteria |
 | [`docs/PLAN.md`](docs/PLAN.md) | Stack, module structure, milestones |
+| [`docs/PLAN-TV.md`](docs/PLAN-TV.md) | The Android TV / Google TV frontend: target hardware, design, milestones |
+| [`docs/ACCEPTANCE-SWEEP.md`](docs/ACCEPTANCE-SWEEP.md) | What has actually been verified on hardware, and what is left |
 | [`docs/RELEASING.md`](docs/RELEASING.md) | Signing key handling and the release process |
 | [`CONTRIBUTING.md`](CONTRIBUTING.md) | How to contribute, and what will get you banned |
 | [`SECURITY.md`](SECURITY.md) | Private vulnerability disclosure |

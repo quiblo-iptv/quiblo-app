@@ -67,39 +67,52 @@ jobs:
           QUIBLO_KEYSTORE_PASSWORD: ${{ secrets.QUIBLO_KEYSTORE_PASSWORD }}
           QUIBLO_KEY_ALIAS: ${{ secrets.QUIBLO_KEY_ALIAS }}
           QUIBLO_KEY_PASSWORD: ${{ secrets.QUIBLO_KEY_PASSWORD }}
-        run: ./gradlew :app:assembleRelease
+        # Two APKs, two application ids, one key. They are separate installs — a user may
+        # have both — so the release ships both or it ships neither.
+        run: ./gradlew :app:assembleRelease :app-tv:assembleRelease
 
       - name: Remove keystore
         if: always()
         run: rm -f "$RUNNER_TEMP/quiblo-release.jks"
 
       # AC-NFR-02. Enforced rather than reported: a release that quietly grew past the
-      # budget is exactly the kind of regression nobody notices until it ships.
-      - name: Check APK size against the 25 MB budget
+      # budget is exactly the kind of regression nobody notices until it ships. The TV
+      # APK is held to the same budget — it carries no more than the phone does.
+      - name: Check APK sizes against the 25 MB budget
         run: |
           set -euo pipefail
-          APK=$(find app/build/outputs/apk/release -name '*.apk' ! -name '*unsigned*' | head -n 1)
-          if [ -z "$APK" ]; then
-            echo "::error::No signed APK was produced."
-            exit 1
-          fi
-          SIZE=$(stat -c%s "$APK")
           LIMIT=$((25 * 1000 * 1000))
-          echo "APK: $APK"
-          echo "Size: $((SIZE / 1000000)) MB (limit $((LIMIT / 1000000)) MB)"
-          if [ "$SIZE" -gt "$LIMIT" ]; then
-            echo "::error::APK is over the AC-NFR-02 budget."
-            exit 1
-          fi
+          for DIR in app app-tv; do
+            APK=$(find "$DIR/build/outputs/apk/release" -name '*.apk' ! -name '*unsigned*' | head -n 1)
+            if [ -z "$APK" ]; then
+              echo "::error::No signed APK was produced for :$DIR."
+              exit 1
+            fi
+            SIZE=$(stat -c%s "$APK")
+            echo "APK: $APK"
+            echo "Size: $((SIZE / 1000000)) MB (limit $((LIMIT / 1000000)) MB)"
+            if [ "$SIZE" -gt "$LIMIT" ]; then
+              echo "::error::$APK is over the AC-NFR-02 budget."
+              exit 1
+            fi
+          done
 
-      - name: Checksums
+      # Named apart so the two are never confused on the releases page: installing the
+      # phone APK on a television gets you an app the launcher will not show.
+      - name: Name and checksum
         run: |
           set -euo pipefail
-          cd app/build/outputs/apk/release
-          APK=$(find . -name '*.apk' ! -name '*unsigned*' | head -n 1)
           TAG="${{ github.event.inputs.tag || github.ref_name }}"
-          cp "$APK" "quiblo-${TAG}.apk"
-          sha256sum "quiblo-${TAG}.apk" > "quiblo-${TAG}.apk.sha256"
+          for DIR in app app-tv; do
+            case "$DIR" in
+              app) NAME="quiblo-${TAG}.apk" ;;
+              app-tv) NAME="quiblo-tv-${TAG}.apk" ;;
+            esac
+            cd "$GITHUB_WORKSPACE/$DIR/build/outputs/apk/release"
+            APK=$(find . -name '*.apk' ! -name '*unsigned*' ! -name 'quiblo*' | head -n 1)
+            cp "$APK" "$NAME"
+            sha256sum "$NAME" > "${NAME}.sha256"
+          done
 
       - name: Publish release
         uses: softprops/action-gh-release@v2
@@ -110,3 +123,5 @@ jobs:
           files: |
             app/build/outputs/apk/release/quiblo-*.apk
             app/build/outputs/apk/release/quiblo-*.apk.sha256
+            app-tv/build/outputs/apk/release/quiblo-tv-*.apk
+            app-tv/build/outputs/apk/release/quiblo-tv-*.apk.sha256

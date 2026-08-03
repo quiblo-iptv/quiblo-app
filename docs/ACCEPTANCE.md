@@ -87,6 +87,23 @@ IDs are stable — reference them in commits and issues (`fix: AC-PL-04 crash on
 | AC-NFR-08 | Full RTL layout support and no hardcoded user-facing strings outside `strings.xml`. |
 | AC-NFR-09 | Dark theme and light theme both render correctly; the app respects the system setting. |
 
+## AC-TV — Television
+
+Added by `FREEZE.md` Amendment 1 (2026-08-03), which brought Android TV and Google TV into
+v1. These apply to the `:app-tv` build only; the phone criteria above apply to it too,
+except where a criterion names an input method the television does not have.
+
+| ID | Criterion |
+|---|---|
+| AC-TV-01 | Every interactive element is reachable and operable with a D-pad alone. No control requires touch. |
+| AC-TV-02 | Focus is visible at all times. At no point is there no focused element on screen. |
+| AC-TV-03 | Back from any screen returns to the category bar; back from the bar exits the app. Back never strands the user. |
+| AC-TV-04 | The app is installable from the TV launcher, carries a banner, and appears in the launcher's app row. |
+| AC-TV-05 | A held D-pad scroll through 20,000 live channels issues guide requests only for rows focus settles on. |
+| AC-TV-06 | Playback controls appear on D-pad down and hide on back, without pausing. |
+| AC-TV-07 | Text entry is never required to restore a configuration that exists as a backup file. |
+| AC-TV-08 | Cold start to interactive under 3s on a low-end Android TV box — a looser bound than AC-NFR-01, because the hardware is weaker. |
+
 ## AC-LEGAL — Licensing and Compliance
 
 | ID | Criterion |
@@ -102,3 +119,5 @@ IDs are stable — reference them in commits and issues (`fix: AC-PL-04 crash on
 ## Definition of Done for v1.0
 
 Every AC above passes on a physical Android 11 device and a physical Android 14 device, with both an M3U source and an Xtream source configured, verified against a fresh install and against an upgrade from the previous release.
+
+Since Amendment 1 the television is part of v1.0, so there is a third row: **AC-TV-\* and the phone criteria that still apply pass on a physical Android TV device, driven by its remote alone.** A green phone sweep is not a v1.0. Progress against all three is recorded in [`ACCEPTANCE-SWEEP.md`](ACCEPTANCE-SWEEP.md).

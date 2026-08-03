@@ -42,8 +42,13 @@ keyPassword=…
 Then:
 
 ```bash
-./gradlew :app:assembleRelease
+./gradlew :app:assembleRelease :app-tv:assembleRelease
 ```
+
+**A release is two APKs.** `:app` is the phone app (`dev.quiblo.player`), `:app-tv` is the
+television app (`dev.quiblo.tv`). They are separate application ids, not flavours: two
+installs, two databases, and a user may well have both. Both are signed with the same key —
+losing it loses the upgrade path for both.
 
 Without those values the build still succeeds and produces `app-release-unsigned.apk`. It
 is never signed with the debug key as a fallback: an APK silently signed with a throwaway
@@ -52,8 +57,18 @@ key cannot be upgraded over a real install, and the failure would only surface f
 ## Releasing through CI
 
 Tagging `v*` runs `.github/workflows/release.yml`, which builds, tests, runs detekt and
-lint, assembles a signed release, enforces the 25 MB budget (AC-NFR-02), attaches the APK
-and its SHA-256, and opens the release as a **draft** for a human to publish.
+lint, assembles both signed releases, enforces the 25 MB budget (AC-NFR-02) on each,
+attaches all four files, and opens the release as a **draft** for a human to publish:
+
+| Asset | What it is |
+|---|---|
+| `quiblo-<tag>.apk` | Phone and tablet, `dev.quiblo.player` |
+| `quiblo-tv-<tag>.apk` | Android TV / Google TV, `dev.quiblo.tv` |
+| `….apk.sha256` | One per APK |
+
+The names differ because the artefacts are not interchangeable, and the failure is quiet:
+the phone APK installs happily on a television and then never appears in its launcher,
+because only `:app-tv` declares `LEANBACK_LAUNCHER`.
 
 Required repository secrets:
 
@@ -70,10 +85,14 @@ deleted in an `always()` step so it is removed even when a build fails.
 ## Checklist before tagging
 
 1. `./gradlew build` is green.
-2. `versionCode` and `versionName` in `app/build.gradle.kts` are bumped. `versionCode`
-   must increase on every published build.
-3. The signed release APK has been installed **over** a previous release and launched —
+2. `versionCode` and `versionName` are bumped in **both** `app/build.gradle.kts` and
+   `app-tv/build.gradle.kts`. `versionCode` must increase on every published build, and
+   each application id has its own sequence.
+3. Both signed release APKs have been installed **over** a previous release and launched —
    R8 breaks reflection at runtime, not at build time, so a green build proves nothing
-   about whether the app starts.
-4. Smoke test on a real device: add a source, play something, export and re-import.
-5. Confirm the size check passed rather than assuming it.
+   about whether the app starts. `:app-tv` depends on the `:feature:*` modules for their
+   ViewModels only, so it is the build most likely to have been shrunk too far.
+4. Smoke test on a real device: add a source, play something, export and re-import. Then
+   the same on the television, with the remote as the only input device.
+5. `docs/ACCEPTANCE-SWEEP.md` §5 and §6 are clear, including the AC-TV-\* rows.
+6. Confirm the size checks passed rather than assuming it.

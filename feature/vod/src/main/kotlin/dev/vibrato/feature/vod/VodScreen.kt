@@ -18,45 +18,35 @@
 
 package dev.vibrato.feature.vod
 
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.unit.dp
+import dev.vibrato.core.model.Channel
+import dev.vibrato.core.model.MediaKind
+import dev.vibrato.feature.browse.BrowseScreen
+import dev.vibrato.feature.browse.BrowseViewModel
+import dev.vibrato.feature.browse.di.browseParams
+import org.koin.androidx.compose.koinViewModel
 
 /**
- * Empty [VodScreen] shell for M0.
+ * VodScreen.
  *
- * Real content arrives in a later milestone (docs/PLAN.md §3). The screen exists now so
- * the navigation graph, theming and module wiring are exercised end to end at M0.
+ * A thin wrapper over the shared browse UI. The screens differ in what they show, not in
+ * how they behave, so there is one implementation rather than four.
  */
 @Composable
-fun VodScreen(modifier: Modifier = Modifier) {
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .padding(24.dp),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        Text(
-            text = stringResource(R.string.feature_vod_title),
-            style = MaterialTheme.typography.headlineSmall,
-            color = MaterialTheme.colorScheme.onSurface,
-        )
-        Text(
-            text = stringResource(R.string.feature_vod_empty),
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = TextAlign.Center,
-            modifier = Modifier.padding(top = 8.dp),
-        )
-    }
+fun VodScreen(
+    onItemClick: (Channel) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val viewModel: BrowseViewModel = koinViewModel(
+        key = "vod",
+        parameters = { browseParams(MediaKind.VOD, favoritesOnly = false) },
+    )
+    BrowseScreen(
+        viewModel = viewModel,
+        onItemClick = onItemClick,
+        emptyMessage = stringResource(R.string.feature_vod_empty),
+        modifier = modifier,
+    )
 }

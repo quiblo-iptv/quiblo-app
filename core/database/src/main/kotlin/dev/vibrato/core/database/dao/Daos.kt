@@ -20,12 +20,14 @@ package dev.vibrato.core.database.dao
 
 import androidx.room.Dao
 import androidx.room.Delete
+import androidx.room.Embedded
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Transaction
 import androidx.room.Update
 import dev.vibrato.core.database.entity.ChannelEntity
+import dev.vibrato.core.database.entity.FavoriteEntity
 import dev.vibrato.core.database.entity.ResumePositionEntity
 import dev.vibrato.core.database.entity.SourceEntity
 import kotlinx.coroutines.flow.Flow
@@ -55,6 +57,17 @@ interface SourceDao {
     suspend fun markRefreshed(id: Long, timestamp: Long)
 }
 
+/**
+ * A channel row plus whether the user has favourited it.
+ *
+ * The favourite flag is joined in SQL rather than combined in Kotlin so that a
+ * 20,000-entry list is not re-mapped on every favourite toggle (AC-PL-05).
+ */
+data class ChannelWithFavorite(
+    @Embedded val channel: ChannelEntity,
+    val isFavorite: Boolean,
+)
+
 /** A category and how many items it holds, computed rather than stored. */
 data class CategoryCount(
     val groupTitle: String,
@@ -64,23 +77,50 @@ data class CategoryCount(
 @Dao
 interface ChannelDao {
 
+    /**
+     * The single browse query.
+     *
+     * Category, search and favourites-only are all optional predicates rather than
+     * separate queries, so the four combinations cannot drift apart. Filtering in SQL is
+     * what keeps search inside the 200ms budget across 20,000 rows (AC-FAV-05).
+     *
+     * @param groupTitle null for "all categories".
+     * @param query empty for "no search".
+     * @param favoritesOnly 1 to restrict to favourites, 0 for everything.
+     */
     @Query(
         """
-        SELECT * FROM channels
-        WHERE sourceId = :sourceId AND kind = :kind
-        ORDER BY sortIndex ASC
+        SELECT c.*, (f.stableKey IS NOT NULL) AS isFavorite
+        FROM channels c
+        LEFT JOIN favorites f ON f.sourceId = c.sourceId AND f.stableKey = c.stableKey
+        WHERE c.sourceId = :sourceId
+          AND c.kind = :kind
+          AND (:groupTitle IS NULL OR c.groupTitle = :groupTitle)
+          AND (:query = '' OR c.name LIKE '%' || :query || '%')
+          AND (:favoritesOnly = 0 OR f.stableKey IS NOT NULL)
+        ORDER BY c.sortIndex ASC
         """,
     )
-    fun observeBySourceAndKind(sourceId: Long, kind: String): Flow<List<ChannelEntity>>
+    fun observeBrowse(
+        sourceId: Long,
+        kind: String,
+        groupTitle: String?,
+        query: String,
+        favoritesOnly: Int,
+    ): Flow<List<ChannelWithFavorite>>
 
+    /** Favourites across every content type, for the dedicated section (AC-FAV-01). */
     @Query(
         """
-        SELECT * FROM channels
-        WHERE sourceId = :sourceId AND kind = :kind AND groupTitle = :groupTitle
-        ORDER BY sortIndex ASC
+        SELECT c.*, 1 AS isFavorite
+        FROM channels c
+        INNER JOIN favorites f ON f.sourceId = c.sourceId AND f.stableKey = c.stableKey
+        WHERE c.sourceId = :sourceId
+          AND (:query = '' OR c.name LIKE '%' || :query || '%')
+        ORDER BY c.kind ASC, c.sortIndex ASC
         """,
     )
-    fun observeByGroupAndKind(sourceId: Long, kind: String, groupTitle: String): Flow<List<ChannelEntity>>
+    fun observeFavorites(sourceId: Long, query: String): Flow<List<ChannelWithFavorite>>
 
     @Query(
         """
@@ -131,4 +171,20 @@ interface ResumePositionDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(position: ResumePositionEntity)
+}
+
+@Dao
+interface FavoriteDao {
+
+    @Query("SELECT EXISTS(SELECT 1 FROM favorites WHERE sourceId = :sourceId AND stableKey = :stableKey)")
+    suspend fun isFavorite(sourceId: Long, stableKey: String): Boolean
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun add(favorite: FavoriteEntity)
+
+    @Query("DELETE FROM favorites WHERE sourceId = :sourceId AND stableKey = :stableKey")
+    suspend fun remove(sourceId: Long, stableKey: String)
+
+    @Query("SELECT COUNT(*) FROM favorites WHERE sourceId = :sourceId")
+    suspend fun countFor(sourceId: Long): Int
 }

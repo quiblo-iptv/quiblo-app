@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Vibrato — a free, open source IPTV player.
+  Copyright (C) 2026 The Vibrato Authors
+  Licensed under the GNU General Public License v3.0 or later. See LICENSE.
+-->
+<resources>
+    <string name="browse_search">Search</string>
+    <string name="browse_search_clear">Clear search</string>
+    <string name="browse_category_all">All</string>
+    <string name="browse_category_ungrouped">Ungrouped</string>
+    <string name="browse_favorite_add">Add to favourites</string>
+    <string name="browse_favorite_remove">Remove from favourites</string>
+    <string name="browse_no_results">Nothing matches that search.</string>
+    <string name="browse_no_favorites">Tap the heart on anything to keep it here.</string>
+    <string name="browse_no_source">Add a playlist in Sources to see content here.</string>
+    <string name="browse_empty_kind">Nothing of this type in your source.</string>
+</resources>

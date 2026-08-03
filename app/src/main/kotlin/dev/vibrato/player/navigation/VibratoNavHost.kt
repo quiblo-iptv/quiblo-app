@@ -48,10 +48,14 @@ fun VibratoNavHost(
         startDestination = LiveRoute,
         modifier = modifier,
     ) {
-        composable<LiveRoute> { LiveScreen(onChannelClick = { navController.navigate(PlayerRoute(it)) }) }
-        composable<VodRoute> { VodScreen() }
-        composable<SeriesRoute> { SeriesScreen() }
-        composable<FavoritesRoute> { FavoritesScreen() }
+        val play: (dev.vibrato.core.model.Channel) -> Unit = { channel ->
+            navController.navigate(PlayerRoute(channel.id))
+        }
+
+        composable<LiveRoute> { LiveScreen(onItemClick = play) }
+        composable<VodRoute> { VodScreen(onItemClick = play) }
+        composable<SeriesRoute> { SeriesScreen(onItemClick = play) }
+        composable<FavoritesRoute> { FavoritesScreen(onItemClick = play) }
         composable<SourcesRoute> { SourcesScreen() }
         composable<SettingsRoute> { SettingsScreen() }
         composable<PlayerRoute> { entry ->

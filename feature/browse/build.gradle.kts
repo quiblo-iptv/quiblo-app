@@ -16,14 +16,17 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-package dev.vibrato.feature.live.di
+plugins {
+    id("vibrato.android.feature")
+}
 
-import dev.vibrato.feature.live.LiveViewModel
-import org.koin.core.module.Module
-import org.koin.core.module.dsl.viewModelOf
-import org.koin.dsl.module
+android {
+    namespace = "dev.vibrato.feature.browse"
+}
 
-/** Wiring owned by `:feature:live`. Aggregated by `:app`. */
-val liveModule: Module = module {
-    viewModelOf(::LiveViewModel)
+dependencies {
+    implementation(projects.core.data)
+    implementation(projects.core.model)
+    implementation(libs.coil.compose)
+    implementation(libs.coil.network.okhttp)
 }

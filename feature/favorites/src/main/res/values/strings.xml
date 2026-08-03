@@ -6,5 +6,5 @@
 -->
 <resources>
     <string name="feature_favorites_title">Favourites</string>
-    <string name="feature_favorites_empty">Channels and titles you mark as favourite appear here.</string>
+    <string name="feature_favorites_empty">Tap the heart on anything to keep it here.</string>
 </resources>

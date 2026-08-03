@@ -16,23 +16,31 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-package dev.vibrato.core.database.di
+package dev.vibrato.feature.browse.di
 
-import android.content.Context
-import dev.vibrato.core.database.VibratoDatabase
+import dev.vibrato.core.model.MediaKind
+import dev.vibrato.feature.browse.BrowseViewModel
 import org.koin.core.module.Module
+import org.koin.core.module.dsl.viewModel
+import org.koin.core.parameter.parametersOf
 import org.koin.dsl.module
 
 /**
- * Wiring owned by `:core:database`.
+ * Wiring owned by `:feature:browse`.
  *
- * The database is constructed here rather than in `:core:data` so that Room stays an
- * implementation detail of this module and never leaks onto a consumer's classpath.
+ * One ViewModel definition serves four screens; the caller supplies the content kind and
+ * whether to restrict to favourites.
  */
-val databaseModule: Module = module {
-    single { VibratoDatabase.create(get<Context>()) }
-    single { get<VibratoDatabase>().sourceDao() }
-    single { get<VibratoDatabase>().channelDao() }
-    single { get<VibratoDatabase>().resumePositionDao() }
-    single { get<VibratoDatabase>().favoriteDao() }
+val browseModule: Module = module {
+    viewModel { (kind: MediaKind, favoritesOnly: Boolean) ->
+        BrowseViewModel(
+            kind = kind,
+            favoritesOnly = favoritesOnly,
+            sourceRepository = get(),
+            channelRepository = get(),
+        )
+    }
 }
+
+/** Koin parameters for a browse screen. */
+fun browseParams(kind: MediaKind, favoritesOnly: Boolean = false) = parametersOf(kind, favoritesOnly)

@@ -66,6 +66,12 @@ include(":source:m3u")
 include(":source:xtream")
 
 // Feature layer. Compose UI, consumes :core:data only.
+//
+// :feature:browse holds the list UI that Live, Movies, Series and Favourites all share.
+// It lives in the feature layer rather than in :core: because AC-NFR-06 forbids Compose
+// in :core:*, which rules out a :core:ui module entirely. The alternative was the same
+// screen copied four times.
+include(":feature:browse")
 include(":feature:sources")
 include(":feature:live")
 include(":feature:vod")

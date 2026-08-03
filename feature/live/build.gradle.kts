@@ -27,6 +27,5 @@ android {
 dependencies {
     implementation(projects.core.data)
     implementation(projects.core.model)
-    implementation(libs.coil.compose)
-    implementation(libs.coil.network.okhttp)
+    implementation(projects.feature.browse)
 }

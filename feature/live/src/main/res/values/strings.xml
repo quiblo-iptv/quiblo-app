@@ -6,7 +6,5 @@
 -->
 <resources>
     <string name="feature_live_title">Live TV</string>
-    <string name="feature_live_empty">Add a playlist in Sources to see channels here.</string>
-    <string name="live_category_all">All</string>
-    <string name="live_category_ungrouped">Ungrouped</string>
+    <string name="feature_live_empty">No live channels in your source.</string>
 </resources>

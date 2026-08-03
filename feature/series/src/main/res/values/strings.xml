@@ -6,5 +6,5 @@
 -->
 <resources>
     <string name="feature_series_title">Series</string>
-    <string name="feature_series_empty">Series appear here once a source is added.</string>
+    <string name="feature_series_empty">No series in your source.</string>
 </resources>

@@ -19,7 +19,9 @@
 package dev.vibrato.core.data
 
 import dev.vibrato.core.database.dao.ChannelDao
+import dev.vibrato.core.database.dao.FavoriteDao
 import dev.vibrato.core.database.dao.ResumePositionDao
+import dev.vibrato.core.database.entity.FavoriteEntity
 import dev.vibrato.core.database.entity.ResumePositionEntity
 import dev.vibrato.core.model.Category
 import dev.vibrato.core.model.Channel
@@ -34,26 +36,69 @@ import kotlinx.coroutines.flow.map
  * destinations, and an Xtream account returns all three from a single load — the case
  * that makes an unfiltered query look correct right up until it is not.
  *
- * Filtering happens in SQL rather than in composition, so a 20,000-entry playlist neither
- * blocks a frame nor holds a second filtered copy in memory (AC-PL-05).
+ * Filtering, searching and the favourite join all happen in SQL rather than in
+ * composition, so a 20,000-entry playlist neither blocks a frame nor holds a second
+ * filtered copy in memory (AC-PL-05, AC-FAV-05).
  */
 class ChannelRepository(
     private val channelDao: ChannelDao,
     private val resumePositionDao: ResumePositionDao,
+    private val favoriteDao: FavoriteDao,
     private val now: () -> Long = System::currentTimeMillis,
 ) {
 
-    fun observeChannels(sourceId: Long, kind: MediaKind): Flow<List<Channel>> =
-        channelDao.observeBySourceAndKind(sourceId, kind.name)
-            .map { entities -> entities.map { it.toDomain() } }
+    /**
+     * The browse feed.
+     *
+     * @param groupTitle null for every category.
+     * @param query blank for no search.
+     */
+    fun observeBrowse(
+        sourceId: Long,
+        kind: MediaKind,
+        groupTitle: String? = null,
+        query: String = "",
+        favoritesOnly: Boolean = false,
+    ): Flow<List<Channel>> =
+        channelDao.observeBrowse(
+            sourceId = sourceId,
+            kind = kind.name,
+            groupTitle = groupTitle,
+            query = query.trim(),
+            favoritesOnly = if (favoritesOnly) 1 else 0,
+        ).map { rows -> rows.map { it.channel.toDomain(isFavorite = it.isFavorite) } }
 
-    fun observeChannelsInGroup(sourceId: Long, kind: MediaKind, groupTitle: String): Flow<List<Channel>> =
-        channelDao.observeByGroupAndKind(sourceId, kind.name, groupTitle)
-            .map { entities -> entities.map { it.toDomain() } }
+    /** Favourites across every content type (AC-FAV-01). */
+    fun observeFavorites(sourceId: Long, query: String = ""): Flow<List<Channel>> =
+        channelDao.observeFavorites(sourceId, query.trim())
+            .map { rows -> rows.map { it.channel.toDomain(isFavorite = true) } }
 
     fun observeCategories(sourceId: Long, kind: MediaKind): Flow<List<Category>> =
         channelDao.observeCategoriesByKind(sourceId, kind.name)
             .map { counts -> counts.map { it.toDomain(sourceId) } }
+
+    /**
+     * Marks or unmarks a favourite.
+     *
+     * Keyed by the provider's stable identity, never by row id. That is what lets a
+     * favourite survive a refresh in which the stream URL changed and every row was
+     * reinserted with a new id (AC-FAV-03).
+     */
+    suspend fun toggleFavorite(channel: Channel) {
+        if (favoriteDao.isFavorite(channel.sourceId, channel.stableKey)) {
+            favoriteDao.remove(channel.sourceId, channel.stableKey)
+        } else {
+            favoriteDao.add(
+                FavoriteEntity(
+                    sourceId = channel.sourceId,
+                    stableKey = channel.stableKey,
+                    favoritedAtEpochMillis = now(),
+                ),
+            )
+        }
+    }
+
+    suspend fun favoriteCount(sourceId: Long): Int = favoriteDao.countFor(sourceId)
 
     suspend fun channelCount(sourceId: Long): Int = channelDao.countForSource(sourceId)
 

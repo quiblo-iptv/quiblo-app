@@ -58,6 +58,7 @@ dependencies {
     implementation(projects.core.model)
     implementation(projects.core.media)
 
+    implementation(projects.feature.browse)
     implementation(projects.feature.sources)
     implementation(projects.feature.live)
     implementation(projects.feature.vod)

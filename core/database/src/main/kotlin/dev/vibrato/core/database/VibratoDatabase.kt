@@ -23,6 +23,7 @@ import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
 import dev.vibrato.core.database.dao.ChannelDao
+import dev.vibrato.core.database.dao.FavoriteDao
 import dev.vibrato.core.database.dao.ResumePositionDao
 import dev.vibrato.core.database.dao.SourceDao
 import dev.vibrato.core.database.entity.ChannelEntity
@@ -51,6 +52,8 @@ abstract class VibratoDatabase : RoomDatabase() {
     abstract fun channelDao(): ChannelDao
 
     abstract fun resumePositionDao(): ResumePositionDao
+
+    abstract fun favoriteDao(): FavoriteDao
 
     companion object {
         const val NAME = "vibrato.db"

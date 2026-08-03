@@ -13,7 +13,14 @@ Xtream source configured, on a fresh install and on an upgrade.
 This file records what has been verified so far, how, and what is left. It is the gate on
 tagging v1.0.0 — do not tag while anything in §5 or §6 is unchecked.
 
-**Last updated:** 2026-08-03, at commit `3494da5`.
+**Last updated:** 2026-08-03, at commit `7dd52c2`.
+
+> **The recorded results predate the player and browse work that followed.** Everything in
+> §2 and §3 was measured at `3494da5`. Since then the player gained aspect modes, gesture
+> controls and full-screen; browse moved to poster grids and grid-by-default; and movies
+> and series gained detail screens. Cold start and the parser results are unaffected by
+> any of that, but **AC-PLAY-\*, AC-PL-05 and the scroll-jank baseline want re-running**,
+> and the movie screen adds a network call the sweep never exercised (see §6).
 
 **Devices used so far:**
 
@@ -162,6 +169,28 @@ The "upgrade from the previous release" half of the Definition of Done cannot ap
 v1.0.0, since there is no previous release to upgrade from. It becomes live at v1.0.1.
 
 ## 6. Open — needs a decision before tagging
+
+**Requests to the panel, and the cost of each.** Recorded here because getting an account
+throttled is the failure mode this project keeps meeting, and because it is not obvious
+from the code which actions cost anything.
+
+| Action | Requests |
+|---|---|
+| Add a source, or the manual refresh button | auth + 6 catalogue calls |
+| Anything else on a browse screen | none — favouriting, scrolling and filtering are local |
+| A live row scrolling into view, in list mode | one `get_short_epg`, once ever per channel, rate-limited and skipped when cached |
+| Opening a series | one `get_series_info`, **uncached** — re-opening the same series fetches again |
+| Opening a movie | one `get_vod_info`, **uncached**, added at `a5de4ee` |
+
+Nothing refreshes automatically: not on launch, not on tab switch, not on scroll.
+
+`XtreamSource` stops asking for fifteen minutes after a panel refuses it, across all four
+call paths. Before `a5de4ee` that backoff existed only around the guide, so a blocked
+account kept being asked by the catalogue, series and film paths — which is how a short
+block becomes a lasting one.
+
+**The obvious remaining reduction is caching series and film details for the session**, so
+re-opening the same item costs nothing. Not done yet.
 
 **AC-NFR-04 does not pass as written.** The criterion says "Permissions requested: INTERNET
 and network state only." The merged release manifest contains four:

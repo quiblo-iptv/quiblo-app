@@ -41,18 +41,20 @@ immediate ban — see [`CONTRIBUTING.md`](CONTRIBUTING.md).
 | **Sources** | M3U/M3U8 by URL or local file, and Xtream Codes API |
 | **Content & Series** | Live TV, movies, series with seasons & episode breakdown |
 | **Guide & EPG** | Now/next per channel, fetched on demand and cached |
-| **Player Controls** | Play/pause, seek, ±10s skip, Start Over, subtitle & audio track selection, screen lock with position swap |
-| **Layout & Search** | Expandable search header, category filter, list/grid view toggle |
+| **Player Controls** | Play/pause, seek, configurable skip interval, Start Over, subtitle & audio track selection, screen lock |
+| **Picture & Sound** | Fit/Fill/Zoom/Stretch aspect modes, drag for brightness and volume, full-screen playback that keeps the screen awake |
+| **Playback Tuning** | Skip interval, buffering profile and a maximum-bitrate cap, all in Settings |
+| **Movies & Series** | Detail screens with artwork and overview, and Resume or Start from beginning |
+| **Layout & Search** | Poster grids for movies and series, category filter, list/grid toggle, expandable search |
 | **Theme & Design** | Material 3 Expressive, dark and light |
-| **Resume** | Playback position remembered per item |
+| **Resume** | Playback position remembered per item, and per episode within a series |
 | **Favourites** | Survive playlist refresh |
 | **Backup** | Versioned export and import of sources and favourites, to a file you choose |
 | **Storage & Privacy** | Entirely on-device with zero telemetry |
 
-Not yet implemented, in rough priority order: aspect-ratio modes, configurable buffer and
-seek intervals, an EPG time-grid, a quick-zap overlay, a continue-watching carousel,
-catchup/timeshift, and picture-in-picture. Several are Phase 2 in
-[`docs/PLAN.md`](docs/PLAN.md) §6.
+Not yet implemented, in rough priority order: an EPG time-grid, a quick-zap overlay, a
+continue-watching carousel, catchup/timeshift, and picture-in-picture. Several are Phase 2
+in [`docs/PLAN.md`](docs/PLAN.md) §6.
 
 ## Privacy
 

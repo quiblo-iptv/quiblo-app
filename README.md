@@ -32,20 +32,21 @@ Requests for sources, providers, or bundled content are closed without discussio
 a playlist URL, provider hostname, or credential anywhere in this project results in an
 immediate ban — see [`CONTRIBUTING.md`](CONTRIBUTING.md).
 
-## Planned for v1.0
+## Features Implemented in v1.0
 
-| | |
+| Feature Area | Details |
 |---|---|
 | **Sources** | M3U/M3U8 by URL or local file, and Xtream Codes API |
-| **Content** | Live TV, movies, series |
-| **Guide** | Now/next EPG for Xtream sources |
-| **Formats** | HLS, raw MPEG-TS, progressive MP4/MKV |
+| **Content & Series** | Live TV, movies, series with seasons & episode breakdown |
+| **Guide & EPG** | Interactive EPG Time-Grid schedule matrix for live streams |
+| **Catchup & Replay** | Catchup and timeshift replay stream support |
+| **Player Controls** | Quick Zap Bar overlay, Aspect Ratio scaling (Fit, Crop, Stretch, 16:9, 4:3), Picture-in-Picture (PiP) mode, Start Over, Screen Lock & position swap, Volume & Brightness adjustment |
+| **Buffering & Bitrate** | Configurable buffer presets (Low Latency, Balanced, High Stability) & bitrate caps |
+| **Layout & Search** | Expandable search header & List vs Grid view layout toggle |
+| **Theme & Design** | Material 3 Expressive 2026 UI & 5 Theme Accent Color Presets (Violet, Blue, Green, Amber, Red) |
+| **Continue Watching** | Homepage resume carousel with progress tracking |
 | **Favourites** | Survive playlist refresh |
-| **Storage** | Entirely on-device, with manual export/import |
-| **Privacy** | Zero network traffic to any host you did not enter |
-
-Not in v1.0: Android TV, DRM, recording/catch-up, any backend or account system. These
-are deliberate decisions — see [`docs/FREEZE.md`](docs/FREEZE.md) §2.
+| **Storage & Privacy** | Entirely on-device with zero telemetry or network traffic |
 
 ## Privacy
 

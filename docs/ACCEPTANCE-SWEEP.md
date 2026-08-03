@@ -13,7 +13,16 @@ Xtream source configured, on a fresh install and on an upgrade.
 This file records what has been verified so far, how, and what is left. It is the gate on
 tagging v1.0.0 — do not tag while anything in §3 is unchecked.
 
-**Last updated:** 2026-08-03, at commit `697eca7`.
+**Last updated:** 2026-08-03, at commit `6d5b4e8`.
+
+**Devices used so far:**
+
+| Device | OS | Notes |
+|---|---|---|
+| Lenovo TB305XU | Android 15 (API 35), arm64, 3.7 GB RAM | Neither DoD row. Low-RAM mid-range, so a fair cold-start target |
+| Pixel Tablet emulator | Android 15 | Desktop-fast; treat its numbers as upper bounds only |
+
+**Neither Android 11 nor Android 14 has been tested at all.** Both DoD rows are still open.
 
 ---
 
@@ -33,54 +42,89 @@ by hand on the devices.
 | AC-LEGAL-04 | **Pass** | CI greps for provider URLs and the forbidden brand string; all test payloads are synthetic |
 | AC-LEGAL-05 | **Pass** | README "Vibrato supplies no content" |
 
-## 2. Verified on the emulator only
+## 2. Verified on hardware (Lenovo TB305XU, Android 15)
 
-Real evidence, but not against the criterion as written. Repeat these on hardware.
+Release build, R8-minified, signed with a throwaway debug key for testing — **not the
+shipping artifact**, so these need one confirming pass against the real signed APK.
 
-**AC-NFR-01 — cold start under 2s.** Release build (R8, signed with a throwaway debug key
-for measurement only), `emulator-5554`, Android 15, fresh install with no sources
-configured:
+Driven against a synthetic 20,000-entry M3U from [`tools/gen_playlist.py`](../tools/gen_playlist.py),
+served to the device over `adb reverse` so no network is involved:
+
+```sh
+python tools/gen_playlist.py 20000 big.m3u
+python -m http.server 8000 --bind 127.0.0.1      # in the directory holding big.m3u
+adb reverse tcp:8000 tcp:8000                     # then add http://127.0.0.1:8000/big.m3u
+```
+
+Every host in it is under `.invalid` (RFC 2606), so nothing resolves and nothing plays: the
+playlist exercises ingestion, storage and browse, never playback.
+
+| ID | Result | Evidence |
+|---|---|---|
+| AC-PL-01 | **Pass** (qualified) | 20,002 channels ingested and grouped, ~4s end to end. Served over a loopback tunnel, so this says nothing about the 10 Mbps clause |
+| AC-PL-04 | **Pass** | BOM, CRLF, an unescaped comma in a display name, a missing `group-title` and a truncated final line all handled; "Loaded 20002 channels. 2 entries could not be read and were skipped" surfaced to the user |
+| AC-PL-05 | **Pass** | 20k list scrolls; see the jank note below |
+| AC-NFR-01 | **Pass** | See below |
+| AC-NFR-08 (RTL half) | **Pass** | Under `ar-EG` the whole UI mirrors: nav order reverses, rows and icons flip, the category chip right-aligns |
+| AC-NFR-09 | **Pass** | Dark and light both render correctly and the app follows the system setting live, without a restart |
+| AC-FAV (survives refresh) | **Pass** | Three favourites set, source fully re-ingested, all three still present and still flagged in the browse list |
+
+**AC-NFR-01 — cold start, populated database.** 20,002 channels in the database, six runs
+after `force-stop`:
 
 | run | 1 | 2 | 3 | 4 | 5 | 6 |
 |---|---|---|---|---|---|---|
-| `am start -W` TotalTime (ms) | 462 | 663 | 499 | 678 | 538 | 568 |
+| TotalTime (ms) | 471 | 450 | 438 | 439 | 441 | 449 |
 
-Median 553 ms, worst 678 ms. The startup path is clean by construction: `VibratoApplication`
-starts Koin and nothing else, Room is built lazily, and there is no main-thread query before
-the first frame.
+**Median 445 ms against a 2000 ms budget.** Loading 20k channels costs nothing at startup,
+which matches the architecture: Koin starts, Room is built lazily, and nothing queries the
+database before the first frame.
 
-**Two caveats, both of which the hardware sweep must settle:**
+Two earlier readings that looked alarming were both measurement artefacts, recorded here so
+nobody re-derives them:
 
-1. A desktop emulator is much faster than the mid-range Android 11 device the criterion
-   names. Treat 553 ms as an upper bound on the code's own cost, not as a passing result.
-2. This was measured on an **empty** database. The debug build against a populated 26 MB
-   database took ~1850 ms, but that number confounds two variables — it is also an
-   unminified build — so it does not transfer. Getting a populated *release* database on
-   this machine was not possible: the emulator is a Play image with no root, and the backup
-   format carries sources and favourites rather than the channel corpus, so import cannot
-   seed one. **Measure cold start on hardware with a large playlist loaded**, not on a fresh
-   install; that is the number the criterion is actually about.
+- The **first** launch after install took 1590 ms. That is one-time dexopt and ART warmup,
+  not steady state — every subsequent run sat near 445 ms.
+- The debug build against a populated database took ~1850 ms. That is unminified-build
+  overhead, not data volume. The release figures above settle it.
 
-A baseline profile has not been generated. Given the headroom it is an optimisation rather
-than a blocker, but it is the obvious lever if the hardware number comes in near 2s.
+A baseline profile remains ungenerated and, at 4.5x headroom, unnecessary.
 
-## 3. Requires physical devices
+**Scroll jank, worth watching.** Six hard flings through the 20k list: 118 frames, 5.93%
+janky, 50th percentile 9 ms, 90th 28 ms, 95th 36 ms. The 90th and 95th percentiles are over
+the 16.7 ms frame budget. No criterion sets a jank threshold so nothing fails, but flinging
+a 20k list is exactly the risk PLAN.md §5 calls out, and this is the number to compare
+against after any change to the browse list.
+
+## 3. Emulator baseline
+
+Superseded by §2 for anything the tablet covered; kept as a comparison point. Release
+build, Pixel Tablet emulator, Android 15, **empty** database: 462 / 663 / 499 / 678 / 538 /
+568 ms, median 553 ms.
+
+Note that the emulator on an empty database was *slower* than the tablet on 20,002 channels.
+That is the clearest evidence that database size does not touch startup cost here.
+
+## 4. Requires physical devices
 
 Nothing below has been executed. Run each on **Android 11** and **Android 14**, with an M3U
 source and an Xtream source configured, on a fresh install and again over an upgrade.
 
-- **Playlists** — AC-PL-01 … AC-PL-07
+- **Playlists** — AC-PL-02, AC-PL-03, AC-PL-06, AC-PL-07 (01/04/05 covered in §2 on Android 15)
 - **Xtream** — AC-XT-01 … AC-XT-06
 - **Guide** — AC-EPG-01 … AC-EPG-05
 - **Playback** — AC-PLAY-01 … AC-PLAY-10
-- **Favourites** — AC-FAV-01 … AC-FAV-05
-- **Export / import** — AC-DATA-01 … AC-DATA-05
-- **Cold start on hardware** — AC-NFR-01, per the caveats in §2
+- **Favourites** — AC-FAV-01 … AC-FAV-05 (survival across refresh covered in §2)
+- **Export / import** — AC-DATA-01 … AC-DATA-05 — **not started.** Both directions go
+  through the SAF file picker, which is the one flow that resists adb driving
+- **Cold start** — AC-NFR-01, to confirm §2 on the two DoD OS versions
 - **No unconfigured network traffic** — AC-NFR-03, by packet capture on a clean install
-- **Permissions** — AC-NFR-04, see §4
-- **RTL and strings** — AC-NFR-08
-- **Dark and light** — AC-NFR-09
+- **Permissions** — AC-NFR-04, see §5
+- **Strings** — AC-NFR-08; the RTL half is covered in §2, but no screen has been read for
+  hardcoded strings on-device
 - **Licences screen** — AC-LEGAL-03
+- **Playback** — needs a playlist of real streams. The synthetic playlist used in §2 points
+  every entry at `.invalid`, so it cannot exercise the player at all
 
 Note that AC-PL-07 and the Xtream criteria cannot currently be exercised against the
 account previously used for testing: that panel is API-blocked at the provider's end and
@@ -90,7 +134,7 @@ sweep.
 The "upgrade from the previous release" half of the Definition of Done cannot apply to
 v1.0.0, since there is no previous release to upgrade from. It becomes live at v1.0.1.
 
-## 4. Open — needs a decision before tagging
+## 5. Open — needs a decision before tagging
 
 **AC-NFR-04 does not pass as written.** The criterion says "Permissions requested: INTERNET
 and network state only." The merged release manifest contains four:

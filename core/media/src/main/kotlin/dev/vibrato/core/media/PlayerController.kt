@@ -132,3 +132,16 @@ data class PlaybackState(
     val isPlaying: Boolean get() = status == PlaybackStatus.PLAYING
     val hasTrackChoice: Boolean get() = audioTracks.size > 1 || textTracks.isNotEmpty()
 }
+
+enum class BufferMode(val minBufferMs: Int, val maxBufferMs: Int, val playbackBufferMs: Int) {
+    LOW_LATENCY(minBufferMs = 5_000, maxBufferMs = 15_000, playbackBufferMs = 1_000),
+    BALANCED(minBufferMs = 15_000, maxBufferMs = 30_000, playbackBufferMs = 1_500),
+    HIGH_STABILITY(minBufferMs = 30_000, maxBufferMs = 60_000, playbackBufferMs = 3_000),
+}
+
+enum class MaxBitrateCap(val bitrateKbps: Int) {
+    AUTO(bitrateKbps = Int.MAX_VALUE),
+    HIGH_1080P(bitrateKbps = 8_000),
+    MEDIUM_720P(bitrateKbps = 4_000),
+    LOW_480P(bitrateKbps = 1_500),
+}

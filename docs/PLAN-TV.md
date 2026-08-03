@@ -6,8 +6,40 @@
 
 # Execution Plan — Vibrato for Android TV / Google TV
 
-**Status:** proposed, not started.
+**Status:** proposed, not started. Target device confirmed.
 **Date:** 2026-08-03.
+
+## 0. The target device, measured
+
+Not assumed — read over adb from the actual TV on 2026-08-03.
+
+| | |
+|---|---|
+| Device | Haier MatrixTV EE (`HR9676EU`), Google TV |
+| OS | **Android 14, API 34** |
+| Panel | 3840x2160, UI rendered at 1920x1080 @ 320dpi |
+| CPU | **`armeabi-v7a` — 32-bit** |
+| RAM | **1.84 GB total** |
+| Features | `android.software.leanback`, `leanback_only` — no touchscreen at all |
+
+**This settles the minSdk question: API 34 is well clear of minSdk 30, so this is a
+straightforward port and not a compatibility project.** The wider-reach concern in §7
+stands for *other people's* devices but does not affect this one.
+
+Three findings from installing the existing phone APK on it, which it accepts because the
+manifest implies only `faketouch` and never requires `touchscreen`:
+
+1. **The whole stack already runs.** Cold start 967 ms, dark theme, correct layout at
+   1080p. Every `:core:*` and `:source:*` module works on 32-bit ARM under Android 14.
+2. **D-pad focus traversal already works** with the phone's Material 3 components — the
+   settings icon takes focus at launch, and the D-pad reaches the navigation bar and moves
+   along it. T0 is therefore about making focus *legible and deliberate*, not about making
+   it exist. That is a smaller job than this plan assumed.
+3. **1.84 GB of RAM, 32-bit.** Every phone performance figure must be re-measured rather
+   than carried over. This is the weakest device the project has ever run on.
+
+The APK it accepts does **not** appear in the TV launcher, because it declares no
+`LEANBACK_LAUNCHER` category — which is T0's first task, not a bug.
 
 > **This is outside the v1.0 freeze.** [`FREEZE.md`](FREEZE.md) §2 lists Android TV and
 > Google TV as explicit non-goals — "**Not a TV app in v1**" — and §6 requires scope changes
@@ -206,7 +238,8 @@ Written in the style of [`ACCEPTANCE.md`](ACCEPTANCE.md), which the sweep would 
 
 | Risk | Mitigation |
 |---|---|
-| **minSdk 30 excludes much of the installed TV base.** Chromecast with Google TV (2020) and many boxes ship Android 9–10. A TV app at API 30 cannot install on them | Decide deliberately: either lower `minSdk` for `:app-tv` only, or accept the reduced reach and say so in the README. **Check the actual API level of the target devices before writing code** — this changes the plan's shape, not just a number |
+| ~~minSdk 30 excludes the target device~~ | **Resolved.** The target runs API 34 (§0). The reach concern remains for other users' older boxes — a README note, not a blocker |
+| **32-bit, 1.84 GB RAM.** The weakest device this project has run on | Re-measure everything; carry over no phone figure. The 20k-list and cold-start work already done is the starting point, not the answer |
 | Focus bugs are the defining TV defect and do not show up in unit tests | T0 exists to prove the focus model before anything is built on it. Test with the D-pad only — unplug the mouse |
 | Guide prefetch under fast scroll gets the account blocked | §3.3. Debounce on focus settling; the `XtreamSource` backoff already covers the failure case |
 | Low-end TV boxes have far less RAM than a phone | The 20k-list work already done applies. Re-measure; do not assume the phone figures carry |
@@ -221,8 +254,8 @@ are either the remote's own hardware keys or nothing at all.
 
 ## 9. First three tasks
 
-1. **Find out what the target devices actually run.** The minSdk question in §7 decides
-   whether this is a straightforward port or a compatibility project.
-2. Amend `FREEZE.md` with a dated scope entry, or defer until v1.0 ships.
-3. Build T0 and nothing else. If the focus model is not right, none of the rest is worth
-   writing.
+1. ~~Find out what the target devices run.~~ **Done — §0. API 34, so this is a port.**
+2. Amend `FREEZE.md` with a dated scope entry, or defer until v1.0 ships. **Still open, and
+   the only thing blocking T0.**
+3. Build T0 and nothing else. Given §0.2, the focus model is likely closer than assumed —
+   which makes it cheaper to prove, not safer to skip.

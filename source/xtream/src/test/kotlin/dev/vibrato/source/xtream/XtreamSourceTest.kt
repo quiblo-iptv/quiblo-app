@@ -266,4 +266,25 @@ class XtreamSourceTest {
         assertEquals(1, episode.episodeNumber)
         assertTrue(episode.streamUrl.endsWith("/series/user/pass/501.mp4"))
     }
+
+    @Test
+    fun `series with alternate property keys are mapped defensively`() = runTest {
+        val seriesJson = """
+            [
+              {"id": "77", "title": "Game of Thrones", "stream_icon": "http://img.png", "category_id": "5"}
+            ]
+        """.trimIndent()
+
+        val source = sourceServing(
+            mapOf(null to authOk, "get_series" to seriesJson, "get_series_categories" to "[]"),
+        )
+
+        val result = source.load(request)
+        val success = assertInstanceOf(SourceResult.Success::class.java, result)
+        val channels = success.channels
+        assertEquals(1, channels.size)
+        assertEquals("Game of Thrones", channels[0].name)
+        assertEquals("77", channels[0].providerStreamId)
+        assertEquals("http://img.png", channels[0].logoUrl)
+    }
 }

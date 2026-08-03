@@ -124,14 +124,35 @@ internal data class SeriesDto(
     @SerialName("series_id")
     @Serializable(FlexibleStringSerializer::class)
     val seriesId: String? = null,
+    @SerialName("id")
+    @Serializable(FlexibleStringSerializer::class)
+    val id: String? = null,
+    @SerialName("stream_id")
+    @Serializable(FlexibleStringSerializer::class)
+    val streamId: String? = null,
     @Serializable(FlexibleStringSerializer::class)
     val name: String? = null,
     @Serializable(FlexibleStringSerializer::class)
+    val title: String? = null,
+    @Serializable(FlexibleStringSerializer::class)
     val cover: String? = null,
+    @SerialName("stream_icon")
+    @Serializable(FlexibleStringSerializer::class)
+    val streamIcon: String? = null,
     @SerialName("category_id")
     @Serializable(FlexibleStringSerializer::class)
     val categoryId: String? = null,
-)
+) {
+    val effectiveId: String? get() = seriesId?.takeIf { it.isNotBlank() }
+        ?: id?.takeIf { it.isNotBlank() }
+        ?: streamId?.takeIf { it.isNotBlank() }
+
+    val effectiveName: String? get() = name?.takeIf { it.isNotBlank() }
+        ?: title?.takeIf { it.isNotBlank() }
+
+    val effectiveCover: String? get() = cover?.takeIf { it.isNotBlank() }
+        ?: streamIcon?.takeIf { it.isNotBlank() }
+}
 
 @Serializable
 internal data class EpgResponse(

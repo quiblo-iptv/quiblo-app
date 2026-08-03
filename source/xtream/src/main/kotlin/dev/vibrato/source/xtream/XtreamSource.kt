@@ -200,8 +200,8 @@ class XtreamSource internal constructor(
         val channels = mutableListOf<Channel>()
         var skipped = 0
         entries.forEach { dto ->
-            val id = dto.seriesId
-            val name = dto.name
+            val id = dto.effectiveId
+            val name = dto.effectiveName
             if (id.isNullOrBlank() || name.isNullOrBlank()) {
                 skipped++
             } else {
@@ -214,7 +214,7 @@ class XtreamSource internal constructor(
                     streamUrl = "",
                     kind = MediaKind.SERIES,
                     tvgId = "xtream-series-$id",
-                    logoUrl = dto.cover,
+                    logoUrl = dto.effectiveCover,
                     groupTitle = categories.titleFor(dto.categoryId),
                     providerStreamId = id,
                 )

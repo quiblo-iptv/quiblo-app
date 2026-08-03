@@ -7,4 +7,33 @@
 <resources>
     <string name="feature_settings_title">Settings</string>
     <string name="feature_settings_empty">Export, import, appearance and licences.</string>
+
+    <!-- Backup: AC-DATA-01 to 04 -->
+    <string name="settings_backup_title">Backup</string>
+    <string name="settings_backup_summary">Save your sources and favourites to a file, or restore them from one. Passwords are never written to the file — you will re-enter them after importing.</string>
+    <string name="settings_backup_export">Export</string>
+    <string name="settings_backup_import">Import</string>
+    <string name="settings_backup_default_filename">vibrato-backup.json</string>
+    <string name="settings_backup_working">Working…</string>
+    <string name="settings_backup_exported">Backup saved.</string>
+    <string name="settings_backup_failed">That file could not be read as a Vibrato backup.</string>
+    <string name="settings_backup_rejected">That backup was written by a newer version of Vibrato (format %1$d, this build reads %2$d). Update the app and try again.</string>
+    <string name="settings_backup_dismiss">OK</string>
+
+    <plurals name="settings_backup_sources_restored">
+        <item quantity="one">%d source restored.</item>
+        <item quantity="other">%d sources restored.</item>
+    </plurals>
+    <plurals name="settings_backup_favorites_restored">
+        <item quantity="one">%d favourite restored.</item>
+        <item quantity="other">%d favourites restored.</item>
+    </plurals>
+    <string name="settings_backup_credentials_needed">Sign in again for: %1$s</string>
+    <string name="settings_backup_nothing_restored">Nothing to restore — everything in that file is already set up.</string>
+
+    <!-- Licences: AC-LEGAL-03 -->
+    <string name="settings_licenses_title">Open source licenses</string>
+    <string name="settings_licenses_summary">Vibrato is free software under the GNU General Public License v3.0 or later. It ships the following third-party components.</string>
+    <string name="settings_licenses_show">Show licenses</string>
+    <string name="settings_licenses_hide">Hide licenses</string>
 </resources>

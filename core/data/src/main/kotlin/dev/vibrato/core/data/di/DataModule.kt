@@ -23,6 +23,7 @@ import dev.vibrato.core.data.ChannelRepository
 import dev.vibrato.core.data.GuideRepository
 import dev.vibrato.core.data.LocalFileContentFetcher
 import dev.vibrato.core.data.SourceRepository
+import dev.vibrato.core.data.backup.BackupRepository
 import dev.vibrato.core.model.SourceKind
 import dev.vibrato.core.network.HttpContentFetcher
 import dev.vibrato.source.api.ContentFetcher
@@ -60,4 +61,5 @@ val dataModule: Module = module {
     single { SourceRepository(get(), get(), get(), get()) }
     single { ChannelRepository(get(), get(), get(), get(), get()) }
     single { GuideRepository(get(), get(), get()) }
+    single { BackupRepository(get(), get()) }
 }

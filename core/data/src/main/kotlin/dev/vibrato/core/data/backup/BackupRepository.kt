@@ -1,0 +1,170 @@
+/*
+ * Vibrato — a free, open source IPTV player.
+ * Copyright (C) 2026 The Vibrato Authors
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
+package dev.vibrato.core.data.backup
+
+import dev.vibrato.core.database.dao.FavoriteDao
+import dev.vibrato.core.database.dao.SourceDao
+import dev.vibrato.core.database.entity.FavoriteEntity
+import dev.vibrato.core.database.entity.SourceEntity
+import dev.vibrato.core.model.SourceKind
+import kotlinx.serialization.json.Json
+
+/** Why an import was refused, or what it restored. */
+sealed interface ImportResult {
+
+    /**
+     * @param sourcesRestored how many sources were added.
+     * @param favoritesRestored how many favourites were reattached.
+     * @param credentialsNeeded sources that will not load until a password is re-entered.
+     */
+    data class Success(
+        val sourcesRestored: Int,
+        val favoritesRestored: Int,
+        val credentialsNeeded: List<String>,
+    ) : ImportResult
+
+    /** The file parsed but was written by a newer build (AC-DATA-04). */
+    data class VersionTooNew(val fileVersion: Int, val supportedVersion: Int) : ImportResult
+
+    /** The file was not a Vibrato export, or was corrupt. */
+    data object Unreadable : ImportResult
+}
+
+/**
+ * Export and import of the user's configuration (AC-DATA-01 → 04).
+ *
+ * Channel rows are never exported. They are a cache of what a provider served and can run
+ * to tens of thousands of entries; a refresh rebuilds them in seconds. What cannot be
+ * rebuilt is which sources the user configured and what they favourited, so that is
+ * exactly what an export carries.
+ */
+class BackupRepository(
+    private val sourceDao: SourceDao,
+    private val favoriteDao: FavoriteDao,
+    private val now: () -> Long = System::currentTimeMillis,
+) {
+
+    suspend fun export(): String {
+        val sources = sourceDao.allOnce()
+
+        val backupSources = sources.map { entity ->
+            BackupSource(
+                name = entity.name,
+                kind = entity.kind,
+                url = entity.url,
+                createdAtEpochMillis = entity.createdAtEpochMillis,
+                requiresCredentials = entity.kind == SourceKind.XTREAM.name,
+            )
+        }
+
+        val backupFavorites = sources.flatMap { entity ->
+            favoriteDao.allFor(entity.id).map { favorite ->
+                BackupFavorite(
+                    sourceUrl = entity.url,
+                    stableKey = favorite.stableKey,
+                    favoritedAtEpochMillis = favorite.favoritedAtEpochMillis,
+                )
+            }
+        }
+
+        return json.encodeToString(
+            BackupFile(
+                schemaVersion = BackupFile.CURRENT_SCHEMA_VERSION,
+                exportedAtEpochMillis = now(),
+                sources = backupSources,
+                favorites = backupFavorites,
+            ),
+        )
+    }
+
+    /**
+     * Restores an export.
+     *
+     * Additive rather than destructive: a source whose URL is already configured is left
+     * alone instead of being duplicated or overwritten, so importing the wrong file is an
+     * inconvenience rather than a way to lose what is already set up.
+     */
+    @Suppress("SwallowedException", "TooGenericExceptionCaught", "ReturnCount")
+    suspend fun import(contents: String): ImportResult {
+        val backup = try {
+            json.decodeFromString<BackupFile>(contents)
+        } catch (_: Exception) {
+            return ImportResult.Unreadable
+        }
+
+        // Checked before anything is written. A file from a future schema may carry fields
+        // this build would silently drop, and a half-applied import is worse than none.
+        if (backup.schemaVersion > BackupFile.CURRENT_SCHEMA_VERSION) {
+            return ImportResult.VersionTooNew(backup.schemaVersion, BackupFile.CURRENT_SCHEMA_VERSION)
+        }
+        if (backup.schemaVersion < 1) return ImportResult.Unreadable
+
+        val existingByUrl = sourceDao.allOnce().associateBy { it.url }
+        val idByUrl = existingByUrl.mapValues { it.value.id }.toMutableMap()
+        var sourcesRestored = 0
+        val credentialsNeeded = mutableListOf<String>()
+
+        backup.sources.forEach { source ->
+            if (existingByUrl.containsKey(source.url)) return@forEach
+            if (SourceKind.entries.none { it.name == source.kind }) return@forEach
+
+            val id = sourceDao.insert(
+                SourceEntity(
+                    id = 0L,
+                    name = source.name,
+                    kind = source.kind,
+                    url = source.url,
+                    createdAtEpochMillis = source.createdAtEpochMillis,
+                    // Never carried over: this device has not loaded this source yet, and
+                    // claiming otherwise would hide that it holds no channels.
+                    lastRefreshedEpochMillis = null,
+                ),
+            )
+            idByUrl[source.url] = id
+            sourcesRestored++
+            if (source.requiresCredentials) credentialsNeeded += source.name
+        }
+
+        var favoritesRestored = 0
+        backup.favorites.forEach { favorite ->
+            val sourceId = idByUrl[favorite.sourceUrl] ?: return@forEach
+            favoriteDao.add(
+                FavoriteEntity(
+                    sourceId = sourceId,
+                    stableKey = favorite.stableKey,
+                    favoritedAtEpochMillis = favorite.favoritedAtEpochMillis,
+                ),
+            )
+            favoritesRestored++
+        }
+
+        return ImportResult.Success(
+            sourcesRestored = sourcesRestored,
+            favoritesRestored = favoritesRestored,
+            credentialsNeeded = credentialsNeeded,
+        )
+    }
+
+    private companion object {
+        val json = Json {
+            prettyPrint = true
+            ignoreUnknownKeys = true
+        }
+    }
+}

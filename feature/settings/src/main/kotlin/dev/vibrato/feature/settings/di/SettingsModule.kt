@@ -16,27 +16,14 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-plugins {
-    id("vibrato.android.core")
-    alias(libs.plugins.kotlin.serialization)
-}
+package dev.vibrato.feature.settings.di
 
-android {
-    namespace = "dev.vibrato.core.data"
-}
+import dev.vibrato.feature.settings.SettingsViewModel
+import org.koin.core.module.Module
+import org.koin.core.module.dsl.viewModelOf
+import org.koin.dsl.module
 
-dependencies {
-    api(projects.core.model)
-    api(projects.source.api)
-    implementation(projects.core.common)
-    implementation(projects.core.database)
-    implementation(projects.core.datastore)
-    implementation(projects.core.network)
-    implementation(projects.source.m3u)
-    implementation(projects.source.xtream)
-    implementation(libs.kotlinx.coroutines.core)
-    implementation(platform(libs.koin.bom))
-    implementation(libs.koin.core)
-    implementation(libs.ktor.client.core)
-    implementation(libs.kotlinx.serialization.json)
+/** Wiring owned by `:feature:settings`. Aggregated by `:app`. */
+val settingsModule: Module = module {
+    viewModelOf(::SettingsViewModel)
 }

@@ -42,6 +42,10 @@ interface SourceDao {
     @Query("SELECT * FROM sources WHERE id = :id")
     suspend fun findById(id: Long): SourceEntity?
 
+    /** A one-shot read of every source, for export (AC-DATA-01). */
+    @Query("SELECT * FROM sources ORDER BY createdAtEpochMillis ASC")
+    suspend fun allOnce(): List<SourceEntity>
+
     @Insert(onConflict = OnConflictStrategy.ABORT)
     suspend fun insert(source: SourceEntity): Long
 
@@ -188,6 +192,10 @@ interface FavoriteDao {
 
     @Query("SELECT COUNT(*) FROM favorites WHERE sourceId = :sourceId")
     suspend fun countFor(sourceId: Long): Int
+
+    /** Every favourite for one source, for export (AC-DATA-01). */
+    @Query("SELECT * FROM favorites WHERE sourceId = :sourceId")
+    suspend fun allFor(sourceId: Long): List<FavoriteEntity>
 }
 
 @Dao

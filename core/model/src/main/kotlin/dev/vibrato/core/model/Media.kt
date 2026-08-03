@@ -28,17 +28,6 @@ enum class MediaKind {
     LIVE,
     VOD,
     SERIES,
-    ;
-
-    /**
-     * Whether a browse list of this kind reads better alphabetically.
-     *
-     * Live keeps the provider's own order, because that order *is* the channel numbering
-     * a viewer knows — sorting it by name puts channel 1 somewhere in the middle. Films
-     * and series have no such numbering, and the provider's order for them is its own
-     * insertion order, which looks arbitrary to anyone trying to find a specific title.
-     */
-    val sortsAlphabetically: Boolean get() = this != LIVE
 }
 
 /** How a [Source] obtains its content. */

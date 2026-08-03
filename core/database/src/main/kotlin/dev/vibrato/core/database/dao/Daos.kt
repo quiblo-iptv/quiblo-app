@@ -93,11 +93,6 @@ interface ChannelDao {
      * @param query empty for "no search".
      * @param favoritesOnly 1 to restrict to favourites, 0 for everything.
      */
-    /**
-     * @param sortByName 1 to order alphabetically, 0 to keep the provider's own order.
-     *   The CASE yields NULL for every row when it is 0, so the sort falls through to
-     *   `sortIndex` — one query rather than two, and no `@RawQuery`.
-     */
     @Query(
         """
         SELECT c.*, (f.stableKey IS NOT NULL) AS isFavorite
@@ -108,9 +103,7 @@ interface ChannelDao {
           AND (:groupTitle IS NULL OR c.groupTitle = :groupTitle)
           AND (:query = '' OR c.name LIKE '%' || :query || '%')
           AND (:favoritesOnly = 0 OR f.stableKey IS NOT NULL)
-        ORDER BY
-          CASE WHEN :sortByName = 1 THEN c.name END COLLATE NOCASE ASC,
-          c.sortIndex ASC
+        ORDER BY c.sortIndex ASC
         """,
     )
     fun observeBrowse(
@@ -119,7 +112,6 @@ interface ChannelDao {
         groupTitle: String?,
         query: String,
         favoritesOnly: Int,
-        sortByName: Int,
     ): Flow<List<ChannelWithFavorite>>
 
     /** Favourites across every content type, for the dedicated section (AC-FAV-01). */
@@ -130,17 +122,25 @@ interface ChannelDao {
         INNER JOIN favorites f ON f.sourceId = c.sourceId AND f.stableKey = c.stableKey
         WHERE c.sourceId = :sourceId
           AND (:query = '' OR c.name LIKE '%' || :query || '%')
-        ORDER BY c.kind ASC, c.name COLLATE NOCASE ASC
+        ORDER BY c.kind ASC, c.sortIndex ASC
         """,
     )
     fun observeFavorites(sourceId: Long, query: String): Flow<List<ChannelWithFavorite>>
 
+    /**
+     * Categories in the provider's own order, not alphabetically.
+     *
+     * There is no stored category order to sort by — categories are derived by grouping
+     * channels — so the first channel in each group stands in for it. That is faithful,
+     * because the ingest numbers channels in the order the provider returned them, and a
+     * provider that lists a category first lists its channels first.
+     */
     @Query(
         """
         SELECT groupTitle, COUNT(*) AS itemCount FROM channels
         WHERE sourceId = :sourceId AND kind = :kind
         GROUP BY groupTitle
-        ORDER BY groupTitle ASC
+        ORDER BY MIN(sortIndex) ASC
         """,
     )
     fun observeCategoriesByKind(sourceId: Long, kind: String): Flow<List<CategoryCount>>

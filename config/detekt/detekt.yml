@@ -28,11 +28,7 @@ style:
 complexity:
   LongParameterList:
     active: true
-    # A Room @Query's parameters are the query's own filters. They cannot be bundled into a
-    # parameter object — Room binds each one by name into the SQL — so this rule's usual
-    # remedy is unavailable here, and the count measures how selective the query is rather
-    # than a function doing too much.
-    ignoreAnnotated: [ 'Composable', 'Query' ]
+    ignoreAnnotated: [ 'Composable' ]
   TooManyFunctions:
     active: true
     ignoreAnnotatedFunctions: [ 'Composable' ]

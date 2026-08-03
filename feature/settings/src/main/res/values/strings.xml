@@ -54,4 +54,17 @@
     <string name="settings_bitrate_8">8 Mbps</string>
     <string name="settings_bitrate_4">4 Mbps</string>
     <string name="settings_bitrate_2">2 Mbps</string>
+
+    <string name="settings_metadata_title">Film information</string>
+    <string name="settings_metadata_summary">Optionally show a description, genres, rating, certificate, director and cast on movie screens, using your own account with The Movie Database. Off by default — Vibrato ships no key of its own and contacts nothing until you add one.</string>
+    <string name="settings_metadata_key">TMDB API key or read access token</string>
+    <string name="settings_metadata_save">Save and check</string>
+    <string name="settings_metadata_clear">Turn off</string>
+    <string name="settings_metadata_checking">Checking the key…</string>
+    <string name="settings_metadata_accepted">Key accepted. Film information is on.</string>
+    <string name="settings_metadata_rejected">The Movie Database rejected that key. Nothing was saved.</string>
+    <string name="settings_metadata_cleared">Turned off. The key was removed.</string>
+    <string name="settings_metadata_on">Film information is on.</string>
+    <string name="settings_metadata_off">Off. No requests are made to The Movie Database.</string>
+    <string name="settings_metadata_attribution">This product uses the TMDB API but is not endorsed or certified by TMDB.</string>
 </resources>

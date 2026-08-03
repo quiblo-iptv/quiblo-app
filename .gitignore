@@ -35,3 +35,6 @@ config/detekt/baseline.xml.tmp
 
 # Databases pulled off a device for debugging
 *_temp.db
+
+# Third-party API keys used for local testing. Never committed.
+tmdb.properties

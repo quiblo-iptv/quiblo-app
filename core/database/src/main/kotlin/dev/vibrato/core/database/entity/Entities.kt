@@ -147,3 +147,36 @@ data class ProgrammeEntity(
     val startEpochMillis: Long,
     val endEpochMillis: Long,
 )
+
+/**
+ * Cached film metadata, keyed by the cleaned search title.
+ *
+ * Persisted rather than held in memory so a relaunch does not re-ask the service for
+ * everything the user browses. A metadata provider rate-limits per key, and the key is the
+ * user's own — being wasteful with it is being wasteful with something that belongs to them.
+ *
+ * Keyed by title rather than by channel id because a refresh reassigns every channel id,
+ * and the cache would be thrown away for no reason each time a playlist reloaded.
+ */
+@Entity(tableName = "movie_metadata")
+data class MovieMetadataEntity(
+    @PrimaryKey val searchTitle: String,
+    val overview: String? = null,
+    /** Newline-separated. A list table for a handful of short strings is not worth a join. */
+    val genres: String? = null,
+    val ageRating: String? = null,
+    val rating: Double? = null,
+    val director: String? = null,
+    val topCast: String? = null,
+    val posterUrl: String? = null,
+    val backdropUrl: String? = null,
+    /** When this was fetched, so a stale entry can be refreshed rather than kept forever. */
+    val fetchedAtEpochMillis: Long,
+    /**
+     * True when the service was asked and had nothing.
+     *
+     * Recorded so a title with no match is not re-asked on every visit. A negative answer
+     * is an answer, and re-requesting it is the most wasteful thing this cache could do.
+     */
+    val isMiss: Boolean = false,
+)

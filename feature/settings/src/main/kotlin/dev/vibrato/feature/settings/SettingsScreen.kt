@@ -68,6 +68,8 @@ fun SettingsScreen(
 ) {
     val backupState by viewModel.backupState.collectAsStateWithLifecycle()
     val playerSettings by viewModel.playerSettings.collectAsStateWithLifecycle()
+    val tmdbKey by viewModel.tmdbApiKey.collectAsStateWithLifecycle()
+    val tmdbCheck by viewModel.tmdbCheck.collectAsStateWithLifecycle()
     val context = LocalContext.current
 
     // SAF, so the file lands wherever the user chooses and the app needs no storage
@@ -122,6 +124,15 @@ fun SettingsScreen(
             onSeekInterval = viewModel::setSeekInterval,
             onBufferMode = viewModel::setBufferMode,
             onMaxBitrate = viewModel::setMaxBitrate,
+        )
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        MetadataSettingsCard(
+            savedKey = tmdbKey,
+            check = tmdbCheck,
+            onSave = viewModel::saveTmdbKey,
+            onClear = viewModel::clearTmdbKey,
         )
 
         Spacer(modifier = Modifier.height(16.dp))

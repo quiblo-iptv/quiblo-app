@@ -49,6 +49,7 @@ immediate ban — see [`CONTRIBUTING.md`](CONTRIBUTING.md).
 | **Theme & Design** | Material 3 Expressive, dark and light |
 | **Resume** | Playback position remembered per item, and per episode within a series |
 | **Favourites** | Survive playlist refresh |
+| **Film information** | Optional descriptions, genres, certificates, ratings, director and cast from The Movie Database, using your own API key. Off by default |
 | **Backup** | Versioned export and import of sources and favourites, to a file you choose |
 | **Storage & Privacy** | Entirely on-device with zero telemetry |
 
@@ -60,7 +61,9 @@ in [`docs/PLAN.md`](docs/PLAN.md) §6.
 
 Vibrato has no telemetry, no analytics, no crash-reporting SDK, and no update check
 against any project-controlled server. The only outbound connections are to the hosts you
-configure yourself. This is verifiable by packet capture on a clean install, and is a
+configure yourself — your playlist or Xtream provider, and The Movie Database only if you
+have entered your own API key for it. Vibrato ships no key of its own, so with the setting
+untouched nothing ever contacts that service. This is verifiable by packet capture on a clean install, and is a
 release criterion (AC-NFR-03).
 
 Permissions requested: `INTERNET` and `ACCESS_NETWORK_STATE`. Nothing else — file access

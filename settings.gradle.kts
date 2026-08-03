@@ -65,6 +65,7 @@ include(":core:data")
 include(":source:api")
 include(":source:m3u")
 include(":source:xtream")
+include(":source:tmdb")
 
 // Feature layer. Compose UI, consumes :core:data only.
 //

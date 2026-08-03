@@ -67,6 +67,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.compose.SubcomposeAsyncImage
 import dev.vibrato.core.model.Channel
+import dev.vibrato.core.model.MovieMetadata
 import dev.vibrato.core.model.VodDetails
 import org.koin.androidx.compose.koinViewModel
 import org.koin.core.parameter.parametersOf
@@ -149,7 +150,11 @@ private fun MovieDetail(
     onPlay: (Channel, Long) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val artwork = state.details?.coverUrl?.takeIf { it.isNotBlank() } ?: state.channel.logoUrl
+    // TMDB artwork first when it exists: it is a real poster at a known size, where a
+    // provider's is whatever they happened to attach.
+    val artwork = state.metadata?.posterUrl
+        ?: state.details?.coverUrl?.takeIf { it.isNotBlank() }
+        ?: state.channel.logoUrl
     val isLandscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
 
     if (isLandscape) {
@@ -201,10 +206,14 @@ private fun Details(
 ) {
     Column(modifier = modifier) {
         state.details?.let { MetadataLine(it) }
+        state.metadata?.let { TmdbFacts(it) }
 
         PlaybackButtons(state = state, onPlay = onPlay)
 
+        // The provider's plot wins when it has one — it describes the file the user will
+        // actually play. TMDB fills the very common case where the provider supplies none.
         val overview = state.details?.overview?.takeIf { it.isNotBlank() }
+            ?: state.metadata?.overview?.takeIf { it.isNotBlank() }
         if (overview != null) {
             Text(
                 text = overview,
@@ -304,6 +313,50 @@ private fun ArtworkPlaceholder() {
             tint = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.size(48.dp),
         )
+    }
+}
+
+/**
+ * Genres, certificate, score, director and cast, when the user has enabled enrichment.
+ *
+ * Every line is omitted rather than blanked when its field is missing. A film with no
+ * credited director is not an error, and a row reading "Director: —" is worse than no row.
+ */
+@Composable
+private fun TmdbFacts(metadata: MovieMetadata) {
+    if (metadata.isEmpty) return
+
+    Column(modifier = Modifier.padding(bottom = 12.dp)) {
+        val chips = listOfNotNull(
+            metadata.ageRating?.takeIf { it.isNotBlank() },
+            metadata.rating?.let { stringResource(R.string.movie_rating, it) },
+            metadata.genres.takeIf { it.isNotEmpty() }?.joinToString(", "),
+        )
+        if (chips.isNotEmpty()) {
+            Text(
+                text = chips.joinToString(SEPARATOR),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+
+        metadata.director?.takeIf { it.isNotBlank() }?.let {
+            Text(
+                text = stringResource(R.string.movie_director, it),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 4.dp),
+            )
+        }
+
+        metadata.topCast.takeIf { it.isNotEmpty() }?.let {
+            Text(
+                text = stringResource(R.string.movie_cast, it.joinToString(", ")),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 4.dp),
+            )
+        }
     }
 }
 

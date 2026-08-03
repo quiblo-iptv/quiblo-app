@@ -22,6 +22,7 @@ import android.content.Context
 import dev.vibrato.core.data.ChannelRepository
 import dev.vibrato.core.data.GuideRepository
 import dev.vibrato.core.data.LocalFileContentFetcher
+import dev.vibrato.core.data.MovieMetadataRepository
 import dev.vibrato.core.data.PlayerSettingsRepository
 import dev.vibrato.core.data.SourceRepository
 import dev.vibrato.core.data.backup.BackupRepository
@@ -31,6 +32,7 @@ import dev.vibrato.source.api.ContentFetcher
 import dev.vibrato.source.api.CredentialStore
 import dev.vibrato.source.api.MediaSource
 import dev.vibrato.source.m3u.M3uSource
+import dev.vibrato.source.tmdb.TmdbClient
 import dev.vibrato.source.xtream.createXtreamSource
 import io.ktor.client.HttpClient
 import org.koin.core.module.Module
@@ -64,4 +66,6 @@ val dataModule: Module = module {
     single { GuideRepository(get(), get(), get()) }
     single { BackupRepository(get(), get()) }
     single { PlayerSettingsRepository(get()) }
+    single { TmdbClient(get<HttpClient>()) }
+    single { MovieMetadataRepository(get(), get(), get()) }
 }

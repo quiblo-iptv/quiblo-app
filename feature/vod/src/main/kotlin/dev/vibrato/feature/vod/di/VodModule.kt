@@ -25,5 +25,5 @@ import org.koin.dsl.module
 
 /** Wiring owned by `:feature:vod`. Aggregated by `:app`. */
 val vodModule: Module = module {
-    viewModel { (channelId: Long) -> MovieDetailViewModel(channelId, get()) }
+    viewModel { (channelId: Long) -> MovieDetailViewModel(channelId, get(), get()) }
 }

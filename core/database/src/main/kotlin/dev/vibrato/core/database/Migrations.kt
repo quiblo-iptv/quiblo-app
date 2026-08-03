@@ -87,3 +87,27 @@ val MIGRATION_3_4 = object : Migration(3, 4) {
         db.execSQL("ALTER TABLE `channels` ADD COLUMN `categoryIndex` INTEGER")
     }
 }
+
+/** Adds the film metadata cache. Nothing to migrate — the table starts empty and refills. */
+val MIGRATION_4_5 = object : Migration(4, 5) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS `movie_metadata` (
+                `searchTitle` TEXT NOT NULL,
+                `overview` TEXT,
+                `genres` TEXT,
+                `ageRating` TEXT,
+                `rating` REAL,
+                `director` TEXT,
+                `topCast` TEXT,
+                `posterUrl` TEXT,
+                `backdropUrl` TEXT,
+                `fetchedAtEpochMillis` INTEGER NOT NULL,
+                `isMiss` INTEGER NOT NULL DEFAULT 0,
+                PRIMARY KEY(`searchTitle`)
+            )
+            """.trimIndent(),
+        )
+    }
+}

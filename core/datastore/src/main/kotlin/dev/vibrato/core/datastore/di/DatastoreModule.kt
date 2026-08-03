@@ -21,6 +21,7 @@ package dev.vibrato.core.datastore.di
 import android.content.Context
 import dev.vibrato.core.datastore.EncryptedCredentialStore
 import dev.vibrato.core.datastore.PlayerSettingsStore
+import dev.vibrato.core.datastore.TmdbKeyStore
 import dev.vibrato.source.api.CredentialStore
 import org.koin.core.module.Module
 import org.koin.dsl.module
@@ -29,4 +30,5 @@ import org.koin.dsl.module
 val datastoreModule: Module = module {
     single<CredentialStore> { EncryptedCredentialStore(get<Context>()) }
     single { PlayerSettingsStore(get<Context>()) }
+    single { TmdbKeyStore(get<Context>()) }
 }

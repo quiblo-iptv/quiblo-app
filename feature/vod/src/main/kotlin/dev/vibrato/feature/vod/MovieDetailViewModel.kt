@@ -21,7 +21,9 @@ package dev.vibrato.feature.vod
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dev.vibrato.core.data.ChannelRepository
+import dev.vibrato.core.data.MovieMetadataRepository
 import dev.vibrato.core.model.Channel
+import dev.vibrato.core.model.MovieMetadata
 import dev.vibrato.core.model.VodDetails
 import dev.vibrato.source.api.VodDetailsResult
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -44,6 +46,8 @@ sealed interface MovieDetailUiState {
         val channel: Channel,
         val details: VodDetails? = null,
         val resumePositionMillis: Long = 0L,
+        /** From TMDB, when the user has enabled it and a match was found. */
+        val metadata: MovieMetadata? = null,
     ) : MovieDetailUiState {
 
         val canResume: Boolean get() = resumePositionMillis > RESUME_THRESHOLD_MILLIS
@@ -70,6 +74,7 @@ sealed interface MovieDetailUiState {
 class MovieDetailViewModel(
     private val channelId: Long,
     private val channelRepository: ChannelRepository,
+    private val metadataRepository: MovieMetadataRepository,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow<MovieDetailUiState>(MovieDetailUiState.Loading)
@@ -106,8 +111,14 @@ class MovieDetailViewModel(
             )
 
             val details = (channelRepository.getVodDetails(channelId) as? VodDetailsResult.Success)?.details
-            val current = _uiState.value as? MovieDetailUiState.Ready ?: return@launch
-            _uiState.value = current.copy(details = details)
+            (_uiState.value as? MovieDetailUiState.Ready)?.let { _uiState.value = it.copy(details = details) }
+
+            // Fetched after the provider's own details rather than alongside: the screen is
+            // already complete without it, and enrichment must never be what a viewer waits
+            // for. Returns null when the feature is off, which is the default.
+            metadataRepository.load()
+            val metadata = metadataRepository.forTitle(channel.name)
+            (_uiState.value as? MovieDetailUiState.Ready)?.let { _uiState.value = it.copy(metadata = metadata) }
         }
     }
 }

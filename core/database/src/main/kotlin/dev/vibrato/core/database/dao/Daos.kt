@@ -28,6 +28,7 @@ import androidx.room.Transaction
 import androidx.room.Update
 import dev.vibrato.core.database.entity.ChannelEntity
 import dev.vibrato.core.database.entity.FavoriteEntity
+import dev.vibrato.core.database.entity.MovieMetadataEntity
 import dev.vibrato.core.database.entity.ProgrammeEntity
 import dev.vibrato.core.database.entity.ResumePositionEntity
 import dev.vibrato.core.database.entity.SourceEntity
@@ -267,4 +268,18 @@ interface ProgrammeDao {
         deleteFor(sourceId, channelKey)
         insertAll(programmes)
     }
+}
+
+@Dao
+interface MovieMetadataDao {
+
+    @Query("SELECT * FROM movie_metadata WHERE searchTitle = :searchTitle")
+    suspend fun find(searchTitle: String): MovieMetadataEntity?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsert(entity: MovieMetadataEntity)
+
+    /** Emptied when the key changes: a different key can return different answers. */
+    @Query("DELETE FROM movie_metadata")
+    suspend fun clear()
 }

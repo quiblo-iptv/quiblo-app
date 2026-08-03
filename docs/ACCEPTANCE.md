@@ -79,7 +79,7 @@ IDs are stable — reference them in commits and issues (`fix: AC-PL-04 crash on
 |---|---|
 | AC-NFR-01 | Cold start to interactive: under 2s on a mid-range Android 11 device. |
 | AC-NFR-02 | Release APK under 25 MB. |
-| AC-NFR-03 | Zero network requests to any host the user did not configure. Verifiable by packet capture on a clean install. |
+| AC-NFR-03 | Zero network requests to any host the user did not configure. Verifiable by packet capture on a clean install. A metadata service the user has enabled by entering their own key counts as configured; with no key entered, a packet capture must show no contact with it at all. |
 | AC-NFR-04 | Permissions requested: INTERNET and network state only. No storage permission (SAF instead), no location, no contacts. |
 | AC-NFR-05 | Passes `./gradlew lint detekt test` with zero errors in CI. |
 | AC-NFR-06 | `:core:*` modules have no dependency on Compose or any `:feature:*` module — enforced by a build-level dependency check, not convention. |

@@ -25,6 +25,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -117,6 +118,12 @@ fun PlayerScreen(
     val aspectRatioMode by viewModel.aspectRatioMode.collectAsStateWithLifecycle()
     var controlsVisible by remember { mutableStateOf(true) }
 
+    // Hoisted out of PlayerControls, which leaves composition every time the controls
+    // auto-hide — taking a `remember` inside it with them. The lock forgot itself after
+    // three seconds, and locking never suppressed anything while it lasted.
+    var isLocked by remember { mutableStateOf(false) }
+    var isLockTopLeft by remember { mutableStateOf(true) }
+
     val context = LocalContext.current
     val brightness = remember(context) { ScreenBrightness(context.findActivity()) }
     val volume = remember(context) { MediaVolume(context) }
@@ -171,16 +178,25 @@ fun PlayerScreen(
         modifier = modifier
             .fillMaxSize()
             .background(Color.Black)
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null,
-            ) { controlsVisible = !controlsVisible }
-            .playerVolumeBrightnessGestures(
-                onFeedback = { gestureFeedback = it },
-                onBrightnessDelta = brightness::adjustBy,
-                onVolumeDelta = volume::adjustBy,
-                currentBrightness = brightness::current,
-                currentVolume = volume::current,
+            // A locked screen ignores taps and drags entirely. That is the whole point of
+            // the lock: a sleeve or a stray hand must not pause, seek or change volume.
+            .then(
+                if (isLocked) {
+                    Modifier
+                } else {
+                    Modifier
+                        .clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null,
+                        ) { controlsVisible = !controlsVisible }
+                        .playerVolumeBrightnessGestures(
+                            onFeedback = { gestureFeedback = it },
+                            onBrightnessDelta = brightness::adjustBy,
+                            onVolumeDelta = volume::adjustBy,
+                            currentBrightness = brightness::current,
+                            currentVolume = volume::current,
+                        )
+                },
             ),
     ) {
         VideoSurface(
@@ -189,6 +205,18 @@ fun PlayerScreen(
             mode = aspectRatioMode,
             modifier = Modifier.fillMaxSize(),
         )
+
+        // While locked the lock button is the only thing on screen, and the only thing that
+        // responds. It stays visible rather than auto-hiding, because a lock with no
+        // visible way out is indistinguishable from a frozen app.
+        if (isLocked) {
+            LockButton(
+                isLocked = true,
+                isTopLeft = isLockTopLeft,
+                onClick = { isLocked = false },
+            )
+            return@Box
+        }
 
         when {
             state.status == PlaybackStatus.ERROR -> PlaybackErrorMessage(
@@ -215,6 +243,9 @@ fun PlayerScreen(
                 state = state,
                 seekInterval = settings.seekInterval,
                 aspectRatioMode = aspectRatioMode,
+                isLockTopLeft = isLockTopLeft,
+                onLock = { isLocked = true },
+                onSwapLockSide = { isLockTopLeft = !isLockTopLeft },
                 onBack = onBack,
                 onPlayPause = {
                     viewModel.togglePlayPause()
@@ -263,6 +294,35 @@ private fun TapToPlay(onPlay: () -> Unit) {
                 modifier = Modifier.size(56.dp),
             )
         }
+    }
+}
+
+/** The floating lock toggle, on whichever side the user has parked it. */
+@Composable
+private fun BoxScope.LockButton(
+    isLocked: Boolean,
+    isTopLeft: Boolean,
+    onClick: () -> Unit,
+) {
+    IconButton(
+        onClick = onClick,
+        modifier = Modifier
+            .padding(16.dp)
+            .align(if (isTopLeft) Alignment.TopStart else Alignment.TopEnd)
+            // A scrim, not decoration. While locked this is the only control on screen and
+            // it sits directly over the video, so against a bright frame a white glyph on
+            // nothing is invisible — and an invisible unlock is a player the user cannot
+            // get out of.
+            .background(Color.Black.copy(alpha = 0.45f), CircleShape),
+    ) {
+        Icon(
+            imageVector = if (isLocked) Icons.Filled.Lock else Icons.Filled.LockOpen,
+            contentDescription = stringResource(
+                if (isLocked) R.string.player_unlock else R.string.player_lock,
+            ),
+            tint = Color.White,
+            modifier = Modifier.size(32.dp),
+        )
     }
 }
 
@@ -431,6 +491,9 @@ private fun PlayerControls(
     state: PlaybackState,
     seekInterval: SeekInterval,
     aspectRatioMode: AspectRatioMode,
+    isLockTopLeft: Boolean,
+    onLock: () -> Unit,
+    onSwapLockSide: () -> Unit,
     onBack: () -> Unit,
     onPlayPause: () -> Unit,
     onSeek: (Long) -> Unit,
@@ -438,53 +501,37 @@ private fun PlayerControls(
     onCycleAspectRatio: () -> Unit,
     onCycleSubtitles: () -> Unit,
 ) {
-    var isLocked by remember { mutableStateOf(false) }
-    var isLockTopLeft by remember { mutableStateOf(true) }
-
     Box(modifier = Modifier.fillMaxSize()) {
-        // Floating Lock Button positioned Top-Left or Top-Right
-        IconButton(
-            onClick = { isLocked = !isLocked },
-            modifier = Modifier
-                .padding(16.dp)
-                .align(if (isLockTopLeft) Alignment.TopStart else Alignment.TopEnd),
-        ) {
-            Icon(
-                imageVector = if (isLocked) Icons.Filled.Lock else Icons.Filled.LockOpen,
-                contentDescription = stringResource(
-                    if (isLocked) R.string.player_unlock else R.string.player_lock,
-                ),
-                tint = Color.White,
-                modifier = Modifier.size(32.dp),
-            )
-        }
+        LockButton(isLocked = false, isTopLeft = isLockTopLeft, onClick = onLock)
 
-        if (!isLocked) {
-            Column(modifier = Modifier.fillMaxSize()) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(Color.Black.copy(alpha = 0.4f))
-                        .padding(start = 56.dp, end = 8.dp, top = 8.dp, bottom = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    IconButton(onClick = onBack) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = stringResource(R.string.player_back),
-                            tint = Color.White,
-                        )
-                    }
-                    Text(
-                        text = state.item?.title.orEmpty(),
-                        color = Color.White,
-                        style = MaterialTheme.typography.titleMedium,
-                        modifier = Modifier
-                            .weight(1f)
-                            .padding(start = 8.dp),
+        Column(modifier = Modifier.fillMaxSize()) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(Color.Black.copy(alpha = 0.4f))
+                    .padding(start = 56.dp, end = 8.dp, top = 8.dp, bottom = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                IconButton(onClick = onBack) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                        contentDescription = stringResource(R.string.player_back),
+                        tint = Color.White,
                     )
+                }
+                Text(
+                    text = state.item?.title.orEmpty(),
+                    color = Color.White,
+                    style = MaterialTheme.typography.titleMedium,
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(start = 8.dp),
+                )
 
-                    // Start Over (Seek to 0L)
+                // Only for content that can actually be seeked. A live stream cannot, so
+                // the controller drops the request and the button does nothing — the same
+                // reasoning that hides the seek bar in AC-PLAY-02.
+                if (state.isSeekable) {
                     IconButton(onClick = { onSeek(0L) }) {
                         Icon(
                             imageVector = Icons.Filled.Replay,
@@ -492,54 +539,58 @@ private fun PlayerControls(
                             tint = Color.White,
                         )
                     }
-
-                    // Lock Position Swap (Top-Left <-> Top-Right)
-                    IconButton(onClick = { isLockTopLeft = !isLockTopLeft }) {
-                        Icon(
-                            imageVector = Icons.Filled.SwapHoriz,
-                            contentDescription = stringResource(R.string.player_swap_lock),
-                            tint = Color.White,
-                        )
-                    }
-
-                    // Cycles Fit → Fill → Zoom → Stretch. The label names the mode being
-                    // applied now, not the one a tap would move to.
-                    IconButton(onClick = onCycleAspectRatio) {
-                        Icon(
-                            imageVector = Icons.Filled.AspectRatio,
-                            contentDescription = stringResource(
-                                R.string.player_aspect_ratio,
-                                stringResource(aspectRatioMode.labelRes()),
-                            ),
-                            tint = Color.White,
-                        )
-                    }
-
-                    if (state.textTracks.isNotEmpty()) {
-                        IconButton(onClick = onCycleSubtitles) {
-                            Icon(
-                                imageVector = Icons.Filled.ClosedCaption,
-                                contentDescription = stringResource(R.string.player_subtitles),
-                                tint = Color.White,
-                            )
-                        }
-                    }
                 }
 
-                // fillMaxWidth is load-bearing. `weight` in a Column only claims height, so
-                // without it this Box wrapped its content and `Alignment.Center` centred the
-                // transport controls inside a box the width of the controls — leaving them
-                // pinned to the left edge of the screen.
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .fillMaxWidth(),
-                    contentAlignment = Alignment.Center,
+                // Lock Position Swap (Top-Left <-> Top-Right)
+                IconButton(onClick = onSwapLockSide) {
+                    Icon(
+                        imageVector = Icons.Filled.SwapHoriz,
+                        contentDescription = stringResource(R.string.player_swap_lock),
+                        tint = Color.White,
+                    )
+                }
+
+                // Cycles Fit → Fill → Zoom → Stretch. The label names the mode being
+                // applied now, not the one a tap would move to.
+                IconButton(onClick = onCycleAspectRatio) {
+                    Icon(
+                        imageVector = Icons.Filled.AspectRatio,
+                        contentDescription = stringResource(
+                            R.string.player_aspect_ratio,
+                            stringResource(aspectRatioMode.labelRes()),
+                        ),
+                        tint = Color.White,
+                    )
+                }
+
+                if (state.textTracks.isNotEmpty()) {
+                    IconButton(onClick = onCycleSubtitles) {
+                        Icon(
+                            imageVector = Icons.Filled.ClosedCaption,
+                            contentDescription = stringResource(R.string.player_subtitles),
+                            tint = Color.White,
+                        )
+                    }
+                }
+            }
+
+            // fillMaxWidth is load-bearing. `weight` in a Column only claims height, so
+            // without it this Box wrapped its content and `Alignment.Center` centred the
+            // transport controls inside a box the width of the controls — leaving them
+            // pinned to the left edge of the screen.
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth(),
+                contentAlignment = Alignment.Center,
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(24.dp),
                 ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(24.dp),
-                    ) {
+                    // Skip is meaningless on an unseekable stream: the controller ignores
+                    // the seek, so the button would look active and do nothing.
+                    if (state.isSeekable) {
                         IconButton(onClick = { onSkip(-1) }) {
                             Icon(
                                 imageVector = seekInterval.replayIcon(),
@@ -551,18 +602,20 @@ private fun PlayerControls(
                                 modifier = Modifier.size(40.dp),
                             )
                         }
+                    }
 
-                        IconButton(onClick = onPlayPause, modifier = Modifier.size(72.dp)) {
-                            Icon(
-                                imageVector = if (state.isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
-                                contentDescription = stringResource(
-                                    if (state.isPlaying) R.string.player_pause else R.string.player_play,
-                                ),
-                                tint = Color.White,
-                                modifier = Modifier.size(56.dp),
-                            )
-                        }
+                    IconButton(onClick = onPlayPause, modifier = Modifier.size(72.dp)) {
+                        Icon(
+                            imageVector = if (state.isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
+                            contentDescription = stringResource(
+                                if (state.isPlaying) R.string.player_pause else R.string.player_play,
+                            ),
+                            tint = Color.White,
+                            modifier = Modifier.size(56.dp),
+                        )
+                    }
 
+                    if (state.isSeekable) {
                         IconButton(onClick = { onSkip(1) }) {
                             Icon(
                                 imageVector = seekInterval.forwardIcon(),
@@ -576,34 +629,34 @@ private fun PlayerControls(
                         }
                     }
                 }
+            }
 
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(Color.Black.copy(alpha = 0.4f))
-                        .padding(horizontal = 16.dp, vertical = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    if (state.isSeekable && state.durationMillis > 0L) {
-                        Text(text = state.positionMillis.asClock(), color = Color.White)
-                        Slider(
-                            value = state.positionMillis.toFloat(),
-                            onValueChange = { onSeek(it.toLong()) },
-                            valueRange = 0f..state.durationMillis.toFloat(),
-                            modifier = Modifier
-                                .weight(1f)
-                                .padding(horizontal = 8.dp),
-                        )
-                        Text(text = state.durationMillis.asClock(), color = Color.White)
-                    } else {
-                        // AC-PLAY-02: an unseekable stream shows no seek bar at all, rather than
-                        // one that looks interactive and does nothing.
-                        Text(
-                            text = stringResource(R.string.player_live),
-                            color = Color.White,
-                            style = MaterialTheme.typography.labelLarge,
-                        )
-                    }
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(Color.Black.copy(alpha = 0.4f))
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                if (state.isSeekable && state.durationMillis > 0L) {
+                    Text(text = state.positionMillis.asClock(), color = Color.White)
+                    Slider(
+                        value = state.positionMillis.toFloat(),
+                        onValueChange = { onSeek(it.toLong()) },
+                        valueRange = 0f..state.durationMillis.toFloat(),
+                        modifier = Modifier
+                            .weight(1f)
+                            .padding(horizontal = 8.dp),
+                    )
+                    Text(text = state.durationMillis.asClock(), color = Color.White)
+                } else {
+                    // AC-PLAY-02: an unseekable stream shows no seek bar at all, rather than
+                    // one that looks interactive and does nothing.
+                    Text(
+                        text = stringResource(R.string.player_live),
+                        color = Color.White,
+                        style = MaterialTheme.typography.labelLarge,
+                    )
                 }
             }
         }

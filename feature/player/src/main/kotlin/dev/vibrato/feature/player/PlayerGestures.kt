@@ -26,6 +26,7 @@ import android.view.WindowManager
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
+import kotlin.math.roundToInt
 
 /**
  * Which half of the screen a vertical drag started in.
@@ -126,22 +127,52 @@ class ScreenBrightness(private val activity: Activity?) {
     }
 }
 
-/** Media-stream volume, expressed as a fraction so the UI never sees raw step counts. */
+/**
+ * Media-stream volume, expressed as a fraction so the UI never sees raw step counts.
+ *
+ * The fraction is accumulated here rather than re-read from the system on every drag
+ * event, because the system only stores whole steps — typically fifteen. Reading it back
+ * each time rounds the drag away: a delta smaller than one step lands between two values
+ * and is lost, so the volume only moves when a single event happens to cross a boundary.
+ *
+ * That asymmetry is what made this feel broken in one direction only. Truncating toward
+ * zero turns 6.7 into 6, so a small *decrease* always crossed a step, while the same small
+ * *increase* turned 7.3 back into 7 and did nothing at all. Volume went down easily and
+ * refused to come back up.
+ */
 class MediaVolume(context: Context) {
 
     private val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
     private val maxSteps = audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
 
-    fun current(): Float = if (maxSteps <= 0) {
+    /** Continuous position between drags; -1 until seeded from the system volume. */
+    private var fraction: Float = UNSEEDED
+
+    fun current(): Float {
+        if (fraction < 0f) fraction = systemFraction()
+        return fraction
+    }
+
+    fun adjustBy(delta: Float) {
+        if (maxSteps <= 0) return
+        fraction = (current() + delta).coerceIn(0f, 1f)
+        // Round, so half a step up is a step up. Truncation is what broke this.
+        audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, (fraction * maxSteps).roundToInt(), 0)
+    }
+
+    /** Re-seeds from the system, for when the hardware keys have moved it behind our back. */
+    fun resync() {
+        fraction = systemFraction()
+    }
+
+    private fun systemFraction(): Float = if (maxSteps <= 0) {
         0f
     } else {
         audioManager.getStreamVolume(AudioManager.STREAM_MUSIC).toFloat() / maxSteps
     }
 
-    fun adjustBy(delta: Float) {
-        if (maxSteps <= 0) return
-        val next = ((current() + delta) * maxSteps).toInt().coerceIn(0, maxSteps)
-        audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, next, 0)
+    private companion object {
+        const val UNSEEDED = -1f
     }
 }
 

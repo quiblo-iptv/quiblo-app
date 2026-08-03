@@ -101,7 +101,11 @@ fun VibratoApp() {
     ) { innerPadding ->
         VibratoNavHost(
             navController = navController,
-            modifier = Modifier.padding(innerPadding),
+            // Hiding the bars is not enough to reach the screen edges. Scaffold still
+            // reports the window insets in its content padding, so the player was inset by
+            // the status bar height and drew a strip of surface colour above the video.
+            // Full screen has to mean ignoring that padding, not just removing the bars.
+            modifier = if (isPlayer) Modifier else Modifier.padding(innerPadding),
         )
     }
 }

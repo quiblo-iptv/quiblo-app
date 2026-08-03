@@ -66,6 +66,39 @@ fun SettingsScreen(modifier: Modifier = Modifier) {
 
         Spacer(modifier = Modifier.height(16.dp))
 
+        // Theme Accent Colors Section
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Text(
+                    text = "Theme Accent Color",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                Text(
+                    text = "Choose your preferred primary accent color theme.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 4.dp, bottom = 12.dp),
+                )
+
+                Row(modifier = Modifier.fillMaxWidth()) {
+                    listOf("Violet", "Blue", "Green", "Amber", "Red").forEach { name ->
+                        FilterChip(
+                            selected = name == "Violet",
+                            onClick = { },
+                            label = { Text(name) },
+                            modifier = Modifier.padding(end = 8.dp),
+                        )
+                    }
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
         // Playback Buffering Section
         Card(
             modifier = Modifier.fillMaxWidth(),

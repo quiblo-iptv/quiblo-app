@@ -32,12 +32,18 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Brightness6
 import androidx.compose.material.icons.filled.ClosedCaption
 import androidx.compose.material.icons.filled.Forward10
+import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.LockOpen
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.PictureInPictureAlt
+import androidx.compose.material.icons.filled.Replay
 import androidx.compose.material.icons.filled.Replay10
+import androidx.compose.material.icons.filled.SwapHoriz
+import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -226,109 +232,170 @@ private fun PlayerControls(
     onCycleSubtitles: () -> Unit,
     onPictureInPictureClick: () -> Unit = {},
 ) {
-    Column(modifier = Modifier.fillMaxSize()) {
-        Row(
+    var isLocked by remember { mutableStateOf(false) }
+    var isLockTopLeft by remember { mutableStateOf(true) }
+    var showVolumeSlider by remember { mutableStateOf(false) }
+    var showBrightnessSlider by remember { mutableStateOf(false) }
+    var volume by remember { mutableStateOf(1.0f) }
+    var brightness by remember { mutableStateOf(1.0f) }
+
+    Box(modifier = Modifier.fillMaxSize()) {
+        // Floating Lock Button positioned Top-Left or Top-Right
+        IconButton(
+            onClick = { isLocked = !isLocked },
             modifier = Modifier
-                .fillMaxWidth()
-                .background(Color.Black.copy(alpha = 0.4f))
-                .padding(8.dp),
-            verticalAlignment = Alignment.CenterVertically,
+                .padding(16.dp)
+                .align(if (isLockTopLeft) Alignment.TopStart else Alignment.TopEnd),
         ) {
-            IconButton(onClick = onBack) {
-                Icon(
-                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                    contentDescription = stringResource(R.string.player_back),
-                    tint = Color.White,
-                )
-            }
-            Text(
-                text = state.item?.title.orEmpty(),
-                color = Color.White,
-                style = MaterialTheme.typography.titleMedium,
-                modifier = Modifier
-                    .weight(1f)
-                    .padding(start = 8.dp),
+            Icon(
+                imageVector = if (isLocked) Icons.Filled.Lock else Icons.Filled.LockOpen,
+                contentDescription = if (isLocked) "Unlock screen" else "Lock screen",
+                tint = Color.White,
+                modifier = Modifier.size(32.dp),
             )
-            if (state.textTracks.isNotEmpty()) {
-                IconButton(onClick = onCycleSubtitles) {
-                    Icon(
-                        imageVector = Icons.Filled.ClosedCaption,
-                        contentDescription = stringResource(R.string.player_subtitles),
-                        tint = Color.White,
-                    )
-                }
-            }
-            IconButton(onClick = onPictureInPictureClick) {
-                Icon(
-                    imageVector = Icons.Filled.PictureInPictureAlt,
-                    contentDescription = "Picture in Picture",
-                    tint = Color.White,
-                )
-            }
         }
 
-        Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(24.dp),
-            ) {
-                IconButton(onClick = { onSeek((state.positionMillis - 10_000L).coerceAtLeast(0L)) }) {
-                    Icon(
-                        imageVector = Icons.Filled.Replay10,
-                        contentDescription = "Skip Backward 10s",
-                        tint = Color.White,
-                        modifier = Modifier.size(40.dp),
-                    )
-                }
-
-                IconButton(onClick = onPlayPause, modifier = Modifier.size(72.dp)) {
-                    Icon(
-                        imageVector = if (state.isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
-                        contentDescription = stringResource(
-                            if (state.isPlaying) R.string.player_pause else R.string.player_play,
-                        ),
-                        tint = Color.White,
-                        modifier = Modifier.size(56.dp),
-                    )
-                }
-
-                IconButton(onClick = { onSeek(state.positionMillis + 10_000L) }) {
-                    Icon(
-                        imageVector = Icons.Filled.Forward10,
-                        contentDescription = "Skip Forward 10s",
-                        tint = Color.White,
-                        modifier = Modifier.size(40.dp),
-                    )
-                }
-            }
-        }
-
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(Color.Black.copy(alpha = 0.4f))
-                .padding(horizontal = 16.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            if (state.isSeekable && state.durationMillis > 0L) {
-                Text(text = state.positionMillis.asClock(), color = Color.White)
-                Slider(
-                    value = state.positionMillis.toFloat(),
-                    onValueChange = { onSeek(it.toLong()) },
-                    valueRange = 0f..state.durationMillis.toFloat(),
+        if (!isLocked) {
+            Column(modifier = Modifier.fillMaxSize()) {
+                Row(
                     modifier = Modifier
-                        .weight(1f)
-                        .padding(horizontal = 8.dp),
-                )
-                Text(text = state.durationMillis.asClock(), color = Color.White)
-            } else {
-                // AC-PLAY-02: an unseekable stream shows no seek bar at all, rather than
-                // one that looks interactive and does nothing.
-                Text(
-                    text = stringResource(R.string.player_live),
-                    color = Color.White,
-                    style = MaterialTheme.typography.labelLarge,
-                )
+                        .fillMaxWidth()
+                        .background(Color.Black.copy(alpha = 0.4f))
+                        .padding(start = 56.dp, end = 8.dp, top = 8.dp, bottom = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    IconButton(onClick = onBack) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = stringResource(R.string.player_back),
+                            tint = Color.White,
+                        )
+                    }
+                    Text(
+                        text = state.item?.title.orEmpty(),
+                        color = Color.White,
+                        style = MaterialTheme.typography.titleMedium,
+                        modifier = Modifier
+                            .weight(1f)
+                            .padding(start = 8.dp),
+                    )
+
+                    // Start Over (Seek to 0L)
+                    IconButton(onClick = { onSeek(0L) }) {
+                        Icon(
+                            imageVector = Icons.Filled.Replay,
+                            contentDescription = "Start over",
+                            tint = Color.White,
+                        )
+                    }
+
+                    // Lock Position Swap (Top-Left <-> Top-Right)
+                    IconButton(onClick = { isLockTopLeft = !isLockTopLeft }) {
+                        Icon(
+                            imageVector = Icons.Filled.SwapHoriz,
+                            contentDescription = "Swap lock icon position",
+                            tint = Color.White,
+                        )
+                    }
+
+                    if (state.textTracks.isNotEmpty()) {
+                        IconButton(onClick = onCycleSubtitles) {
+                            Icon(
+                                imageVector = Icons.Filled.ClosedCaption,
+                                contentDescription = stringResource(R.string.player_subtitles),
+                                tint = Color.White,
+                            )
+                        }
+                    }
+                    IconButton(onClick = onPictureInPictureClick) {
+                        Icon(
+                            imageVector = Icons.Filled.PictureInPictureAlt,
+                            contentDescription = "Picture in Picture",
+                            tint = Color.White,
+                        )
+                    }
+                }
+
+                Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(24.dp),
+                    ) {
+                        IconButton(onClick = { onSeek((state.positionMillis - 10_000L).coerceAtLeast(0L)) }) {
+                            Icon(
+                                imageVector = Icons.Filled.Replay10,
+                                contentDescription = "Skip Backward 10s",
+                                tint = Color.White,
+                                modifier = Modifier.size(40.dp),
+                            )
+                        }
+
+                        IconButton(onClick = onPlayPause, modifier = Modifier.size(72.dp)) {
+                            Icon(
+                                imageVector = if (state.isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
+                                contentDescription = stringResource(
+                                    if (state.isPlaying) R.string.player_pause else R.string.player_play,
+                                ),
+                                tint = Color.White,
+                                modifier = Modifier.size(56.dp),
+                            )
+                        }
+
+                        IconButton(onClick = { onSeek(state.positionMillis + 10_000L) }) {
+                            Icon(
+                                imageVector = Icons.Filled.Forward10,
+                                contentDescription = "Skip Forward 10s",
+                                tint = Color.White,
+                                modifier = Modifier.size(40.dp),
+                            )
+                        }
+                    }
+                }
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(Color.Black.copy(alpha = 0.4f))
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    IconButton(onClick = { showVolumeSlider = !showVolumeSlider }) {
+                        Icon(
+                            imageVector = Icons.Filled.VolumeUp,
+                            contentDescription = "Volume",
+                            tint = Color.White,
+                        )
+                    }
+
+                    IconButton(onClick = { showBrightnessSlider = !showBrightnessSlider }) {
+                        Icon(
+                            imageVector = Icons.Filled.Brightness6,
+                            contentDescription = "Brightness",
+                            tint = Color.White,
+                        )
+                    }
+
+                    if (state.isSeekable && state.durationMillis > 0L) {
+                        Text(text = state.positionMillis.asClock(), color = Color.White)
+                        Slider(
+                            value = state.positionMillis.toFloat(),
+                            onValueChange = { onSeek(it.toLong()) },
+                            valueRange = 0f..state.durationMillis.toFloat(),
+                            modifier = Modifier
+                                .weight(1f)
+                                .padding(horizontal = 8.dp),
+                        )
+                        Text(text = state.durationMillis.asClock(), color = Color.White)
+                    } else {
+                        // AC-PLAY-02: an unseekable stream shows no seek bar at all, rather than
+                        // one that looks interactive and does nothing.
+                        Text(
+                            text = stringResource(R.string.player_live),
+                            color = Color.White,
+                            style = MaterialTheme.typography.labelLarge,
+                        )
+                    }
+                }
             }
         }
     }

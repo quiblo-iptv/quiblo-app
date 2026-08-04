@@ -53,6 +53,32 @@
     <string name="tv_settings_on">On</string>
     <string name="tv_settings_off">Off</string>
 
+    <string name="tv_settings_categories">Categories</string>
+    <string name="tv_settings_category_kind">Editing categories for</string>
+    <string name="tv_settings_rename_field">Rename to</string>
+    <string name="tv_settings_apply">Apply</string>
+    <string name="tv_settings_hide">Hide</string>
+    <string name="tv_settings_show">Show</string>
+    <string name="tv_settings_tmdb">Film and series information</string>
+    <string name="tv_settings_tmdb_detail">Optional. Adds plots, cast and scores from The Movie Database.</string>
+    <string name="tv_settings_tmdb_field">API key</string>
+    <string name="tv_settings_tmdb_checking">Checking…</string>
+    <string name="tv_settings_tmdb_accepted">Key accepted.</string>
+    <string name="tv_settings_tmdb_rejected">That key was not accepted.</string>
+    <string name="tv_settings_tmdb_cleared">Key removed.</string>
+    <string name="tv_settings_save">Save</string>
+    <string name="tv_settings_clear">Clear</string>
+    <string name="tv_settings_backup">Backup</string>
+    <string name="tv_settings_backup_label">Your configuration</string>
+    <string name="tv_settings_backup_detail">Passwords are never written to the file — you will re-enter them after importing.</string>
+    <string name="tv_settings_export">Export</string>
+    <string name="tv_settings_import">Import</string>
+    <string name="tv_settings_backup_working">Working…</string>
+    <string name="tv_settings_backup_exported">Exported %1$d bytes.</string>
+    <string name="tv_settings_backup_imported">Restored %1$d sources and %2$d favourites.</string>
+    <string name="tv_settings_backup_rejected">That backup was written by a newer version of Quiblo (format %1$d, this build reads %2$d). Update the app and try again.</string>
+    <string name="tv_settings_backup_failed">That file could not be read.</string>
+
     <!-- Categories -->
     <string name="tv_category_all">All channels</string>
     <string name="tv_category_ungrouped">Ungrouped</string>

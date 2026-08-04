@@ -29,10 +29,10 @@ import androidx.room.Update
 import dev.quiblo.core.database.entity.CategoryOverrideEntity
 import dev.quiblo.core.database.entity.ChannelEntity
 import dev.quiblo.core.database.entity.FavoriteEntity
-import dev.quiblo.core.database.entity.MovieMetadataEntity
 import dev.quiblo.core.database.entity.ProgrammeEntity
 import dev.quiblo.core.database.entity.ResumePositionEntity
 import dev.quiblo.core.database.entity.SourceEntity
+import dev.quiblo.core.database.entity.TitleMetadataEntity
 import kotlinx.coroutines.flow.Flow
 
 @Dao
@@ -207,6 +207,15 @@ interface FavoriteDao {
     @Query("SELECT EXISTS(SELECT 1 FROM favorites WHERE sourceId = :sourceId AND stableKey = :stableKey)")
     suspend fun isFavorite(sourceId: Long, stableKey: String): Boolean
 
+    /**
+     * The same fact as a stream, for a screen that both shows and changes it.
+     *
+     * A detail screen cannot read it once: it owns the toggle, so a one-shot read would
+     * leave the heart it just filled in showing the state from before the tap.
+     */
+    @Query("SELECT EXISTS(SELECT 1 FROM favorites WHERE sourceId = :sourceId AND stableKey = :stableKey)")
+    fun observeIsFavorite(sourceId: Long, stableKey: String): Flow<Boolean>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun add(favorite: FavoriteEntity)
 
@@ -272,16 +281,16 @@ interface ProgrammeDao {
 }
 
 @Dao
-interface MovieMetadataDao {
+interface TitleMetadataDao {
 
-    @Query("SELECT * FROM movie_metadata WHERE searchTitle = :searchTitle")
-    suspend fun find(searchTitle: String): MovieMetadataEntity?
+    @Query("SELECT * FROM title_metadata WHERE searchTitle = :searchTitle AND kind = :kind")
+    suspend fun find(searchTitle: String, kind: String): TitleMetadataEntity?
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun upsert(entity: MovieMetadataEntity)
+    suspend fun upsert(entity: TitleMetadataEntity)
 
     /** Emptied when the key changes: a different key can return different answers. */
-    @Query("DELETE FROM movie_metadata")
+    @Query("DELETE FROM title_metadata")
     suspend fun clear()
 }
 

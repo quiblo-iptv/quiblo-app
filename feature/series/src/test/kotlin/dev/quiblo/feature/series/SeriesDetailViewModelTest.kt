@@ -19,6 +19,7 @@
 package dev.quiblo.feature.series
 
 import dev.quiblo.core.data.ChannelRepository
+import dev.quiblo.core.data.TitleMetadataRepository
 import dev.quiblo.core.model.Channel
 import dev.quiblo.core.model.Episode
 import dev.quiblo.core.model.MediaKind
@@ -27,9 +28,11 @@ import dev.quiblo.core.model.SeriesDetails
 import dev.quiblo.source.api.SeriesDetailsResult
 import dev.quiblo.source.api.SourceError
 import io.mockk.coEvery
+import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
@@ -46,6 +49,7 @@ class SeriesDetailViewModelTest {
 
     private val testDispatcher = StandardTestDispatcher()
     private val channelRepository: ChannelRepository = mockk()
+    private val metadataRepository: TitleMetadataRepository = mockk(relaxed = true)
 
     private val sampleChannel = Channel(
         id = 10L,
@@ -81,6 +85,10 @@ class SeriesDetailViewModelTest {
     @BeforeEach
     fun setUp() {
         Dispatchers.setMain(testDispatcher)
+        // The screen watches the favourite flag and asks the metadata service about the
+        // title; neither is what any test here is about, so both answer flatly.
+        every { channelRepository.observeIsFavorite(any()) } returns flowOf(false)
+        coEvery { metadataRepository.forTitle(any(), any()) } returns null
     }
 
     @AfterEach
@@ -97,7 +105,7 @@ class SeriesDetailViewModelTest {
         coEvery { channelRepository.mostRecentlyWatched(any()) } returns
             ("http://stream.example.invalid/501.mp4" to 900_000L)
 
-        val viewModel = SeriesDetailViewModel(10L, channelRepository)
+        val viewModel = SeriesDetailViewModel(10L, channelRepository, metadataRepository)
         testDispatcher.scheduler.advanceUntilIdle()
 
         val state = assertInstanceOf(SeriesDetailUiState.Success::class.java, viewModel.uiState.value)
@@ -113,7 +121,7 @@ class SeriesDetailViewModelTest {
         // or resurrect a button pointing at nothing.
         coEvery { channelRepository.mostRecentlyWatched(any()) } returns ("http://gone.invalid/9.mp4" to 60_000L)
 
-        val viewModel = SeriesDetailViewModel(10L, channelRepository)
+        val viewModel = SeriesDetailViewModel(10L, channelRepository, metadataRepository)
         testDispatcher.scheduler.advanceUntilIdle()
 
         val state = assertInstanceOf(SeriesDetailUiState.Success::class.java, viewModel.uiState.value)
@@ -126,7 +134,7 @@ class SeriesDetailViewModelTest {
         coEvery { channelRepository.getSeriesDetails(sampleChannel) } returns SeriesDetailsResult.Success(sampleDetails)
         coEvery { channelRepository.mostRecentlyWatched(any()) } returns null
 
-        val viewModel = SeriesDetailViewModel(10L, channelRepository)
+        val viewModel = SeriesDetailViewModel(10L, channelRepository, metadataRepository)
         testDispatcher.scheduler.advanceUntilIdle()
 
         val state = assertInstanceOf(SeriesDetailUiState.Success::class.java, viewModel.uiState.value)
@@ -142,7 +150,7 @@ class SeriesDetailViewModelTest {
     fun `emits error when channel is not found`() = runTest(testDispatcher) {
         coEvery { channelRepository.findById(99L) } returns null
 
-        val viewModel = SeriesDetailViewModel(99L, channelRepository)
+        val viewModel = SeriesDetailViewModel(99L, channelRepository, metadataRepository)
         testDispatcher.scheduler.advanceUntilIdle()
 
         val state = assertInstanceOf(SeriesDetailUiState.Error::class.java, viewModel.uiState.value)
@@ -156,7 +164,7 @@ class SeriesDetailViewModelTest {
             channelRepository.getSeriesDetails(sampleChannel)
         } returns SeriesDetailsResult.Failure(SourceError.UnreachableHost)
 
-        val viewModel = SeriesDetailViewModel(10L, channelRepository)
+        val viewModel = SeriesDetailViewModel(10L, channelRepository, metadataRepository)
         testDispatcher.scheduler.advanceUntilIdle()
 
         val state = assertInstanceOf(SeriesDetailUiState.Error::class.java, viewModel.uiState.value)

@@ -21,9 +21,9 @@ package dev.quiblo.feature.settings
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dev.quiblo.core.data.CategoryRepository
-import dev.quiblo.core.data.MovieMetadataRepository
 import dev.quiblo.core.data.PlayerSettingsRepository
 import dev.quiblo.core.data.SourceRepository
+import dev.quiblo.core.data.TitleMetadataRepository
 import dev.quiblo.core.data.backup.BackupRepository
 import dev.quiblo.core.data.backup.ImportResult
 import dev.quiblo.core.model.Appearance
@@ -77,7 +77,7 @@ sealed interface BackupUiState {
 class SettingsViewModel(
     private val backupRepository: BackupRepository,
     private val playerSettingsRepository: PlayerSettingsRepository,
-    private val metadataRepository: MovieMetadataRepository,
+    private val metadataRepository: TitleMetadataRepository,
     private val categoryRepository: CategoryRepository,
     private val sourceRepository: SourceRepository,
 ) : ViewModel() {

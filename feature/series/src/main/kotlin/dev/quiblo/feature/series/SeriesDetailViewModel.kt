@@ -21,11 +21,15 @@ package dev.quiblo.feature.series
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dev.quiblo.core.data.ChannelRepository
+import dev.quiblo.core.data.TitleMetadataRepository
 import dev.quiblo.core.model.Channel
 import dev.quiblo.core.model.Episode
+import dev.quiblo.core.model.MediaKind
 import dev.quiblo.core.model.SeriesDetails
+import dev.quiblo.core.model.TitleMetadata
 import dev.quiblo.source.api.SeriesDetailsResult
 import dev.quiblo.source.api.SourceError
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -44,6 +48,15 @@ sealed interface SeriesDetailUiState {
         val details: SeriesDetails,
         val resumeEpisode: Episode? = null,
         val resumePositionMillis: Long = 0L,
+        /** From TMDB, when the user has enabled it and a match was found. */
+        val metadata: TitleMetadata? = null,
+        /**
+         * Whether this series is favourited.
+         *
+         * Streamed rather than taken from [channel], which is a snapshot from when the
+         * screen opened and would not reflect a tap made on this screen.
+         */
+        val isFavorite: Boolean = false,
     ) : SeriesDetailUiState
     data class Error(val error: SourceError) : SeriesDetailUiState
 }
@@ -51,10 +64,13 @@ sealed interface SeriesDetailUiState {
 class SeriesDetailViewModel(
     private val channelId: Long,
     private val channelRepository: ChannelRepository,
+    private val metadataRepository: TitleMetadataRepository,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow<SeriesDetailUiState>(SeriesDetailUiState.Loading)
     val uiState: StateFlow<SeriesDetailUiState> = _uiState.asStateFlow()
+
+    private var favoriteJob: Job? = null
 
     init {
         loadDetails()
@@ -81,7 +97,58 @@ class SeriesDetailViewModel(
                         details = result.details,
                         resumeEpisode = watched?.let { (key, _) -> episodes.firstOrNull { it.streamUrl == key } },
                         resumePositionMillis = watched?.second ?: 0L,
+                        isFavorite = channel.isFavorite,
                     )
+
+                    observeFavorite(channel)
+                    enrich(channel)
+                }
+            }
+        }
+    }
+
+    /**
+     * Adds or removes this series from favourites.
+     *
+     * The detail screen is where the decision is made — the grid is where a title is
+     * recognised, this is where it is read about — so the control belongs on both.
+     */
+    fun toggleFavorite() {
+        val current = _uiState.value as? SeriesDetailUiState.Success ?: return
+        viewModelScope.launch { channelRepository.toggleFavorite(current.channel) }
+    }
+
+    /**
+     * Asks the metadata service about the series, if the user has enabled it.
+     *
+     * After the provider's own details rather than alongside them, and never awaited by
+     * anything on screen: the episode list is the screen, and enrichment is decoration on
+     * a screen that already works. Returns null when the feature is off, which is the
+     * default.
+     */
+    private fun enrich(channel: Channel) {
+        viewModelScope.launch {
+            metadataRepository.load()
+            val metadata = metadataRepository.forTitle(channel.name, MediaKind.SERIES)
+            (_uiState.value as? SeriesDetailUiState.Success)?.let {
+                _uiState.value = it.copy(metadata = metadata)
+            }
+        }
+    }
+
+    /**
+     * Keeps the heart in step with the database for as long as the screen is open.
+     *
+     * The previous collector is cancelled first because [loadDetails] is the retry button:
+     * without this, every failed load a user retries past leaves another collector running
+     * on the same flow.
+     */
+    private fun observeFavorite(channel: Channel) {
+        favoriteJob?.cancel()
+        favoriteJob = viewModelScope.launch {
+            channelRepository.observeIsFavorite(channel).collect { isFavorite ->
+                (_uiState.value as? SeriesDetailUiState.Success)?.let {
+                    _uiState.value = it.copy(isFavorite = isFavorite)
                 }
             }
         }

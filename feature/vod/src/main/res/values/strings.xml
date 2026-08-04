@@ -16,7 +16,4 @@
     <string name="movie_minutes">%1$d min</string>
     <string name="movie_overview_loading">Looking for a description…</string>
     <string name="movie_no_overview">No description is available for this movie.</string>
-    <string name="movie_rating">★ %1$.1f</string>
-    <string name="movie_director">Director: %1$s</string>
-    <string name="movie_cast">Cast: %1$s</string>
 </resources>

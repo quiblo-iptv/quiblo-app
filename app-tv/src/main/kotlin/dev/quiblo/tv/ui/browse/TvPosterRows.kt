@@ -46,6 +46,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -64,6 +65,7 @@ import coil3.compose.SubcomposeAsyncImage
 import dev.quiblo.core.model.Channel
 import dev.quiblo.core.model.MediaKind
 import dev.quiblo.feature.browse.BrowseViewModel
+import dev.quiblo.feature.browse.RatingBadge
 import dev.quiblo.feature.browse.di.browseParams
 import dev.quiblo.tv.R
 import org.koin.androidx.compose.koinViewModel
@@ -127,6 +129,8 @@ fun TvPosterRows(
                 CategoryRow(
                     category = category,
                     items = items,
+                    ratings = state.ratings,
+                    onVisible = viewModel::onPosterVisible,
                     // Indexed against the flat list so zapping walks every item on screen,
                     // not just the row the viewer happened to start in.
                     onItemClick = { item -> onPlay(state.items, state.items.indexOf(item)) },
@@ -140,6 +144,8 @@ fun TvPosterRows(
 private fun CategoryRow(
     category: String,
     items: List<Channel>,
+    ratings: Map<String, Double>,
+    onVisible: (Channel) -> Unit,
     onItemClick: (Channel) -> Unit,
 ) {
     Column {
@@ -153,7 +159,15 @@ private fun CategoryRow(
 
         LazyRow(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
             items(items = items, key = { it.id }) { item ->
-                Poster(channel = item, onClick = { onItemClick(item) })
+                // Per poster on screen, not per category: a category row can hold hundreds
+                // of films, and only the handful the remote has actually reached are
+                // displaying a score to fetch.
+                LaunchedEffect(item.id) { onVisible(item) }
+                Poster(
+                    channel = item,
+                    rating = ratings[item.stableKey],
+                    onClick = { onItemClick(item) },
+                )
             }
         }
     }
@@ -168,7 +182,7 @@ private fun CategoryRow(
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun Poster(channel: Channel, onClick: () -> Unit) {
+private fun Poster(channel: Channel, rating: Double?, onClick: () -> Unit) {
     // A live channel's artwork is a small wide logo, not a poster. Cropping one to 2:3
     // shows a corner of a logo — the exact mistake PLAN-TV.md §3.3 exists to avoid — so a
     // live item keeps its whole logo inside the same tile instead.
@@ -213,6 +227,17 @@ private fun Poster(channel: Channel, onClick: () -> Unit) {
                         .padding(if (isLogo) LOGO_PADDING else 0.dp),
                     loading = { ArtworkPlaceholder() },
                     error = { ArtworkPlaceholder() },
+                )
+            }
+
+            // Top left, where the phone's card puts it, so the two apps agree about what a
+            // poster looks like.
+            rating?.let {
+                RatingBadge(
+                    rating = it,
+                    modifier = Modifier
+                        .align(Alignment.TopStart)
+                        .padding(6.dp),
                 )
             }
         }

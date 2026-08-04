@@ -149,7 +149,7 @@ data class ProgrammeEntity(
 )
 
 /**
- * Cached film metadata, keyed by the cleaned search title.
+ * Cached film and series metadata, keyed by the cleaned search title and the kind asked for.
  *
  * Persisted rather than held in memory so a relaunch does not re-ask the service for
  * everything the user browses. A metadata provider rate-limits per key, and the key is the
@@ -157,16 +157,23 @@ data class ProgrammeEntity(
  *
  * Keyed by title rather than by channel id because a refresh reassigns every channel id,
  * and the cache would be thrown away for no reason each time a playlist reloaded.
+ *
+ * [kind] is half the key rather than a column, because "Fargo" is a film and "Fargo" is a
+ * series and they are not the same record. With the title alone, whichever tab the user
+ * opened first would answer for the other.
  */
-@Entity(tableName = "movie_metadata")
-data class MovieMetadataEntity(
-    @PrimaryKey val searchTitle: String,
+@Entity(tableName = "title_metadata", primaryKeys = ["searchTitle", "kind"])
+data class TitleMetadataEntity(
+    val searchTitle: String,
+    /** A [dev.quiblo.core.model.MediaKind] name — `VOD` or `SERIES`. */
+    val kind: String,
     val overview: String? = null,
     /** Newline-separated. A list table for a handful of short strings is not worth a join. */
     val genres: String? = null,
     val ageRating: String? = null,
     val rating: Double? = null,
-    val director: String? = null,
+    /** A film's director or a series' creator; which one follows from [kind]. */
+    val author: String? = null,
     val topCast: String? = null,
     val posterUrl: String? = null,
     val backdropUrl: String? = null,
@@ -179,6 +186,14 @@ data class MovieMetadataEntity(
      * is an answer, and re-requesting it is the most wasteful thing this cache could do.
      */
     val isMiss: Boolean = false,
+    /**
+     * True when only the search step ran, giving a score and artwork but no cast or plot.
+     *
+     * Poster tiles ask for a score for everything on screen; detail screens ask for
+     * everything about one title. Recording which was fetched lets a tile be satisfied by
+     * one request and a detail screen upgrade the same row rather than duplicate it.
+     */
+    val isPartial: Boolean = false,
 )
 
 /**

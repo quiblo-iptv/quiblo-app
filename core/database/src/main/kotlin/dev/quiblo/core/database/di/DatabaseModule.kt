@@ -32,7 +32,7 @@ import org.koin.dsl.module
 val databaseModule: Module = module {
     single { QuibloDatabase.create(get<Context>()) }
     single { get<QuibloDatabase>().sourceDao() }
-    single { get<QuibloDatabase>().movieMetadataDao() }
+    single { get<QuibloDatabase>().titleMetadataDao() }
     single { get<QuibloDatabase>().categoryOverrideDao() }
     single { get<QuibloDatabase>().channelDao() }
     single { get<QuibloDatabase>().resumePositionDao() }

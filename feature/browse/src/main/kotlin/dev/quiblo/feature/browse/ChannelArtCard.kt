@@ -78,6 +78,7 @@ internal fun ChannelArtCard(
     channel: Channel,
     onClick: () -> Unit,
     onToggleFavorite: () -> Unit,
+    rating: Double? = null,
 ) {
     // A long title is truncated until asked for. Hover covers a mouse or trackpad; long
     // press is the equivalent on a touch screen, where there is no hover to speak of.
@@ -119,6 +120,16 @@ internal fun ChannelArtCard(
                         ),
                     ),
             )
+
+            // Top left, opposite the heart, so the two never collide on a narrow tile.
+            rating?.let {
+                RatingBadge(
+                    rating = it,
+                    modifier = Modifier
+                        .align(Alignment.TopStart)
+                        .padding(6.dp),
+                )
+            }
 
             IconButton(
                 onClick = onToggleFavorite,

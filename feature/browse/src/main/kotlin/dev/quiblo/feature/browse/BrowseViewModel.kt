@@ -24,6 +24,7 @@ import dev.quiblo.core.data.CategoryRepository
 import dev.quiblo.core.data.ChannelRepository
 import dev.quiblo.core.data.GuideRepository
 import dev.quiblo.core.data.SourceRepository
+import dev.quiblo.core.data.TitleMetadataRepository
 import dev.quiblo.core.model.Category
 import dev.quiblo.core.model.Channel
 import dev.quiblo.core.model.MediaKind
@@ -63,22 +64,41 @@ data class BrowseUiState(
     val query: String = "",
     /** What is airing now, keyed by channel identity. Empty for sources with no guide. */
     val nowPlaying: Map<String, Programme> = emptyMap(),
+    /**
+     * Scores from the metadata service, keyed by channel identity.
+     *
+     * Empty unless the user has configured a key, and filled in only for rows that have
+     * actually been on screen. A tile with no entry shows no badge rather than a blank one:
+     * "not fetched" and "no score" are the same thing to a poster.
+     */
+    val ratings: Map<String, Double> = emptyMap(),
+)
+
+/**
+ * Which feed a browse screen is showing.
+ *
+ * The two travel together everywhere — a screen is Movies, or it is Favourites — so they
+ * are one argument rather than two that can be passed in the wrong combination.
+ */
+data class BrowseFeed(
+    val kind: MediaKind,
+    val favoritesOnly: Boolean = false,
 )
 
 /**
  * Drives Live, Movies, Series and Favourites.
  *
- * One implementation rather than four, parameterised by [kind] and [favoritesOnly]. The
- * screens differ in what they show, not in how they behave.
+ * One implementation rather than four, parameterised by [feed]. The screens differ in what
+ * they show, not in how they behave.
  */
 @OptIn(ExperimentalCoroutinesApi::class, FlowPreview::class)
 class BrowseViewModel(
-    private val kind: MediaKind,
-    private val favoritesOnly: Boolean,
+    private val feed: BrowseFeed,
     sourceRepository: SourceRepository,
     private val channelRepository: ChannelRepository,
     private val categoryRepository: CategoryRepository,
     private val guideRepository: GuideRepository,
+    private val metadataRepository: TitleMetadataRepository,
 ) : ViewModel() {
 
     /**
@@ -91,6 +111,18 @@ class BrowseViewModel(
 
     /** Caps concurrent guide requests so scrolling cannot stampede a panel. */
     private val guideLimiter = Semaphore(MAX_CONCURRENT_GUIDE_FETCHES)
+
+    /** The same two guards for the metadata service, which rate-limits per key. */
+    private val ratingRequested = ConcurrentHashMap.newKeySet<String>()
+    private val ratingLimiter = Semaphore(MAX_CONCURRENT_RATING_FETCHES)
+
+    private val ratings = MutableStateFlow<Map<String, Double>>(emptyMap())
+
+    init {
+        // Reads the stored key once, so the first posters on screen already know whether
+        // there is anything to ask.
+        viewModelScope.launch { metadataRepository.load() }
+    }
 
     private val selectedCategory = MutableStateFlow<String?>(null)
     private val query = MutableStateFlow("")
@@ -128,7 +160,7 @@ class BrowseViewModel(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS), BrowseUiState())
 
     private fun feedFor(sourceId: Long) = combine(
-        categoryRepository.observeCategories(sourceId, kind),
+        categoryRepository.observeCategories(sourceId, feed.kind),
         selectedCategory,
         // Debounced so a fast typist does not issue a query per keystroke. Short enough
         // to stay well inside the 200ms budget in AC-FAV-05.
@@ -136,20 +168,21 @@ class BrowseViewModel(
     ) { categories, selected, searchText ->
         Triple(categories, selected, searchText)
     }.flatMapLatest { (categories, selected, searchText) ->
-        val items = if (favoritesOnly) {
+        val items = if (feed.favoritesOnly) {
             channelRepository.observeFavorites(sourceId, searchText)
         } else {
-            channelRepository.observeBrowse(sourceId, kind, selected, searchText)
+            channelRepository.observeBrowse(sourceId, feed.kind, selected, searchText)
         }
-        combine(items, guideRepository.observeNowPlaying(sourceId)) { list, guide ->
+        combine(items, guideRepository.observeNowPlaying(sourceId), ratings) { list, guide, scores ->
             BrowseUiState(
                 isLoading = false,
                 hasSource = true,
-                categories = if (favoritesOnly) emptyList() else categories,
+                categories = if (feed.favoritesOnly) emptyList() else categories,
                 selectedCategory = selected,
                 items = list,
                 query = searchText,
                 nowPlaying = guide,
+                ratings = scores,
             )
         }
     }
@@ -180,6 +213,52 @@ class BrowseViewModel(
         }
     }
 
+    /**
+     * Called as a poster comes into view, and only from the poster grid.
+     *
+     * Separate from [onRowVisible] rather than folded into it, because the two prefetch
+     * different things for different reasons: a list row displays a guide entry and a
+     * poster displays a score, and a list row showing a film has no use for either. The
+     * kind check keeps live channels out — a television channel is not a title, and asking
+     * a film database about one returns whatever film shares its name.
+     */
+    fun onPosterVisible(channel: Channel) {
+        if (channel.kind == MediaKind.LIVE) return
+        requestRating(channel)
+    }
+
+    /**
+     * Fetches a film's or series' score.
+     *
+     * Per visible tile rather than per category, deliberately. A category can hold
+     * thousands of films, and asking about all of them the moment it is opened would spend
+     * the user's whole rate limit on titles they scrolled past — the same mistake as
+     * requesting a guide for 20,000 channels, made against a service that answers with a
+     * hard limit rather than a slow one. There is no batch endpoint that would make the
+     * whole-category version cheap; TMDB has no way to ask about many titles at once.
+     *
+     * Costs one request per title once, then nothing: the answer, including "no match",
+     * is cached in the database across launches.
+     */
+    private fun requestRating(channel: Channel) {
+        if (!ratingRequested.add(channel.stableKey)) return
+
+        viewModelScope.launch {
+            ratingLimiter.withPermit {
+                if (!metadataRepository.isEnabled) {
+                    // Nothing was asked, so nothing has been answered. Forgetting the row
+                    // again is what lets tiles fill in when a user adds a key mid-session,
+                    // instead of staying blank until the app is restarted.
+                    ratingRequested.remove(channel.stableKey)
+                    return@withPermit
+                }
+                val rating = metadataRepository.ratingFor(channel.name, channel.kind)
+                    ?: return@withPermit
+                ratings.value = ratings.value + (channel.stableKey to rating)
+            }
+        }
+    }
+
     /** Now and next for one channel, for the detail sheet (AC-EPG-02). */
     fun nowNextFor(channel: Channel) = guideRepository.observeNowNext(channel.sourceId, channel.stableKey)
 
@@ -199,5 +278,14 @@ class BrowseViewModel(
         const val STOP_TIMEOUT_MILLIS = 5_000L
         const val SEARCH_DEBOUNCE_MILLIS = 120L
         const val MAX_CONCURRENT_GUIDE_FETCHES = 3
+
+        /**
+         * Four at a time against the metadata service.
+         *
+         * Higher than the guide limit because TMDB is a public API sized for this, where
+         * the panel on the other end of a guide request is one user's subscription and the
+         * thing this project keeps getting blocked by.
+         */
+        const val MAX_CONCURRENT_RATING_FETCHES = 4
     }
 }

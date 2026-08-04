@@ -21,9 +21,10 @@ package dev.quiblo.feature.vod
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dev.quiblo.core.data.ChannelRepository
-import dev.quiblo.core.data.MovieMetadataRepository
+import dev.quiblo.core.data.TitleMetadataRepository
 import dev.quiblo.core.model.Channel
-import dev.quiblo.core.model.MovieMetadata
+import dev.quiblo.core.model.MediaKind
+import dev.quiblo.core.model.TitleMetadata
 import dev.quiblo.core.model.VodDetails
 import dev.quiblo.source.api.VodDetailsResult
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -47,7 +48,15 @@ sealed interface MovieDetailUiState {
         val details: VodDetails? = null,
         val resumePositionMillis: Long = 0L,
         /** From TMDB, when the user has enabled it and a match was found. */
-        val metadata: MovieMetadata? = null,
+        val metadata: TitleMetadata? = null,
+        /**
+         * Whether this film is favourited.
+         *
+         * Held in the state rather than read from [channel], which is a snapshot taken when
+         * the screen opened and would still say "not favourited" after the user tapped the
+         * heart on this very screen.
+         */
+        val isFavorite: Boolean = false,
         /**
          * True while the description is still being fetched.
          *
@@ -83,7 +92,7 @@ sealed interface MovieDetailUiState {
 class MovieDetailViewModel(
     private val channelId: Long,
     private val channelRepository: ChannelRepository,
-    private val metadataRepository: MovieMetadataRepository,
+    private val metadataRepository: TitleMetadataRepository,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow<MovieDetailUiState>(MovieDetailUiState.Loading)
@@ -91,6 +100,19 @@ class MovieDetailViewModel(
 
     init {
         load()
+    }
+
+    /**
+     * Adds or removes this film from favourites.
+     *
+     * Here as well as on the poster grid because a detail screen is where the decision is
+     * actually made: the grid is where a title is recognised, this is where it is read
+     * about, and requiring a trip back to the grid to act on that is the kind of gap
+     * nobody notices while writing the grid.
+     */
+    fun toggleFavorite() {
+        val current = _uiState.value as? MovieDetailUiState.Ready ?: return
+        viewModelScope.launch { channelRepository.toggleFavorite(current.channel) }
     }
 
     /** Re-reads the resume point, so returning from playback updates the buttons. */
@@ -117,8 +139,11 @@ class MovieDetailViewModel(
             _uiState.value = MovieDetailUiState.Ready(
                 channel = channel,
                 resumePositionMillis = channelRepository.resumePosition(channel.stableKey),
+                isFavorite = channel.isFavorite,
                 isEnriching = true,
             )
+
+            observeFavorite(channel)
 
             val details = (channelRepository.getVodDetails(channelId) as? VodDetailsResult.Success)?.details
             (_uiState.value as? MovieDetailUiState.Ready)?.let { _uiState.value = it.copy(details = details) }
@@ -127,9 +152,25 @@ class MovieDetailViewModel(
             // already complete without it, and enrichment must never be what a viewer waits
             // for. Returns null when the feature is off, which is the default.
             metadataRepository.load()
-            val metadata = metadataRepository.forTitle(channel.name)
+            val metadata = metadataRepository.forTitle(channel.name, MediaKind.VOD)
             (_uiState.value as? MovieDetailUiState.Ready)?.let {
                 _uiState.value = it.copy(metadata = metadata, isEnriching = false)
+            }
+        }
+    }
+
+    /**
+     * Keeps the heart in step with the database for as long as the screen is open.
+     *
+     * A separate coroutine from [load] because it never completes, and putting a
+     * `collect` in the middle of that function would stop everything after it from running.
+     */
+    private fun observeFavorite(channel: Channel) {
+        viewModelScope.launch {
+            channelRepository.observeIsFavorite(channel).collect { isFavorite ->
+                (_uiState.value as? MovieDetailUiState.Ready)?.let {
+                    _uiState.value = it.copy(isFavorite = isFavorite)
+                }
             }
         }
     }

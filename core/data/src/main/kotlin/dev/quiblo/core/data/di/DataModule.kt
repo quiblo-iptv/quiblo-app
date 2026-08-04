@@ -23,9 +23,9 @@ import dev.quiblo.core.data.CategoryRepository
 import dev.quiblo.core.data.ChannelRepository
 import dev.quiblo.core.data.GuideRepository
 import dev.quiblo.core.data.LocalFileContentFetcher
-import dev.quiblo.core.data.MovieMetadataRepository
 import dev.quiblo.core.data.PlayerSettingsRepository
 import dev.quiblo.core.data.SourceRepository
+import dev.quiblo.core.data.TitleMetadataRepository
 import dev.quiblo.core.data.backup.BackupRepository
 import dev.quiblo.core.model.SourceKind
 import dev.quiblo.core.network.HttpContentFetcher
@@ -69,5 +69,5 @@ val dataModule: Module = module {
     single { BackupRepository(get(), get()) }
     single { PlayerSettingsRepository(get()) }
     single { TmdbClient(get<HttpClient>()) }
-    single { MovieMetadataRepository(get(), get(), get()) }
+    single { TitleMetadataRepository(get(), get(), get()) }
 }

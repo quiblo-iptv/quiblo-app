@@ -67,8 +67,9 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.compose.SubcomposeAsyncImage
 import dev.quiblo.core.model.Channel
-import dev.quiblo.core.model.MovieMetadata
 import dev.quiblo.core.model.VodDetails
+import dev.quiblo.feature.browse.FavoriteAction
+import dev.quiblo.feature.browse.TitleFacts
 import org.koin.androidx.compose.koinViewModel
 import org.koin.core.parameter.parametersOf
 
@@ -103,6 +104,16 @@ fun MovieDetailScreen(
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = stringResource(R.string.movie_back),
+                        )
+                    }
+                },
+                actions = {
+                    // Only once the film is loaded: a heart over a spinner has nothing to
+                    // toggle, and tapping it would silently do nothing.
+                    (uiState as? MovieDetailUiState.Ready)?.let { state ->
+                        FavoriteAction(
+                            isFavorite = state.isFavorite,
+                            onToggle = viewModel::toggleFavorite,
                         )
                     }
                 },
@@ -206,7 +217,7 @@ private fun Details(
 ) {
     Column(modifier = modifier) {
         state.details?.let { MetadataLine(it) }
-        state.metadata?.let { TmdbFacts(it) }
+        state.metadata?.let { TitleFacts(metadata = it, modifier = Modifier.padding(bottom = 12.dp)) }
 
         PlaybackButtons(state = state, onPlay = onPlay)
 
@@ -351,44 +362,6 @@ private fun ArtworkPlaceholder() {
  * Every line is omitted rather than blanked when its field is missing. A film with no
  * credited director is not an error, and a row reading "Director: —" is worse than no row.
  */
-@Composable
-private fun TmdbFacts(metadata: MovieMetadata) {
-    if (metadata.isEmpty) return
-
-    Column(modifier = Modifier.padding(bottom = 12.dp)) {
-        val chips = listOfNotNull(
-            metadata.ageRating?.takeIf { it.isNotBlank() },
-            metadata.rating?.let { stringResource(R.string.movie_rating, it) },
-            metadata.genres.takeIf { it.isNotEmpty() }?.joinToString(", "),
-        )
-        if (chips.isNotEmpty()) {
-            Text(
-                text = chips.joinToString(SEPARATOR),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-
-        metadata.director?.takeIf { it.isNotBlank() }?.let {
-            Text(
-                text = stringResource(R.string.movie_director, it),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = 4.dp),
-            )
-        }
-
-        metadata.topCast.takeIf { it.isNotEmpty() }?.let {
-            Text(
-                text = stringResource(R.string.movie_cast, it.joinToString(", ")),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = 4.dp),
-            )
-        }
-    }
-}
-
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun MetadataLine(details: VodDetails) {

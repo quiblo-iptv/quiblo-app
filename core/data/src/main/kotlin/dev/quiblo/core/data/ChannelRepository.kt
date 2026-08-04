@@ -107,6 +107,15 @@ class ChannelRepository(
         }
     }
 
+    /**
+     * Whether one item is favourited, as a stream.
+     *
+     * For the detail screens, which both show the state and change it. Keyed on the same
+     * stable identity [toggleFavorite] writes, so the two cannot disagree.
+     */
+    fun observeIsFavorite(channel: Channel): Flow<Boolean> =
+        favoriteDao.observeIsFavorite(channel.sourceId, channel.stableKey)
+
     suspend fun favoriteCount(sourceId: Long): Int = favoriteDao.countFor(sourceId)
 
     suspend fun channelCount(sourceId: Long): Int = channelDao.countForSource(sourceId)

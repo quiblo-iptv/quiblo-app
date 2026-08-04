@@ -25,17 +25,17 @@ import androidx.room.RoomDatabase
 import dev.quiblo.core.database.dao.CategoryOverrideDao
 import dev.quiblo.core.database.dao.ChannelDao
 import dev.quiblo.core.database.dao.FavoriteDao
-import dev.quiblo.core.database.dao.MovieMetadataDao
 import dev.quiblo.core.database.dao.ProgrammeDao
 import dev.quiblo.core.database.dao.ResumePositionDao
 import dev.quiblo.core.database.dao.SourceDao
+import dev.quiblo.core.database.dao.TitleMetadataDao
 import dev.quiblo.core.database.entity.CategoryOverrideEntity
 import dev.quiblo.core.database.entity.ChannelEntity
 import dev.quiblo.core.database.entity.FavoriteEntity
-import dev.quiblo.core.database.entity.MovieMetadataEntity
 import dev.quiblo.core.database.entity.ProgrammeEntity
 import dev.quiblo.core.database.entity.ResumePositionEntity
 import dev.quiblo.core.database.entity.SourceEntity
+import dev.quiblo.core.database.entity.TitleMetadataEntity
 
 /**
  * The single local database. There is no remote counterpart and never will be
@@ -48,10 +48,10 @@ import dev.quiblo.core.database.entity.SourceEntity
         FavoriteEntity::class,
         ResumePositionEntity::class,
         ProgrammeEntity::class,
-        MovieMetadataEntity::class,
+        TitleMetadataEntity::class,
         CategoryOverrideEntity::class,
     ],
-    version = 6,
+    version = 7,
     exportSchema = true,
 )
 abstract class QuibloDatabase : RoomDatabase() {
@@ -64,7 +64,7 @@ abstract class QuibloDatabase : RoomDatabase() {
 
     abstract fun favoriteDao(): FavoriteDao
 
-    abstract fun movieMetadataDao(): MovieMetadataDao
+    abstract fun titleMetadataDao(): TitleMetadataDao
 
     abstract fun categoryOverrideDao(): CategoryOverrideDao
 
@@ -83,7 +83,14 @@ abstract class QuibloDatabase : RoomDatabase() {
          */
         fun create(context: Context): QuibloDatabase =
             Room.databaseBuilder(context, QuibloDatabase::class.java, NAME)
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
+                .addMigrations(
+                    MIGRATION_1_2,
+                    MIGRATION_2_3,
+                    MIGRATION_3_4,
+                    MIGRATION_4_5,
+                    MIGRATION_5_6,
+                    MIGRATION_6_7,
+                )
                 .build()
     }
 }

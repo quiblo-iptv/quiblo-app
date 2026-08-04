@@ -18,10 +18,13 @@
 
 package dev.quiblo.source.tmdb
 
-import dev.quiblo.core.model.MovieMetadata
+import dev.quiblo.core.model.TitleMetadata
 import dev.quiblo.source.tmdb.dto.MovieDetailsDto
 import dev.quiblo.source.tmdb.dto.SearchResponse
+import dev.quiblo.source.tmdb.dto.SearchResult
+import dev.quiblo.source.tmdb.dto.TvDetailsDto
 import dev.quiblo.source.tmdb.dto.toMetadata
+import dev.quiblo.source.tmdb.dto.toPartialMetadata
 import io.ktor.client.HttpClient
 import io.ktor.client.request.get
 import io.ktor.client.request.header
@@ -29,6 +32,34 @@ import io.ktor.client.request.parameter
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.HttpStatusCode
 import kotlinx.serialization.json.Json
+
+/**
+ * Which half of TMDB to ask.
+ *
+ * Films and series are separate catalogues with separate endpoints, separate search
+ * parameters and separate names for a certificate. They are not variants of one request,
+ * which is why this is a parameter rather than something inferred from the response.
+ */
+enum class TmdbKind(
+    internal val searchPath: String,
+    internal val detailsPath: String,
+    internal val yearParameter: String,
+    internal val appendToResponse: String,
+) {
+    MOVIE(
+        searchPath = "movie",
+        detailsPath = "movie",
+        yearParameter = "year",
+        appendToResponse = "credits,release_dates",
+    ),
+
+    SERIES(
+        searchPath = "tv",
+        detailsPath = "tv",
+        yearParameter = "first_air_date_year",
+        appendToResponse = "credits,content_ratings",
+    ),
+}
 
 /**
  * A read-only client for The Movie Database.
@@ -47,44 +78,77 @@ class TmdbClient(
 ) {
 
     /**
-     * Finds [title] and returns what TMDB knows about it.
+     * Finds [title] and returns everything TMDB knows about it: two requests, a search and
+     * a full record.
      *
      * Returns null for every failure — no match, a rejected key, a rate limit, an
      * unreachable host. Enrichment is decoration on a screen that already works, so it
      * fails silently rather than putting an error where a plot should be.
      */
     @Suppress("TooGenericExceptionCaught", "SwallowedException")
-    suspend fun lookup(apiKey: String, title: String, year: Int? = null): MovieMetadata? = try {
+    suspend fun lookup(
+        apiKey: String,
+        title: String,
+        kind: TmdbKind,
+        year: Int? = null,
+    ): TitleMetadata? = try {
         val cleaned = title.cleanedForSearch()
         if (cleaned.isBlank()) {
             null
         } else {
-            searchFirstId(apiKey, cleaned, year)?.let { id -> details(apiKey, id) }
+            search(apiKey, cleaned, kind, year)?.id?.let { id -> details(apiKey, id, kind) }
         }
     } catch (_: Exception) {
         null
     }
 
-    private suspend fun searchFirstId(apiKey: String, query: String, year: Int?): Int? {
-        val response = httpClient.get("$BASE_URL/search/movie") {
+    /**
+     * The cheap half: one search request, giving a score and artwork but no cast or plot.
+     *
+     * For poster tiles, which display a number. Fetching a full record per tile would
+     * double every request for facts nothing on that screen shows, and the user's rate
+     * limit is the thing being spent.
+     */
+    @Suppress("TooGenericExceptionCaught", "SwallowedException")
+    suspend fun summary(
+        apiKey: String,
+        title: String,
+        kind: TmdbKind,
+        year: Int? = null,
+    ): TitleMetadata? = try {
+        val cleaned = title.cleanedForSearch()
+        if (cleaned.isBlank()) null else search(apiKey, cleaned, kind, year)?.toPartialMetadata()
+    } catch (_: Exception) {
+        null
+    }
+
+    private suspend fun search(apiKey: String, query: String, kind: TmdbKind, year: Int?): SearchResult? {
+        val response = httpClient.get("$BASE_URL/search/${kind.searchPath}") {
             authorise(apiKey)
             parameter("query", query)
             parameter("include_adult", false)
-            if (year != null) parameter("year", year)
+            // The year parameter is named differently for television, and sending the wrong
+            // one is not an error TMDB reports — it is silently ignored, and the search
+            // quietly stops being narrowed.
+            if (year != null) parameter(kind.yearParameter, year)
         }
         if (response.status != HttpStatusCode.OK) return null
-        return json.decodeFromString<SearchResponse>(response.bodyAsText()).results.firstOrNull()?.id
+        return json.decodeFromString<SearchResponse>(response.bodyAsText()).results.firstOrNull()
     }
 
-    private suspend fun details(apiKey: String, id: Int): MovieMetadata? {
-        val response = httpClient.get("$BASE_URL/movie/$id") {
+    private suspend fun details(apiKey: String, id: Int, kind: TmdbKind): TitleMetadata? {
+        val response = httpClient.get("$BASE_URL/${kind.detailsPath}/$id") {
             authorise(apiKey)
             // One request instead of three. TMDB rate-limits, and a films screen that fires
             // three calls per open is three times as likely to be throttled.
-            parameter("append_to_response", "credits,release_dates")
+            parameter("append_to_response", kind.appendToResponse)
         }
         if (response.status != HttpStatusCode.OK) return null
-        return json.decodeFromString<MovieDetailsDto>(response.bodyAsText()).toMetadata()
+        val body = response.bodyAsText()
+        return when (kind) {
+            TmdbKind.MOVIE -> json.decodeFromString<MovieDetailsDto>(body).toMetadata()
+            TmdbKind.SERIES -> json.decodeFromString<TvDetailsDto>(body).toMetadata()
+        }
     }
 
     /**

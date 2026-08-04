@@ -165,8 +165,13 @@ fun BrowseScreen(
                 // for each one is a burst of requests whose results nothing renders.
                 items(items = state.items, key = { it.id }) { item ->
                     if (showArtworkCards) {
+                        // A score, on the other hand, is exactly what a poster shows, so
+                        // this one is fetched per visible tile — cached across launches,
+                        // so a category costs its requests once and never again.
+                        LaunchedEffect(item.id) { viewModel.onPosterVisible(item) }
                         ChannelArtCard(
                             channel = item,
+                            rating = state.ratings[item.stableKey],
                             onClick = { onItemClick(item) },
                             onToggleFavorite = { viewModel.toggleFavorite(item) },
                         )

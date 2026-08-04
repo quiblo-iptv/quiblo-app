@@ -18,7 +18,9 @@
 
 package dev.quiblo.source.tmdb
 
+import dev.quiblo.core.model.AuthorLabel
 import dev.quiblo.source.tmdb.dto.MovieDetailsDto
+import dev.quiblo.source.tmdb.dto.TvDetailsDto
 import dev.quiblo.source.tmdb.dto.toMetadata
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.mock.MockEngine
@@ -151,7 +153,7 @@ class TmdbTest {
             assertEquals("A hacker learns the truth.", metadata.overview)
             assertEquals(listOf("Action", "Science Fiction"), metadata.genres)
             assertEquals(8.2, metadata.rating)
-            assertEquals("The Director", metadata.director)
+            assertEquals("The Director", metadata.author)
             // Billing order, not the order the API happened to list them in.
             assertEquals(listOf("Top Billed", "Second Billed"), metadata.topCast)
             // US is preferred, because certificates are national and not comparable.
@@ -193,6 +195,116 @@ class TmdbTest {
     }
 
     @Nested
+    @DisplayName("series mapping")
+    inner class SeriesMapping {
+
+        @Test
+        @DisplayName("reads a series from the names television uses")
+        fun `maps a series`() {
+            val dto = json.decodeFromString<TvDetailsDto>(
+                """
+                {
+                  "overview": "A chemistry teacher turns to crime.",
+                  "genres": [{"name": "Drama"}],
+                  "vote_average": 8.9,
+                  "poster_path": "/bb.jpg",
+                  "created_by": [{"name": "The Creator"}],
+                  "credits": {
+                    "cast": [
+                      {"name": "Second Billed", "order": 1},
+                      {"name": "Top Billed", "order": 0}
+                    ]
+                  },
+                  "content_ratings": {
+                    "results": [
+                      {"iso_3166_1": "GB", "rating": "18"},
+                      {"iso_3166_1": "US", "rating": "TV-MA"}
+                    ]
+                  }
+                }
+                """.trimIndent(),
+            )
+
+            val metadata = dto.toMetadata()
+
+            assertEquals("A chemistry teacher turns to crime.", metadata.overview)
+            assertEquals(8.9, metadata.rating)
+            // A series is created, not directed, and the screen labels it from this.
+            assertEquals("The Creator", metadata.author)
+            assertEquals(AuthorLabel.CREATOR, metadata.authorLabel)
+            assertEquals(listOf("Top Billed", "Second Billed"), metadata.topCast)
+            // `content_ratings.rating`, where a film uses `release_dates.certification`.
+            assertEquals("TV-MA", metadata.ageRating)
+        }
+
+        @Test
+        fun `falls back to any country that rates the series`() {
+            val dto = json.decodeFromString<TvDetailsDto>(
+                """{"content_ratings":{"results":[{"iso_3166_1":"DE","rating":"16"}]}}""",
+            )
+
+            assertEquals("16", dto.toMetadata().ageRating)
+        }
+
+        @Test
+        fun `a series with no creator credited is still mapped`() {
+            assertTrue(json.decodeFromString<TvDetailsDto>("{}").toMetadata().isEmpty)
+        }
+    }
+
+    @Nested
+    @DisplayName("the cheap half, for poster tiles")
+    inner class Summaries {
+
+        @Test
+        @DisplayName("a score costs one request, not two")
+        fun `summary does not fetch the full record`() = runTest {
+            val paths = mutableListOf<String>()
+            val client = TmdbClient(
+                HttpClient(
+                    MockEngine { request ->
+                        paths += request.url.encodedPath
+                        respond(
+                            """{"results":[{"id":603,"vote_average":8.2,"poster_path":"/p.jpg"}]}""",
+                            HttpStatusCode.OK,
+                            headersOf("Content-Type", "application/json"),
+                        )
+                    },
+                ),
+            )
+
+            val metadata = client.summary("key", "The Matrix", TmdbKind.MOVIE)
+
+            assertEquals(8.2, metadata?.rating)
+            // Marked partial, so a detail screen knows to ask properly rather than render a
+            // record with no cast and call it complete.
+            assertTrue(metadata!!.isPartial)
+            assertEquals(listOf("/3/search/movie"), paths)
+        }
+
+        @Test
+        @DisplayName("a series is searched in the television catalogue")
+        fun `series search uses the tv endpoint and its year parameter`() = runTest {
+            var url = ""
+            val client = TmdbClient(
+                HttpClient(
+                    MockEngine { request ->
+                        url = request.url.toString()
+                        respond("""{"results":[]}""", HttpStatusCode.OK, headersOf("Content-Type", "application/json"))
+                    },
+                ),
+            )
+
+            client.summary("key", "Fargo (2014)", TmdbKind.SERIES, year = 2014)
+
+            // `year` is silently ignored by the television endpoint, so sending the wrong
+            // parameter name is not an error — it just stops narrowing the search.
+            assertTrue(url.contains("/search/tv"), url)
+            assertTrue(url.contains("first_air_date_year=2014"), url)
+        }
+    }
+
+    @Nested
     @DisplayName("failure handling")
     inner class Failures {
 
@@ -205,12 +317,12 @@ class TmdbTest {
         fun `unauthorised returns null`() = runTest {
             // Enrichment is decoration on a screen that already works. Every failure has the
             // same correct response: show what the provider supplied and nothing more.
-            assertNull(clientReturning(HttpStatusCode.Unauthorized).lookup("bad-key", "The Matrix"))
+            assertNull(clientReturning(HttpStatusCode.Unauthorized).lookup("bad-key", "The Matrix", TmdbKind.MOVIE))
         }
 
         @Test
         fun `a rate limit yields no metadata`() = runTest {
-            assertNull(clientReturning(HttpStatusCode.TooManyRequests).lookup("key", "The Matrix"))
+            assertNull(clientReturning(HttpStatusCode.TooManyRequests).lookup("key", "The Matrix", TmdbKind.MOVIE))
         }
 
         @Test
@@ -225,13 +337,15 @@ class TmdbTest {
                 ),
             )
 
-            assertNull(client.lookup("key", "|AR| [1080p] HD"))
+            assertNull(client.lookup("key", "|AR| [1080p] HD", TmdbKind.MOVIE))
             assertEquals(0, requests, "a blank search must not be sent")
         }
 
         @Test
         fun `no match yields no metadata`() = runTest {
-            assertNull(clientReturning(HttpStatusCode.OK, """{"results":[]}""").lookup("key", "Nonexistent"))
+            val client = clientReturning(HttpStatusCode.OK, """{"results":[]}""")
+
+            assertNull(client.lookup("key", "Nonexistent", TmdbKind.MOVIE))
         }
     }
 }

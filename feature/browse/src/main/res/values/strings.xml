@@ -28,4 +28,9 @@
     <string name="browse_select_category">Select category</string>
     <string name="browse_clear_filter">Clear filter</string>
     <string name="browse_filter_categories">Filter categories…</string>
+
+    <string name="title_facts_rating">★ %1$.1f</string>
+    <string name="title_facts_director">Director: %1$s</string>
+    <string name="title_facts_creator">Created by: %1$s</string>
+    <string name="title_facts_cast">Cast: %1$s</string>
 </resources>

@@ -19,6 +19,7 @@
 package dev.quiblo.feature.browse.di
 
 import dev.quiblo.core.model.MediaKind
+import dev.quiblo.feature.browse.BrowseFeed
 import dev.quiblo.feature.browse.BrowseViewModel
 import org.koin.core.module.Module
 import org.koin.core.module.dsl.viewModel
@@ -32,17 +33,18 @@ import org.koin.dsl.module
  * whether to restrict to favourites.
  */
 val browseModule: Module = module {
-    viewModel { (kind: MediaKind, favoritesOnly: Boolean) ->
+    viewModel { (feed: BrowseFeed) ->
         BrowseViewModel(
-            kind = kind,
-            favoritesOnly = favoritesOnly,
+            feed = feed,
             sourceRepository = get(),
             channelRepository = get(),
             categoryRepository = get(),
             guideRepository = get(),
+            metadataRepository = get(),
         )
     }
 }
 
 /** Koin parameters for a browse screen. */
-fun browseParams(kind: MediaKind, favoritesOnly: Boolean = false) = parametersOf(kind, favoritesOnly)
+fun browseParams(kind: MediaKind, favoritesOnly: Boolean = false) =
+    parametersOf(BrowseFeed(kind = kind, favoritesOnly = favoritesOnly))

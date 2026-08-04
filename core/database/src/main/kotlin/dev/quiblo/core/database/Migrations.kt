@@ -128,3 +128,55 @@ val MIGRATION_5_6 = object : Migration(5, 6) {
         )
     }
 }
+
+/**
+ * Widens the film metadata cache to cover series.
+ *
+ * The key becomes (title, kind) rather than title alone, because "Fargo" is a film and
+ * "Fargo" is a series and they are not the same record. A column cannot be added to a
+ * SQLite primary key, so the table is rebuilt.
+ *
+ * Existing rows are carried over as `VOD` and as complete records, which is what they are:
+ * everything cached before this migration was fetched by the film detail screen, in full.
+ * Throwing them away would have been easier and would have re-spent the user's rate limit
+ * on answers already held.
+ */
+val MIGRATION_6_7 = object : Migration(6, 7) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS `title_metadata` (
+                `searchTitle` TEXT NOT NULL,
+                `kind` TEXT NOT NULL,
+                `overview` TEXT,
+                `genres` TEXT,
+                `ageRating` TEXT,
+                `rating` REAL,
+                `author` TEXT,
+                `topCast` TEXT,
+                `posterUrl` TEXT,
+                `backdropUrl` TEXT,
+                `fetchedAtEpochMillis` INTEGER NOT NULL,
+                `isMiss` INTEGER NOT NULL DEFAULT 0,
+                `isPartial` INTEGER NOT NULL DEFAULT 0,
+                PRIMARY KEY(`searchTitle`, `kind`)
+            )
+            """.trimIndent(),
+        )
+        db.execSQL(
+            """
+            INSERT OR REPLACE INTO `title_metadata` (
+                `searchTitle`, `kind`, `overview`, `genres`, `ageRating`, `rating`,
+                `author`, `topCast`, `posterUrl`, `backdropUrl`, `fetchedAtEpochMillis`,
+                `isMiss`, `isPartial`
+            )
+            SELECT
+                `searchTitle`, 'VOD', `overview`, `genres`, `ageRating`, `rating`,
+                `director`, `topCast`, `posterUrl`, `backdropUrl`, `fetchedAtEpochMillis`,
+                `isMiss`, 0
+            FROM `movie_metadata`
+            """.trimIndent(),
+        )
+        db.execSQL("DROP TABLE `movie_metadata`")
+    }
+}

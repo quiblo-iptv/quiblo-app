@@ -52,7 +52,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
@@ -70,6 +69,7 @@ import dev.quiblo.tv.ui.player.TvPlaybackRequest
 import dev.quiblo.tv.ui.player.TvPlayerScreen
 import dev.quiblo.tv.ui.player.playbackRequestFor
 import dev.quiblo.tv.ui.series.TvSeriesScreen
+import dev.quiblo.tv.ui.settings.TvSettingsScreen
 import dev.quiblo.tv.ui.sources.TvSourcesScreen
 
 /**
@@ -84,56 +84,93 @@ import dev.quiblo.tv.ui.sources.TvSourcesScreen
 fun TvApp() {
     var selectedTab by remember { mutableIntStateOf(TvTab.LIVE.ordinal) }
 
-    // Playing replaces the whole shell rather than sitting inside it: a television plays
-    // full screen, and leaving the bar drawn over video would be the same mistake the phone
-    // app made for a fortnight.
+    // What is on top of the shell, if anything.
     //
-    // What is being played is now a request rather than a row plus an index, because the
-    // three kinds are played differently and flattening them is what bug #009 was. A series
-    // is not among them at all: it has no stream of its own, so it opens a screen instead.
-    var playing: TvPlaybackRequest? by remember { mutableStateOf(null) }
-    var openSeries: Channel? by remember { mutableStateOf(null) }
-
-    playing?.let { request ->
-        TvPlayerScreen(
-            request = request,
-            onBack = { playing = null },
-            // Only live has a queue to move through, and the key map means only live gets
-            // here at all.
-            onZap = { direction ->
-                playing = (request as? TvPlaybackRequest.Live)?.zappedBy(direction) ?: request
-            },
-        )
-        return
-    }
-
-    openSeries?.let { series ->
-        TvSeriesScreen(
-            channel = series,
-            onPlayEpisode = { episode, resumeFrom ->
-                playing = TvPlaybackRequest.Episode(
-                    channel = series,
-                    streamUrl = episode.streamUrl,
-                    episodeTitle = episode.title,
-                    seasonNumber = episode.seasonNumber,
-                    episodeNumber = episode.episodeNumber,
-                    startPositionMillis = resumeFrom,
-                )
-            },
-            onBack = { openSeries = null },
-            modifier = Modifier.padding(SCREEN_PADDING),
-        )
-        return
-    }
+    // One piece of state rather than three booleans, because the states are exclusive: a
+    // viewer is watching, or reading a series, or in settings, or in the shell. Three flags
+    // can express "playing and in settings", which is not a thing, and the code would have
+    // to keep proving it never happens.
+    var overlay: TvOverlay? by remember { mutableStateOf(null) }
 
     // A series carries no stream of its own, so `playbackRequestFor` answers null for one
     // and it opens a screen rather than the player. Decided per item rather than per
     // screen, because a favourites list holds every kind at once.
     fun open(items: List<Channel>, index: Int) {
         val request = playbackRequestFor(items, index)
-        if (request == null) openSeries = items.getOrNull(index) else playing = request
+        overlay = when {
+            request != null -> TvOverlay.Playing(request)
+            else -> items.getOrNull(index)?.let(TvOverlay::Series)
+        }
     }
 
+    // Playing replaces the whole shell rather than sitting inside it: a television plays
+    // full screen, and leaving the bar drawn over video would be the same mistake the phone
+    // app made for a fortnight.
+    when (val current = overlay) {
+        is TvOverlay.Playing -> TvPlayerScreen(
+            request = current.request,
+            onBack = { overlay = null },
+            // Only live has a queue to move through, and the key map means only live gets
+            // here at all.
+            onZap = { direction ->
+                val live = current.request as? TvPlaybackRequest.Live
+                if (live != null) overlay = TvOverlay.Playing(live.zappedBy(direction))
+            },
+        )
+
+        is TvOverlay.Series -> TvSeriesScreen(
+            channel = current.channel,
+            onPlayEpisode = { episode, resumeFrom ->
+                overlay = TvOverlay.Playing(
+                    TvPlaybackRequest.Episode(
+                        channel = current.channel,
+                        streamUrl = episode.streamUrl,
+                        episodeTitle = episode.title,
+                        seasonNumber = episode.seasonNumber,
+                        episodeNumber = episode.episodeNumber,
+                        startPositionMillis = resumeFrom,
+                    ),
+                )
+            },
+            // Back from an episode list lands on the catalogue it came from, not on the
+            // player it might have opened (AC-TV-03).
+            onBack = { overlay = null },
+            modifier = Modifier.padding(SCREEN_PADDING),
+        )
+
+        TvOverlay.Settings -> TvSettingsScreen(
+            onBack = { overlay = null },
+            modifier = Modifier.padding(SCREEN_PADDING),
+        )
+
+        null -> TvShell(
+            selectedTab = selectedTab,
+            onSelectTab = { selectedTab = it },
+            onOpenSettings = { overlay = TvOverlay.Settings },
+            onOpen = ::open,
+        )
+    }
+}
+
+/**
+ * A screen drawn over the shell.
+ *
+ * Exclusive by construction: the shell is `null`, and everything else replaces it whole.
+ */
+private sealed interface TvOverlay {
+    data class Playing(val request: TvPlaybackRequest) : TvOverlay
+    data class Series(val channel: Channel) : TvOverlay
+    data object Settings : TvOverlay
+}
+
+/** The tab bar and whichever catalogue is selected beneath it. */
+@Composable
+private fun TvShell(
+    selectedTab: Int,
+    onSelectTab: (Int) -> Unit,
+    onOpenSettings: () -> Unit,
+    onOpen: (List<Channel>, Int) -> Unit,
+) {
     // Focus starts in the bar, so the first thing a viewer sees is where they are. An app
     // that opens with nothing focused leaves the remote apparently dead.
     val barFocusRequester = remember { FocusRequester() }
@@ -148,9 +185,10 @@ fun TvApp() {
     ) {
         TvTopBar(
             selectedTab = selectedTab,
-            onSelect = { selectedTab = it },
+            onSelect = onSelectTab,
             focusRequester = barFocusRequester,
             onEnterContent = { contentFocusRequester.tryRequestFocus() },
+            onOpenSettings = onOpenSettings,
         )
 
         Box(
@@ -161,16 +199,16 @@ fun TvApp() {
                 .focusGroup(),
         ) {
             when (TvTab.entries[selectedTab]) {
-                TvTab.LIVE -> TvLiveScreen(onPlay = ::open)
+                TvTab.LIVE -> TvLiveScreen(onPlay = onOpen)
 
-                TvTab.MOVIES -> TvPosterRows(kind = MediaKind.VOD, onPlay = ::open)
+                TvTab.MOVIES -> TvPosterRows(kind = MediaKind.VOD, onPlay = onOpen)
 
-                TvTab.SERIES -> TvPosterRows(kind = MediaKind.SERIES, onPlay = ::open)
+                TvTab.SERIES -> TvPosterRows(kind = MediaKind.SERIES, onPlay = onOpen)
 
                 TvTab.FAVOURITES -> TvPosterRows(
                     kind = MediaKind.VOD,
                     favouritesOnly = true,
-                    onPlay = ::open,
+                    onPlay = onOpen,
                 )
 
                 TvTab.SOURCES -> TvSourcesScreen()
@@ -203,10 +241,23 @@ private fun TvTopBar(
     onSelect: (Int) -> Unit,
     focusRequester: FocusRequester,
     onEnterContent: () -> Unit,
+    onOpenSettings: () -> Unit,
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val isFocused by interactionSource.collectIsFocusedAsState()
     val lastIndex = TvTab.entries.lastIndex
+
+    /**
+     * Whether the remote is resting on the settings icon rather than on a tab.
+     *
+     * The gear is a *position along this bar*, not a focusable of its own, for the same
+     * reason the tabs are not: the bar is one focus target and moves by key press. Making
+     * the icon separately focusable and handing focus across was tried and does not work —
+     * the icon sits inside the bar's own focusable, so a focus search walks past it into
+     * the content below, and the gear could not be reached by remote at all. That is half
+     * of why #004 read as a missing screen when it was really an unreachable one.
+     */
+    var onGear by remember { mutableStateOf(false) }
 
     Row(
         modifier = Modifier
@@ -215,28 +266,25 @@ private fun TvTopBar(
             .focusRequester(focusRequester)
             .onPreviewKeyEvent { event ->
                 if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
-                when (event.key) {
-                    Key.DirectionLeft -> {
-                        // Not consumed at the first tab, so focus can leave the bar the way
-                        // it came rather than the remote going dead in the corner.
-                        val canMove = selectedTab > 0
-                        if (canMove) onSelect(selectedTab - 1)
-                        canMove
+                when (val action = tvBarAction(event.key, TvBarState(selectedTab, onGear), lastIndex)) {
+                    is TvBarAction.Move -> {
+                        onGear = action.state.onGear
+                        if (action.state.selectedTab != selectedTab) onSelect(action.state.selectedTab)
+                        true
                     }
 
-                    // Past the last tab, left unconsumed so focus reaches the settings icon.
-                    Key.DirectionRight -> {
-                        val canMove = selectedTab < lastIndex
-                        if (canMove) onSelect(selectedTab + 1)
-                        canMove
-                    }
-
-                    Key.DirectionDown, Key.DirectionCenter, Key.Enter -> {
+                    TvBarAction.EnterContent -> {
+                        onGear = false
                         onEnterContent()
                         true
                     }
 
-                    else -> false
+                    TvBarAction.OpenSettings -> {
+                        onOpenSettings()
+                        true
+                    }
+
+                    TvBarAction.Unhandled -> false
                 }
             }
             .focusable(interactionSource = interactionSource),
@@ -247,10 +295,11 @@ private fun TvTopBar(
             TextTab(
                 label = stringResource(tab.labelRes),
                 isSelected = index == selectedTab,
-                // Bright only when the bar itself holds the remote. While focus is down in
-                // the content the selected tab stays legible but recedes, which is how a
-                // viewer tells where a press will land.
-                isBarFocused = isFocused,
+                // Bright only when the bar itself holds the remote *and* the remote is on
+                // the tabs rather than the gear. While focus is down in the content the
+                // selected tab stays legible but recedes, which is how a viewer tells where
+                // a press will land.
+                isBarFocused = isFocused && !onGear,
             )
         }
 
@@ -259,6 +308,7 @@ private fun TvTopBar(
         BarIcon(
             icon = Icons.Filled.Settings,
             contentDescription = stringResource(R.string.tv_settings),
+            isHighlighted = onGear && isFocused,
         )
     }
 }
@@ -308,24 +358,26 @@ private fun TextTab(
 }
 
 @Composable
-private fun BarIcon(icon: androidx.compose.ui.graphics.vector.ImageVector, contentDescription: String) {
-    val interactionSource = remember { MutableInteractionSource() }
-    val isFocused by interactionSource.collectIsFocusedAsState()
-
+private fun BarIcon(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    contentDescription: String,
+    isHighlighted: Boolean,
+) {
+    // Not focusable, by design. The bar above owns focus and decides where along itself the
+    // remote is resting; this only has to look like the answer.
     Box(
         modifier = Modifier
             .size(40.dp)
             .background(
-                color = if (isFocused) Color.White.copy(alpha = 0.20f) else Color.Transparent,
+                color = if (isHighlighted) Color.White.copy(alpha = 0.20f) else Color.Transparent,
                 shape = RoundedCornerShape(20.dp),
-            )
-            .focusable(interactionSource = interactionSource),
+            ),
         contentAlignment = Alignment.Center,
     ) {
         Icon(
             imageVector = icon,
             contentDescription = contentDescription,
-            tint = Color.White.copy(alpha = if (isFocused) 1f else IDLE_ALPHA),
+            tint = Color.White.copy(alpha = if (isHighlighted) 1f else IDLE_ALPHA),
             modifier = Modifier.size(24.dp),
         )
     }

@@ -37,6 +37,20 @@
 
     <string name="tv_no_content">Nothing here yet.</string>
 
+    <!-- Settings -->
+    <string name="tv_settings_playback">Playback</string>
+    <string name="tv_settings_artwork">Artwork</string>
+    <string name="tv_settings_seek_interval">Skip forward and back by</string>
+    <string name="tv_settings_buffer">Buffering</string>
+    <string name="tv_settings_bitrate">Maximum quality</string>
+    <string name="tv_settings_channel_logos">Fill in missing channel logos</string>
+    <string name="tv_settings_channel_logos_detail">Looks up artwork for channels your playlist gave none for. Off by default.</string>
+    <string name="tv_settings_seconds">%1$d s</string>
+    <string name="tv_settings_mbps">%1$d Mbps</string>
+    <string name="tv_settings_unlimited">Unlimited</string>
+    <string name="tv_settings_on">On</string>
+    <string name="tv_settings_off">Off</string>
+
     <!-- Categories -->
     <string name="tv_category_all">All channels</string>
     <string name="tv_category_ungrouped">Ungrouped</string>

@@ -13,7 +13,20 @@ Xtream source configured, on a fresh install and on an upgrade.
 This file records what has been verified so far, how, and what is left. It is the gate on
 tagging v1.0.0 — do not tag while anything in §5, §6 or §7 is unchecked.
 
-**Last updated:** 2026-08-04, at commit `ebfa928`.
+**Last updated:** 2026-08-04, after the `agile/001` bug fixes.
+
+> **Since `ebfa928` the data layer and the whole television frontend have changed
+> materially**, and two recorded results are now stale in a way that matters:
+>
+> - **AC-NFR-01 and the scroll-jank baseline were measured before the browse query was
+>   indexed and before its mapping left the main thread.** Schema 10 added
+>   `(sourceId, kind, sortIndex)` to `channels`, so the first launch after upgrading builds
+>   an index over the whole playlist — a one-off cost the old cold-start figures do not
+>   include, and a saving every emission after it does not either. **Re-measure both.**
+> - **AC-NFR-02 wants re-running**: the phone APK is 5.32 MB minified at the time of
+>   writing, against 5.47 MB recorded below, and the television has gained four screens.
+>
+> The parser results in §2 and §3 are unaffected — nothing in that path changed.
 
 > **The recorded results predate almost everything built since.** Everything in §2 and §3
 > was measured at `3494da5`. Since then the player gained aspect modes, gesture controls
@@ -38,10 +51,10 @@ rows are still open.
 
 **Since `FREEZE.md` Amendment 1 (2026-08-03) the television is part of v1.0**, so this sweep
 has a third target: the Haier MatrixTV EE (Google TV, Android 14) recorded in `PLAN-TV.md`
-§0. The TV app now exists — T0–T4 are built and were driven on that device during
-development — but **none of AC-TV-01…08 have been run as a sweep**, which is a different
-thing from having watched a feature work while writing it. They are listed in §7. v1.0.0
-cannot be tagged on a green phone sweep alone.
+§0. The TV app now exists — T0–T4 are built, and Amendment 4 added its settings and detail
+screens — but **none of AC-TV-01…13 have been run as a sweep**, which is a different thing
+from having watched a feature work while writing it. They are listed in §7. v1.0.0 cannot be
+tagged on a green phone sweep alone.
 
 ---
 
@@ -269,6 +282,27 @@ enough, and a subsequent `adb connect <ip>:5555` is refused).
 | AC-TV-06 | Not run | D-pad down shows controls, back hides them, playback never pauses for either |
 | AC-TV-07 | Not run | A source restored from a backup file with no typing beyond a password |
 | AC-TV-08 | Not run | Cold start to interactive under 3s, measured the same way as AC-NFR-01 — six runs after `force-stop`, median reported |
+| AC-TV-09 | Not run on hardware | Every phone setting present and effective. Rendering and a DataStore read-back were confirmed on the emulator; the criterion asks for the television |
+| AC-TV-10 | Not run on hardware | Confirmed on the emulator — two values landed in two fields with the keyboard up, and the action key showed next-field. The Haier's IME is not the emulator's, so this is exactly the criterion most likely to behave differently |
+| AC-TV-11 | Not run on hardware | Film detail with Resume separate from Start from the beginning. Rendering confirmed on the emulator; **resume has never been exercised with a real stored position** |
+| AC-TV-12 | Not run on hardware | Series detail with seasons, episodes and the same information a film shows |
+| AC-TV-13 | Not run on hardware | Category filtering in Live. Confirmed on the emulator against 11,923 channels; count the requests at the source, not by eye |
+
+**What has been seen on an emulator, and what that is worth.** The television emulator
+(`Television_4K`, overridden to 1920x1080 @320dpi — the target device's geometry) was driven
+by D-pad for every screen above during development, against the user's real 11,923-channel
+Xtream account. That is enough to know the screens compose, focus moves, and settings reach
+the store. It is **not** the sweep: the emulator is x86_64 with desktop memory, where the
+Haier is `armeabi-v7a` with 1.84 GB, and it has a different IME. No performance figure from
+it transfers, and neither does AC-TV-10.
+
+**Two items in `agile/001` remain open and are not criteria failures yet — they are
+undiagnosed.** #008 (a wobble while scrolling) had its stated cause disproven and needs
+watching on the device; the "slow and glitchy" half of #009 has no diagnosis at all. Both
+want an hour with the television before anything else is changed for them.
+
+**Continue watching has never been seen populated.** Nothing has been watched on the
+emulator, so the row is correctly empty and its filled state is untested.
 
 The phone criteria apply to the TV build too, and none have been run on it. The ones most
 likely to behave differently, in order: **AC-PL-05** (the 20k list on 1.84 GB of RAM and a

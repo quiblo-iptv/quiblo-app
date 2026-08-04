@@ -103,6 +103,11 @@ except where a criterion names an input method the television does not have.
 | AC-TV-06 | Playback controls appear on D-pad down and hide on back, without pausing. |
 | AC-TV-07 | Text entry is never required to restore a configuration that exists as a backup file. |
 | AC-TV-08 | Cold start to interactive under 3s on a low-end Android TV box — a looser bound than AC-NFR-01, because the hardware is weaker. |
+| AC-TV-09 | Every setting the phone offers is reachable and changeable on the television, and changing one changes what the app does — not merely what the screen says. Theme mode and dynamic colour are excepted by FREEZE Amendment 4 and must be absent rather than present-and-inert. |
+| AC-TV-10 | A text field can be left with the on-screen keyboard **up**. Typing into consecutive fields puts each value in its own field. |
+| AC-TV-11 | Opening a film shows what it is before it plays, and offers Resume separately from Start from the beginning whenever a stored position exists. |
+| AC-TV-12 | Opening a series shows its seasons and episodes, and the same information a film shows — artwork, plot, score, cast, favouriting. Pressing a series never sends its own URL to the player. |
+| AC-TV-13 | A live source with more than one category can be filtered from the Live list by remote, and filtering never issues a request per category passed over. |
 
 ## AC-LEGAL — Licensing and Compliance
 
@@ -121,3 +126,5 @@ except where a criterion names an input method the television does not have.
 Every AC above passes on a physical Android 11 device and a physical Android 14 device, with both an M3U source and an Xtream source configured, verified against a fresh install and against an upgrade from the previous release.
 
 Since Amendment 1 the television is part of v1.0, so there is a third row: **AC-TV-\* and the phone criteria that still apply pass on a physical Android TV device, driven by its remote alone.** A green phone sweep is not a v1.0. Progress against all three is recorded in [`ACCEPTANCE-SWEEP.md`](ACCEPTANCE-SWEEP.md).
+
+Amendment 4 added AC-TV-09…13 for the settings and detail screens the television gained on 2026-08-04. They are part of that third row and not a separate gate.

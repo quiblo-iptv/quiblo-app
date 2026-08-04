@@ -6,8 +6,10 @@
 
 # Execution Plan — Quiblo for Android TV / Google TV
 
-**Status:** approved for v1.0 by `FREEZE.md` Amendment 1. Target device confirmed. Not started.
-**Date:** 2026-08-03.
+**Status:** T0–T4 and T6 built and merged. T5 (the release sweep) is outstanding, and is the
+only thing between here and v1.0.0. Approved for v1.0 by `FREEZE.md` Amendment 1; extended
+by Amendment 4.
+**Date:** 2026-08-03, last revised 2026-08-04.
 
 ## 0. The target device, measured
 
@@ -234,6 +236,29 @@ Each exits on something demonstrable on a real device, not on code existing.
 - **Exit:** a source can be configured on the TV from an exported backup with no typing
   beyond a password.
 
+### T6 — Parity (added by FREEZE Amendment 4, 2026-08-04)
+
+Not in the original plan. Added because `agile/001` showed the television was missing most
+of the product it was supposed to be a frontend for.
+
+- A settings screen with every phone setting except theme mode and dynamic colour, which are
+  meaningless on an always-dark device with no wallpaper.
+- Film and series detail screens, sharing their presentation so the two cannot drift apart.
+- Category selection in the Live list.
+- A continue-watching row.
+- **Exit:** AC-TV-09…13 pass on the television. Built and merged; the sweep is outstanding.
+
+Three focus defects were found and fixed along the way, and they are the reason this
+milestone existed at all rather than being a matter of writing screens:
+
+- The settings gear was `focusable` with **no `onClick`**, and could not be reached anyway —
+  it sits inside the bar's own focusable, so a focus search walks past it into the content.
+  The gear is now a position along the bar, not a focusable.
+- `TvSourcesScreen` claimed focus on its *first* composition, so selecting the Sources tab
+  pulled the remote out of the tab bar entirely.
+- The IME ate the D-pad, so field-to-field movement never ran and every field typed went
+  into the same box. Movement now goes through the keyboard's own next-field action.
+
 ### T5 — Release (week 6)
 - Second release track, TV banner and store assets, size budget.
 - Full AC sweep on the television alongside the phone sweep.
@@ -243,9 +268,10 @@ Each exits on something demonstrable on a real device, not on code existing.
 
 ## 6. Acceptance criteria
 
-~~To add.~~ **Added.** AC-TV-01…08 now live in [`ACCEPTANCE.md`](ACCEPTANCE.md) under
+~~To add.~~ **Added.** AC-TV-01…13 now live in [`ACCEPTANCE.md`](ACCEPTANCE.md) under
 `AC-TV — Television`, and are tracked in the sweep like every other criterion. They are not
 repeated here: two copies of an acceptance criterion is one copy that goes stale.
+09…13 arrived with Amendment 4 and cover the settings and detail screens.
 
 ## 7. Risks
 
@@ -264,6 +290,11 @@ repeated here: two copies of an acceptance criterion is one copy that goes stale
 Stated so nobody implements them by reflex: brightness and volume gestures, screen lock,
 touch-specific affordances, and the phone's long-press interactions. Their TV equivalents
 are either the remote's own hardware keys or nothing at all.
+
+**Theme mode and dynamic colour** join the list as of Amendment 4. `QuibloTvTheme` is always
+dark on purpose — a television is watched at a distance in a dim room — and a television has
+no wallpaper for a dynamic palette. Both controls would change nothing on screen, and a
+switch that lies is worse than an absent one.
 
 ## 9. First three tasks
 

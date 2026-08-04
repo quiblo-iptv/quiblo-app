@@ -54,7 +54,7 @@ import dev.quiblo.core.database.entity.TitleMetadataEntity
         CategoryOverrideEntity::class,
         ChannelLogoEntity::class,
     ],
-    version = 9,
+    version = 10,
     exportSchema = true,
 )
 abstract class QuibloDatabase : RoomDatabase() {
@@ -97,6 +97,7 @@ abstract class QuibloDatabase : RoomDatabase() {
                     MIGRATION_6_7,
                     MIGRATION_7_8,
                     MIGRATION_8_9,
+                    MIGRATION_9_10,
                 )
                 .build()
     }

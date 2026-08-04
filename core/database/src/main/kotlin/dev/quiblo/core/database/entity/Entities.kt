@@ -61,6 +61,20 @@ data class SourceEntity(
         Index("sourceId"),
         Index("sourceId", "groupTitle"),
         Index("sourceId", "stableKey"),
+        /**
+         * The browse query, in the order it asks its questions.
+         *
+         * `observeBrowse` filters on `sourceId` and `kind` and then sorts by `sortIndex`,
+         * and until this existed nothing covered that: SQLite matched every row belonging
+         * to the source, tested `kind` one row at a time, then built a temporary B-tree to
+         * sort the survivors — on every emission. At 67,000 channels that is the difference
+         * between a browse screen appearing and a browse screen arriving.
+         *
+         * `sortIndex` is part of the index rather than left to the sort step because a
+         * covering order is what removes the temporary B-tree; filtering alone would still
+         * sort tens of thousands of rows by hand.
+         */
+        Index("sourceId", "kind", "sortIndex"),
     ],
 )
 data class ChannelEntity(
@@ -160,6 +174,14 @@ data class ResumePositionEntity(
     indices = [
         Index("sourceId", "channelKey", "startEpochMillis"),
         Index("sourceId", "channelKey", "endEpochMillis"),
+        /**
+         * What is on now across a whole source, which asks about no channel in particular.
+         *
+         * The two indices above lead with `channelKey`, so neither serves
+         * `observeNowPlaying` — it filters on a source and a time window and nothing else,
+         * and was scanning the whole table to do it.
+         */
+        Index("sourceId", "startEpochMillis", "endEpochMillis"),
     ],
 )
 data class ProgrammeEntity(

@@ -211,7 +211,7 @@ class BrowseViewModel(
         }
         combine(
             items,
-            guideRepository.observeNowPlaying(sourceId),
+            guideFor(sourceId),
             ratings,
             posters,
             historyFor(sourceId),
@@ -230,6 +230,28 @@ class BrowseViewModel(
             )
         }
     }
+
+    /**
+     * What is on now, for the feeds that can actually show it.
+     *
+     * A film has no programme and a poster has nowhere to put one, so Movies and Series
+     * were combining in a query whose every answer they discarded — and it is not a cheap
+     * query: it asks for every programme airing now across the whole source.
+     *
+     * Keyed on [BrowseFeed.kind] alone rather than also excluding favourites, because the
+     * favourites feed is built with [MediaKind.LIVE] and *does* render a programme line
+     * for the live channels in it. Excluding it would have been a silent regression on a
+     * screen that displays this today.
+     *
+     * The same reasoning as [historyFor] immediately below, in the other direction: each
+     * feed subscribes to what it can display and to nothing else.
+     */
+    private fun guideFor(sourceId: Long): Flow<Map<String, Programme>> =
+        if (feed.kind == MediaKind.LIVE) {
+            guideRepository.observeNowPlaying(sourceId)
+        } else {
+            flowOf(emptyMap())
+        }
 
     /**
      * The "continue watching" feed for this screen.

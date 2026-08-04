@@ -34,7 +34,10 @@ import dev.quiblo.source.api.SourceError
 import dev.quiblo.source.api.SourceRequest
 import dev.quiblo.source.api.VodDetailsResult
 import dev.quiblo.source.api.VodSource
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import java.util.concurrent.ConcurrentHashMap
 
@@ -48,6 +51,14 @@ import java.util.concurrent.ConcurrentHashMap
  * Filtering, searching and the favourite join all happen in SQL rather than in
  * composition, so a 20,000-entry playlist neither blocks a frame nor holds a second
  * filtered copy in memory (AC-PL-05, AC-FAV-05).
+ *
+ * **The mapping from rows to domain objects runs on [browseDispatcher], and that is not an
+ * optimisation.** A Flow operator runs in its *collector's* context, and every collector
+ * here is a `stateIn(viewModelScope, …)` — which is `Dispatchers.Main.immediate`. Without
+ * the `flowOn`, allocating one [Channel] per row happened on the main thread every time
+ * Room re-emitted, which is on every write to the table. At 67,000 channels that is an
+ * ANR, and it was reported as one. Keeping the SQL cheap was never enough on its own,
+ * because the work after the SQL was the larger half.
  */
 class ChannelRepository(
     private val channelDao: ChannelDao,
@@ -55,6 +66,13 @@ class ChannelRepository(
     private val sourceDao: SourceDao? = null,
     private val mediaSources: Map<SourceKind, MediaSource> = emptyMap(),
     private val now: () -> Long = System::currentTimeMillis,
+    /**
+     * Where rows are turned into domain objects.
+     *
+     * Injected rather than hardcoded so a test can prove the work leaves the caller's
+     * thread, which is the whole point of it — see [browseDispatcher]'s use below.
+     */
+    private val browseDispatcher: CoroutineDispatcher = Dispatchers.Default,
 ) {
 
     /**
@@ -77,11 +95,13 @@ class ChannelRepository(
             query = query.trim(),
             favoritesOnly = if (favoritesOnly) 1 else 0,
         ).map { rows -> rows.map { it.channel.toDomain(isFavorite = it.isFavorite) } }
+            .flowOn(browseDispatcher)
 
     /** Favourites across every content type (AC-FAV-01). */
     fun observeFavorites(sourceId: Long, query: String = ""): Flow<List<Channel>> =
         channelDao.observeFavorites(sourceId, query.trim())
             .map { rows -> rows.map { it.channel.toDomain(isFavorite = true) } }
+            .flowOn(browseDispatcher)
 
     /**
      * Marks or unmarks a favourite.

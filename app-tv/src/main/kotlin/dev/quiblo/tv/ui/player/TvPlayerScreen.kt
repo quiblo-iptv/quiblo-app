@@ -214,9 +214,15 @@ fun TvPlayerScreen(
  * lost its resume point, and a series was asked to play a URL that plays nothing.
  */
 private fun PlayerViewModel.load(request: TvPlaybackRequest) = when (request) {
-    // A film resumes without being told to: `load` reads the stored position for anything
-    // that is not live. Passing nothing here is passing the right thing.
-    is TvPlaybackRequest.Live, is TvPlaybackRequest.Film -> load(request.channel.id)
+    is TvPlaybackRequest.Live -> load(request.channel.id)
+
+    // A film resumes on its own when given no position — `load` reads the stored one for
+    // anything that is not live. An explicit zero is what makes "start from the beginning"
+    // a different action rather than the same one worded twice.
+    is TvPlaybackRequest.Film -> load(
+        channelId = request.channel.id,
+        startPositionMillis = request.startPositionMillis,
+    )
 
     is TvPlaybackRequest.Episode -> load(
         channelId = request.channel.id,

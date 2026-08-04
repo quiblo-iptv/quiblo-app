@@ -19,7 +19,6 @@
 package dev.quiblo.tv.ui.player
 
 import dev.quiblo.core.model.Channel
-import dev.quiblo.core.model.MediaKind
 
 /**
  * What the television player has been asked to play.
@@ -79,7 +78,17 @@ sealed interface TvPlaybackRequest {
      * Seekable and resumable, with nothing above or below it to zap to — the next film in
      * a category is not "the next channel" in any sense a viewer means by pressing up.
      */
-    data class Film(override val channel: Channel) : TvPlaybackRequest
+    data class Film(
+        override val channel: Channel,
+        /**
+         * Where to start, or null for wherever it was left.
+         *
+         * Null and zero are different answers: null lets the player read the stored
+         * position, and zero is a viewer deliberately starting the film again. Collapsing
+         * them would make "start from the beginning" impossible to express.
+         */
+        val startPositionMillis: Long? = null,
+    ) : TvPlaybackRequest
 
     /**
      * One episode of a series.
@@ -97,20 +106,4 @@ sealed interface TvPlaybackRequest {
         val episodeNumber: Int,
         val startPositionMillis: Long? = null,
     ) : TvPlaybackRequest
-}
-
-/**
- * How to play the row at [index], or null when it is not something to play directly.
- *
- * The null is a series, which carries no stream of its own and opens a screen instead. A
- * favourites list holds every kind at once, so the decision has to be made per item rather
- * than per screen — deciding it per screen is what let a series reach the player at all.
- */
-fun playbackRequestFor(items: List<Channel>, index: Int): TvPlaybackRequest? {
-    val channel = items.getOrNull(index) ?: return null
-    return when (channel.kind) {
-        MediaKind.LIVE -> TvPlaybackRequest.Live(channel, items, index)
-        MediaKind.VOD -> TvPlaybackRequest.Film(channel)
-        MediaKind.SERIES -> null
-    }
 }

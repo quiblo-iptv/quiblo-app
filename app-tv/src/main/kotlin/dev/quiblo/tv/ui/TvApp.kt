@@ -64,10 +64,10 @@ import dev.quiblo.core.model.Channel
 import dev.quiblo.core.model.MediaKind
 import dev.quiblo.tv.R
 import dev.quiblo.tv.ui.browse.TvPosterRows
+import dev.quiblo.tv.ui.detail.TvMovieScreen
 import dev.quiblo.tv.ui.live.TvLiveScreen
 import dev.quiblo.tv.ui.player.TvPlaybackRequest
 import dev.quiblo.tv.ui.player.TvPlayerScreen
-import dev.quiblo.tv.ui.player.playbackRequestFor
 import dev.quiblo.tv.ui.series.TvSeriesScreen
 import dev.quiblo.tv.ui.settings.TvSettingsScreen
 import dev.quiblo.tv.ui.sources.TvSourcesScreen
@@ -92,14 +92,22 @@ fun TvApp() {
     // to keep proving it never happens.
     var overlay: TvOverlay? by remember { mutableStateOf(null) }
 
-    // A series carries no stream of its own, so `playbackRequestFor` answers null for one
-    // and it opens a screen rather than the player. Decided per item rather than per
-    // screen, because a favourites list holds every kind at once.
+    /**
+     * What pressing a row in a catalogue does.
+     *
+     * Only live plays immediately, because only a live channel is a thing you simply watch.
+     * A film opens its own screen — that is #005, and it is where a resume point can be
+     * offered at all — and a series has no stream of its own to play.
+     *
+     * Decided per item rather than per screen, because a favourites list holds every kind
+     * at once and deciding it per screen is how a series reached the player.
+     */
     fun open(items: List<Channel>, index: Int) {
-        val request = playbackRequestFor(items, index)
-        overlay = when {
-            request != null -> TvOverlay.Playing(request)
-            else -> items.getOrNull(index)?.let(TvOverlay::Series)
+        val channel = items.getOrNull(index) ?: return
+        overlay = when (channel.kind) {
+            MediaKind.LIVE -> TvOverlay.Playing(TvPlaybackRequest.Live(channel, items, index))
+            MediaKind.VOD -> TvOverlay.Movie(channel)
+            MediaKind.SERIES -> TvOverlay.Series(channel)
         }
     }
 
@@ -138,6 +146,19 @@ fun TvApp() {
             modifier = Modifier.padding(SCREEN_PADDING),
         )
 
+        is TvOverlay.Movie -> TvMovieScreen(
+            channel = current.channel,
+            // A null position means "whatever was stored", which is what the player does
+            // with a film by default; zero means the viewer chose to start again.
+            onPlay = { startAt ->
+                overlay = TvOverlay.Playing(
+                    TvPlaybackRequest.Film(current.channel, startPositionMillis = startAt),
+                )
+            },
+            onBack = { overlay = null },
+            modifier = Modifier.padding(SCREEN_PADDING),
+        )
+
         TvOverlay.Settings -> TvSettingsScreen(
             onBack = { overlay = null },
             modifier = Modifier.padding(SCREEN_PADDING),
@@ -148,6 +169,12 @@ fun TvApp() {
             onSelectTab = { selectedTab = it },
             onOpenSettings = { overlay = TvOverlay.Settings },
             onOpen = ::open,
+            onOpenChannel = { channel ->
+                overlay = when (channel.kind) {
+                    MediaKind.SERIES -> TvOverlay.Series(channel)
+                    else -> TvOverlay.Movie(channel)
+                }
+            },
         )
     }
 }
@@ -160,6 +187,7 @@ fun TvApp() {
 private sealed interface TvOverlay {
     data class Playing(val request: TvPlaybackRequest) : TvOverlay
     data class Series(val channel: Channel) : TvOverlay
+    data class Movie(val channel: Channel) : TvOverlay
     data object Settings : TvOverlay
 }
 
@@ -170,6 +198,7 @@ private fun TvShell(
     onSelectTab: (Int) -> Unit,
     onOpenSettings: () -> Unit,
     onOpen: (List<Channel>, Int) -> Unit,
+    onOpenChannel: (Channel) -> Unit,
 ) {
     // Focus starts in the bar, so the first thing a viewer sees is where they are. An app
     // that opens with nothing focused leaves the remote apparently dead.
@@ -201,14 +230,23 @@ private fun TvShell(
             when (TvTab.entries[selectedTab]) {
                 TvTab.LIVE -> TvLiveScreen(onPlay = onOpen)
 
-                TvTab.MOVIES -> TvPosterRows(kind = MediaKind.VOD, onPlay = onOpen)
+                TvTab.MOVIES -> TvPosterRows(
+                    kind = MediaKind.VOD,
+                    onPlay = onOpen,
+                    onResume = onOpenChannel,
+                )
 
-                TvTab.SERIES -> TvPosterRows(kind = MediaKind.SERIES, onPlay = onOpen)
+                TvTab.SERIES -> TvPosterRows(
+                    kind = MediaKind.SERIES,
+                    onPlay = onOpen,
+                    onResume = onOpenChannel,
+                )
 
                 TvTab.FAVOURITES -> TvPosterRows(
                     kind = MediaKind.VOD,
                     favouritesOnly = true,
                     onPlay = onOpen,
+                    onResume = onOpenChannel,
                 )
 
                 TvTab.SOURCES -> TvSourcesScreen()

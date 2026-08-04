@@ -52,6 +52,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -63,6 +64,13 @@ import dev.quiblo.core.model.Episode
 import dev.quiblo.feature.series.SeriesDetailUiState
 import dev.quiblo.feature.series.SeriesDetailViewModel
 import dev.quiblo.tv.R
+import dev.quiblo.tv.ui.detail.DETAIL_COLUMN_GAP
+import dev.quiblo.tv.ui.detail.DetailArtwork
+import dev.quiblo.tv.ui.detail.DetailButton
+import dev.quiblo.tv.ui.detail.DetailFacts
+import dev.quiblo.tv.ui.detail.DetailOverview
+import dev.quiblo.tv.ui.detail.DetailTitle
+import dev.quiblo.tv.ui.detail.genresOrEmpty
 import org.koin.androidx.compose.koinViewModel
 import org.koin.core.parameter.parametersOf
 
@@ -74,9 +82,10 @@ import org.koin.core.parameter.parametersOf
  * channel table — so the television handing a series straight to the player could only ever
  * produce the "plays nothing, shows a series as a channel" behaviour reported as #009.
  *
- * Deliberately the episode half only. Artwork, plot, cast, ratings and favouriting are
- * `agile/002` phase 2.3 and belong here too; what is here is what the player fix needed in
- * order to be a fix rather than a dead end.
+ * It carries everything a film's screen carries — artwork, plot, score, cast, favouriting
+ * and a resume point — because #007's complaint was precisely that a series had none of
+ * them. The presentation is shared with the film screen rather than written twice, so the
+ * two cannot drift into showing different facts about the same kind of thing.
  */
 @Composable
 fun TvSeriesScreen(
@@ -108,6 +117,7 @@ fun TvSeriesScreen(
             is SeriesDetailUiState.Success -> Loaded(
                 state = current,
                 onPlayEpisode = onPlayEpisode,
+                onToggleFavorite = viewModel::toggleFavorite,
             )
         }
     }
@@ -117,6 +127,7 @@ fun TvSeriesScreen(
 private fun Loaded(
     state: SeriesDetailUiState.Success,
     onPlayEpisode: (Episode, Long?) -> Unit,
+    onToggleFavorite: () -> Unit,
 ) {
     // Seasons are picked, episodes are walked. A panel can return thirty seasons and a
     // season can hold a hundred episodes, so a single flat list would put the remote a very
@@ -129,25 +140,87 @@ private fun Loaded(
     LaunchedEffect(state.details.seriesId) { runCatching { episodeFocus.requestFocus() } }
 
     Column(modifier = Modifier.fillMaxSize()) {
-        Text(
-            text = state.details.title,
-            color = Color.White,
-            fontSize = 30.sp,
-            fontWeight = FontWeight.SemiBold,
-            modifier = Modifier.padding(bottom = 4.dp),
-        )
-
-        state.resumeEpisode?.let { episode ->
-            Text(
-                text = stringResource(
-                    R.string.tv_series_resume,
-                    episode.seasonNumber,
-                    episode.episodeNumber,
-                ),
-                color = Color.White.copy(alpha = 0.7f),
-                fontSize = 15.sp,
-                modifier = Modifier.padding(bottom = 12.dp),
+        // Everything a film's screen shows, because #007 asks for exactly that: a series
+        // was missing the information, the score and the history a film had.
+        Row(horizontalArrangement = Arrangement.spacedBy(DETAIL_COLUMN_GAP)) {
+            DetailArtwork(
+                url = state.channel.logoUrl?.takeIf { it.isNotBlank() }
+                    ?: state.details.coverUrl
+                    ?: state.metadata?.posterUrl,
             )
+
+            Column(modifier = Modifier.fillMaxWidth()) {
+                DetailTitle(state.details.title)
+
+                DetailFacts(
+                    rating = state.metadata?.rating,
+                    ageRating = state.metadata?.ageRating,
+                    genres = state.metadata.genresOrEmpty(),
+                    extra = pluralSeasons(seasons.size),
+                )
+
+                DetailOverview(
+                    overview = state.details.overview?.takeIf { it.isNotBlank() }
+                        ?: state.metadata?.overview,
+                    // False, and not `metadata == null`. The panel's own details are
+                    // already loaded by the time this composes, and the metadata service is
+                    // only asked at all when a key is configured — so "no metadata" is the
+                    // permanent answer for most users, and a spinner against it would never
+                    // resolve. `SeriesDetailViewModel` exposes no in-flight flag to do
+                    // better with; when it does, this is the line to change.
+                    isEnriching = false,
+                    author = state.metadata?.author,
+                    authorLabel = state.metadata?.authorLabel?.name
+                        ?.lowercase()?.replaceFirstChar(Char::uppercase),
+                    cast = state.metadata?.topCast.orEmpty(),
+                )
+
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    modifier = Modifier
+                        .padding(top = 20.dp)
+                        .focusGroup(),
+                ) {
+                    // Continue where the viewer left off, which for a series means the
+                    // episode last touched rather than the furthest through.
+                    state.resumeEpisode?.let { episode ->
+                        DetailButton(
+                            label = stringResource(
+                                R.string.tv_series_resume,
+                                episode.seasonNumber,
+                                episode.episodeNumber,
+                            ),
+                            onClick = { onPlayEpisode(episode, state.resumePositionMillis) },
+                            isPrimary = true,
+                        )
+                    }
+
+                    state.firstEpisode?.let { first ->
+                        DetailButton(
+                            label = stringResource(
+                                if (state.resumeEpisode == null) {
+                                    R.string.tv_detail_play
+                                } else {
+                                    R.string.tv_detail_from_start
+                                },
+                            ),
+                            onClick = { onPlayEpisode(first, null) },
+                            isPrimary = state.resumeEpisode == null,
+                        )
+                    }
+
+                    DetailButton(
+                        label = stringResource(
+                            if (state.isFavorite) {
+                                R.string.tv_detail_unfavourite
+                            } else {
+                                R.string.tv_detail_favourite
+                            },
+                        ),
+                        onClick = onToggleFavorite,
+                    )
+                }
+            }
         }
 
         if (seasons.isEmpty()) {
@@ -181,6 +254,7 @@ private fun Loaded(
         LazyColumn(
             verticalArrangement = Arrangement.spacedBy(4.dp),
             modifier = Modifier
+                .padding(top = 20.dp)
                 .fillMaxSize()
                 .focusRequester(episodeFocus)
                 .focusGroup(),
@@ -281,3 +355,8 @@ private fun Centered(content: @Composable () -> Unit) {
 }
 
 private const val IDLE_ALPHA = 0.65f
+
+/** "3 seasons", or nothing at all when the provider listed none. */
+@Composable
+private fun pluralSeasons(count: Int): String? =
+    if (count <= 0) null else pluralStringResource(R.plurals.tv_series_seasons, count, count)

@@ -39,15 +39,37 @@ rather than ticked off.
 | Bug | Phase | State |
 |---|---|---|
 | #001 Loading time in Movies & Series | 1.1 + 1.2 | **Fixed**, pending on-device confirmation |
-| #002 Live list has no category | 2.1 | Not started |
+| #002 Live list has no category | 2.1 | **Fixed** — verified on the emulator |
 | #003 Hover touching the category title | 1.4 | **Fixed** |
-| #004 No settings screen | 2.2 | Not started |
+| #004 No settings screen | 2.2 | **Part done** — screen and icon work; see below |
 | #005 Movies missing info | 2.3 | Not started |
 | #006 Movies missing history row | 2.4 | Not started |
 | #007 Series missing everything Movies has | 2.3 | Episode list done in 1.5; the rest not started |
 | #008 Screen wobble while scrolling | 1.3 | **Open — diagnosis was wrong**, see below |
 | #009 The player is broken | 1.5 | **Half fixed** — see below |
 | #010 App frozen (mobile) | 1.1 | **Fixed**, pending on-device confirmation |
+
+### #004 — what is done, and what is left
+
+Done: the settings screen exists, the gear reaches it, and playback settings (skip interval,
+buffering, maximum quality) plus the channel-logo switch all write through to the store.
+
+Left: **TMDB key, category rename, and backup export/import.** The first two need typing,
+which is blocked on the IME focus trap; the third needs SAF on a television.
+
+Two things found while building it, both worth knowing:
+
+- **The gear could never have been reached.** The bar left the right-key unconsumed at the
+  last tab expecting focus to land on the icon; the focus search walks past it into the
+  content instead, because the icon is inside the bar's own focusable. The gear is now a
+  position along the bar rather than a focusable, matching the tabs.
+- **`TvSourcesScreen` stole focus on first composition**, so selecting the Sources tab
+  pulled the remote out of the bar entirely. Now only a later change claims focus.
+
+**Theme mode and dynamic colour are deliberately not on the television.** It is always dark
+by design and has no wallpaper for a dynamic palette, so both would be controls that change
+nothing — the hollow-feature shape this project has already deleted once. Say so rather than
+ship them; reversing this is a few lines if wanted.
 
 ### #008 — the diagnosis in this plan was wrong
 

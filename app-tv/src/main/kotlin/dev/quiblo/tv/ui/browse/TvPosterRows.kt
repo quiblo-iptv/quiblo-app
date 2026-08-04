@@ -29,6 +29,7 @@ import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -48,6 +49,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -68,6 +70,8 @@ import dev.quiblo.feature.browse.BrowseViewModel
 import dev.quiblo.feature.browse.RatingBadge
 import dev.quiblo.feature.browse.di.browseParams
 import dev.quiblo.tv.R
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import org.koin.androidx.compose.koinViewModel
 
 /**
@@ -93,25 +97,29 @@ fun TvPosterRows(
     )
     val state by viewModel.uiState.collectAsStateWithLifecycle()
 
-    // Grouped here rather than queried per category: one query already returns everything
-    // for this kind in the provider's order, and issuing one query per category would turn
-    // a single read into dozens.
+    // Grouped away from the main thread, not merely away from the query.
+    //
+    // One query already returns everything for this kind in the provider's order, so
+    // grouping here rather than asking per category is still right. What was wrong was
+    // where: this ran inside composition, so opening Movies against a catalogue of tens of
+    // thousands built every category list during the first frame, on the UI thread. That is
+    // the other half of the reported load time (#001).
     //
     // Favourites holds every kind at once, so it groups by kind instead — "Live TV" and
     // "Movies" are the distinction that matters there, and the provider's categories are
     // not even loaded for it.
-    val rows = remember(state.items, favouritesOnly) {
-        if (favouritesOnly) {
-            state.items.groupBy { it.kind.name }.entries.toList()
-        } else {
-            state.items.groupBy { it.groupTitle }.entries.toList()
-        }
+    val rows by produceState(initialValue = emptyList<TvCategoryRow>(), state.items, favouritesOnly) {
+        value = withContext(Dispatchers.Default) { groupIntoRows(state.items, favouritesOnly) }
     }
 
     when {
-        state.isLoading -> Box(modifier = modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            CircularProgressIndicator(color = Color.White)
-        }
+        // Still grouping counts as still loading. Without the second clause the screen
+        // shows "nothing here" for a frame between the items arriving and the rows being
+        // built, which reads as an empty catalogue rather than as work in progress.
+        state.isLoading || (rows.isEmpty() && state.items.isNotEmpty()) ->
+            Box(modifier = modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                CircularProgressIndicator(color = Color.White)
+            }
 
         rows.isEmpty() -> Box(modifier = modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             Text(
@@ -123,30 +131,61 @@ fun TvPosterRows(
 
         else -> LazyColumn(
             modifier = modifier.fillMaxSize(),
-            verticalArrangement = Arrangement.spacedBy(28.dp),
+            // Each row now reserves FOCUS_GROWTH above and below itself, so the spacing
+            // between rows is reduced by the same amount to keep the rhythm on screen
+            // unchanged. The gap a viewer sees is still about 28dp.
+            verticalArrangement = Arrangement.spacedBy(ROW_SPACING),
         ) {
-            items(items = rows, key = { it.key }) { (category, items) ->
+            items(items = rows, key = { it.title }) { row ->
                 CategoryRow(
-                    category = category,
-                    items = items,
+                    category = row.title,
+                    items = row.items,
                     ratings = state.ratings,
                     onVisible = viewModel::onPosterVisible,
-                    // Indexed against the flat list so zapping walks every item on screen,
-                    // not just the row the viewer happened to start in.
-                    onItemClick = { item -> onPlay(state.items, state.items.indexOf(item)) },
+                    // The position travels with the item rather than being searched for.
+                    // It is indexed against the flat list so zapping walks every item on
+                    // screen, not just the row the viewer happened to start in.
+                    onItemClick = { item -> onPlay(state.items, item.flatIndex) },
                 )
             }
         }
     }
 }
 
+/** One category's worth of posters, ready to render. */
+private data class TvCategoryRow(val title: String, val items: List<TvRowItem>)
+
+/**
+ * A poster and where it sits in the flat list.
+ *
+ * The index is carried rather than recovered. Finding it with `indexOf` meant a linear scan
+ * of every item in the catalogue on each press — unnoticeable on a short list, and on a
+ * large one a pause between pressing a film and anything happening.
+ */
+private data class TvRowItem(val channel: Channel, val flatIndex: Int)
+
+/**
+ * Groups the catalogue into rows, recording each item's flat position as it goes.
+ *
+ * One pass rather than a `groupBy` followed by a lookup per item: the position is known
+ * while iterating and is thrown away by any approach that groups first.
+ */
+private fun groupIntoRows(items: List<Channel>, favouritesOnly: Boolean): List<TvCategoryRow> {
+    val grouped = LinkedHashMap<String, MutableList<TvRowItem>>()
+    items.forEachIndexed { index, channel ->
+        val title = if (favouritesOnly) channel.kind.name else channel.groupTitle
+        grouped.getOrPut(title) { mutableListOf() }.add(TvRowItem(channel, index))
+    }
+    return grouped.map { (title, rowItems) -> TvCategoryRow(title, rowItems) }
+}
+
 @Composable
 private fun CategoryRow(
     category: String,
-    items: List<Channel>,
+    items: List<TvRowItem>,
     ratings: Map<String, Double>,
     onVisible: (Channel) -> Unit,
-    onItemClick: (Channel) -> Unit,
+    onItemClick: (TvRowItem) -> Unit,
 ) {
     Column {
         Text(
@@ -154,18 +193,24 @@ private fun CategoryRow(
             color = Color.White.copy(alpha = 0.85f),
             fontSize = 18.sp,
             fontWeight = FontWeight.SemiBold,
-            modifier = Modifier.padding(bottom = 10.dp),
+            modifier = Modifier.padding(bottom = TITLE_GAP),
         )
 
-        LazyRow(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-            items(items = items, key = { it.id }) { item ->
+        // Room above and below for the focused poster to grow into. A `LazyRow` clips to its
+        // own bounds, so without this the top of a scaled card is cut off flat — and the gap
+        // under the title has to clear the same growth or the two touch (#003).
+        LazyRow(
+            horizontalArrangement = Arrangement.spacedBy(14.dp),
+            contentPadding = PaddingValues(vertical = FOCUS_GROWTH),
+        ) {
+            items(items = items, key = { it.channel.id }) { item ->
                 // Per poster on screen, not per category: a category row can hold hundreds
                 // of films, and only the handful the remote has actually reached are
                 // displaying a score to fetch.
-                LaunchedEffect(item.id) { onVisible(item) }
+                LaunchedEffect(item.channel.id) { onVisible(item.channel) }
                 Poster(
-                    channel = item,
-                    rating = ratings[item.stableKey],
+                    channel = item.channel,
+                    rating = ratings[item.channel.stableKey],
                     onClick = { onItemClick(item) },
                 )
             }
@@ -280,3 +325,22 @@ private val POSTER_WIDTH = 150.dp
 private const val POSTER_ASPECT_RATIO = 2f / 3f
 private const val FOCUSED_SCALE = 1.1f
 private val LOGO_PADDING = 12.dp
+
+/**
+ * How far a focused poster grows past its own edge, rounded up.
+ *
+ * A poster column is the artwork — 150dp wide at 2:3, so 225dp tall — plus its label, near
+ * enough 253dp altogether. [FOCUSED_SCALE] scales it about its centre, so it gains about
+ * 25dp of height and half of that goes upwards. The old 10dp gap under a category title was
+ * less than that, which is exactly why a focused card touched the title above it (#003).
+ *
+ * Derived here rather than measured because the poster's size is fixed and known: if any of
+ * the three constants above change, this is the line to revisit.
+ */
+private val FOCUS_GROWTH = 14.dp
+
+/** Clear space under a category title, over and above the growth reserved in the row. */
+private val TITLE_GAP = 16.dp
+
+/** Between rows, net of the [FOCUS_GROWTH] each one now reserves on both sides. */
+private val ROW_SPACING = 14.dp

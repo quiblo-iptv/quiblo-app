@@ -22,6 +22,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dev.quiblo.core.data.ChannelRepository
 import dev.quiblo.core.data.TitleMetadataRepository
+import dev.quiblo.core.data.WatchHistoryRepository
 import dev.quiblo.core.model.Channel
 import dev.quiblo.core.model.Episode
 import dev.quiblo.core.model.MediaKind
@@ -48,6 +49,14 @@ sealed interface SeriesDetailUiState {
         val details: SeriesDetails,
         val resumeEpisode: Episode? = null,
         val resumePositionMillis: Long = 0L,
+        /**
+         * The very first episode the provider lists, for "start from beginning".
+         *
+         * Null when the series has no episodes at all, which panels do occasionally return.
+         * Distinct from [resumeEpisode] on purpose: starting a series over means episode
+         * one, not the current episode from zero — that is what the episode list is for.
+         */
+        val firstEpisode: Episode? = null,
         /** From TMDB, when the user has enabled it and a match was found. */
         val metadata: TitleMetadata? = null,
         /**
@@ -65,6 +74,7 @@ class SeriesDetailViewModel(
     private val channelId: Long,
     private val channelRepository: ChannelRepository,
     private val metadataRepository: TitleMetadataRepository,
+    private val historyRepository: WatchHistoryRepository,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow<SeriesDetailUiState>(SeriesDetailUiState.Loading)
@@ -91,12 +101,13 @@ class SeriesDetailViewModel(
                     val episodes = result.details.seasons.flatMap { it.episodes }
                     // Resume keys are the episode stream URLs, because that is what the
                     // player records against when it is handed a custom URL.
-                    val watched = channelRepository.mostRecentlyWatched(episodes.map { it.streamUrl })
+                    val watched = historyRepository.mostRecentlyWatched(episodes.map { it.streamUrl })
                     _uiState.value = SeriesDetailUiState.Success(
                         channel = channel,
                         details = result.details,
                         resumeEpisode = watched?.let { (key, _) -> episodes.firstOrNull { it.streamUrl == key } },
                         resumePositionMillis = watched?.second ?: 0L,
+                        firstEpisode = episodes.firstOrNull(),
                         isFavorite = channel.isFavorite,
                     )
 
@@ -116,6 +127,45 @@ class SeriesDetailViewModel(
     fun toggleFavorite() {
         val current = _uiState.value as? SeriesDetailUiState.Success ?: return
         viewModelScope.launch { channelRepository.toggleFavorite(current.channel) }
+    }
+
+    /**
+     * Forgets every episode of this series.
+     *
+     * The whole series rather than the current episode, because that is what the button
+     * says and what the tile it removes represents. Deleting only the last episode would
+     * leave the series in "continue watching" at the episode before it, which looks like
+     * the button did nothing.
+     */
+    fun removeFromHistory() {
+        val current = _uiState.value as? SeriesDetailUiState.Success ?: return
+        viewModelScope.launch {
+            historyRepository.removeSeriesFromHistory(current.channel.stableKey)
+            (_uiState.value as? SeriesDetailUiState.Success)?.let {
+                _uiState.value = it.copy(resumeEpisode = null, resumePositionMillis = 0L)
+            }
+        }
+    }
+
+    /**
+     * Re-reads the resume point, so coming back from playback moves the Resume button on.
+     *
+     * A full reload would go back to the provider for an episode list that has not changed
+     * in the four minutes since it was fetched — the sort of request that gets an account
+     * throttled. Only the position can have changed, so only the position is re-read.
+     */
+    fun refreshResumePosition() {
+        val current = _uiState.value as? SeriesDetailUiState.Success ?: return
+        viewModelScope.launch {
+            val episodes = current.details.seasons.flatMap { it.episodes }
+            val watched = historyRepository.mostRecentlyWatched(episodes.map { it.streamUrl })
+            (_uiState.value as? SeriesDetailUiState.Success)?.let {
+                _uiState.value = it.copy(
+                    resumeEpisode = watched?.let { (key, _) -> episodes.firstOrNull { e -> e.streamUrl == key } },
+                    resumePositionMillis = watched?.second ?: 0L,
+                )
+            }
+        }
     }
 
     /**

@@ -20,10 +20,8 @@ package dev.quiblo.core.data
 
 import dev.quiblo.core.database.dao.ChannelDao
 import dev.quiblo.core.database.dao.FavoriteDao
-import dev.quiblo.core.database.dao.ResumePositionDao
 import dev.quiblo.core.database.dao.SourceDao
 import dev.quiblo.core.database.entity.FavoriteEntity
-import dev.quiblo.core.database.entity.ResumePositionEntity
 import dev.quiblo.core.model.Channel
 import dev.quiblo.core.model.MediaKind
 import dev.quiblo.core.model.SeriesDetails
@@ -53,7 +51,6 @@ import java.util.concurrent.ConcurrentHashMap
  */
 class ChannelRepository(
     private val channelDao: ChannelDao,
-    private val resumePositionDao: ResumePositionDao,
     private val favoriteDao: FavoriteDao,
     private val sourceDao: SourceDao? = null,
     private val mediaSources: Map<SourceKind, MediaSource> = emptyMap(),
@@ -122,30 +119,14 @@ class ChannelRepository(
 
     suspend fun findById(channelId: Long): Channel? = channelDao.findById(channelId)?.toDomain()
 
-    /** Where the user got to in this item, or 0 if it has never been played (AC-PLAY-03). */
-    suspend fun resumePosition(stableKey: String): Long = resumePositionDao.positionFor(stableKey) ?: 0L
-
     /**
-     * The most recently watched of [stableKeys], with where it stopped.
+     * The playable row for a provider identity, or null if the source no longer carries it.
      *
-     * Used to offer "resume" for a container — a series — whose parts are tracked
-     * individually. Returns null when none of them has ever been played.
+     * How a history entry gets back to a detail screen: history is keyed by identity so it
+     * survives a refresh, and a detail screen is reached by row id, which does not.
      */
-    suspend fun mostRecentlyWatched(stableKeys: List<String>): Pair<String, Long>? {
-        if (stableKeys.isEmpty()) return null
-        val entity = resumePositionDao.mostRecentOf(stableKeys) ?: return null
-        return entity.stableKey to entity.positionMillis
-    }
-
-    suspend fun saveResumePosition(stableKey: String, positionMillis: Long) {
-        resumePositionDao.upsert(
-            ResumePositionEntity(
-                stableKey = stableKey,
-                positionMillis = positionMillis,
-                updatedAtEpochMillis = now(),
-            ),
-        )
-    }
+    suspend fun findByStableKey(sourceId: Long, stableKey: String): Channel? =
+        channelDao.findByStableKey(sourceId, stableKey)?.toDomain()
 
     suspend fun getSeriesDetails(channelId: Long): SeriesDetailsResult {
         val channel = findById(channelId) ?: return SeriesDetailsResult.Failure(SourceError.NotFound)

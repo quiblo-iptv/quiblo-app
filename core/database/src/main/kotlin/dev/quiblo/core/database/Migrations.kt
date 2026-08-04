@@ -180,3 +180,54 @@ val MIGRATION_6_7 = object : Migration(6, 7) {
         db.execSQL("DROP TABLE `movie_metadata`")
     }
 }
+
+/**
+ * Widens resume positions into watch history.
+ *
+ * Added as columns on the existing table rather than as a second one, because a history
+ * entry and a resume point are the same fact: "this was started and not finished". Two
+ * tables would need a rule for what happens when they disagree, and there is no honest
+ * answer to that question.
+ *
+ * Existing rows keep their position and resume exactly as before. They gain an empty title,
+ * which is what excludes them from the history list — a tile with no name and no artwork is
+ * worse than one absent row, and the next time anything is played the row is rewritten in
+ * full.
+ */
+val MIGRATION_7_8 = object : Migration(7, 8) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE `resume_positions` ADD COLUMN `sourceId` INTEGER NOT NULL DEFAULT 0")
+        db.execSQL("ALTER TABLE `resume_positions` ADD COLUMN `kind` TEXT NOT NULL DEFAULT ''")
+        db.execSQL("ALTER TABLE `resume_positions` ADD COLUMN `title` TEXT NOT NULL DEFAULT ''")
+        db.execSQL("ALTER TABLE `resume_positions` ADD COLUMN `artworkUrl` TEXT")
+        db.execSQL("ALTER TABLE `resume_positions` ADD COLUMN `durationMillis` INTEGER NOT NULL DEFAULT 0")
+        db.execSQL("ALTER TABLE `resume_positions` ADD COLUMN `seriesStableKey` TEXT")
+        db.execSQL("ALTER TABLE `resume_positions` ADD COLUMN `seasonNumber` INTEGER")
+        db.execSQL("ALTER TABLE `resume_positions` ADD COLUMN `episodeNumber` INTEGER")
+        db.execSQL(
+            "CREATE INDEX IF NOT EXISTS `index_resume_positions_sourceId_kind_updatedAtEpochMillis` " +
+                "ON `resume_positions` (`sourceId`, `kind`, `updatedAtEpochMillis`)",
+        )
+    }
+}
+
+/**
+ * Adds the channel logo index.
+ *
+ * Nothing to migrate: the table starts empty and stays empty unless the user turns the
+ * feature on, at which point it is filled from a download. It is a cache of a public
+ * catalogue, so losing it costs one refetch and nothing else.
+ */
+val MIGRATION_8_9 = object : Migration(8, 9) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS `channel_logos` (
+                `matchKey` TEXT NOT NULL,
+                `logoUrl` TEXT NOT NULL,
+                PRIMARY KEY(`matchKey`)
+            )
+            """.trimIndent(),
+        )
+    }
+}

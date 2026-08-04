@@ -21,16 +21,20 @@ package dev.quiblo.feature.browse
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dev.quiblo.core.data.CategoryRepository
+import dev.quiblo.core.data.ChannelLogoRepository
 import dev.quiblo.core.data.ChannelRepository
 import dev.quiblo.core.data.GuideRepository
 import dev.quiblo.core.data.SourceRepository
 import dev.quiblo.core.data.TitleMetadataRepository
+import dev.quiblo.core.data.WatchHistoryRepository
 import dev.quiblo.core.model.Category
 import dev.quiblo.core.model.Channel
+import dev.quiblo.core.model.HistoryEntry
 import dev.quiblo.core.model.MediaKind
 import dev.quiblo.core.model.Programme
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -40,6 +44,7 @@ import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -72,6 +77,25 @@ data class BrowseUiState(
      * "not fetched" and "no score" are the same thing to a poster.
      */
     val ratings: Map<String, Double> = emptyMap(),
+    /**
+     * Artwork found elsewhere, keyed by channel identity.
+     *
+     * Two sources feed it and neither is ever preferred over the provider's own: TMDB
+     * posters for films and series, and the iptv-org reference list for live channels. A
+     * panel's own artwork is the artwork for the thing being served, and second-guessing it
+     * is how a grid ends up showing the wrong film's poster.
+     *
+     * One map rather than two because the consumer's question is one question — "is there
+     * anything to show in this empty frame?" — and a tile has no use for the distinction.
+     */
+    val posters: Map<String, String> = emptyMap(),
+    /**
+     * What the user has already started, most recent first.
+     *
+     * Empty for Live and for Favourites: a channel is not something anyone continues, and
+     * Favourites is a list the user built by hand rather than one built by watching.
+     */
+    val history: List<HistoryEntry> = emptyList(),
 )
 
 /**
@@ -92,6 +116,12 @@ data class BrowseFeed(
  * they show, not in how they behave.
  */
 @OptIn(ExperimentalCoroutinesApi::class, FlowPreview::class)
+// Seven collaborators, and every one of them answers a different question this screen puts
+// on the page: what is in the catalogue, how it is grouped, what is on now, what it scores,
+// and what has already been watched. Bundling them into a holder would hide the count
+// without reducing it, and the alternative — four screens instead of one parameterised
+// ViewModel — is the duplication this class exists to avoid.
+@Suppress("LongParameterList")
 class BrowseViewModel(
     private val feed: BrowseFeed,
     sourceRepository: SourceRepository,
@@ -99,6 +129,8 @@ class BrowseViewModel(
     private val categoryRepository: CategoryRepository,
     private val guideRepository: GuideRepository,
     private val metadataRepository: TitleMetadataRepository,
+    private val historyRepository: WatchHistoryRepository,
+    private val channelLogoRepository: ChannelLogoRepository,
 ) : ViewModel() {
 
     /**
@@ -116,7 +148,11 @@ class BrowseViewModel(
     private val ratingRequested = ConcurrentHashMap.newKeySet<String>()
     private val ratingLimiter = Semaphore(MAX_CONCURRENT_RATING_FETCHES)
 
+    /** The same guard again, for the channel logo index. */
+    private val logoRequested = ConcurrentHashMap.newKeySet<String>()
+
     private val ratings = MutableStateFlow<Map<String, Double>>(emptyMap())
+    private val posters = MutableStateFlow<Map<String, String>>(emptyMap())
 
     init {
         // Reads the stored key once, so the first posters on screen already know whether
@@ -173,7 +209,13 @@ class BrowseViewModel(
         } else {
             channelRepository.observeBrowse(sourceId, feed.kind, selected, searchText)
         }
-        combine(items, guideRepository.observeNowPlaying(sourceId), ratings) { list, guide, scores ->
+        combine(
+            items,
+            guideRepository.observeNowPlaying(sourceId),
+            ratings,
+            posters,
+            historyFor(sourceId),
+        ) { list, guide, scores, art, history ->
             BrowseUiState(
                 isLoading = false,
                 hasSource = true,
@@ -183,9 +225,43 @@ class BrowseViewModel(
                 query = searchText,
                 nowPlaying = guide,
                 ratings = scores,
+                posters = art,
+                history = history,
             )
         }
     }
+
+    /**
+     * The "continue watching" feed for this screen.
+     *
+     * Nothing for Live, which records no position, and nothing for Favourites, which is a
+     * list the user curated rather than one derived from what they watched — putting
+     * history there would mix two different meanings of "things I care about" into one
+     * screen.
+     *
+     * Artwork is requested for entries the provider gave none for, which is the same
+     * request the poster grid makes and therefore usually already answered from the cache.
+     */
+    private fun historyFor(sourceId: Long): Flow<List<HistoryEntry>> =
+        if (feed.favoritesOnly || feed.kind == MediaKind.LIVE) {
+            flowOf(emptyList())
+        } else {
+            historyRepository.observeHistory(sourceId, feed.kind)
+                .onEach { entries ->
+                    entries.filter { it.artworkUrl.isNullOrBlank() }
+                        .forEach { requestPreview(it.titleKey, it.title, it.kind) }
+                }
+        }
+
+    /**
+     * The playable row behind a history entry, or null once the provider has dropped it.
+     *
+     * History is keyed by provider identity so it survives a refresh; a detail screen is
+     * reached by row id, which does not. This is the join between the two, and the null is
+     * the honest answer for a film the provider has since removed.
+     */
+    suspend fun channelForHistory(entry: HistoryEntry): Channel? =
+        channelRepository.findByStableKey(entry.sourceId, entry.titleKey)
 
     /**
      * Called as a row scrolls into view.
@@ -201,6 +277,7 @@ class BrowseViewModel(
      */
     fun onRowVisible(channel: Channel) {
         if (channel.kind != MediaKind.LIVE) return
+        requestChannelLogo(channel)
         if (channel.providerStreamId == null) return
         if (!guideRequested.add(channel.stableKey)) return
 
@@ -223,12 +300,47 @@ class BrowseViewModel(
      * a film database about one returns whatever film shares its name.
      */
     fun onPosterVisible(channel: Channel) {
-        if (channel.kind == MediaKind.LIVE) return
-        requestRating(channel)
+        // A live channel gets its logo looked up and nothing else. No guide: a card shows
+        // no programme, and a grid holds several times more items than a list, so asking
+        // the panel per tile is a burst of requests whose answers nothing renders — the
+        // behaviour that got this project's account blocked twice.
+        if (channel.kind == MediaKind.LIVE) {
+            requestChannelLogo(channel)
+            return
+        }
+        requestPreview(channel.stableKey, channel.name, channel.kind)
     }
 
     /**
-     * Fetches a film's or series' score.
+     * Looks up a missing logo in the channel reference list.
+     *
+     * Only for a channel the playlist gave no artwork for, and only when the user has
+     * turned the feature on — the repository enforces the second part, and the first is
+     * enforced here so a playlist with complete artwork never reaches it at all.
+     *
+     * Costs no network request per channel: the whole index is one file, downloaded once
+     * and then queried locally. Guarded by the same set as the metadata lookups because
+     * scrolling re-composes the same rows constantly.
+     */
+    private fun requestChannelLogo(channel: Channel) {
+        if (!channel.logoUrl.isNullOrBlank()) return
+        if (!logoRequested.add(channel.stableKey)) return
+
+        viewModelScope.launch {
+            val logo = channelLogoRepository.logoFor(channel)
+            if (logo == null) {
+                // Nothing was found, or nothing was asked because the feature is off.
+                // Forgetting the row is what lets logos fill in when the switch is turned
+                // on mid-session, rather than staying blank until the app restarts.
+                logoRequested.remove(channel.stableKey)
+                return@launch
+            }
+            posters.value = posters.value + (channel.stableKey to logo)
+        }
+    }
+
+    /**
+     * Fetches a film's or series' score and poster.
      *
      * Per visible tile rather than per category, deliberately. A category can hold
      * thousands of films, and asking about all of them the moment it is opened would spend
@@ -239,9 +351,17 @@ class BrowseViewModel(
      *
      * Costs one request per title once, then nothing: the answer, including "no match",
      * is cached in the database across launches.
+     *
+     * The poster comes back in the same response as the score, so filling the very common
+     * gap where a panel lists a series with no cover at all costs nothing extra. It is
+     * offered rather than applied: the tile still prefers the provider's own artwork and
+     * only reaches for this when there is none.
+     *
+     * @param key what the answer is filed under — a channel's identity, or a history
+     *   entry's title key, which for a film are the same string.
      */
-    private fun requestRating(channel: Channel) {
-        if (!ratingRequested.add(channel.stableKey)) return
+    private fun requestPreview(key: String, title: String, kind: MediaKind) {
+        if (!ratingRequested.add(key)) return
 
         viewModelScope.launch {
             ratingLimiter.withPermit {
@@ -249,12 +369,14 @@ class BrowseViewModel(
                     // Nothing was asked, so nothing has been answered. Forgetting the row
                     // again is what lets tiles fill in when a user adds a key mid-session,
                     // instead of staying blank until the app is restarted.
-                    ratingRequested.remove(channel.stableKey)
+                    ratingRequested.remove(key)
                     return@withPermit
                 }
-                val rating = metadataRepository.ratingFor(channel.name, channel.kind)
-                    ?: return@withPermit
-                ratings.value = ratings.value + (channel.stableKey to rating)
+                val preview = metadataRepository.previewFor(title, kind) ?: return@withPermit
+                preview.rating?.let { ratings.value = ratings.value + (key to it) }
+                preview.posterUrl?.takeIf { it.isNotBlank() }?.let {
+                    posters.value = posters.value + (key to it)
+                }
             }
         }
     }

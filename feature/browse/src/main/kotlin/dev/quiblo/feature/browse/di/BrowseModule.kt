@@ -41,6 +41,8 @@ val browseModule: Module = module {
             categoryRepository = get(),
             guideRepository = get(),
             metadataRepository = get(),
+            historyRepository = get(),
+            channelLogoRepository = get(),
         )
     }
 }

@@ -32,6 +32,7 @@ dependencies {
     implementation(projects.core.database)
     implementation(projects.core.datastore)
     implementation(projects.core.network)
+    implementation(projects.source.iptvorg)
     implementation(projects.source.m3u)
     implementation(projects.source.tmdb)
     implementation(projects.source.xtream)

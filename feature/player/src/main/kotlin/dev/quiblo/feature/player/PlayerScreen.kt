@@ -114,6 +114,9 @@ fun PlayerScreen(
     streamUrl: String? = null,
     title: String? = null,
     startPositionMillis: Long? = null,
+    /** Which episode this is, for the history entry. Null for anything that is not one. */
+    seasonNumber: Int? = null,
+    episodeNumber: Int? = null,
     viewModel: PlayerViewModel = koinViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -170,6 +173,8 @@ fun PlayerScreen(
             customUrl = streamUrl,
             customTitle = title,
             startPositionMillis = startPositionMillis,
+            seasonNumber = seasonNumber,
+            episodeNumber = episodeNumber,
         )
     }
 

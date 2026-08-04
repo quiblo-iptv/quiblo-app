@@ -19,6 +19,7 @@
 package dev.quiblo.core.datastore.di
 
 import android.content.Context
+import dev.quiblo.core.datastore.ChannelLogoStore
 import dev.quiblo.core.datastore.DataStorePanelBlockStore
 import dev.quiblo.core.datastore.EncryptedCredentialStore
 import dev.quiblo.core.datastore.PlayerSettingsStore
@@ -34,4 +35,5 @@ val datastoreModule: Module = module {
     single<PanelBlockStore> { DataStorePanelBlockStore(get<Context>()) }
     single { PlayerSettingsStore(get<Context>()) }
     single { TmdbKeyStore(get<Context>()) }
+    single { ChannelLogoStore(get<Context>()) }
 }

@@ -90,4 +90,9 @@
     <string name="settings_theme_dark">Dark</string>
     <string name="settings_appearance_dynamic">Match my wallpaper</string>
     <string name="settings_appearance_dynamic_summary">Android 12 and later. Off keeps the app&#8217;s own colours.</string>
+    <string name="settings_channel_logos_title">Channel logos</string>
+    <string name="settings_channel_logos_summary">Fill in logos for live channels your playlist doesn’t provide one for, using the community-maintained iptv-org channel list.</string>
+    <string name="settings_channel_logos_on">On. The channel list is downloaded once — a few megabytes — and refreshed about every two weeks. Your playlist’s own logos are always used where it has them.</string>
+    <string name="settings_channel_logos_off">Off. Nothing is downloaded and iptv-org is never contacted.</string>
+    <string name="settings_channel_logos_attribution">Channel data from the iptv-org project.</string>
 </resources>

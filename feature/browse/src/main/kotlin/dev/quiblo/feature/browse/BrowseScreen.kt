@@ -34,7 +34,10 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
+import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
@@ -67,6 +70,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
@@ -82,8 +86,10 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.compose.SubcomposeAsyncImage
 import dev.quiblo.core.model.Category
 import dev.quiblo.core.model.Channel
+import dev.quiblo.core.model.HistoryEntry
 import dev.quiblo.core.model.Programme
 import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.launch
 
 /**
  * The list UI shared by Live, Movies, Series and Favourites.
@@ -120,19 +126,41 @@ fun BrowseScreen(
     var isGridView by remember { mutableStateOf(true) }
     val listState = rememberLazyListState()
     val gridState = rememberLazyGridState()
+    val scope = rememberCoroutineScope()
+
+    // Hidden while searching. A search is a question about the catalogue, and answering it
+    // with a strip of unrelated things the user happened to watch last week is noise.
+    val history = if (query.isBlank()) state.history else emptyList()
+
+    // History is keyed by provider identity so it survives a refresh; the screens it opens
+    // are keyed by row id, which does not. A tile whose item the provider has since dropped
+    // resolves to nothing and does nothing, which is the honest outcome.
+    val openHistory: (HistoryEntry) -> Unit = { entry ->
+        scope.launch { viewModel.channelForHistory(entry)?.let(onItemClick) }
+    }
+
+    // The "continue watching" strip is one lazy item ahead of the catalogue, so a visible
+    // index is one further along than the item it shows. Getting this wrong prefetches the
+    // wrong rows, which is invisible until someone wonders why the last poster never scores.
+    val headerCount = if (history.isEmpty()) 0 else 1
 
     // Both prefetches wait for the list to stop moving. See [PrefetchWhenSettled].
     PrefetchWhenSettled(
         isScrolling = { gridState.isScrollInProgress },
         visibleIndices = { gridState.layoutInfo.visibleItemsInfo.map { it.index } },
         items = state.items,
-        enabled = showArtworkCards,
+        indexOffset = headerCount,
+        // On for every grid, not only the poster ones. A live grid shows no score, but it
+        // does show a logo, and a channel whose playlist supplied none has nothing in the
+        // frame until the reference list is asked.
+        enabled = true,
         onVisible = viewModel::onPosterVisible,
     )
     PrefetchWhenSettled(
         isScrolling = { listState.isScrollInProgress },
         visibleIndices = { listState.layoutInfo.visibleItemsInfo.map { it.index } },
         items = state.items,
+        indexOffset = headerCount,
         enabled = true,
         onVisible = viewModel::onRowVisible,
     )
@@ -168,56 +196,20 @@ fun BrowseScreen(
             onCategoryClick = { showCategorySheet = true },
         )
 
-        when {
-            state.items.isEmpty() && query.isNotBlank() ->
-                CentredMessage(stringResource(R.string.browse_no_results))
-
-            state.items.isEmpty() -> CentredMessage(emptyMessage)
-
-            isGridView -> LazyVerticalGrid(
-                state = gridState,
-                // Posters are portrait and read fine narrower, so they get more per row.
-                columns = GridCells.Adaptive(minSize = if (showArtworkCards) 120.dp else 150.dp),
-                contentPadding = PaddingValues(12.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier.fillMaxSize(),
-            ) {
-                // No guide prefetch here on purpose: a grid card shows no programme, and
-                // a grid fits several times more items on screen than a list. Fetching
-                // for each one is a burst of requests whose results nothing renders. The
-                // score a poster *does* show is prefetched above, on scroll settling.
-                items(items = state.items, key = { it.id }) { item ->
-                    if (showArtworkCards) {
-                        ChannelArtCard(
-                            channel = item,
-                            rating = state.ratings[item.stableKey],
-                            onClick = { onItemClick(item) },
-                            onToggleFavorite = { viewModel.toggleFavorite(item) },
-                        )
-                    } else {
-                        ChannelGridCard(
-                            channel = item,
-                            onClick = { onItemClick(item) },
-                            onToggleFavorite = { viewModel.toggleFavorite(item) },
-                        )
-                    }
-                }
-            }
-
-            else -> LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
-                items(items = state.items, key = { it.id }) { item ->
-                    ChannelRow(
-                        channel = item,
-                        nowPlaying = state.nowPlaying[item.stableKey],
-                        onClick = { onItemClick(item) },
-                        onLongClick = { guideFor = item },
-                        onToggleFavorite = { viewModel.toggleFavorite(item) },
-                    )
-                    HorizontalDivider()
-                }
-            }
-        }
+        BrowseCatalogue(
+            state = state,
+            history = history,
+            query = query,
+            emptyMessage = emptyMessage,
+            isGridView = isGridView,
+            showArtworkCards = showArtworkCards,
+            gridState = gridState,
+            listState = listState,
+            onItemClick = onItemClick,
+            onHistoryClick = openHistory,
+            onToggleFavorite = viewModel::toggleFavorite,
+            onShowGuide = { guideFor = it },
+        )
     }
 
     guideFor?.let { channel ->
@@ -235,6 +227,117 @@ fun BrowseScreen(
             onSelectCategory = viewModel::selectCategory,
             onDismiss = { showCategorySheet = false },
         )
+    }
+}
+
+/**
+ * The catalogue itself: the empty states, the poster grid and the dense list.
+ *
+ * Split out of [BrowseScreen] because that function had grown to hold the header, the two
+ * prefetch effects, two sheets and all three of these — one composable making six unrelated
+ * decisions, where each of them is simple on its own.
+ */
+@Composable
+private fun BrowseCatalogue(
+    state: BrowseUiState,
+    history: List<HistoryEntry>,
+    query: String,
+    emptyMessage: String,
+    isGridView: Boolean,
+    showArtworkCards: Boolean,
+    gridState: LazyGridState,
+    listState: LazyListState,
+    onItemClick: (Channel) -> Unit,
+    onHistoryClick: (HistoryEntry) -> Unit,
+    onToggleFavorite: (Channel) -> Unit,
+    onShowGuide: (Channel) -> Unit,
+) {
+    when {
+        state.items.isEmpty() && query.isNotBlank() ->
+            CentredMessage(stringResource(R.string.browse_no_results))
+
+        // The strip is still shown above an empty catalogue: a category filter that matches
+        // nothing does not mean the things the user was watching stopped existing.
+        state.items.isEmpty() -> Column {
+            ContinueWatchingRow(
+                entries = history,
+                posters = state.posters,
+                onClick = onHistoryClick,
+                modifier = Modifier.padding(top = 4.dp, bottom = 12.dp),
+            )
+            CentredMessage(emptyMessage)
+        }
+
+        isGridView -> LazyVerticalGrid(
+            state = gridState,
+            // Posters are portrait and read fine narrower, so they get more per row.
+            columns = GridCells.Adaptive(minSize = if (showArtworkCards) 120.dp else 150.dp),
+            contentPadding = PaddingValues(12.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.fillMaxSize(),
+        ) {
+            // Scrolls away with the catalogue rather than pinned above it: the strip is a
+            // shortcut, and a viewer who has scrolled past it is browsing instead.
+            if (history.isNotEmpty()) {
+                item(span = { GridItemSpan(maxLineSpan) }, key = HISTORY_ITEM_KEY) {
+                    ContinueWatchingRow(
+                        entries = history,
+                        posters = state.posters,
+                        onClick = onHistoryClick,
+                        modifier = Modifier.padding(bottom = 12.dp),
+                    )
+                }
+            }
+
+            // No guide prefetch here on purpose: a grid card shows no programme, and a grid
+            // fits several times more items on screen than a list. Fetching for each one is
+            // a burst of requests whose results nothing renders. The score a poster *does*
+            // show is prefetched on scroll settling — see [PrefetchWhenSettled].
+            items(items = state.items, key = { it.id }) { item ->
+                if (showArtworkCards) {
+                    ChannelArtCard(
+                        channel = item,
+                        rating = state.ratings[item.stableKey],
+                        fallbackPosterUrl = state.posters[item.stableKey],
+                        onClick = { onItemClick(item) },
+                        onToggleFavorite = { onToggleFavorite(item) },
+                    )
+                } else {
+                    ChannelGridCard(
+                        channel = item,
+                        fallbackLogoUrl = state.posters[item.stableKey],
+                        onClick = { onItemClick(item) },
+                        onToggleFavorite = { onToggleFavorite(item) },
+                    )
+                }
+            }
+        }
+
+        else -> LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
+            if (history.isNotEmpty()) {
+                item(key = HISTORY_ITEM_KEY) {
+                    ContinueWatchingRow(
+                        entries = history,
+                        posters = state.posters,
+                        onClick = onHistoryClick,
+                        modifier = Modifier.padding(top = 4.dp, bottom = 12.dp),
+                    )
+                }
+            }
+
+            items(items = state.items, key = { it.id }) { item ->
+                ChannelRow(
+                    channel = item,
+                    fallbackLogoUrl = state.posters[item.stableKey],
+                    nowPlaying = state.nowPlaying[item.stableKey],
+                    onClick = { onItemClick(item) },
+                    onLongClick = { onShowGuide(item) },
+                    onToggleFavorite = { onToggleFavorite(item) },
+                )
+                HorizontalDivider()
+            }
+        }
     }
 }
 
@@ -269,15 +372,17 @@ private fun PrefetchWhenSettled(
     isScrolling: () -> Boolean,
     visibleIndices: () -> List<Int>,
     items: List<Channel>,
+    /** How many lazy items sit before the catalogue — the header strip, when there is one. */
+    indexOffset: Int,
     enabled: Boolean,
     onVisible: (Channel) -> Unit,
 ) {
-    LaunchedEffect(items, enabled) {
+    LaunchedEffect(items, enabled, indexOffset) {
         if (!enabled) return@LaunchedEffect
         snapshotFlow(isScrolling)
             .filter { scrolling -> !scrolling }
             .collect {
-                visibleIndices().forEach { index -> items.getOrNull(index)?.let(onVisible) }
+                visibleIndices().forEach { index -> items.getOrNull(index - indexOffset)?.let(onVisible) }
             }
     }
 }
@@ -385,6 +490,8 @@ private fun CategoryChip(selectedCategory: String?, label: String?, onClick: () 
 @Composable
 private fun ChannelGridCard(
     channel: Channel,
+    /** From the channel reference list, used only when the playlist supplied none. */
+    fallbackLogoUrl: String?,
     onClick: () -> Unit,
     onToggleFavorite: () -> Unit,
 ) {
@@ -407,7 +514,7 @@ private fun ChannelGridCard(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.Top,
             ) {
-                ChannelLogo(channel.logoUrl)
+                ChannelLogo(channel.logoUrl?.takeIf { it.isNotBlank() } ?: fallbackLogoUrl)
                 IconButton(onClick = onToggleFavorite, modifier = Modifier.size(24.dp)) {
                     Icon(
                         imageVector = if (channel.isFavorite) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,
@@ -436,6 +543,8 @@ private fun ChannelGridCard(
 @Composable
 private fun ChannelRow(
     channel: Channel,
+    /** From the channel reference list, used only when the playlist supplied none. */
+    fallbackLogoUrl: String?,
     nowPlaying: Programme?,
     onClick: () -> Unit,
     onLongClick: () -> Unit,
@@ -450,7 +559,7 @@ private fun ChannelRow(
             .padding(start = 16.dp, top = 6.dp, bottom = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        ChannelLogo(channel.logoUrl)
+        ChannelLogo(channel.logoUrl?.takeIf { it.isNotBlank() } ?: fallbackLogoUrl)
         Column(
             modifier = Modifier
                 .weight(1f)
@@ -565,3 +674,12 @@ private fun CentredMessage(message: String, modifier: Modifier = Modifier) {
         )
     }
 }
+
+/**
+ * The strip's own lazy key.
+ *
+ * Constant and distinct from any channel id, so adding or removing the strip never makes
+ * Compose reuse a poster's slot for it — the kind of collision that shows one item's
+ * artwork under another's title.
+ */
+private const val HISTORY_ITEM_KEY = "continue-watching"

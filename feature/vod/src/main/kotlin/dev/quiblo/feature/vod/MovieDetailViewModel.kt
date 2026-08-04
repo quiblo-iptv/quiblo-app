@@ -22,6 +22,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dev.quiblo.core.data.ChannelRepository
 import dev.quiblo.core.data.TitleMetadataRepository
+import dev.quiblo.core.data.WatchHistoryRepository
 import dev.quiblo.core.model.Channel
 import dev.quiblo.core.model.MediaKind
 import dev.quiblo.core.model.TitleMetadata
@@ -93,6 +94,7 @@ class MovieDetailViewModel(
     private val channelId: Long,
     private val channelRepository: ChannelRepository,
     private val metadataRepository: TitleMetadataRepository,
+    private val historyRepository: WatchHistoryRepository,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow<MovieDetailUiState>(MovieDetailUiState.Loading)
@@ -115,12 +117,30 @@ class MovieDetailViewModel(
         viewModelScope.launch { channelRepository.toggleFavorite(current.channel) }
     }
 
+    /**
+     * Forgets this film.
+     *
+     * The resume point goes with it, because they are the same record: someone removing a
+     * film from "continue watching" is saying they are not going to continue it, and
+     * leaving a hidden position behind so that pressing Play silently resumes half an hour
+     * in would be the opposite of what they asked for.
+     */
+    fun removeFromHistory() {
+        val current = _uiState.value as? MovieDetailUiState.Ready ?: return
+        viewModelScope.launch {
+            historyRepository.removeFromHistory(current.channel.stableKey)
+            (_uiState.value as? MovieDetailUiState.Ready)?.let {
+                _uiState.value = it.copy(resumePositionMillis = 0L)
+            }
+        }
+    }
+
     /** Re-reads the resume point, so returning from playback updates the buttons. */
     fun refreshResumePosition() {
         val current = _uiState.value as? MovieDetailUiState.Ready ?: return
         viewModelScope.launch {
             _uiState.value = current.copy(
-                resumePositionMillis = channelRepository.resumePosition(current.channel.stableKey),
+                resumePositionMillis = historyRepository.resumePosition(current.channel.stableKey),
             )
         }
     }
@@ -138,7 +158,7 @@ class MovieDetailViewModel(
             // fills in when it arrives.
             _uiState.value = MovieDetailUiState.Ready(
                 channel = channel,
-                resumePositionMillis = channelRepository.resumePosition(channel.stableKey),
+                resumePositionMillis = historyRepository.resumePosition(channel.stableKey),
                 isFavorite = channel.isFavorite,
                 isEnriching = true,
             )

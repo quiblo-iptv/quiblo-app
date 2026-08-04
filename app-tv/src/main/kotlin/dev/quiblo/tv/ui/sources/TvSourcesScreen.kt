@@ -41,6 +41,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -48,6 +49,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusDirection
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
@@ -86,6 +89,14 @@ fun TvSourcesScreen(modifier: Modifier = Modifier, viewModel: SourcesViewModel =
 
     var showForm by remember { mutableStateOf(false) }
 
+    // Swapping one branch for another destroys whatever the remote was pointing at, so each
+    // new branch has to claim focus itself. Without this the viewer is left holding a remote
+    // that does nothing until they find their way back to the tab bar.
+    val focusRequester = remember { FocusRequester() }
+    LaunchedEffect(showForm, addState is AddSourceState.Working) {
+        focusRequester.tryRequestFocus()
+    }
+
     Column(modifier = modifier.fillMaxSize()) {
         when {
             addState is AddSourceState.Working -> Working()
@@ -98,6 +109,7 @@ fun TvSourcesScreen(modifier: Modifier = Modifier, viewModel: SourcesViewModel =
                 BackHandler { showForm = false }
 
                 AddSourceForm(
+                    focusRequester = focusRequester,
                     onAddM3u = { name, url ->
                         viewModel.addM3uSource(name, url)
                         showForm = false
@@ -111,6 +123,7 @@ fun TvSourcesScreen(modifier: Modifier = Modifier, viewModel: SourcesViewModel =
             }
 
             else -> SourceList(
+                focusRequester = focusRequester,
                 sources = sources,
                 addState = addState,
                 onAdd = { showForm = true },
@@ -138,6 +151,7 @@ private fun Working() {
 
 @Composable
 private fun SourceList(
+    focusRequester: FocusRequester,
     sources: List<Source>,
     addState: AddSourceState,
     onAdd: () -> Unit,
@@ -151,7 +165,13 @@ private fun SourceList(
         }
 
         item {
-            FocusRow(label = stringResource(R.string.tv_sources_add), onClick = onAdd)
+            // The one control this screen always has, so it is where focus lands when the
+            // screen appears or comes back from the form.
+            FocusRow(
+                label = stringResource(R.string.tv_sources_add),
+                onClick = onAdd,
+                modifier = Modifier.focusRequester(focusRequester),
+            )
         }
 
         items(items = sources, key = { it.id }) { source ->
@@ -261,6 +281,7 @@ private fun FocusRow(label: String, onClick: () -> Unit, modifier: Modifier = Mo
  */
 @Composable
 private fun AddSourceForm(
+    focusRequester: FocusRequester,
     onAddM3u: (String, String) -> Unit,
     onAddXtream: (String, String, String, String) -> Unit,
     onCancel: () -> Unit,
@@ -284,7 +305,12 @@ private fun AddSourceForm(
             style = MaterialTheme.typography.bodyMedium,
         )
 
-        TvField(value = name, onValueChange = { name = it }, label = stringResource(R.string.tv_sources_name))
+        TvField(
+            value = name,
+            onValueChange = { name = it },
+            label = stringResource(R.string.tv_sources_name),
+            modifier = Modifier.focusRequester(focusRequester),
+        )
         TvField(
             value = url,
             onValueChange = { url = it },
@@ -342,6 +368,7 @@ private fun TvField(
     value: String,
     onValueChange: (String) -> Unit,
     label: String,
+    modifier: Modifier = Modifier,
     keyboardType: KeyboardType = KeyboardType.Text,
     isPassword: Boolean = false,
 ) {
@@ -358,7 +385,7 @@ private fun TvField(
             VisualTransformation.None
         },
         keyboardOptions = KeyboardOptions(keyboardType = keyboardType),
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth(FIELD_WIDTH_FRACTION)
             .onPreviewKeyEvent { event ->
                 if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
@@ -381,3 +408,14 @@ private fun TvField(
 
 private val BUTTON_WIDTH = 220.dp
 private const val FIELD_WIDTH_FRACTION = 0.6f
+
+/**
+ * Requests focus, tolerating there being nothing to focus.
+ *
+ * The branch being focused may not have composed yet on the frame this runs, and a
+ * [FocusRequester] treats that as a programming error and throws. Leaving focus where it is
+ * for a frame is the right outcome; bringing the app down is not.
+ */
+private fun FocusRequester.tryRequestFocus() {
+    runCatching { requestFocus() }
+}

@@ -28,6 +28,7 @@ import androidx.room.Transaction
 import androidx.room.Update
 import dev.quiblo.core.database.entity.CategoryOverrideEntity
 import dev.quiblo.core.database.entity.ChannelEntity
+import dev.quiblo.core.database.entity.ChannelLogoEntity
 import dev.quiblo.core.database.entity.FavoriteEntity
 import dev.quiblo.core.database.entity.ProgrammeEntity
 import dev.quiblo.core.database.entity.ResumePositionEntity
@@ -154,6 +155,15 @@ interface ChannelDao {
     @Query("SELECT * FROM channels WHERE id = :id")
     suspend fun findById(id: Long): ChannelEntity?
 
+    /**
+     * The current row for a provider identity.
+     *
+     * How anything holding a stable key — a favourite, a history entry — gets back to a
+     * playable row after a refresh has reassigned every id.
+     */
+    @Query("SELECT * FROM channels WHERE sourceId = :sourceId AND stableKey = :stableKey LIMIT 1")
+    suspend fun findByStableKey(sourceId: Long, stableKey: String): ChannelEntity?
+
     @Query("DELETE FROM channels WHERE sourceId = :sourceId")
     suspend fun deleteForSource(sourceId: Long)
 
@@ -196,6 +206,34 @@ interface ResumePositionDao {
             "ORDER BY updatedAtEpochMillis DESC LIMIT 1",
     )
     suspend fun mostRecentOf(stableKeys: List<String>): ResumePositionEntity?
+
+    /**
+     * Everything watched of one kind, most recent first.
+     *
+     * Episodes are *not* collapsed here. One row per series is what a list wants, and SQL
+     * that picks the newest row per group either needs a correlated subquery per row or
+     * relies on SQLite's bare-column behaviour, both of which are more machinery than a
+     * `distinctBy` over a short, already-ordered list. [limit] caps the scan instead.
+     *
+     * Rows with no title are pre-v8 resume points, which carry a position and nothing to
+     * render — see [ResumePositionEntity].
+     */
+    @Query(
+        """
+        SELECT * FROM resume_positions
+        WHERE sourceId = :sourceId AND kind = :kind AND title != ''
+        ORDER BY updatedAtEpochMillis DESC
+        LIMIT :limit
+        """,
+    )
+    fun observeHistory(sourceId: Long, kind: String, limit: Int): Flow<List<ResumePositionEntity>>
+
+    @Query("DELETE FROM resume_positions WHERE stableKey = :stableKey")
+    suspend fun delete(stableKey: String)
+
+    /** Forgets every episode of one series, which is what "remove from history" means there. */
+    @Query("DELETE FROM resume_positions WHERE seriesStableKey = :seriesStableKey")
+    suspend fun deleteForSeries(seriesStableKey: String)
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(position: ResumePositionEntity)
@@ -292,6 +330,39 @@ interface TitleMetadataDao {
     /** Emptied when the key changes: a different key can return different answers. */
     @Query("DELETE FROM title_metadata")
     suspend fun clear()
+}
+
+@Dao
+interface ChannelLogoDao {
+
+    @Query("SELECT logoUrl FROM channel_logos WHERE matchKey = :matchKey")
+    suspend fun logoFor(matchKey: String): String?
+
+    @Query("SELECT COUNT(*) FROM channel_logos")
+    suspend fun count(): Int
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertAll(logos: List<ChannelLogoEntity>)
+
+    @Query("DELETE FROM channel_logos")
+    suspend fun clear()
+
+    /**
+     * Swaps in a freshly downloaded index.
+     *
+     * One transaction, so a refresh interrupted halfway cannot leave the user with a
+     * quarter of a logo list and no way to tell. Chunked because SQLite binds a limited
+     * number of variables per statement and this index runs to tens of thousands of rows.
+     */
+    @Transaction
+    suspend fun replaceAll(logos: List<ChannelLogoEntity>) {
+        clear()
+        logos.chunked(INSERT_CHUNK_SIZE).forEach { insertAll(it) }
+    }
+
+    companion object {
+        private const val INSERT_CHUNK_SIZE = 500
+    }
 }
 
 @Dao

@@ -231,3 +231,33 @@ val MIGRATION_8_9 = object : Migration(8, 9) {
         )
     }
 }
+
+/**
+ * Indexes the two queries that were reading whole tables.
+ *
+ * No data changes and no columns move — both statements are pure index creation, so this
+ * migration cannot lose anything, and on an empty or small database it costs nothing.
+ *
+ * The browse query filters channels by source and kind and sorts by the provider's order;
+ * the guide query asks what is on now across a source. Neither had an index that led with
+ * the columns it actually filters on, so both scanned. On the account this project is
+ * tested against — 67,567 channels in one source — the browse scan is the reason the
+ * Movies and Series screens took as long to appear as they did, and the reason the phone
+ * could be made to hang while scrolling.
+ *
+ * Building these over an existing large playlist takes a moment on first launch after
+ * upgrading, once. That is the right trade against paying for the scan on every emission
+ * from then on.
+ */
+val MIGRATION_9_10 = object : Migration(9, 10) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            "CREATE INDEX IF NOT EXISTS `index_channels_sourceId_kind_sortIndex` " +
+                "ON `channels` (`sourceId`, `kind`, `sortIndex`)",
+        )
+        db.execSQL(
+            "CREATE INDEX IF NOT EXISTS `index_programmes_sourceId_startEpochMillis_endEpochMillis` " +
+                "ON `programmes` (`sourceId`, `startEpochMillis`, `endEpochMillis`)",
+        )
+    }
+}

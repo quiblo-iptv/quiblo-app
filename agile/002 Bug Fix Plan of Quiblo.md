@@ -33,18 +33,41 @@ live in code the two apps share.
 
 ## Status
 
+**Phase 1 is merged.** Two items did not survive contact and are recorded honestly below
+rather than ticked off.
+
 | Bug | Phase | State |
 |---|---|---|
-| #001 Loading time in Movies & Series | 1.1 + 1.2 | Not started |
+| #001 Loading time in Movies & Series | 1.1 + 1.2 | **Fixed**, pending on-device confirmation |
 | #002 Live list has no category | 2.1 | Not started |
-| #003 Hover touching the category title | 1.4 | Not started |
+| #003 Hover touching the category title | 1.4 | **Fixed** |
 | #004 No settings screen | 2.2 | Not started |
 | #005 Movies missing info | 2.3 | Not started |
 | #006 Movies missing history row | 2.4 | Not started |
-| #007 Series missing everything Movies has | 2.3 | Not started |
-| #008 Screen wobble while scrolling | 1.3 | Not started |
-| #009 The player is broken | 1.5 | Not started |
-| #010 App frozen (mobile) | 1.1 | Not started |
+| #007 Series missing everything Movies has | 2.3 | Episode list done in 1.5; the rest not started |
+| #008 Screen wobble while scrolling | 1.3 | **Open — diagnosis was wrong**, see below |
+| #009 The player is broken | 1.5 | **Half fixed** — see below |
+| #010 App frozen (mobile) | 1.1 | **Fixed**, pending on-device confirmation |
+
+### #008 — the diagnosis in this plan was wrong
+
+§1.3 claimed a Live row grows taller when its guide arrives, relaying out the list. It does
+not. `ChannelLogo` is a fixed 64x40 box, so the row is `max(24, 40, 24, …) + 20 = 60dp`
+whether `NowPlaying` draws two lines or nothing at all — the logo dominates either way and
+the guide cannot move anything. A fix was written against that story and then reverted
+rather than shipped.
+
+The remaining static suspects, none confirmed: the `basicMarquee` that `Poster` adds and
+removes on focus change, and the absence of `contentPadding` on the Live `LazyColumn`, which
+makes a D-pad step scroll the focused row flush to the screen edge. **This one needs
+watching on the device before anything else is changed.**
+
+### #009 — the other half is unmeasured
+
+The architectural half is fixed: films play as films, series open an episode list, and the
+channel keys no longer zap during a film. "Slow, glitchy, buggy" has no diagnosis yet. Two
+suspects to measure on the Haier before changing either: the `graphicsLayer` scale applied
+to the `SurfaceView`, and the `BufferMode` default on 1.84 GB and a 32-bit ABI.
 
 ---
 

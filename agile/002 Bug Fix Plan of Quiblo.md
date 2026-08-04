@@ -42,9 +42,9 @@ rather than ticked off.
 | #002 Live list has no category | 2.1 | **Fixed** — verified on the emulator |
 | #003 Hover touching the category title | 1.4 | **Fixed** |
 | #004 No settings screen | 2.2 | **Fixed** — all settings but theme; see below |
-| #005 Movies missing info | 2.3 | Not started |
-| #006 Movies missing history row | 2.4 | Not started |
-| #007 Series missing everything Movies has | 2.3 | Episode list done in 1.5; the rest not started |
+| #005 Movies missing info | 2.3 | **Fixed** — verified on the emulator |
+| #006 Movies missing history row | 2.4 | **Built**, not yet seen with real history |
+| #007 Series missing everything Movies has | 2.3 | **Fixed** |
 | #008 Screen wobble while scrolling | 1.3 | **Open — diagnosis was wrong**, see below |
 | #009 The player is broken | 1.5 | **Half fixed** — see below |
 | #010 App frozen (mobile) | 1.1 | **Fixed**, pending on-device confirmation |
@@ -79,6 +79,17 @@ Two things found while building it, both worth knowing:
 by design and has no wallpaper for a dynamic palette, so both would be controls that change
 nothing — the hollow-feature shape this project has already deleted once. Say so rather than
 ship them; reversing this is a few lines if wanted.
+
+### #005 / #006 / #007 — done, with one gap
+
+The film screen, the enriched series screen and the continue-watching row are built and
+merged. Presentation is shared between the two detail screens rather than written twice, so
+they cannot drift into showing different facts about the same kind of title.
+
+**#006 has not been seen populated.** Nothing has been watched on the emulator, so the row
+is correctly empty and its filled state — artwork, progress bar, the season and episode
+label — is untested. Watch a few minutes of anything and it should appear at the top of
+Movies and Series.
 
 ### #008 — the diagnosis in this plan was wrong
 

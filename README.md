@@ -45,6 +45,7 @@ immediate ban — see [`CONTRIBUTING.md`](CONTRIBUTING.md).
 | **Picture & Sound** | Fit/Fill/Zoom/Stretch aspect modes, drag for brightness and volume, full-screen playback that keeps the screen awake |
 | **Playback Tuning** | Skip interval, buffering profile and a maximum-bitrate cap, all in Settings |
 | **Movies & Series** | Detail screens with artwork and overview, and Resume or Start from beginning |
+| **Continue watching** | A row of what you started and have not finished, with how far in you were. A series appears once, at the episode you were last on |
 | **Layout & Search** | Poster grids for movies and series, category filter, list/grid toggle, expandable search |
 | **Theme & Design** | Material 3 Expressive, dark and light |
 | **Resume** | Playback position remembered per item, and per episode within a series |
@@ -121,6 +122,7 @@ lands in one place and reaches both apps. See [`docs/PLAN.md`](docs/PLAN.md) §2
 | [`docs/PLAN-TV.md`](docs/PLAN-TV.md) | The Android TV / Google TV frontend: target hardware, design, milestones |
 | [`docs/ACCEPTANCE-SWEEP.md`](docs/ACCEPTANCE-SWEEP.md) | What has actually been verified on hardware, and what is left |
 | [`docs/RELEASING.md`](docs/RELEASING.md) | Signing key handling and the release process |
+| [`agile/`](agile) | Reported bugs and the plan being worked against them |
 | [`CONTRIBUTING.md`](CONTRIBUTING.md) | How to contribute, and what will get you banned |
 | [`SECURITY.md`](SECURITY.md) | Private vulnerability disclosure |
 

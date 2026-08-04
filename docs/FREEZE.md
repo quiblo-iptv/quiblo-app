@@ -22,7 +22,7 @@ These are non-goals. Rejecting them is a decision, not an oversight.
 - **Not a content service.** The project hosts, indexes, bundles, aggregates, and distributes zero streams. It ships with no default playlist, no channel directory, no "discover content" feature, and no built-in provider list.
 - **Not a backend.** There is no server component, no user accounts, no telemetry, no cloud sync, no remote configuration.
 - **Not a DRM client.** No Widevine, no ClearKey, no PlayReady in v1.
-- **Not a TV app in v1** — *amended 2026-08-03, see Amendment 1. Android TV and Google TV are now in v1.* LG webOS, Linux desktop, and Xbox remain phase 2 or later.
+- **Not a TV app in v1** — *amended 2026-08-03, see Amendment 1, and extended by Amendment 4. Android TV and Google TV are now in v1, with the same screens as the phone.* LG webOS, Linux desktop, and Xbox remain phase 2 or later.
 - **Not a downloader/recorder.** No recording, no catch-up, no timeshift in v1.
 
 ## 3. Locked decisions
@@ -136,3 +136,38 @@ released, which makes this the only free moment to do it.
 **Consequences.** The database file is renamed with everything else. On any device carrying a
 test build, the new build is a separate install with an empty database; sources must be added
 again. That is a one-off cost of the rename and not a defect.
+
+### Amendment 4 — the television gets the screens that make Amendment 1 true (2026-08-04)
+
+**Decision.** `:app-tv` gains four things the frozen TV plan never included: a settings
+screen, film and series detail screens, category selection in the Live list, and a
+continue-watching row. v1.0.0 does not tag until they pass.
+
+**Rationale.** Amendment 1 admitted the television into v1.0 on the argument that it is "the
+same player with a different frontend, not a different product". A bug report on 2026-08-04
+(`agile/001`) showed that claim did not hold. On a television a viewer could not open a film,
+could not see a series' episodes, could not reach any setting — the gear was wired to
+nothing *and* unreachable by remote — and could not pick a category in a list of 11,923
+channels. That is not the same player with a different frontend; it is a frontend missing
+most of the product.
+
+So this amendment is less an expansion of scope than an admission that Amendment 1's scope
+was never delivered. It is written down because `FREEZE.md` §1 requires scope to be explicit,
+and because reasonable people could read these four screens as new work rather than as
+completion — the honest thing is to date the decision either way.
+
+**What this costs.** The acceptance sweep grows again: five new criteria (AC-TV-09…13) and
+the television's own settings and detail screens to walk with a remote. v1.0.0 was already
+gated on a sweep that had not been run; it is now gated on a slightly longer one.
+
+**What does not change.** Every non-goal in §2 stands. No backend, no accounts, no DRM, no
+bundled content, no recording. Nothing here adds a network call to a host the user did not
+configure: the detail screens read the user's own panel and the optional metadata service
+they supplied a key for, both of which already existed on the phone.
+
+**One deliberate omission.** Theme mode and dynamic colour are *not* on the television, even
+though §4 of this amendment says "the same settings". The television theme is always dark by
+design (`QuibloTvTheme` documents why), and a television has no wallpaper for a dynamic
+palette to be drawn from, so both controls would change nothing on screen. Shipping a control
+that does nothing is the "hollow feature" shape this project has already had to delete nine
+of; a documented absence is better than a switch that lies.

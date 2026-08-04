@@ -35,11 +35,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -49,22 +46,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.input.key.Key
-import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
-import androidx.compose.ui.input.key.onPreviewKeyEvent
-import androidx.compose.ui.input.key.type
-import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.input.PasswordVisualTransformation
-import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -74,6 +62,7 @@ import dev.quiblo.core.model.SourceKind
 import dev.quiblo.feature.sources.AddSourceState
 import dev.quiblo.feature.sources.SourcesViewModel
 import dev.quiblo.tv.R
+import dev.quiblo.tv.ui.common.TvTextField
 import org.koin.androidx.compose.koinViewModel
 
 /**
@@ -328,29 +317,34 @@ private fun AddSourceForm(
             )
         }
 
-        TvField(
+        TvTextField(
             value = name,
             onValueChange = { name = it },
             label = stringResource(R.string.tv_sources_name),
-            modifier = Modifier.focusRequester(focusRequester),
+            modifier = Modifier
+                .fillMaxWidth(FIELD_WIDTH_FRACTION)
+                .focusRequester(focusRequester),
         )
-        TvField(
+        TvTextField(
             value = url,
             onValueChange = { url = it },
             label = stringResource(R.string.tv_sources_url),
             keyboardType = KeyboardType.Uri,
+            modifier = Modifier.fillMaxWidth(FIELD_WIDTH_FRACTION),
         )
-        TvField(
+        TvTextField(
             value = username,
             onValueChange = { username = it },
             label = stringResource(R.string.tv_sources_username),
+            modifier = Modifier.fillMaxWidth(FIELD_WIDTH_FRACTION),
         )
-        TvField(
+        TvTextField(
             value = password,
             onValueChange = { password = it },
             label = stringResource(R.string.tv_sources_password),
             isPassword = true,
             isLast = true,
+            modifier = Modifier.fillMaxWidth(FIELD_WIDTH_FRACTION),
         )
 
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -375,77 +369,6 @@ private fun AddSourceForm(
             )
         }
     }
-}
-
-/**
- * A text field a remote can actually leave — with the keyboard up or down.
- *
- * Two different traps, and only one of them was handled.
- *
- * **Keyboard down.** A Compose text field treats the D-pad's up and down as cursor movement
- * within the text, so focus enters and never comes out. Intercepting the two keys before
- * the field sees them and moving focus explicitly is the fix, and that is what
- * [onPreviewKeyEvent] below does. Left and right are deliberately left alone: those really
- * are cursor movement, and a viewer editing a long URL needs them.
- *
- * **Keyboard up, which is the usual case on a television and was the broken one.** The IME
- * takes the D-pad for itself — it is how a viewer moves around the on-screen keys — so
- * `onPreviewKeyEvent` never runs at all. Every field typed went into whichever field was
- * focused when the keyboard first appeared, silently, appending to whatever was already
- * there. The way out is the keyboard's own action key: [ImeAction.Next] turns it into
- * "next field", and [ImeAction.Done] on the last one dismisses rather than moving nowhere.
- */
-@Composable
-private fun TvField(
-    value: String,
-    onValueChange: (String) -> Unit,
-    label: String,
-    modifier: Modifier = Modifier,
-    keyboardType: KeyboardType = KeyboardType.Text,
-    isPassword: Boolean = false,
-    isLast: Boolean = false,
-) {
-    val focusManager = LocalFocusManager.current
-
-    OutlinedTextField(
-        value = value,
-        onValueChange = onValueChange,
-        label = { Text(label) },
-        singleLine = true,
-        visualTransformation = if (isPassword) {
-            PasswordVisualTransformation()
-        } else {
-            VisualTransformation.None
-        },
-        keyboardOptions = KeyboardOptions(
-            keyboardType = keyboardType,
-            imeAction = if (isLast) ImeAction.Done else ImeAction.Next,
-        ),
-        keyboardActions = KeyboardActions(
-            onNext = { focusManager.moveFocus(FocusDirection.Down) },
-            // Clearing focus is what dismisses the keyboard, which is what a viewer wants
-            // from the last field — the buttons below are unreachable until it is gone.
-            onDone = { focusManager.clearFocus() },
-        ),
-        modifier = modifier
-            .fillMaxWidth(FIELD_WIDTH_FRACTION)
-            .onPreviewKeyEvent { event ->
-                if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
-                when (event.key) {
-                    Key.DirectionDown -> {
-                        focusManager.moveFocus(FocusDirection.Down)
-                        true
-                    }
-
-                    Key.DirectionUp -> {
-                        focusManager.moveFocus(FocusDirection.Up)
-                        true
-                    }
-
-                    else -> false
-                }
-            },
-    )
 }
 
 private val BUTTON_WIDTH = 220.dp

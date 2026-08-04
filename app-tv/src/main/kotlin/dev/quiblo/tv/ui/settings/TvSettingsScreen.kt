@@ -18,7 +18,10 @@
 
 package dev.quiblo.tv.ui.settings
 
+import android.net.Uri
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -33,24 +36,35 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.quiblo.core.model.BufferMode
+import dev.quiblo.core.model.Category
 import dev.quiblo.core.model.MaxBitrateCap
+import dev.quiblo.core.model.MediaKind
 import dev.quiblo.core.model.SeekInterval
+import dev.quiblo.feature.settings.BackupUiState
 import dev.quiblo.feature.settings.SettingsViewModel
+import dev.quiblo.feature.settings.TmdbCheck
 import dev.quiblo.tv.R
+import dev.quiblo.tv.ui.common.TvTextField
 import org.koin.androidx.compose.koinViewModel
 
 /**
@@ -76,8 +90,42 @@ fun TvSettingsScreen(
 ) {
     val playerSettings by viewModel.playerSettings.collectAsStateWithLifecycle()
     val channelLogosEnabled by viewModel.channelLogosEnabled.collectAsStateWithLifecycle()
+    val tmdbApiKey by viewModel.tmdbApiKey.collectAsStateWithLifecycle()
+    val tmdbCheck by viewModel.tmdbCheck.collectAsStateWithLifecycle()
+    val categoryKind by viewModel.selectedCategoryKind.collectAsStateWithLifecycle()
+    val categories by viewModel.categories.collectAsStateWithLifecycle()
+    val backupState by viewModel.backupState.collectAsStateWithLifecycle()
 
     BackHandler(onBack = onBack)
+
+    // SAF, so the file lands wherever the viewer chooses and the app needs no storage
+    // permission at all (AC-DATA-01, AC-TV-07). The same contracts the phone uses — a
+    // television's document picker is the system's problem, not this screen's.
+    val context = LocalContext.current
+    val exportLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument(BACKUP_MIME_TYPE),
+    ) { uri: Uri? ->
+        if (uri == null) {
+            viewModel.dismiss()
+        } else {
+            viewModel.export { contents ->
+                context.contentResolver.openOutputStream(uri)?.use { it.write(contents.toByteArray()) }
+            }
+        }
+    }
+
+    val importLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument(),
+    ) { uri: Uri? ->
+        if (uri == null) {
+            viewModel.dismiss()
+        } else {
+            val contents = runCatching {
+                context.contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() }
+            }.getOrNull()
+            viewModel.import(contents)
+        }
+    }
 
     LazyColumn(
         modifier = modifier
@@ -145,7 +193,251 @@ fun TvSettingsScreen(
                 onSelect = viewModel::setChannelLogosEnabled,
             )
         }
+
+        item {
+            TmdbKeyRow(
+                currentKey = tmdbApiKey,
+                check = tmdbCheck,
+                onSave = viewModel::saveTmdbKey,
+                onClear = viewModel::clearTmdbKey,
+            )
+        }
+
+        item { SectionHeading(stringResource(R.string.tv_settings_categories)) }
+
+        item {
+            OptionRow(
+                label = stringResource(R.string.tv_settings_category_kind),
+                options = listOf(MediaKind.LIVE, MediaKind.VOD, MediaKind.SERIES),
+                selected = categoryKind,
+                labelFor = { it.name.lowercase().replaceFirstChar(Char::uppercase) },
+                onSelect = viewModel::selectCategoryKind,
+            )
+        }
+
+        items(items = categories, key = { "${categoryKind.name}-${it.title}" }) { category ->
+            CategoryEditRow(
+                category = category,
+                onToggleHidden = { viewModel.setCategoryHidden(category, !category.isHidden) },
+                onRename = { viewModel.renameCategory(category, it) },
+            )
+        }
+
+        item { SectionHeading(stringResource(R.string.tv_settings_backup)) }
+
+        item {
+            BackupRow(
+                state = backupState,
+                onExport = { exportLauncher.launch(BACKUP_FILE_NAME) },
+                onImport = { importLauncher.launch(arrayOf(BACKUP_MIME_TYPE, ANY_MIME_TYPE)) },
+            )
+        }
     }
+}
+
+/**
+ * The metadata key, which is the one setting on this screen that has to be typed.
+ *
+ * Held locally until Save rather than written per keystroke: a key is meaningless
+ * half-entered, and writing one would clear the cached metadata on every character.
+ */
+@Composable
+private fun TmdbKeyRow(
+    currentKey: String?,
+    check: TmdbCheck,
+    onSave: (String) -> Unit,
+    onClear: () -> Unit,
+) {
+    var draft by remember(currentKey) { mutableStateOf(currentKey.orEmpty()) }
+
+    Column(modifier = Modifier.padding(vertical = 6.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(modifier = Modifier.width(LABEL_WIDTH)) {
+                Text(
+                    text = stringResource(R.string.tv_settings_tmdb),
+                    color = Color.White,
+                    fontSize = 17.sp,
+                )
+                Text(
+                    text = stringResource(R.string.tv_settings_tmdb_detail),
+                    color = Color.White.copy(alpha = 0.55f),
+                    fontSize = 13.sp,
+                    modifier = Modifier.padding(top = 2.dp),
+                )
+            }
+
+            TvTextField(
+                value = draft,
+                onValueChange = { draft = it },
+                label = stringResource(R.string.tv_settings_tmdb_field),
+                modifier = Modifier.width(FIELD_WIDTH),
+            )
+        }
+
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            modifier = Modifier.padding(start = LABEL_WIDTH, top = 8.dp),
+        ) {
+            OptionChip(
+                label = stringResource(R.string.tv_settings_save),
+                isSelected = false,
+                onClick = { onSave(draft) },
+            )
+            OptionChip(
+                label = stringResource(R.string.tv_settings_clear),
+                isSelected = false,
+                onClick = onClear,
+            )
+
+            // The service is the only thing that can say whether a key works, so the answer
+            // is reported rather than guessed at from its shape.
+            val message = when (check) {
+                TmdbCheck.Checking -> R.string.tv_settings_tmdb_checking
+                TmdbCheck.Accepted -> R.string.tv_settings_tmdb_accepted
+                TmdbCheck.Rejected -> R.string.tv_settings_tmdb_rejected
+                TmdbCheck.Cleared -> R.string.tv_settings_tmdb_cleared
+                TmdbCheck.Idle -> null
+            }
+            message?.let {
+                Text(
+                    text = stringResource(it),
+                    color = if (check == TmdbCheck.Rejected) {
+                        MaterialTheme.colorScheme.error
+                    } else {
+                        Color.White.copy(alpha = 0.75f)
+                    },
+                    fontSize = 14.sp,
+                    modifier = Modifier.padding(top = 8.dp),
+                )
+            }
+        }
+    }
+}
+
+/**
+ * One category, with the two edits the phone offers: hide it, or rename it.
+ *
+ * The rename is local and the provider's own title stays the key, so the edit reattaches
+ * after every refresh rather than being lost with the ids.
+ */
+@Composable
+private fun CategoryEditRow(
+    category: Category,
+    onToggleHidden: () -> Unit,
+    onRename: (String?) -> Unit,
+) {
+    var draft by remember(category.title) { mutableStateOf(category.customName.orEmpty()) }
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = category.title,
+            color = Color.White.copy(alpha = if (category.isHidden) 0.4f else 0.9f),
+            fontSize = 15.sp,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.width(LABEL_WIDTH),
+        )
+
+        TvTextField(
+            value = draft,
+            onValueChange = { draft = it },
+            label = stringResource(R.string.tv_settings_rename_field),
+            modifier = Modifier.width(RENAME_WIDTH),
+        )
+
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            modifier = Modifier.padding(start = 12.dp),
+        ) {
+            OptionChip(
+                label = stringResource(R.string.tv_settings_apply),
+                isSelected = false,
+                // A blank rename means "use the provider's name", which is also how the
+                // override row is removed rather than left saying nothing.
+                onClick = { onRename(draft.ifBlank { null }) },
+            )
+            OptionChip(
+                label = stringResource(
+                    if (category.isHidden) R.string.tv_settings_show else R.string.tv_settings_hide,
+                ),
+                isSelected = category.isHidden,
+                onClick = onToggleHidden,
+            )
+        }
+    }
+}
+
+/** Export and import, and whatever the last attempt had to say about itself. */
+@Composable
+private fun BackupRow(state: BackupUiState, onExport: () -> Unit, onImport: () -> Unit) {
+    Column(modifier = Modifier.padding(vertical = 6.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(modifier = Modifier.width(LABEL_WIDTH)) {
+                Text(
+                    text = stringResource(R.string.tv_settings_backup_label),
+                    color = Color.White,
+                    fontSize = 17.sp,
+                )
+                Text(
+                    text = stringResource(R.string.tv_settings_backup_detail),
+                    color = Color.White.copy(alpha = 0.55f),
+                    fontSize = 13.sp,
+                    modifier = Modifier.padding(top = 2.dp),
+                )
+            }
+
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                OptionChip(
+                    label = stringResource(R.string.tv_settings_export),
+                    isSelected = false,
+                    onClick = onExport,
+                )
+                OptionChip(
+                    label = stringResource(R.string.tv_settings_import),
+                    isSelected = false,
+                    onClick = onImport,
+                )
+            }
+        }
+
+        backupMessage(state)?.let {
+            Text(
+                text = it,
+                color = if (state is BackupUiState.Failed || state is BackupUiState.ImportRejected) {
+                    MaterialTheme.colorScheme.error
+                } else {
+                    Color.White.copy(alpha = 0.75f)
+                },
+                fontSize = 14.sp,
+                modifier = Modifier.padding(start = LABEL_WIDTH, top = 8.dp),
+            )
+        }
+    }
+}
+
+@Composable
+private fun backupMessage(state: BackupUiState): String? = when (state) {
+    BackupUiState.Idle -> null
+    BackupUiState.Working -> stringResource(R.string.tv_settings_backup_working)
+    is BackupUiState.Exported -> stringResource(R.string.tv_settings_backup_exported, state.byteCount)
+    is BackupUiState.Imported -> stringResource(
+        R.string.tv_settings_backup_imported,
+        state.sourcesRestored,
+        state.favoritesRestored,
+    )
+    // Names both versions rather than failing vaguely, as the phone's wording does — a
+    // viewer who is told only "wrong format" has nothing to act on.
+    is BackupUiState.ImportRejected -> stringResource(
+        R.string.tv_settings_backup_rejected,
+        state.fileVersion,
+        state.supportedVersion,
+    )
+    BackupUiState.Failed -> stringResource(R.string.tv_settings_backup_failed)
 }
 
 @Composable
@@ -235,4 +527,9 @@ private fun OptionChip(label: String, isSelected: Boolean, onClick: () -> Unit) 
 }
 
 private val LABEL_WIDTH = 360.dp
+private val FIELD_WIDTH = 460.dp
+private val RENAME_WIDTH = 320.dp
 private const val MBPS = 1_000_000
+private const val BACKUP_MIME_TYPE = "application/json"
+private const val BACKUP_FILE_NAME = "quiblo-backup.json"
+private const val ANY_MIME_TYPE = "*/*"

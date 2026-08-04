@@ -35,8 +35,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.LiveTv
@@ -106,34 +106,63 @@ fun TvLiveScreen(
         viewModel.onRowVisible(channel)
     }
 
-    when {
-        state.isLoading -> Box(modifier = modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+    if (state.isLoading) {
+        Box(modifier = modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             CircularProgressIndicator(color = Color.White)
         }
+        return
+    }
 
-        state.items.isEmpty() -> Box(modifier = modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Text(
-                text = stringResource(R.string.tv_no_channels),
-                color = Color.White.copy(alpha = 0.65f),
-                style = MaterialTheme.typography.headlineSmall,
+    Row(
+        modifier = modifier.fillMaxSize(),
+        horizontalArrangement = Arrangement.spacedBy(24.dp),
+    ) {
+        // Only when there is a choice to make. A source with one category, or an M3U with
+        // none at all, gets the full width for its channels rather than a rail holding a
+        // single row (#002).
+        if (state.categories.size > 1) {
+            TvCategoryRail(
+                categories = state.categories,
+                selectedCategory = state.selectedCategory,
+                onSelect = viewModel::selectCategory,
             )
         }
 
-        else -> LazyColumn(
-            state = rememberLazyListState(),
-            modifier = modifier.fillMaxSize(),
-            verticalArrangement = Arrangement.spacedBy(4.dp),
-        ) {
-            itemsIndexed(items = state.items, key = { _, item -> item.id }) { index, channel ->
-                ChannelRow(
-                    // The provider's own ordering is the channel numbering a viewer knows;
-                    // the panel's `num` field is not stored, so position stands in for it.
-                    number = index + 1,
-                    channel = channel,
-                    nowPlaying = state.nowPlaying[channel.stableKey],
-                    onFocused = { focusedChannel = channel },
-                    onClick = { onPlay(state.items, index) },
+        // A fresh state per category, so the list starts at the top when the filter
+        // changes. Carrying a scroll position into a different set of channels leaves the
+        // viewer somewhere arbitrary in a list they have not seen — and the position is
+        // meaningless anyway, since row 400 of one category is not row 400 of another.
+        val listState = remember(state.selectedCategory) { LazyListState() }
+
+        when {
+            state.items.isEmpty() -> Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    text = stringResource(R.string.tv_no_channels),
+                    color = Color.White.copy(alpha = 0.65f),
+                    style = MaterialTheme.typography.headlineSmall,
                 )
+            }
+
+            else -> LazyColumn(
+                state = listState,
+                modifier = Modifier.fillMaxSize(),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                itemsIndexed(items = state.items, key = { _, item -> item.id }) { index, channel ->
+                    ChannelRow(
+                        // The provider's own ordering is the channel numbering a viewer
+                        // knows; the panel's `num` field is not stored, so position stands
+                        // in for it.
+                        number = index + 1,
+                        channel = channel,
+                        nowPlaying = state.nowPlaying[channel.stableKey],
+                        onFocused = { focusedChannel = channel },
+                        onClick = { onPlay(state.items, index) },
+                    )
+                }
             }
         }
     }

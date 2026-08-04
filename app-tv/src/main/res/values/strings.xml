@@ -37,6 +37,10 @@
 
     <string name="tv_no_content">Nothing here yet.</string>
 
+    <!-- Categories -->
+    <string name="tv_category_all">All channels</string>
+    <string name="tv_category_ungrouped">Ungrouped</string>
+
     <!-- Series -->
     <string name="tv_series_unavailable">That series could not be loaded.</string>
     <string name="tv_series_no_episodes">This series lists no episodes.</string>

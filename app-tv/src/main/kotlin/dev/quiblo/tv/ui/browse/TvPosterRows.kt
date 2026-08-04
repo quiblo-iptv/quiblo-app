@@ -51,6 +51,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -71,6 +72,7 @@ import dev.quiblo.feature.browse.RatingBadge
 import dev.quiblo.feature.browse.di.browseParams
 import dev.quiblo.tv.R
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.koin.androidx.compose.koinViewModel
 
@@ -86,6 +88,15 @@ fun TvPosterRows(
     kind: MediaKind,
     /** Hands over the whole list, not just the item: the player needs it to zap. */
     onPlay: (List<Channel>, Int) -> Unit,
+    /**
+     * Opens a title the viewer had already started.
+     *
+     * Takes a resolved [Channel] rather than the history entry, because the resolution
+     * belongs here: history is keyed by provider identity so it survives a refresh, a
+     * detail screen is reached by row id which does not, and the join between them is a
+     * suspending lookup this screen's ViewModel already offers.
+     */
+    onResume: (Channel) -> Unit,
     modifier: Modifier = Modifier,
     favouritesOnly: Boolean = false,
 ) {
@@ -96,6 +107,7 @@ fun TvPosterRows(
         parameters = { browseParams(kind, favoritesOnly = favouritesOnly) },
     )
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+    val scope = rememberCoroutineScope()
 
     // Grouped away from the main thread, not merely away from the query.
     //
@@ -136,6 +148,26 @@ fun TvPosterRows(
             // unchanged. The gap a viewer sees is still about 28dp.
             verticalArrangement = Arrangement.spacedBy(ROW_SPACING),
         ) {
+            // First, above the catalogue, because it is what a returning viewer came for.
+            // Empty on Favourites and on Live, which the ViewModel decides — a channel is
+            // not something anyone continues, and Favourites is a list built by hand.
+            if (state.history.isNotEmpty()) {
+                item(key = CONTINUE_ROW_KEY) {
+                    TvContinueWatchingRow(
+                        entries = state.history,
+                        posters = state.posters,
+                        // Null when the provider has since dropped the title, which is an
+                        // honest outcome rather than an error: the row is stale, and doing
+                        // nothing is better than opening a screen about nothing.
+                        onClick = { entry ->
+                            scope.launch {
+                                viewModel.channelForHistory(entry)?.let(onResume)
+                            }
+                        },
+                    )
+                }
+            }
+
             items(items = rows, key = { it.title }) { row ->
                 CategoryRow(
                     category = row.title,
@@ -344,3 +376,6 @@ private val TITLE_GAP = 16.dp
 
 /** Between rows, net of the [FOCUS_GROWTH] each one now reserves on both sides. */
 private val ROW_SPACING = 14.dp
+
+/** Stable across catalogues, so the row is not rebuilt when the titles beneath it change. */
+private const val CONTINUE_ROW_KEY = "__continue__"

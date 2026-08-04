@@ -83,6 +83,17 @@
     <string name="tv_category_all">All channels</string>
     <string name="tv_category_ungrouped">Ungrouped</string>
 
+    <string name="tv_continue_watching">Continue watching</string>
+
+    <!-- Detail screens -->
+    <string name="tv_detail_loading">Loading…</string>
+    <string name="tv_detail_unavailable">That title is no longer available from this source.</string>
+    <string name="tv_detail_play">Play</string>
+    <string name="tv_detail_resume">Resume</string>
+    <string name="tv_detail_from_start">Start from the beginning</string>
+    <string name="tv_detail_favourite">Add to favourites</string>
+    <string name="tv_detail_unfavourite">Remove from favourites</string>
+
     <!-- Series -->
     <string name="tv_series_unavailable">That series could not be loaded.</string>
     <string name="tv_series_no_episodes">This series lists no episodes.</string>
@@ -95,4 +106,8 @@
     <string name="tv_player_hint_seek">◀ ▶ to skip %1$d s</string>
     <string name="tv_player_hint_zap">▲ to change channel</string>
     <string name="tv_player_hint_aspect">Aspect: %1$s</string>
+    <plurals name="tv_series_seasons">
+        <item quantity="one">%1$d season</item>
+        <item quantity="other">%1$d seasons</item>
+    </plurals>
 </resources>

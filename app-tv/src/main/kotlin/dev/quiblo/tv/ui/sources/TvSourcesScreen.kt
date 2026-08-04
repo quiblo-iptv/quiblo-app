@@ -92,9 +92,17 @@ fun TvSourcesScreen(modifier: Modifier = Modifier, viewModel: SourcesViewModel =
     // Swapping one branch for another destroys whatever the remote was pointing at, so each
     // new branch has to claim focus itself. Without this the viewer is left holding a remote
     // that does nothing until they find their way back to the tab bar.
+    //
+    // **Not on the first composition, though.** Selecting this tab composes the screen, and
+    // grabbing focus then pulls the remote out of the tab bar the instant the viewer lands
+    // on Sources — so they can no longer continue along the bar to the settings icon, which
+    // sits past the last tab. Focus belongs to the bar until the viewer presses down into
+    // the content; only a change *after* that — the form opening, a refresh finishing — is
+    // this screen's to claim.
     val focusRequester = remember { FocusRequester() }
+    var hasComposed by remember { mutableStateOf(false) }
     LaunchedEffect(showForm, addState is AddSourceState.Working) {
-        focusRequester.tryRequestFocus()
+        if (hasComposed) focusRequester.tryRequestFocus() else hasComposed = true
     }
 
     Column(modifier = modifier.fillMaxSize()) {

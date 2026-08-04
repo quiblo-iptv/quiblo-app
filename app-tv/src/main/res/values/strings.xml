@@ -36,6 +36,13 @@
     <string name="tv_sources_form_hint">Leave the username and password empty for an M3U playlist.</string>
 
     <string name="tv_no_content">Nothing here yet.</string>
+
+    <!-- Series -->
+    <string name="tv_series_unavailable">That series could not be loaded.</string>
+    <string name="tv_series_no_episodes">This series lists no episodes.</string>
+    <string name="tv_series_season">Season %1$d</string>
+    <string name="tv_series_episode_number">S%1$d E%2$d</string>
+    <string name="tv_series_resume">Continue from season %1$d, episode %2$d</string>
     <string name="tv_player_live">LIVE</string>
     <string name="tv_player_hint_play">OK to play</string>
     <string name="tv_player_hint_pause">OK to pause</string>

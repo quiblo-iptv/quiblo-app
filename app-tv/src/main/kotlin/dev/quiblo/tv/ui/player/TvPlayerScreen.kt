@@ -67,7 +67,6 @@ import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.quiblo.core.media.PlaybackStatus
 import dev.quiblo.core.model.AspectRatioMode
-import dev.quiblo.core.model.Channel
 import dev.quiblo.core.model.videoScale
 import dev.quiblo.feature.player.PlayerViewModel
 import dev.quiblo.tv.R
@@ -83,7 +82,7 @@ import org.koin.androidx.compose.koinViewModel
  */
 @Composable
 fun TvPlayerScreen(
-    channel: Channel,
+    request: TvPlaybackRequest,
     onBack: () -> Unit,
     onZap: (Int) -> Unit,
     modifier: Modifier = Modifier,
@@ -98,9 +97,9 @@ fun TvPlayerScreen(
 
     val focusRequester = remember { FocusRequester() }
 
-    LaunchedEffect(channel.id) {
-        viewModel.load(channel.id)
-        zapNotice = channel.name
+    LaunchedEffect(request) {
+        viewModel.load(request)
+        zapNotice = request.noticeTitle
     }
 
     // The surface has to hold focus or the D-pad reaches nothing at all. Requested once the
@@ -157,6 +156,10 @@ fun TvPlayerScreen(
                 handleKey(
                     key = event.key,
                     isSeekable = state.isSeekable,
+                    // Only a live channel has anything to zap to. On a film, up and
+                    // channel-up used to jump to whatever film happened to sit next in the
+                    // category — which is not what either key means to a viewer.
+                    canZap = request is TvPlaybackRequest.Live,
                     actions = KeyActions(
                         showControls = { controlsVisible = true },
                         playPause = {
@@ -188,6 +191,10 @@ fun TvPlayerScreen(
                 title = state.item?.title.orEmpty(),
                 isPlaying = state.isPlaying,
                 isSeekable = state.isSeekable,
+                // From the request, not from whether a duration has arrived yet. A film
+                // reports no duration for its first moments, and the old test announced it
+                // as live for exactly that long.
+                isLive = request is TvPlaybackRequest.Live,
                 positionMillis = state.positionMillis,
                 durationMillis = state.durationMillis,
                 skipSeconds = settings.seekInterval.seconds,
@@ -198,20 +205,49 @@ fun TvPlayerScreen(
 }
 
 /**
+ * Starts whatever this request describes.
+ *
+ * Each case loads differently, and that is the whole of bug #009. The engine already knew
+ * how to play a film and an episode — [PlayerViewModel.load] has taken a custom URL, a
+ * start position and an episode's numbering since the phone app needed them. The television
+ * simply never passed any of it, so every request became "play this channel's URL": a film
+ * lost its resume point, and a series was asked to play a URL that plays nothing.
+ */
+private fun PlayerViewModel.load(request: TvPlaybackRequest) = when (request) {
+    // A film resumes without being told to: `load` reads the stored position for anything
+    // that is not live. Passing nothing here is passing the right thing.
+    is TvPlaybackRequest.Live, is TvPlaybackRequest.Film -> load(request.channel.id)
+
+    is TvPlaybackRequest.Episode -> load(
+        channelId = request.channel.id,
+        customUrl = request.streamUrl,
+        customTitle = request.episodeTitle,
+        startPositionMillis = request.startPositionMillis,
+        seasonNumber = request.seasonNumber,
+        episodeNumber = request.episodeNumber,
+    )
+}
+
+/**
  * The whole remote-control vocabulary, in one place.
  *
  * Written as a plain function rather than inline so the mapping is legible and testable:
  * on a television the key map *is* the interface, and burying it in a modifier makes the
  * one thing a reviewer needs to check the hardest thing to find.
  */
-private data class KeyActions(
+internal data class KeyActions(
     val showControls: () -> Unit,
     val playPause: () -> Unit,
     val skip: (Int) -> Unit,
     val zap: (Int) -> Unit,
 )
 
-private fun handleKey(key: Key, isSeekable: Boolean, actions: KeyActions): Boolean = when (key) {
+internal fun handleKey(
+    key: Key,
+    isSeekable: Boolean,
+    canZap: Boolean,
+    actions: KeyActions,
+): Boolean = when (key) {
     Key.DirectionDown -> {
         actions.showControls()
         true
@@ -242,14 +278,22 @@ private fun handleKey(key: Key, isSeekable: Boolean, actions: KeyActions): Boole
 
     // Up and down the channel list, which is what a television remote's channel keys and
     // its D-pad up both mean to a viewer watching live.
-    Key.DirectionUp, Key.ChannelUp -> {
+    //
+    // Left unhandled on a film or an episode rather than doing nothing, so the key falls
+    // through to the system instead of being silently swallowed — the same rule the seek
+    // keys follow on a live stream just above.
+    Key.DirectionUp, Key.ChannelUp -> if (canZap) {
         actions.zap(-1)
         true
+    } else {
+        false
     }
 
-    Key.ChannelDown -> {
+    Key.ChannelDown -> if (canZap) {
         actions.zap(1)
         true
+    } else {
+        false
     }
 
     else -> false
@@ -317,10 +361,12 @@ private fun ZapNotice(name: String) {
  * already perform with one press.
  */
 @Composable
+@Suppress("LongParameterList")
 private fun Controls(
     title: String,
     isPlaying: Boolean,
     isSeekable: Boolean,
+    isLive: Boolean,
     positionMillis: Long,
     durationMillis: Long,
     skipSeconds: Int,
@@ -356,7 +402,7 @@ private fun Controls(
                 fontSize = 15.sp,
                 modifier = Modifier.padding(top = 8.dp),
             )
-        } else {
+        } else if (isLive) {
             Text(
                 text = stringResource(R.string.tv_player_live),
                 color = Color.White.copy(alpha = 0.75f),
@@ -372,7 +418,10 @@ private fun Controls(
             Hint(stringResource(if (isPlaying) R.string.tv_player_hint_pause else R.string.tv_player_hint_play))
             if (isSeekable) {
                 Hint(stringResource(R.string.tv_player_hint_seek, skipSeconds))
-            } else {
+            }
+            // Only offered where the key does something. Advertising the channel keys on a
+            // film was telling the viewer about a control that had just been taken away.
+            if (isLive) {
                 Hint(stringResource(R.string.tv_player_hint_zap))
             }
             Hint(stringResource(R.string.tv_player_hint_aspect, aspectRatioMode.name))

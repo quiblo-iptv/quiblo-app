@@ -1,0 +1,97 @@
+/*
+ * Quiblo — a free, open source IPTV player.
+ * Copyright (C) 2026 The Quiblo Authors
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
+package dev.quiblo.tv.ui.player
+
+import androidx.compose.ui.input.key.Key
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
+import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.Test
+
+/**
+ * The remote's vocabulary, which on a television *is* the interface.
+ *
+ * Half of bug #009 was this map being the same whatever was playing: a film was given the
+ * channel keys, so pressing up during a film jumped to whichever film happened to sit next
+ * in the category. These tests hold the two modes apart.
+ */
+class TvPlayerKeyMapTest {
+
+    private var zapped = 0
+    private var skipped = 0
+    private var playPauses = 0
+    private var controlsShown = 0
+
+    private val actions = KeyActions(
+        showControls = { controlsShown++ },
+        playPause = { playPauses++ },
+        skip = { skipped += it },
+        zap = { zapped += it },
+    )
+
+    @Test
+    fun `channel keys zap on a live stream`() {
+        assertTrue(press(Key.ChannelUp, isSeekable = false, canZap = true))
+        assertTrue(press(Key.DirectionUp, isSeekable = false, canZap = true))
+        assertTrue(press(Key.ChannelDown, isSeekable = false, canZap = true))
+
+        // Up and channel-up both mean "the previous channel"; channel-down means the next.
+        assertEquals(-1, zapped)
+    }
+
+    @Test
+    fun `channel keys do nothing on a film`() {
+        assertFalse(press(Key.ChannelUp, isSeekable = true, canZap = false))
+        assertFalse(press(Key.DirectionUp, isSeekable = true, canZap = false))
+        assertFalse(press(Key.ChannelDown, isSeekable = true, canZap = false))
+
+        // Unhandled rather than handled-and-ignored, so the key falls through to the system
+        // instead of being silently swallowed by a player that has nothing to do with it.
+        assertEquals(0, zapped)
+    }
+
+    @Test
+    fun `left and right seek a film and are left alone on a live stream`() {
+        assertTrue(press(Key.DirectionRight, isSeekable = true, canZap = false))
+        assertEquals(1, skipped)
+
+        assertFalse(press(Key.DirectionRight, isSeekable = false, canZap = true))
+        assertFalse(press(Key.DirectionLeft, isSeekable = false, canZap = true))
+        assertEquals(1, skipped)
+    }
+
+    @Test
+    fun `centre plays and pauses whatever is on`() {
+        assertTrue(press(Key.DirectionCenter, isSeekable = false, canZap = true))
+        assertTrue(press(Key.Enter, isSeekable = true, canZap = false))
+
+        assertEquals(2, playPauses)
+    }
+
+    @Test
+    fun `down opens the controls in both modes`() {
+        assertTrue(press(Key.DirectionDown, isSeekable = false, canZap = true))
+        assertTrue(press(Key.DirectionDown, isSeekable = true, canZap = false))
+
+        assertEquals(2, controlsShown)
+    }
+
+    private fun press(key: Key, isSeekable: Boolean, canZap: Boolean) =
+        handleKey(key = key, isSeekable = isSeekable, canZap = canZap, actions = actions)
+}

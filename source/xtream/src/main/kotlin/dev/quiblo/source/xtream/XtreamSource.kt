@@ -32,6 +32,7 @@ import dev.quiblo.source.api.Credentials
 import dev.quiblo.source.api.GuideResult
 import dev.quiblo.source.api.GuideSource
 import dev.quiblo.source.api.MediaSource
+import dev.quiblo.source.api.PanelBlockStore
 import dev.quiblo.source.api.SeriesDetailsResult
 import dev.quiblo.source.api.SeriesSource
 import dev.quiblo.source.api.SourceError
@@ -56,7 +57,8 @@ import java.util.Base64
 fun createXtreamSource(
     httpClient: HttpClient,
     credentialStore: CredentialStore,
-): XtreamSource = XtreamSource(XtreamClient(httpClient), credentialStore)
+    blockStore: PanelBlockStore,
+): XtreamSource = XtreamSource(XtreamClient(httpClient), credentialStore, blockStore)
 
 /**
  * The Xtream Codes implementation of [MediaSource].
@@ -67,6 +69,7 @@ fun createXtreamSource(
 class XtreamSource internal constructor(
     private val client: XtreamClient,
     private val credentialStore: CredentialStore,
+    private val blockStore: PanelBlockStore,
     private val now: () -> Long = System::currentTimeMillis,
 ) : MediaSource, GuideSource, SeriesSource, VodSource {
 
@@ -82,20 +85,34 @@ class XtreamSource internal constructor(
      * details alike. It used to exist only around the guide, which left the other three
      * free to keep knocking.
      */
-    private var blockedUntilEpochMillis: Long = 0L
+    private var blockedUntilEpochMillis: Long = NOT_YET_READ
 
-    private val isBlocked: Boolean get() = now() < blockedUntilEpochMillis
+    private suspend fun isBlocked(): Boolean {
+        if (blockedUntilEpochMillis == NOT_YET_READ) {
+            // Read once per process. A user told their provider is refusing them will
+            // force-stop the app and open it again, and an in-memory-only backoff is
+            // cleared by exactly that — which turns the most likely reaction to a block
+            // into the thing that extends it.
+            blockedUntilEpochMillis = blockStore.blockedUntil()
+        }
+        return now() < blockedUntilEpochMillis
+    }
 
     /** Records a block so the other call paths stop too, and passes the error through. */
-    private fun <T> noteBlocked(error: SourceError, failure: (SourceError) -> T): T {
+    private suspend fun <T> noteBlocked(error: SourceError, failure: (SourceError) -> T): T {
         if (error == SourceError.ProviderBlocked) {
-            blockedUntilEpochMillis = now() + BLOCK_BACKOFF_MILLIS
+            beginBackoff()
         }
         return failure(error)
     }
 
+    private suspend fun beginBackoff() {
+        blockedUntilEpochMillis = now() + BLOCK_BACKOFF_MILLIS
+        blockStore.setBlockedUntil(blockedUntilEpochMillis)
+    }
+
     override suspend fun load(request: SourceRequest): SourceResult {
-        if (isBlocked) return SourceResult.Failure(SourceError.ProviderBlocked)
+        if (isBlocked()) return SourceResult.Failure(SourceError.ProviderBlocked)
 
         val base = XtreamUrl.normalize(request.location)
             ?: return SourceResult.Failure(SourceError.UnreachableHost)
@@ -127,22 +144,69 @@ class XtreamSource internal constructor(
     private suspend fun collect(base: String, credentials: Credentials, sourceId: Long): SourceResult {
         val ctx = Context(base, credentials, sourceId)
 
-        val live = when (val result = client.liveStreams(base, credentials)) {
+        return when (val result = client.liveStreams(base, credentials)) {
             // Live is the point of the account. If it fails, the load failed.
-            is ApiResult.Err -> return noteBlocked(result.error, SourceResult::Failure)
-            is ApiResult.Ok -> mapLive(result.value, ctx, client.liveCategories(base, credentials).orEmpty())
+            is ApiResult.Err -> noteBlocked(result.error, SourceResult::Failure)
+            is ApiResult.Ok -> withOptionalCatalogues(
+                ctx = ctx,
+                live = mapLive(result.value, ctx, categories(client.liveCategories(base, credentials))),
+            )
+        }
+    }
+
+    /**
+     * Adds films and series to the live catalogue, if the panel is still talking to us.
+     *
+     * VOD and series are optional: plenty of accounts carry neither, and a panel that 404s
+     * on them is perfectly usable for live TV. A *block* is not an optional-content
+     * failure, though, and used to be swallowed as one — so a refresh against an
+     * already-blocked panel carried on and spent four more requests on it, each one
+     * another strike against an account that was being refused precisely for asking too
+     * often. Each step now stops the moment the panel says no.
+     */
+    private suspend fun withOptionalCatalogues(ctx: Context, live: Batch): SourceResult {
+        val vod = if (isBlocked()) {
+            null
+        } else {
+            optionalBatch(client.vodStreams(ctx.base, ctx.credentials)) { streams ->
+                mapVod(streams, ctx, categories(client.vodCategories(ctx.base, ctx.credentials)))
+            }
         }
 
-        // VOD and series are optional: plenty of accounts carry neither, and a panel that
-        // 404s on them is still perfectly usable for live TV.
-        val vod = (client.vodStreams(base, credentials) as? ApiResult.Ok)
-            ?.let { mapVod(it.value, ctx, client.vodCategories(base, credentials).orEmpty()) }
-            ?: Batch(emptyList(), 0)
+        val series = if (vod == null || isBlocked()) {
+            null
+        } else {
+            optionalBatch(client.series(ctx.base, ctx.credentials)) { entries ->
+                mapSeries(entries, ctx, categories(client.seriesCategories(ctx.base, ctx.credentials)))
+            }
+        }
 
-        val series = (client.series(base, credentials) as? ApiResult.Ok)
-            ?.let { mapSeries(it.value, ctx, client.seriesCategories(base, credentials).orEmpty()) }
-            ?: Batch(emptyList(), 0)
+        return when {
+            vod == null || series == null -> SourceResult.Failure(SourceError.ProviderBlocked)
+            else -> assemble(live, vod, series)
+        }
+    }
 
+    /**
+     * A mapped batch, an empty one, or null.
+     *
+     * Null means only one thing — the panel is refusing us — which is what lets the caller
+     * tell "this account has no films" apart from "stop asking".
+     */
+    private suspend fun <T> optionalBatch(
+        result: ApiResult<List<T>>,
+        map: suspend (List<T>) -> Batch,
+    ): Batch? = when (result) {
+        is ApiResult.Ok -> map(result.value)
+        is ApiResult.Err -> if (result.error == SourceError.ProviderBlocked) {
+            beginBackoff()
+            null
+        } else {
+            Batch(emptyList(), 0)
+        }
+    }
+
+    private fun assemble(live: Batch, vod: Batch, series: Batch): SourceResult {
         val channels = live.channels + vod.channels + series.channels
         val skipped = live.skipped + vod.skipped + series.skipped
 
@@ -269,7 +333,7 @@ class XtreamSource internal constructor(
         channelKey: String,
         providerStreamId: String,
     ): GuideResult {
-        if (isBlocked) return GuideResult.Failure(SourceError.ProviderBlocked)
+        if (isBlocked()) return GuideResult.Failure(SourceError.ProviderBlocked)
 
         val base = XtreamUrl.normalize(request.location)
             ?: return GuideResult.Failure(SourceError.UnreachableHost)
@@ -289,7 +353,7 @@ class XtreamSource internal constructor(
         request: SourceRequest,
         seriesId: String,
     ): SeriesDetailsResult {
-        if (isBlocked) return SeriesDetailsResult.Failure(SourceError.ProviderBlocked)
+        if (isBlocked()) return SeriesDetailsResult.Failure(SourceError.ProviderBlocked)
 
         val base = XtreamUrl.normalize(request.location)
             ?: return SeriesDetailsResult.Failure(SourceError.UnreachableHost)
@@ -308,7 +372,7 @@ class XtreamSource internal constructor(
         request: SourceRequest,
         vodId: String,
     ): VodDetailsResult {
-        if (isBlocked) return VodDetailsResult.Failure(SourceError.ProviderBlocked)
+        if (isBlocked()) return VodDetailsResult.Failure(SourceError.ProviderBlocked)
 
         val base = XtreamUrl.normalize(request.location)
             ?: return VodDetailsResult.Failure(SourceError.UnreachableHost)
@@ -430,8 +494,20 @@ class XtreamSource internal constructor(
         this
     }
 
-    private fun ApiResult<List<CategoryDto>>.orEmpty(): List<CategoryDto> =
-        (this as? ApiResult.Ok)?.value ?: emptyList()
+    /**
+     * A category list, or none.
+     *
+     * A category list that fails to load costs the user their grouping and nothing more, so
+     * this one failure genuinely is optional. A block is still recorded, because the caller
+     * checks [isBlocked] immediately afterwards and stops.
+     */
+    private suspend fun categories(result: ApiResult<List<CategoryDto>>): List<CategoryDto> = when (result) {
+        is ApiResult.Ok -> result.value
+        is ApiResult.Err -> {
+            if (result.error == SourceError.ProviderBlocked) beginBackoff()
+            emptyList()
+        }
+    }
 
     /**
      * Where this category sat in the provider's list, or null when it is not in it.
@@ -460,5 +536,8 @@ class XtreamSource internal constructor(
          * user who waits a moment and retries is not told to come back tomorrow.
          */
         const val BLOCK_BACKOFF_MILLIS = 15L * 60L * 1000L
+
+        /** Distinguishes "no block recorded" from "the stored deadline has not been read". */
+        const val NOT_YET_READ = -1L
     }
 }

@@ -48,5 +48,9 @@ fun FavoritesScreen(
         onItemClick = onItemClick,
         emptyMessage = stringResource(R.string.feature_favorites_empty),
         modifier = modifier,
+        // The same poster grid as Movies and Series. Favourites holds live channels too,
+        // and the card handles that by fitting a wide logo inside the tile rather than
+        // cropping it — so the shelf stays one uniform grid instead of two.
+        showArtworkCards = true,
     )
 }

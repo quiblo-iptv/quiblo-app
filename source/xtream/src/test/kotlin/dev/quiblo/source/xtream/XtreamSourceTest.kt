@@ -23,6 +23,7 @@ import dev.quiblo.core.model.MediaKind
 import dev.quiblo.source.api.CredentialStore
 import dev.quiblo.source.api.Credentials
 import dev.quiblo.source.api.GuideResult
+import dev.quiblo.source.api.PanelBlockStore
 import dev.quiblo.source.api.SourceError
 import dev.quiblo.source.api.SourceRequest
 import dev.quiblo.source.api.SourceResult
@@ -62,6 +63,7 @@ class XtreamSourceTest {
         bodies: Map<String?, String>,
         status: HttpStatusCode = HttpStatusCode.OK,
         store: CredentialStore = FakeStore(credentials),
+        blockStore: PanelBlockStore = FakeBlockStore(),
     ) = createXtreamSource(
         HttpClient(
             MockEngine { request ->
@@ -75,7 +77,19 @@ class XtreamSourceTest {
             },
         ),
         store,
+        blockStore,
     )
+
+    /** No block recorded, and nothing written anywhere a later test could read it. */
+    private class FakeBlockStore : PanelBlockStore {
+        private var blockedUntil = 0L
+
+        override suspend fun blockedUntil(): Long = blockedUntil
+
+        override suspend fun setBlockedUntil(epochMillis: Long) {
+            blockedUntil = epochMillis
+        }
+    }
 
     private val request = SourceRequest(sourceId = 5L, location = "panel.example.invalid:8080")
 
@@ -588,6 +602,68 @@ class XtreamSourceTest {
 
         // The point of the whole exercise: not one further byte went to the panel.
         assertEquals(afterFirst, requestCount, "requests were still sent while blocked")
+    }
+
+    @Test
+    @DisplayName("a refresh stops the moment the panel refuses, mid-catalogue")
+    fun `a block during the catalogue walk ends the refresh`() = runTest {
+        // Live answers; everything after it is refused. The refresh used to treat that as
+        // "this account has no films or series" and carry on, spending four more requests
+        // on a panel that was refusing precisely because it was being asked too often.
+        var blockFrom = false
+        val source = createXtreamSource(
+            HttpClient(
+                MockEngine { request ->
+                    requestCount++
+                    val action = request.url.parameters["action"]
+                    if (action == "get_vod_streams") blockFrom = true
+                    when {
+                        blockFrom -> respond(
+                            content = "",
+                            status = HttpStatusCode(469, "Blocked"),
+                            headers = headersOf("Content-Type", "application/json"),
+                        )
+
+                        else -> respond(
+                            content = when (action) {
+                                null -> authOk
+                                "get_live_streams" -> liveStreams
+                                "get_live_categories" -> liveCategories
+                                else -> "[]"
+                            },
+                            status = HttpStatusCode.OK,
+                            headers = headersOf("Content-Type", "application/json"),
+                        )
+                    }
+                },
+            ),
+            FakeStore(credentials),
+            FakeBlockStore(),
+        )
+
+        val result = assertInstanceOf(SourceResult.Failure::class.java, source.load(request))
+        assertEquals(SourceError.ProviderBlocked, result.error)
+
+        // auth, live streams, live categories, then the one refusal that stopped it.
+        assertEquals(4, requestCount, "the refresh kept asking after being refused")
+    }
+
+    @Test
+    @DisplayName("a block recorded before this launch is still in force")
+    fun `a stored block survives a restart`() = runTest {
+        // A user told their provider is refusing them force-stops the app and opens it
+        // again. An in-memory-only backoff is cleared by exactly that, which turns the
+        // most likely reaction to a block into the thing that extends it.
+        val store = FakeBlockStore()
+        store.setBlockedUntil(System.currentTimeMillis() + 60_000L)
+
+        val source = sourceServing(bodies = mapOf(null to authOk), blockStore = store)
+
+        assertEquals(
+            SourceError.ProviderBlocked,
+            assertInstanceOf(SourceResult.Failure::class.java, source.load(request)).error,
+        )
+        assertEquals(0, requestCount, "a fresh process ignored a block it had already been given")
     }
 
     @Test

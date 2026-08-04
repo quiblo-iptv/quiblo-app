@@ -19,16 +19,19 @@
 package dev.quiblo.core.datastore.di
 
 import android.content.Context
+import dev.quiblo.core.datastore.DataStorePanelBlockStore
 import dev.quiblo.core.datastore.EncryptedCredentialStore
 import dev.quiblo.core.datastore.PlayerSettingsStore
 import dev.quiblo.core.datastore.TmdbKeyStore
 import dev.quiblo.source.api.CredentialStore
+import dev.quiblo.source.api.PanelBlockStore
 import org.koin.core.module.Module
 import org.koin.dsl.module
 
 /** Wiring owned by `:core:datastore`. */
 val datastoreModule: Module = module {
     single<CredentialStore> { EncryptedCredentialStore(get<Context>()) }
+    single<PanelBlockStore> { DataStorePanelBlockStore(get<Context>()) }
     single { PlayerSettingsStore(get<Context>()) }
     single { TmdbKeyStore(get<Context>()) }
 }

@@ -37,7 +37,9 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -66,6 +68,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -80,6 +83,7 @@ import coil3.compose.SubcomposeAsyncImage
 import dev.quiblo.core.model.Category
 import dev.quiblo.core.model.Channel
 import dev.quiblo.core.model.Programme
+import kotlinx.coroutines.flow.filter
 
 /**
  * The list UI shared by Live, Movies, Series and Favourites.
@@ -114,6 +118,24 @@ fun BrowseScreen(
     // Grid by default: artwork is the point of a catalogue, and the list view remains one
     // tap away for anyone who wants density instead.
     var isGridView by remember { mutableStateOf(true) }
+    val listState = rememberLazyListState()
+    val gridState = rememberLazyGridState()
+
+    // Both prefetches wait for the list to stop moving. See [PrefetchWhenSettled].
+    PrefetchWhenSettled(
+        isScrolling = { gridState.isScrollInProgress },
+        visibleIndices = { gridState.layoutInfo.visibleItemsInfo.map { it.index } },
+        items = state.items,
+        enabled = showArtworkCards,
+        onVisible = viewModel::onPosterVisible,
+    )
+    PrefetchWhenSettled(
+        isScrolling = { listState.isScrollInProgress },
+        visibleIndices = { listState.layoutInfo.visibleItemsInfo.map { it.index } },
+        items = state.items,
+        enabled = true,
+        onVisible = viewModel::onRowVisible,
+    )
 
     // Loading is checked before "no source": they used to be the same branch, so opening a
     // screen with a perfectly good playlist told the user to go and add one.
@@ -153,6 +175,7 @@ fun BrowseScreen(
             state.items.isEmpty() -> CentredMessage(emptyMessage)
 
             isGridView -> LazyVerticalGrid(
+                state = gridState,
                 // Posters are portrait and read fine narrower, so they get more per row.
                 columns = GridCells.Adaptive(minSize = if (showArtworkCards) 120.dp else 150.dp),
                 contentPadding = PaddingValues(12.dp),
@@ -162,13 +185,10 @@ fun BrowseScreen(
             ) {
                 // No guide prefetch here on purpose: a grid card shows no programme, and
                 // a grid fits several times more items on screen than a list. Fetching
-                // for each one is a burst of requests whose results nothing renders.
+                // for each one is a burst of requests whose results nothing renders. The
+                // score a poster *does* show is prefetched above, on scroll settling.
                 items(items = state.items, key = { it.id }) { item ->
                     if (showArtworkCards) {
-                        // A score, on the other hand, is exactly what a poster shows, so
-                        // this one is fetched per visible tile — cached across launches,
-                        // so a category costs its requests once and never again.
-                        LaunchedEffect(item.id) { viewModel.onPosterVisible(item) }
                         ChannelArtCard(
                             channel = item,
                             rating = state.ratings[item.stableKey],
@@ -185,9 +205,8 @@ fun BrowseScreen(
                 }
             }
 
-            else -> LazyColumn(modifier = Modifier.fillMaxSize()) {
+            else -> LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
                 items(items = state.items, key = { it.id }) { item ->
-                    LaunchedEffect(item.id) { viewModel.onRowVisible(item) }
                     ChannelRow(
                         channel = item,
                         nowPlaying = state.nowPlaying[item.stableKey],
@@ -230,6 +249,39 @@ fun BrowseScreen(
  * Expanding search takes the row over rather than adding another, so the height never
  * changes and the content below does not jump.
  */
+
+/**
+ * Prefetches for the rows on screen, once the list has stopped moving.
+ *
+ * Not per row entering composition, which is what this used to be. A fling through a
+ * channel list composes hundreds of rows in a couple of seconds, and asking the provider
+ * for a guide for each one is a burst of hundreds of requests at a panel that counts them
+ * — the behaviour that got this project's account blocked, and then blocked again. The
+ * television app was given a focus-settle delay for exactly this reason and the phone was
+ * not; this is the phone's equivalent.
+ *
+ * Rows flown past are not rows anyone read, so nothing is lost by skipping them. The same
+ * rule covers poster scores: TMDB answers a flood with a rate limit rather than a ban, but
+ * it is still the user's key and their quota being spent on titles nobody looked at.
+ */
+@Composable
+private fun PrefetchWhenSettled(
+    isScrolling: () -> Boolean,
+    visibleIndices: () -> List<Int>,
+    items: List<Channel>,
+    enabled: Boolean,
+    onVisible: (Channel) -> Unit,
+) {
+    LaunchedEffect(items, enabled) {
+        if (!enabled) return@LaunchedEffect
+        snapshotFlow(isScrolling)
+            .filter { scrolling -> !scrolling }
+            .collect {
+                visibleIndices().forEach { index -> items.getOrNull(index)?.let(onVisible) }
+            }
+    }
+}
+
 @Composable
 private fun BrowseHeader(
     query: String,

@@ -31,13 +31,13 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Tv
 import androidx.compose.material3.Button
@@ -47,11 +47,8 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -73,7 +70,7 @@ import dev.quiblo.core.model.Episode
 import dev.quiblo.core.model.Season
 import dev.quiblo.core.model.SeriesDetails
 import dev.quiblo.core.model.TitleMetadata
-import dev.quiblo.feature.browse.FavoriteAction
+import dev.quiblo.feature.browse.DetailOverlayActions
 import dev.quiblo.feature.browse.TitleFacts
 import dev.quiblo.source.api.SourceError
 import org.koin.androidx.compose.koinViewModel
@@ -90,66 +87,41 @@ fun SeriesDetailScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = {
-                    val title = (uiState as? SeriesDetailUiState.Success)?.channel?.name ?: ""
-                    Text(text = title, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = stringResource(R.string.series_back),
-                        )
-                    }
-                },
-                actions = {
-                    // Only once the series is loaded: a heart over a spinner or an error has
-                    // nothing to toggle, and tapping it would silently do nothing.
-                    (uiState as? SeriesDetailUiState.Success)?.let { state ->
-                        FavoriteAction(
-                            isFavorite = state.isFavorite,
-                            onToggle = viewModel::toggleFavorite,
-                        )
-                    }
-                },
-            )
-        },
-        modifier = modifier,
-    ) { innerPadding ->
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding),
-        ) {
-            when (val state = uiState) {
-                is SeriesDetailUiState.Loading -> {
-                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        CircularProgressIndicator()
-                    }
-                }
-
-                is SeriesDetailUiState.Error -> {
-                    SeriesDetailError(
-                        error = state.error,
-                        onRetry = viewModel::loadDetails,
-                    )
-                }
-
-                is SeriesDetailUiState.Success -> {
-                    SeriesDetailContent(
-                        channel = state.channel,
-                        details = state.details,
-                        metadata = state.metadata,
-                        resumeEpisode = state.resumeEpisode,
-                        resumePositionMillis = state.resumePositionMillis,
-                        onEpisodeClick = onEpisodeClick,
-                    )
+    // No app bar, for the same reason as the film screen: the header states the series'
+    // name in full a few pixels below where a title bar would have repeated it.
+    Box(modifier = modifier.fillMaxSize()) {
+        when (val state = uiState) {
+            is SeriesDetailUiState.Loading -> {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator()
                 }
             }
+
+            is SeriesDetailUiState.Error -> {
+                SeriesDetailError(
+                    error = state.error,
+                    onRetry = viewModel::loadDetails,
+                )
+            }
+
+            is SeriesDetailUiState.Success -> {
+                SeriesDetailContent(
+                    channel = state.channel,
+                    details = state.details,
+                    metadata = state.metadata,
+                    resumeEpisode = state.resumeEpisode,
+                    resumePositionMillis = state.resumePositionMillis,
+                    onEpisodeClick = onEpisodeClick,
+                )
+            }
         }
+
+        DetailOverlayActions(
+            isFavorite = (uiState as? SeriesDetailUiState.Success)?.isFavorite == true,
+            onBack = onBack,
+            onToggleFavorite = viewModel::toggleFavorite,
+            modifier = Modifier.align(Alignment.TopCenter),
+        )
     }
 }
 
@@ -180,6 +152,9 @@ private fun ResumeButton(
         )
     }
 }
+
+/** Height of the floating action row, so content starts clear of it. */
+private val OVERLAY_ACTIONS_HEIGHT = 56.dp
 
 private const val MILLIS_PER_SECOND = 1000
 private const val SECONDS_PER_MINUTE = 60
@@ -246,8 +221,13 @@ private fun SeriesDetailContent(
     val currentSeason = seasons.getOrNull(selectedSeasonIndex) ?: seasons.first()
 
     LazyColumn(
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(bottom = 24.dp),
+        modifier = Modifier
+            .fillMaxSize()
+            .statusBarsPadding(),
+        // Starts below the floating back and favourite buttons. The list scrolls under them
+        // afterwards, which is the intended behaviour — they stay reachable at any depth in
+        // a long episode list, where an app bar that scrolled away would not.
+        contentPadding = PaddingValues(top = OVERLAY_ACTIONS_HEIGHT, bottom = 24.dp),
     ) {
         item {
             SeriesHeader(channel = channel, details = details, metadata = metadata)

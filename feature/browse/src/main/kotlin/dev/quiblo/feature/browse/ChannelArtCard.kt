@@ -35,6 +35,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
+import androidx.compose.material.icons.filled.LiveTv
 import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -59,14 +60,16 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil3.compose.SubcomposeAsyncImage
 import dev.quiblo.core.model.Channel
+import dev.quiblo.core.model.MediaKind
 
 /**
  * A poster card: artwork edge to edge, a gradient foot, and the title over it.
  *
- * Only for VOD and anything else whose artwork is a poster. A live channel's "logo" is a
- * small wide badge on a transparent background, and cropping one to fill a portrait card
- * gives you a corner of a logo — which is why the plain [ChannelGridCard] still exists
- * rather than this replacing it everywhere.
+ * Handles a live channel too, which is what lets Favourites — the one screen holding every
+ * kind at once — be a single uniform grid. A live channel's "logo" is a small wide badge on
+ * a transparent background, so it is fitted inside the tile rather than cropped to fill it;
+ * cropping one to 2:3 gives you a corner of a logo. The tile keeps its shape either way, so
+ * the grid does not go ragged.
  *
  * The gradient is not decoration. Poster art is arbitrary, so a title drawn straight onto
  * it is legible or not depending on the film, and a scrim is the only way to make the
@@ -102,7 +105,7 @@ internal fun ChannelArtCard(
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
-            Artwork(logoUrl = channel.logoUrl)
+            Artwork(logoUrl = channel.logoUrl, isLogo = channel.kind == MediaKind.LIVE)
 
             Box(
                 modifier = Modifier
@@ -168,28 +171,34 @@ internal fun ChannelArtCard(
 }
 
 @Composable
-private fun Artwork(logoUrl: String?) {
+private fun Artwork(logoUrl: String?, isLogo: Boolean) {
     if (logoUrl.isNullOrBlank()) {
-        ArtworkPlaceholder()
+        ArtworkPlaceholder(isLogo = isLogo)
         return
     }
 
     SubcomposeAsyncImage(
         model = logoUrl,
         contentDescription = null,
-        // Crop, not Fit: the card is a poster frame, and letterboxing artwork inside it
-        // would reintroduce the bars this layout exists to remove.
-        contentScale = ContentScale.Crop,
+        // Crop for a poster, because the card is a poster frame and letterboxing artwork
+        // inside it would reintroduce the bars this layout exists to remove.
+        //
+        // Fit for a live channel, whose "logo" is a small wide badge on a transparent
+        // background. Cropping one to 2:3 shows a corner of a logo — so Favourites, which
+        // holds every kind at once, keeps the tile shape and changes only what happens
+        // inside it. One grid, two ways of filling a frame.
+        contentScale = if (isLogo) ContentScale.Fit else ContentScale.Crop,
         modifier = Modifier
             .fillMaxSize()
-            .clip(RoundedCornerShape(12.dp)),
-        loading = { ArtworkPlaceholder() },
-        error = { ArtworkPlaceholder() },
+            .clip(RoundedCornerShape(12.dp))
+            .padding(if (isLogo) LOGO_INSET else 0.dp),
+        loading = { ArtworkPlaceholder(isLogo = isLogo) },
+        error = { ArtworkPlaceholder(isLogo = isLogo) },
     )
 }
 
 @Composable
-private fun ArtworkPlaceholder() {
+private fun ArtworkPlaceholder(isLogo: Boolean = false) {
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -197,7 +206,7 @@ private fun ArtworkPlaceholder() {
         contentAlignment = Alignment.Center,
     ) {
         Icon(
-            imageVector = Icons.Filled.Movie,
+            imageVector = if (isLogo) Icons.Filled.LiveTv else Icons.Filled.Movie,
             contentDescription = null,
             tint = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.size(32.dp),
@@ -207,5 +216,8 @@ private fun ArtworkPlaceholder() {
 
 /** Standard poster proportions, so mixed artwork sizes still line up in the grid. */
 private const val POSTER_ASPECT_RATIO = 2f / 3f
+
+/** Keeps a wide channel logo clear of the tile's rounded corners and its two badges. */
+private val LOGO_INSET = 16.dp
 private const val SCRIM_START = 0.55f
 private const val SCRIM_ALPHA = 0.85f

@@ -186,13 +186,25 @@ from the code which actions cost anything.
 
 | Action | Requests |
 |---|---|
-| Add a source, or the manual refresh button | auth + 6 catalogue calls |
+| Add a source, or the manual refresh button | auth + up to 6 catalogue calls, stopping at the first refusal |
 | Anything else on a browse screen | none — favouriting, scrolling and filtering are local |
-| A live row scrolling into view, in list mode | one `get_short_epg`, once ever per channel, rate-limited and skipped when cached |
+| A live row **the list settles on**, in list mode | one `get_short_epg`, once ever per channel, skipped when cached |
+| A live row merely scrolled past | **none** |
 | Opening a series | one `get_series_info`, cached for the session since `ebfa928` — re-opening the same series costs nothing |
 | Opening a movie | one `get_vod_info`, cached for the session since `ebfa928` |
 
 Nothing refreshes automatically: not on launch, not on tab switch, not on scroll.
+
+**Every one of those passes a token bucket** in `PanelRateLimiter`: a burst of 8, refilling
+at one request per 400 ms. A refresh is therefore never slowed, and no amount of scrolling
+can exceed two and a half requests a second however many rows go by.
+
+The phone's guide prefetch was per row *entering composition* until 2026-08-04, which is
+not the same thing as per row read: a fling composes hundreds of rows in a couple of
+seconds. The concurrency cap of three that was supposed to contain it does not — three in
+flight at 100 ms each is thirty requests a second. The television app had a focus-settle
+delay for exactly this reason and the phone did not. That is the most likely cause of the
+provider block seen on 2026-08-03 and again on 2026-08-04.
 
 `XtreamSource` stops asking for fifteen minutes after a panel refuses it, across all four
 call paths. Before `a5de4ee` that backoff existed only around the guide, so a blocked

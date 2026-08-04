@@ -1,0 +1,95 @@
+/*
+ * Quiblo — a free, open source IPTV player.
+ * Copyright (C) 2026 The Quiblo Authors
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
+package dev.quiblo.source.xtream
+
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+
+/**
+ * How fast this app is willing to talk to one panel, at all, for any reason.
+ *
+ * A token bucket rather than a concurrency cap, because the two are not the same thing and
+ * only one of them is what a panel's firewall measures. Three requests in flight sounds
+ * modest and is, in fact, thirty requests a second when each takes 100 ms — which is
+ * exactly how a fling through a channel list turned into an anti-flood block.
+ *
+ * The bucket allows a burst so that a user-initiated refresh, which is seven calls back to
+ * back and then silence, is not slowed down at all. What it stops is the *sustained* rate:
+ * once the burst is spent, requests are spaced out, so a list scrolled for a minute costs
+ * a hundred requests rather than a thousand.
+ *
+ * Placed on the client rather than on any one call path, because the panel counts them all
+ * together and does not care which screen they came from.
+ */
+internal class PanelRateLimiter(
+    private val now: () -> Long = System::currentTimeMillis,
+    private val pause: suspend (Long) -> Unit = { delay(it) },
+) {
+
+    private val mutex = Mutex()
+    private var tokens: Double = BURST_CAPACITY.toDouble()
+    private var lastRefillEpochMillis: Long = now()
+
+    /** Suspends until this request is within budget. */
+    suspend fun acquire() {
+        val waitMillis = mutex.withLock {
+            refill()
+            if (tokens >= 1.0) {
+                tokens -= 1.0
+                0L
+            } else {
+                // Take the token anyway and pay for it by waiting. Ordering does not matter
+                // here — every caller is a background prefetch or one of a refresh's seven
+                // calls, and none of them is a user waiting on a single answer.
+                val deficit = 1.0 - tokens
+                tokens = 0.0
+                (deficit * MILLIS_PER_TOKEN).toLong()
+            }
+        }
+        if (waitMillis > 0) pause(waitMillis)
+    }
+
+    private fun refill() {
+        val timestamp = now()
+        val elapsed = timestamp - lastRefillEpochMillis
+        if (elapsed > 0) {
+            tokens = (tokens + elapsed / MILLIS_PER_TOKEN).coerceAtMost(BURST_CAPACITY.toDouble())
+            lastRefillEpochMillis = timestamp
+        }
+    }
+
+    private companion object {
+        /**
+         * Sustained rate: one request every 400 ms, so two and a half a second.
+         *
+         * Chosen against what the guide prefetch actually needs rather than against what a
+         * panel will tolerate, which is unknowable and varies per provider. A viewer
+         * reading a channel list settles on a few rows a second at most; anything faster is
+         * a scroll passing through, and rows passed through do not need a guide.
+         */
+        const val MILLIS_PER_TOKEN = 400.0
+
+        /**
+         * Enough for a full catalogue refresh — authenticate plus six catalogue calls —
+         * to go out at once, since that is a deliberate action a user is waiting on.
+         */
+        const val BURST_CAPACITY = 8
+    }
+}

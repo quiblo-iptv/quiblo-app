@@ -32,6 +32,7 @@ import dev.quiblo.core.network.HttpContentFetcher
 import dev.quiblo.source.api.ContentFetcher
 import dev.quiblo.source.api.CredentialStore
 import dev.quiblo.source.api.MediaSource
+import dev.quiblo.source.api.PanelBlockStore
 import dev.quiblo.source.m3u.M3uSource
 import dev.quiblo.source.tmdb.TmdbClient
 import dev.quiblo.source.xtream.createXtreamSource
@@ -58,7 +59,7 @@ val dataModule: Module = module {
         mapOf(
             SourceKind.M3U to M3uSource(get()),
             // Adding a protocol is one entry here plus one module (docs/FREEZE.md §4.2).
-            SourceKind.XTREAM to createXtreamSource(get<HttpClient>(), get<CredentialStore>()),
+            SourceKind.XTREAM to createXtreamSource(get<HttpClient>(), get<CredentialStore>(), get<PanelBlockStore>()),
         )
     }
 

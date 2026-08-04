@@ -32,12 +32,12 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Replay
@@ -45,12 +45,9 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -62,13 +59,12 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.compose.SubcomposeAsyncImage
 import dev.quiblo.core.model.Channel
 import dev.quiblo.core.model.VodDetails
-import dev.quiblo.feature.browse.FavoriteAction
+import dev.quiblo.feature.browse.DetailOverlayActions
 import dev.quiblo.feature.browse.TitleFacts
 import org.koin.androidx.compose.koinViewModel
 import org.koin.core.parameter.parametersOf
@@ -91,60 +87,36 @@ fun MovieDetailScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
-    Scaffold(
-        modifier = modifier,
-        topBar = {
-            TopAppBar(
-                title = {
-                    val title = (uiState as? MovieDetailUiState.Ready)?.channel?.name.orEmpty()
-                    Text(text = title, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = stringResource(R.string.movie_back),
-                        )
-                    }
-                },
-                actions = {
-                    // Only once the film is loaded: a heart over a spinner has nothing to
-                    // toggle, and tapping it would silently do nothing.
-                    (uiState as? MovieDetailUiState.Ready)?.let { state ->
-                        FavoriteAction(
-                            isFavorite = state.isFavorite,
-                            onToggle = viewModel::toggleFavorite,
-                        )
-                    }
-                },
-            )
-        },
-    ) { padding ->
+    // No app bar. The screen states the film's name in full, at a readable size, a few
+    // pixels below where a title bar would have repeated it — see [DetailOverlayActions].
+    Box(modifier = modifier.fillMaxSize()) {
         when (val state = uiState) {
             MovieDetailUiState.Loading -> Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(padding),
+                modifier = Modifier.fillMaxSize(),
                 contentAlignment = Alignment.Center,
             ) {
                 CircularProgressIndicator()
             }
 
             MovieDetailUiState.NotFound -> Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(padding),
+                modifier = Modifier.fillMaxSize(),
                 contentAlignment = Alignment.Center,
             ) {
                 Text(stringResource(R.string.movie_not_found))
             }
 
-            is MovieDetailUiState.Ready -> MovieDetail(
-                state = state,
-                onPlay = onPlay,
-                modifier = Modifier.padding(padding),
-            )
+            is MovieDetailUiState.Ready -> MovieDetail(state = state, onPlay = onPlay)
         }
+
+        DetailOverlayActions(
+            // Before the film has loaded there is nothing to favourite, so the heart shows
+            // its empty state and the toggle is a no-op the ViewModel already guards. Back
+            // still works, which is the one control that must never depend on a load.
+            isFavorite = (uiState as? MovieDetailUiState.Ready)?.isFavorite == true,
+            onBack = onBack,
+            onToggleFavorite = viewModel::toggleFavorite,
+            modifier = Modifier.align(Alignment.TopCenter),
+        )
     }
 }
 
@@ -172,7 +144,10 @@ private fun MovieDetail(
         Row(
             modifier = modifier
                 .fillMaxSize()
-                .padding(16.dp),
+                .statusBarsPadding()
+                // Clears the floating back and favourite buttons, which in this layout have
+                // no backdrop to sit on and would otherwise land on the poster.
+                .padding(start = 16.dp, end = 16.dp, top = OVERLAY_ACTIONS_HEIGHT, bottom = 16.dp),
             horizontalArrangement = Arrangement.spacedBy(20.dp),
         ) {
             Poster(
@@ -425,6 +400,10 @@ private const val SCRIM_START = 0.45f
 private const val SCRIM_ALPHA = 0.85f
 private const val POSTER_ASPECT_RATIO = 2f / 3f
 private const val SECONDS_PER_MINUTE = 60
+
+/** Height of the floating action row, so a layout with no backdrop can clear it. */
+private val OVERLAY_ACTIONS_HEIGHT = 56.dp
+
 private const val SEPARATOR = "  ·  "
 private const val MILLIS_PER_SECOND = 1000
 private const val MINUTES_PER_HOUR = 60

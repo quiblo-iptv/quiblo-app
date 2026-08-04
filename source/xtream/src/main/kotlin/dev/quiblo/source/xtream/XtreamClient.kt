@@ -56,6 +56,7 @@ internal sealed interface ApiResult<out T> {
 internal class XtreamClient(
     private val client: HttpClient,
     private val json: Json = defaultJson,
+    private val rateLimiter: PanelRateLimiter = PanelRateLimiter(),
 ) {
 
     suspend fun authenticate(base: String, credentials: Credentials): ApiResult<AuthResponse> =
@@ -98,6 +99,11 @@ internal class XtreamClient(
         action: String?,
         crossinline extra: io.ktor.client.request.HttpRequestBuilder.() -> Unit = {},
     ): ApiResult<T> = runCatchingApi {
+        // Every request the app makes to a panel passes through here, which is why the
+        // budget lives at this line and not on any one caller. The panel counts them all
+        // together and does not care which screen they came from.
+        rateLimiter.acquire()
+
         val response = client.get(XtreamUrl.playerApi(base)) {
             parameter("username", credentials.username)
             parameter("password", credentials.password)

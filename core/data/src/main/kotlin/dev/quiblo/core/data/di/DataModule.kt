@@ -20,12 +20,14 @@ package dev.quiblo.core.data.di
 
 import android.content.Context
 import dev.quiblo.core.data.CategoryRepository
+import dev.quiblo.core.data.ChannelLogoRepository
 import dev.quiblo.core.data.ChannelRepository
 import dev.quiblo.core.data.GuideRepository
 import dev.quiblo.core.data.LocalFileContentFetcher
 import dev.quiblo.core.data.PlayerSettingsRepository
 import dev.quiblo.core.data.SourceRepository
 import dev.quiblo.core.data.TitleMetadataRepository
+import dev.quiblo.core.data.WatchHistoryRepository
 import dev.quiblo.core.data.backup.BackupRepository
 import dev.quiblo.core.model.SourceKind
 import dev.quiblo.core.network.HttpContentFetcher
@@ -33,6 +35,7 @@ import dev.quiblo.source.api.ContentFetcher
 import dev.quiblo.source.api.CredentialStore
 import dev.quiblo.source.api.MediaSource
 import dev.quiblo.source.api.PanelBlockStore
+import dev.quiblo.source.iptvorg.IptvOrgClient
 import dev.quiblo.source.m3u.M3uSource
 import dev.quiblo.source.tmdb.TmdbClient
 import dev.quiblo.source.xtream.createXtreamSource
@@ -64,11 +67,14 @@ val dataModule: Module = module {
     }
 
     single { SourceRepository(get(), get(), get(), get()) }
-    single { ChannelRepository(get(), get(), get(), get(), get()) }
+    single { ChannelRepository(get(), get(), get(), get()) }
+    single { WatchHistoryRepository(get()) }
     single { CategoryRepository(get(), get()) }
     single { GuideRepository(get(), get(), get()) }
     single { BackupRepository(get(), get()) }
     single { PlayerSettingsRepository(get()) }
     single { TmdbClient(get<HttpClient>()) }
     single { TitleMetadataRepository(get(), get(), get()) }
+    single { IptvOrgClient(get<HttpClient>()) }
+    single { ChannelLogoRepository(get(), get(), get()) }
 }

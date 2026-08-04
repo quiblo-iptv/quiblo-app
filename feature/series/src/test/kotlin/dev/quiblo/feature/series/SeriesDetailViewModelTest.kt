@@ -20,6 +20,7 @@ package dev.quiblo.feature.series
 
 import dev.quiblo.core.data.ChannelRepository
 import dev.quiblo.core.data.TitleMetadataRepository
+import dev.quiblo.core.data.WatchHistoryRepository
 import dev.quiblo.core.model.Channel
 import dev.quiblo.core.model.Episode
 import dev.quiblo.core.model.MediaKind
@@ -28,6 +29,7 @@ import dev.quiblo.core.model.SeriesDetails
 import dev.quiblo.source.api.SeriesDetailsResult
 import dev.quiblo.source.api.SourceError
 import io.mockk.coEvery
+import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
@@ -50,6 +52,7 @@ class SeriesDetailViewModelTest {
     private val testDispatcher = StandardTestDispatcher()
     private val channelRepository: ChannelRepository = mockk()
     private val metadataRepository: TitleMetadataRepository = mockk(relaxed = true)
+    private val historyRepository: WatchHistoryRepository = mockk(relaxed = true)
 
     private val sampleChannel = Channel(
         id = 10L,
@@ -102,10 +105,10 @@ class SeriesDetailViewModelTest {
         coEvery { channelRepository.getSeriesDetails(sampleChannel) } returns SeriesDetailsResult.Success(sampleDetails)
         // Resume points are keyed by the episode's stream URL, because that is what the
         // player records against when it is handed a custom URL.
-        coEvery { channelRepository.mostRecentlyWatched(any()) } returns
+        coEvery { historyRepository.mostRecentlyWatched(any()) } returns
             ("http://stream.example.invalid/501.mp4" to 900_000L)
 
-        val viewModel = SeriesDetailViewModel(10L, channelRepository, metadataRepository)
+        val viewModel = SeriesDetailViewModel(10L, channelRepository, metadataRepository, historyRepository)
         testDispatcher.scheduler.advanceUntilIdle()
 
         val state = assertInstanceOf(SeriesDetailUiState.Success::class.java, viewModel.uiState.value)
@@ -114,14 +117,51 @@ class SeriesDetailViewModelTest {
     }
 
     @Test
+    fun `offers the first listed episode to start from the beginning`() = runTest(testDispatcher) {
+        coEvery { channelRepository.findById(10L) } returns sampleChannel
+        coEvery { channelRepository.getSeriesDetails(sampleChannel) } returns SeriesDetailsResult.Success(sampleDetails)
+        coEvery { historyRepository.mostRecentlyWatched(any()) } returns
+            ("http://stream.example.invalid/501.mp4" to 900_000L)
+
+        val viewModel = SeriesDetailViewModel(10L, channelRepository, metadataRepository, historyRepository)
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        // Episode one of season one, not the current episode from zero. Starting a series
+        // over means going back to its beginning.
+        val state = assertInstanceOf(SeriesDetailUiState.Success::class.java, viewModel.uiState.value)
+        assertEquals("501", state.firstEpisode?.id)
+    }
+
+    @Test
+    fun `removing from history forgets the whole series and clears the resume button`() = runTest(testDispatcher) {
+        coEvery { channelRepository.findById(10L) } returns sampleChannel
+        coEvery { channelRepository.getSeriesDetails(sampleChannel) } returns SeriesDetailsResult.Success(sampleDetails)
+        coEvery { historyRepository.mostRecentlyWatched(any()) } returns
+            ("http://stream.example.invalid/501.mp4" to 900_000L)
+        coEvery { historyRepository.removeSeriesFromHistory(any()) } returns Unit
+
+        val viewModel = SeriesDetailViewModel(10L, channelRepository, metadataRepository, historyRepository)
+        testDispatcher.scheduler.advanceUntilIdle()
+        viewModel.removeFromHistory()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        // Keyed by the series, not by the episode: deleting one episode would leave the
+        // series in "continue watching" at the one before it, which reads as a dead button.
+        coVerify { historyRepository.removeSeriesFromHistory(sampleChannel.stableKey) }
+        val state = assertInstanceOf(SeriesDetailUiState.Success::class.java, viewModel.uiState.value)
+        assertNull(state.resumeEpisode)
+        assertEquals(0L, state.resumePositionMillis)
+    }
+
+    @Test
     fun `a resume key that matches no episode leaves nothing to resume`() = runTest(testDispatcher) {
         coEvery { channelRepository.findById(10L) } returns sampleChannel
         coEvery { channelRepository.getSeriesDetails(sampleChannel) } returns SeriesDetailsResult.Success(sampleDetails)
         // A stale position from an episode the provider has since removed must not crash
         // or resurrect a button pointing at nothing.
-        coEvery { channelRepository.mostRecentlyWatched(any()) } returns ("http://gone.invalid/9.mp4" to 60_000L)
+        coEvery { historyRepository.mostRecentlyWatched(any()) } returns ("http://gone.invalid/9.mp4" to 60_000L)
 
-        val viewModel = SeriesDetailViewModel(10L, channelRepository, metadataRepository)
+        val viewModel = SeriesDetailViewModel(10L, channelRepository, metadataRepository, historyRepository)
         testDispatcher.scheduler.advanceUntilIdle()
 
         val state = assertInstanceOf(SeriesDetailUiState.Success::class.java, viewModel.uiState.value)
@@ -132,9 +172,9 @@ class SeriesDetailViewModelTest {
     fun `loads series details successfully`() = runTest(testDispatcher) {
         coEvery { channelRepository.findById(10L) } returns sampleChannel
         coEvery { channelRepository.getSeriesDetails(sampleChannel) } returns SeriesDetailsResult.Success(sampleDetails)
-        coEvery { channelRepository.mostRecentlyWatched(any()) } returns null
+        coEvery { historyRepository.mostRecentlyWatched(any()) } returns null
 
-        val viewModel = SeriesDetailViewModel(10L, channelRepository, metadataRepository)
+        val viewModel = SeriesDetailViewModel(10L, channelRepository, metadataRepository, historyRepository)
         testDispatcher.scheduler.advanceUntilIdle()
 
         val state = assertInstanceOf(SeriesDetailUiState.Success::class.java, viewModel.uiState.value)
@@ -150,7 +190,7 @@ class SeriesDetailViewModelTest {
     fun `emits error when channel is not found`() = runTest(testDispatcher) {
         coEvery { channelRepository.findById(99L) } returns null
 
-        val viewModel = SeriesDetailViewModel(99L, channelRepository, metadataRepository)
+        val viewModel = SeriesDetailViewModel(99L, channelRepository, metadataRepository, historyRepository)
         testDispatcher.scheduler.advanceUntilIdle()
 
         val state = assertInstanceOf(SeriesDetailUiState.Error::class.java, viewModel.uiState.value)
@@ -164,7 +204,7 @@ class SeriesDetailViewModelTest {
             channelRepository.getSeriesDetails(sampleChannel)
         } returns SeriesDetailsResult.Failure(SourceError.UnreachableHost)
 
-        val viewModel = SeriesDetailViewModel(10L, channelRepository, metadataRepository)
+        val viewModel = SeriesDetailViewModel(10L, channelRepository, metadataRepository, historyRepository)
         testDispatcher.scheduler.advanceUntilIdle()
 
         val state = assertInstanceOf(SeriesDetailUiState.Error::class.java, viewModel.uiState.value)

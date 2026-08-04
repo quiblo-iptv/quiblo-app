@@ -38,6 +38,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Replay
@@ -48,6 +49,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -60,6 +62,7 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.compose.SubcomposeAsyncImage
 import dev.quiblo.core.model.Channel
@@ -87,6 +90,13 @@ fun MovieDetailScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
+    // Coming back from playback must update the buttons: a film watched to the end still
+    // offered "resume from 1:52" until the screen was left and reopened.
+    LifecycleResumeEffect(Unit) {
+        viewModel.refreshResumePosition()
+        onPauseOrDispose {}
+    }
+
     // No app bar. The screen states the film's name in full, at a readable size, a few
     // pixels below where a title bar would have repeated it — see [DetailOverlayActions].
     Box(modifier = modifier.fillMaxSize()) {
@@ -105,7 +115,11 @@ fun MovieDetailScreen(
                 Text(stringResource(R.string.movie_not_found))
             }
 
-            is MovieDetailUiState.Ready -> MovieDetail(state = state, onPlay = onPlay)
+            is MovieDetailUiState.Ready -> MovieDetail(
+                state = state,
+                onPlay = onPlay,
+                onRemoveFromHistory = viewModel::removeFromHistory,
+            )
         }
 
         DetailOverlayActions(
@@ -131,6 +145,7 @@ fun MovieDetailScreen(
 private fun MovieDetail(
     state: MovieDetailUiState.Ready,
     onPlay: (Channel, Long) -> Unit,
+    onRemoveFromHistory: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     // TMDB artwork first when it exists: it is a real poster at a known size, where a
@@ -167,7 +182,12 @@ private fun MovieDetail(
                     style = MaterialTheme.typography.headlineSmall,
                     fontWeight = FontWeight.Bold,
                 )
-                Details(state = state, onPlay = onPlay, modifier = Modifier.padding(top = 12.dp))
+                Details(
+                    state = state,
+                    onPlay = onPlay,
+                    onRemoveFromHistory = onRemoveFromHistory,
+                    modifier = Modifier.padding(top = 12.dp),
+                )
             }
         }
         return
@@ -179,7 +199,12 @@ private fun MovieDetail(
             .verticalScroll(rememberScrollState()),
     ) {
         Backdrop(artworkUrl = artwork, title = state.channel.name)
-        Details(state = state, onPlay = onPlay, modifier = Modifier.padding(16.dp))
+        Details(
+            state = state,
+            onPlay = onPlay,
+            onRemoveFromHistory = onRemoveFromHistory,
+            modifier = Modifier.padding(16.dp),
+        )
     }
 }
 
@@ -188,13 +213,14 @@ private fun MovieDetail(
 private fun Details(
     state: MovieDetailUiState.Ready,
     onPlay: (Channel, Long) -> Unit,
+    onRemoveFromHistory: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Column(modifier = modifier) {
         state.details?.let { MetadataLine(it) }
         state.metadata?.let { TitleFacts(metadata = it, modifier = Modifier.padding(bottom = 12.dp)) }
 
-        PlaybackButtons(state = state, onPlay = onPlay)
+        PlaybackButtons(state = state, onPlay = onPlay, onRemoveFromHistory = onRemoveFromHistory)
 
         // The provider's plot wins when it has one — it describes the file the user will
         // actually play. TMDB fills the very common case where the provider supplies none.
@@ -363,6 +389,7 @@ private fun MetadataLine(details: VodDetails) {
 private fun PlaybackButtons(
     state: MovieDetailUiState.Ready,
     onPlay: (Channel, Long) -> Unit,
+    onRemoveFromHistory: () -> Unit,
 ) {
     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         if (state.canResume) {
@@ -379,6 +406,16 @@ private fun PlaybackButtons(
                 Icon(imageVector = Icons.Filled.Replay, contentDescription = null)
                 Text(
                     text = stringResource(R.string.movie_start_over),
+                    modifier = Modifier.padding(start = 8.dp),
+                )
+            }
+            // Only alongside a resume point, because that is the only time there is
+            // anything to remove. A permanently visible one would be a button that does
+            // nothing on almost every film in the catalogue.
+            TextButton(onClick = onRemoveFromHistory) {
+                Icon(imageVector = Icons.Filled.DeleteOutline, contentDescription = null)
+                Text(
+                    text = stringResource(R.string.movie_remove_history),
                     modifier = Modifier.padding(start = 8.dp),
                 )
             }

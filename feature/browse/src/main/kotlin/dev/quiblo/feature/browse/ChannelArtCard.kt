@@ -82,6 +82,16 @@ internal fun ChannelArtCard(
     onClick: () -> Unit,
     onToggleFavorite: () -> Unit,
     rating: Double? = null,
+    /**
+     * Artwork from the metadata service, used only when the provider supplied none.
+     *
+     * Series are where this matters. Panels commonly carry a series' cover on the details
+     * endpoint and nothing on the catalogue entry, so the Series grid was a wall of
+     * placeholder icons for titles the app could describe perfectly well once opened. The
+     * provider's own artwork still wins wherever it exists: it is the art for the thing
+     * being served, where this is a guess from a title search.
+     */
+    fallbackPosterUrl: String? = null,
 ) {
     // A long title is truncated until asked for. Hover covers a mouse or trackpad; long
     // press is the equivalent on a touch screen, where there is no hover to speak of.
@@ -105,7 +115,10 @@ internal fun ChannelArtCard(
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
-            Artwork(logoUrl = channel.logoUrl, isLogo = channel.kind == MediaKind.LIVE)
+            Artwork(
+                logoUrl = channel.logoUrl?.takeIf { it.isNotBlank() } ?: fallbackPosterUrl,
+                isLogo = channel.kind == MediaKind.LIVE,
+            )
 
             Box(
                 modifier = Modifier

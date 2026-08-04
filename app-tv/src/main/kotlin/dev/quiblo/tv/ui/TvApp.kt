@@ -20,6 +20,7 @@ package dev.quiblo.tv.ui
 
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
+import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
@@ -40,6 +41,7 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -49,8 +51,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -103,6 +109,9 @@ fun TvApp() {
     // Focus starts in the bar, so the first thing a viewer sees is where they are. An app
     // that opens with nothing focused leaves the remote apparently dead.
     val barFocusRequester = remember { FocusRequester() }
+    val contentFocusRequester = remember { FocusRequester() }
+
+    LaunchedEffect(Unit) { barFocusRequester.tryRequestFocus() }
 
     Column(
         modifier = Modifier
@@ -113,12 +122,15 @@ fun TvApp() {
             selectedTab = selectedTab,
             onSelect = { selectedTab = it },
             focusRequester = barFocusRequester,
+            onEnterContent = { contentFocusRequester.tryRequestFocus() },
         )
 
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(start = SCREEN_PADDING, end = SCREEN_PADDING, bottom = SCREEN_PADDING),
+                .padding(start = SCREEN_PADDING, end = SCREEN_PADDING, bottom = SCREEN_PADDING)
+                .focusRequester(contentFocusRequester)
+                .focusGroup(),
         ) {
             when (TvTab.entries[selectedTab]) {
                 TvTab.LIVE -> TvLiveScreen(
@@ -165,21 +177,61 @@ fun TvApp() {
  * No pill, no card, no surface behind the labels — the reference is plain text, and a
  * filled chip reads as a button rather than as a place you are.
  *
- * Focused and selected are separate states and both are visible at once. On a television
- * they routinely disagree: the remote can be pointing along the bar while the content
- * below still belongs to the tab you came from, and a design that shows only one of the
- * two leaves the viewer unable to tell what pressing centre will do.
+ * **The bar is one focus target, not five.** Moving left and right along it still switches
+ * tab immediately, which is the Google TV feel this was always after, but the switch is
+ * driven by the key press rather than by which label happens to hold focus.
+ *
+ * That distinction is the whole bug this shape exists to prevent. With a focusable per tab
+ * and selection following focus, *any* event that destroyed the focused element inside the
+ * content below — opening the add-source form, the refresh spinner appearing, a list
+ * emptying — left Compose with no focus target, so it fell back to the first focusable in
+ * the tree, which was a tab, which selected itself and threw the viewer onto another
+ * screen. Content could silently change which tab you were on. Now it cannot: nothing but a
+ * key press on this bar moves the selection.
  */
 @Composable
 private fun TvTopBar(
     selectedTab: Int,
     onSelect: (Int) -> Unit,
     focusRequester: FocusRequester,
+    onEnterContent: () -> Unit,
 ) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isFocused by interactionSource.collectIsFocusedAsState()
+    val lastIndex = TvTab.entries.lastIndex
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = SCREEN_PADDING, vertical = 20.dp),
+            .padding(horizontal = SCREEN_PADDING, vertical = 20.dp)
+            .focusRequester(focusRequester)
+            .onPreviewKeyEvent { event ->
+                if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+                when (event.key) {
+                    Key.DirectionLeft -> {
+                        // Not consumed at the first tab, so focus can leave the bar the way
+                        // it came rather than the remote going dead in the corner.
+                        val canMove = selectedTab > 0
+                        if (canMove) onSelect(selectedTab - 1)
+                        canMove
+                    }
+
+                    // Past the last tab, left unconsumed so focus reaches the settings icon.
+                    Key.DirectionRight -> {
+                        val canMove = selectedTab < lastIndex
+                        if (canMove) onSelect(selectedTab + 1)
+                        canMove
+                    }
+
+                    Key.DirectionDown, Key.DirectionCenter, Key.Enter -> {
+                        onEnterContent()
+                        true
+                    }
+
+                    else -> false
+                }
+            }
+            .focusable(interactionSource = interactionSource),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(28.dp),
     ) {
@@ -187,12 +239,10 @@ private fun TvTopBar(
             TextTab(
                 label = stringResource(tab.labelRes),
                 isSelected = index == selectedTab,
-                onSelect = { onSelect(index) },
-                modifier = if (index == selectedTab) {
-                    Modifier.focusRequester(focusRequester)
-                } else {
-                    Modifier
-                },
+                // Bright only when the bar itself holds the remote. While focus is down in
+                // the content the selected tab stays legible but recedes, which is how a
+                // viewer tells where a press will land.
+                isBarFocused = isFocused,
             )
         }
 
@@ -205,26 +255,17 @@ private fun TvTopBar(
     }
 }
 
-/**
- * One tab.
- *
- * Selection follows focus — moving along the bar switches tab, as Google TV does, rather
- * than requiring a centre press to confirm. That is what makes a remote feel like it is
- * browsing rather than filling in a form.
- */
+/** One tab. A label and an underline — the bar above owns focus and selection. */
 @Composable
 private fun TextTab(
     label: String,
     isSelected: Boolean,
-    onSelect: () -> Unit,
+    isBarFocused: Boolean,
     modifier: Modifier = Modifier,
 ) {
-    val interactionSource = remember { MutableInteractionSource() }
-    val isFocused by interactionSource.collectIsFocusedAsState()
-
     val alpha by animateFloatAsState(
         targetValue = when {
-            isFocused -> 1f
+            isSelected && isBarFocused -> 1f
             isSelected -> SELECTED_ALPHA
             else -> IDLE_ALPHA
         },
@@ -233,9 +274,7 @@ private fun TextTab(
 
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = modifier
-            .onFocusChanged { if (it.isFocused) onSelect() }
-            .focusable(interactionSource = interactionSource),
+        modifier = modifier,
     ) {
         Text(
             text = label,
@@ -290,3 +329,15 @@ private val UNDERLINE_WIDTH = 28.dp
 private val TAB_TEXT_SIZE = 20.sp
 private const val SELECTED_ALPHA = 0.90f
 private const val IDLE_ALPHA = 0.55f
+
+/**
+ * Requests focus, tolerating there being nothing to focus.
+ *
+ * A content area can legitimately hold no focusable at all — an empty catalogue, a spinner,
+ * a line of explanatory text — and [FocusRequester] treats that as a programming error and
+ * throws. Here it is an ordinary state, and the right behaviour is to leave focus where it
+ * is rather than to bring the app down.
+ */
+private fun FocusRequester.tryRequestFocus() {
+    runCatching { requestFocus() }
+}

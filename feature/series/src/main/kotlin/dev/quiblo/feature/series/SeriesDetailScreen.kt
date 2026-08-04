@@ -38,7 +38,9 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Replay
 import androidx.compose.material.icons.filled.Tv
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -48,7 +50,9 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -63,6 +67,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.compose.SubcomposeAsyncImage
 import dev.quiblo.core.model.Channel
@@ -81,11 +86,25 @@ import org.koin.core.parameter.parametersOf
 fun SeriesDetailScreen(
     channelId: Long,
     onBack: () -> Unit,
-    onEpisodeClick: (Episode, Channel) -> Unit,
+    /**
+     * Plays one episode.
+     *
+     * The third argument is where to start: null for "use whatever this episode's own
+     * resume point says", which is what tapping it in the list means, and an explicit value
+     * for the two buttons that override it.
+     */
+    onEpisodeClick: (Episode, Channel, Long?) -> Unit,
     modifier: Modifier = Modifier,
     viewModel: SeriesDetailViewModel = koinViewModel(parameters = { parametersOf(channelId) }),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+
+    // Coming back from playback must move the Resume button on, or the screen still offers
+    // the episode that was just finished.
+    LifecycleResumeEffect(Unit) {
+        viewModel.refreshResumePosition()
+        onPauseOrDispose {}
+    }
 
     // No app bar, for the same reason as the film screen: the header states the series'
     // name in full a few pixels below where a title bar would have repeated it.
@@ -106,12 +125,9 @@ fun SeriesDetailScreen(
 
             is SeriesDetailUiState.Success -> {
                 SeriesDetailContent(
-                    channel = state.channel,
-                    details = state.details,
-                    metadata = state.metadata,
-                    resumeEpisode = state.resumeEpisode,
-                    resumePositionMillis = state.resumePositionMillis,
+                    state = state,
                     onEpisodeClick = onEpisodeClick,
+                    onRemoveFromHistory = viewModel::removeFromHistory,
                 )
             }
         }
@@ -125,31 +141,70 @@ fun SeriesDetailScreen(
     }
 }
 
-/** Continues the series from the episode last watched. */
+/**
+ * What to do with a series that has been started: continue it, restart it, or forget it.
+ *
+ * All three only appear together. A "start from beginning" beside nothing to resume is the
+ * same button as "play", and a "remove from history" for a series with no history is a
+ * control that can only ever do nothing.
+ */
 @Composable
-private fun ResumeButton(
+private fun ResumeActions(
     episode: Episode,
     positionMillis: Long,
-    onClick: () -> Unit,
+    firstEpisode: Episode?,
+    onResume: () -> Unit,
+    onStartFromBeginning: (Episode) -> Unit,
+    onRemoveFromHistory: () -> Unit,
 ) {
-    Button(
-        onClick = onClick,
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 8.dp),
-    ) {
-        Icon(imageVector = Icons.Filled.PlayArrow, contentDescription = null)
-        Text(
-            text = stringResource(
-                R.string.series_resume,
-                episode.seasonNumber,
-                episode.episodeNumber,
-                positionMillis.asResumeClock(),
-            ),
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.padding(start = 8.dp),
-        )
+    Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+        Button(onClick = onResume, modifier = Modifier.fillMaxWidth()) {
+            Icon(imageVector = Icons.Filled.PlayArrow, contentDescription = null)
+            Text(
+                text = stringResource(
+                    R.string.series_resume,
+                    episode.seasonNumber,
+                    episode.episodeNumber,
+                    positionMillis.asResumeClock(),
+                ),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(start = 8.dp),
+            )
+        }
+
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            // Offered only when the provider actually listed an episode to go back to.
+            firstEpisode?.let { first ->
+                OutlinedButton(
+                    onClick = { onStartFromBeginning(first) },
+                    modifier = Modifier.weight(1f),
+                ) {
+                    Icon(imageVector = Icons.Filled.Replay, contentDescription = null)
+                    Text(
+                        text = stringResource(R.string.series_start_over),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.padding(start = 8.dp),
+                    )
+                }
+            }
+
+            TextButton(onClick = onRemoveFromHistory, modifier = Modifier.weight(1f)) {
+                Icon(imageVector = Icons.Filled.DeleteOutline, contentDescription = null)
+                Text(
+                    text = stringResource(R.string.series_remove_history),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(start = 8.dp),
+                )
+            }
+        }
     }
 }
 
@@ -206,13 +261,12 @@ private fun SeriesDetailError(
 
 @Composable
 private fun SeriesDetailContent(
-    channel: Channel,
-    details: SeriesDetails,
-    metadata: TitleMetadata?,
-    resumeEpisode: Episode?,
-    resumePositionMillis: Long,
-    onEpisodeClick: (Episode, Channel) -> Unit,
+    state: SeriesDetailUiState.Success,
+    onEpisodeClick: (Episode, Channel, Long?) -> Unit,
+    onRemoveFromHistory: () -> Unit,
 ) {
+    val channel = state.channel
+    val details = state.details
     var selectedSeasonIndex by remember { mutableIntStateOf(0) }
     val defaultSeasonName = stringResource(R.string.series_season_label, 1)
     val seasons = details.seasons.ifEmpty {
@@ -230,17 +284,20 @@ private fun SeriesDetailContent(
         contentPadding = PaddingValues(top = OVERLAY_ACTIONS_HEIGHT, bottom = 24.dp),
     ) {
         item {
-            SeriesHeader(channel = channel, details = details, metadata = metadata)
+            SeriesHeader(channel = channel, details = details, metadata = state.metadata)
         }
 
         // Only when there is something to resume. An always-present button that sometimes
         // starts episode one is worse than no button, because it stops meaning anything.
-        if (resumeEpisode != null) {
+        state.resumeEpisode?.let { resumeEpisode ->
             item {
-                ResumeButton(
+                ResumeActions(
                     episode = resumeEpisode,
-                    positionMillis = resumePositionMillis,
-                    onClick = { onEpisodeClick(resumeEpisode, channel) },
+                    positionMillis = state.resumePositionMillis,
+                    firstEpisode = state.firstEpisode,
+                    onResume = { onEpisodeClick(resumeEpisode, channel, state.resumePositionMillis) },
+                    onStartFromBeginning = { first -> onEpisodeClick(first, channel, 0L) },
+                    onRemoveFromHistory = onRemoveFromHistory,
                 )
             }
         }
@@ -293,7 +350,9 @@ private fun SeriesDetailContent(
             items(currentSeason.episodes) { episode ->
                 EpisodeItem(
                     episode = episode,
-                    onClick = { onEpisodeClick(episode, channel) },
+                    // Null, not zero: an episode tapped in the list starts wherever it was
+                    // left, which is what its own resume point already records.
+                    onClick = { onEpisodeClick(episode, channel, null) },
                 )
             }
         }

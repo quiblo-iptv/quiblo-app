@@ -72,13 +72,22 @@ class TitleMetadataRepository(
         cachedOrFetched(title, kind, acceptPartial = false)
 
     /**
-     * Just the score, for a poster tile.
+     * What a poster tile needs: a score, and artwork for the very common case of a provider
+     * that supplies none.
      *
      * One request rather than two on a miss, and nothing at all once cached. A record
      * already held in full answers this without asking anyone.
+     *
+     * Series are where this earns its keep. Panels routinely list a series with a cover on
+     * the details endpoint and nothing on the catalogue entry, so a Series grid built from
+     * the catalogue alone is a wall of placeholder icons — and the one request that fetches
+     * the score already carries the poster.
      */
-    suspend fun ratingFor(title: String, kind: MediaKind): Double? =
-        cachedOrFetched(title, kind, acceptPartial = true)?.rating
+    suspend fun previewFor(title: String, kind: MediaKind): TitleMetadata? =
+        cachedOrFetched(title, kind, acceptPartial = true)
+
+    /** Just the score. Kept for callers that render a badge and nothing else. */
+    suspend fun ratingFor(title: String, kind: MediaKind): Double? = previewFor(title, kind)?.rating
 
     private suspend fun cachedOrFetched(
         title: String,

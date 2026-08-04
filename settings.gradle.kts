@@ -67,6 +67,10 @@ include(":source:m3u")
 include(":source:xtream")
 include(":source:tmdb")
 
+// The iptv-org channel reference list. Not a MediaSource: it carries no streams, only
+// names and logos for channels a user's own playlist already returned.
+include(":source:iptvorg")
+
 // Feature layer. Compose UI, consumes :core:data only.
 //
 // :feature:browse holds the list UI that Live, Movies, Series and Favourites all share.

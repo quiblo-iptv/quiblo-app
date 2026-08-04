@@ -21,6 +21,7 @@ package dev.quiblo.feature.settings
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dev.quiblo.core.data.CategoryRepository
+import dev.quiblo.core.data.ChannelLogoRepository
 import dev.quiblo.core.data.PlayerSettingsRepository
 import dev.quiblo.core.data.SourceRepository
 import dev.quiblo.core.data.TitleMetadataRepository
@@ -74,12 +75,19 @@ sealed interface BackupUiState {
     data object Failed : BackupUiState
 }
 
+// One function per control on a screen that is a list of unrelated controls: backup,
+// appearance, playback tuning, categories, film metadata, channel logos. The count tracks
+// the number of settings, not any tangle between them — each is two or three lines that
+// touch one repository — so splitting it would produce six ViewModels for one screen and a
+// composable that has to fetch all six.
+@Suppress("TooManyFunctions")
 class SettingsViewModel(
     private val backupRepository: BackupRepository,
     private val playerSettingsRepository: PlayerSettingsRepository,
     private val metadataRepository: TitleMetadataRepository,
     private val categoryRepository: CategoryRepository,
     private val sourceRepository: SourceRepository,
+    private val channelLogoRepository: ChannelLogoRepository,
 ) : ViewModel() {
 
     private val categoryKind = MutableStateFlow(MediaKind.LIVE)
@@ -115,6 +123,19 @@ class SettingsViewModel(
 
     init {
         viewModelScope.launch { metadataRepository.load() }
+    }
+
+    /**
+     * Whether missing channel logos are filled in from the iptv-org reference list.
+     *
+     * False until the store has been read, which is also the value it holds when the
+     * feature has never been turned on — the two are the same thing to this screen.
+     */
+    val channelLogosEnabled: StateFlow<Boolean> = channelLogoRepository.isEnabled
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(SUBSCRIPTION_TIMEOUT_MILLIS), false)
+
+    fun setChannelLogosEnabled(enabled: Boolean) = viewModelScope.launch {
+        channelLogoRepository.setEnabled(enabled)
     }
 
     /** The saved TMDB key, or null when the feature is off. */

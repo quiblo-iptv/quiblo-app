@@ -22,10 +22,12 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dev.quiblo.core.data.ChannelRepository
 import dev.quiblo.core.data.PlayerSettingsRepository
+import dev.quiblo.core.data.WatchHistoryRepository
 import dev.quiblo.core.media.PlayableItem
 import dev.quiblo.core.media.PlaybackState
 import dev.quiblo.core.media.PlayerController
 import dev.quiblo.core.model.AspectRatioMode
+import dev.quiblo.core.model.HistoryEntry
 import dev.quiblo.core.model.MediaKind
 import dev.quiblo.core.model.PlayerSettings
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -48,6 +50,7 @@ import kotlinx.coroutines.launch
 class PlayerViewModel(
     private val controller: PlayerController,
     private val channelRepository: ChannelRepository,
+    private val historyRepository: WatchHistoryRepository,
     settingsRepository: PlayerSettingsRepository,
 ) : ViewModel() {
 
@@ -76,6 +79,31 @@ class PlayerViewModel(
 
     private var loadedChannelId: Long? = null
 
+    /**
+     * What is playing, in the terms history is recorded in.
+     *
+     * Held here rather than read back at save time because saving happens on the way out,
+     * when the screen is already going and a database read racing teardown is the kind of
+     * thing that silently loses the last position of every session.
+     */
+    private var playing: PlayingItem? = null
+
+    /**
+     * The item being played, described well enough to write a history row.
+     *
+     * @property seriesStableKey set only for an episode, whose own identity is its stream
+     *   URL and which therefore has no row of its own to be looked up from.
+     */
+    private data class PlayingItem(
+        val sourceId: Long,
+        val kind: MediaKind,
+        val title: String,
+        val artworkUrl: String?,
+        val seriesStableKey: String? = null,
+        val seasonNumber: Int? = null,
+        val episodeNumber: Int? = null,
+    )
+
     fun cycleAspectRatio() {
         val modes = AspectRatioMode.entries
         _aspectRatioMode.value = modes[(_aspectRatioMode.value.ordinal + 1) % modes.size]
@@ -93,11 +121,21 @@ class PlayerViewModel(
      * Guarded so a recomposition, or a rotation that re-runs the effect, does not restart
      * a stream that is already playing (AC-PLAY-07).
      */
+    @Suppress("LongParameterList")
     fun load(
         channelId: Long,
         customUrl: String? = null,
         customTitle: String? = null,
         startPositionMillis: Long? = null,
+        /**
+         * Which episode this is, when it is one.
+         *
+         * Carried from the series screen rather than derived here, because an episode's
+         * stream URL says nothing about where it sits in a run and the player never sees
+         * the episode list it came from.
+         */
+        seasonNumber: Int? = null,
+        episodeNumber: Int? = null,
     ) {
         if (loadedChannelId == channelId && customUrl == null) return
         loadedChannelId = channelId
@@ -106,6 +144,18 @@ class PlayerViewModel(
             val channel = channelRepository.findById(channelId) ?: return@launch
             val playUrl = customUrl ?: channel.streamUrl
             val playTitle = customTitle ?: channel.name
+            val isEpisode = customUrl != null && channel.kind == MediaKind.SERIES
+            playing = PlayingItem(
+                sourceId = channel.sourceId,
+                kind = channel.kind,
+                // The series' name, not the episode's: history lists titles, and the
+                // episode is named by its season and number underneath.
+                title = channel.name,
+                artworkUrl = channel.logoUrl,
+                seriesStableKey = channel.stableKey.takeIf { isEpisode },
+                seasonNumber = seasonNumber.takeIf { isEpisode },
+                episodeNumber = episodeNumber.takeIf { isEpisode },
+            )
             controller.prepare(
                 PlayableItem(
                     id = customUrl ?: channel.stableKey,
@@ -118,7 +168,7 @@ class PlayerViewModel(
                     startPositionMillis = when {
                         channel.kind == MediaKind.LIVE -> 0L
                         startPositionMillis != null -> startPositionMillis
-                        else -> channelRepository.resumePosition(customUrl ?: channel.stableKey)
+                        else -> historyRepository.resumePosition(customUrl ?: channel.stableKey)
                     },
                 ),
             )
@@ -151,14 +201,44 @@ class PlayerViewModel(
         super.onCleared()
     }
 
-    /** Persists the VOD resume point (AC-PLAY-03). Live has no meaningful position. */
+    /**
+     * Persists the VOD resume point and the history entry beside it (AC-PLAY-03).
+     *
+     * Live has no meaningful position and is never recorded — a channel is not something
+     * anyone continues, and putting one in "continue watching" would fill the row with
+     * things that cannot be resumed.
+     */
     private fun rememberPosition() {
-        val current = state.value
-        val item = current.item ?: return
-        if (item.isLive || current.positionMillis <= 0L) return
+        val entry = currentHistoryEntry() ?: return
+        viewModelScope.launch { historyRepository.saveProgress(entry) }
+    }
 
-        viewModelScope.launch {
-            channelRepository.saveResumePosition(item.id, current.positionMillis)
-        }
+    /**
+     * What is playing as a history entry, or null when there is nothing worth remembering.
+     *
+     * Null covers all three cases together — nothing loaded, a live channel, a position of
+     * zero — because the caller's response to each is identical, and separating them would
+     * imply an order of precedence that does not exist.
+     */
+    private fun currentHistoryEntry(): HistoryEntry? {
+        val current = state.value
+        val item = current.item?.takeIf { !it.isLive && current.positionMillis > 0L }
+        val playing = playing
+        if (item == null || playing == null) return null
+
+        return HistoryEntry(
+            stableKey = item.id,
+            sourceId = playing.sourceId,
+            kind = playing.kind,
+            title = playing.title,
+            artworkUrl = playing.artworkUrl,
+            positionMillis = current.positionMillis,
+            // Zero until the engine has read the container. A history tile draws no progress
+            // bar rather than an empty one when that is all we have.
+            durationMillis = current.durationMillis.coerceAtLeast(0L),
+            seriesStableKey = playing.seriesStableKey,
+            seasonNumber = playing.seasonNumber,
+            episodeNumber = playing.episodeNumber,
+        )
     }
 }

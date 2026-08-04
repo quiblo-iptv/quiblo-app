@@ -21,9 +21,11 @@ package dev.quiblo.core.data
 import dev.quiblo.core.database.dao.CategoryCount
 import dev.quiblo.core.database.entity.ChannelEntity
 import dev.quiblo.core.database.entity.ProgrammeEntity
+import dev.quiblo.core.database.entity.ResumePositionEntity
 import dev.quiblo.core.database.entity.SourceEntity
 import dev.quiblo.core.model.Category
 import dev.quiblo.core.model.Channel
+import dev.quiblo.core.model.HistoryEntry
 import dev.quiblo.core.model.MediaKind
 import dev.quiblo.core.model.Programme
 import dev.quiblo.core.model.Source
@@ -78,6 +80,20 @@ internal fun Channel.toEntity(sortIndex: Int): ChannelEntity = ChannelEntity(
     sortIndex = sortIndex,
     categoryIndex = categoryIndex,
     providerStreamId = providerStreamId,
+)
+
+internal fun ResumePositionEntity.toDomain(): HistoryEntry = HistoryEntry(
+    stableKey = stableKey,
+    sourceId = sourceId,
+    kind = runCatching { MediaKind.valueOf(kind) }.getOrDefault(MediaKind.VOD),
+    title = title,
+    artworkUrl = artworkUrl,
+    positionMillis = positionMillis,
+    durationMillis = durationMillis,
+    watchedAtEpochMillis = updatedAtEpochMillis,
+    seriesStableKey = seriesStableKey,
+    seasonNumber = seasonNumber,
+    episodeNumber = episodeNumber,
 )
 
 internal fun CategoryCount.toDomain(sourceId: Long): Category = Category(

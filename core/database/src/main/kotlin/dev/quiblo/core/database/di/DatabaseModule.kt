@@ -33,6 +33,7 @@ val databaseModule: Module = module {
     single { QuibloDatabase.create(get<Context>()) }
     single { get<QuibloDatabase>().sourceDao() }
     single { get<QuibloDatabase>().titleMetadataDao() }
+    single { get<QuibloDatabase>().channelLogoDao() }
     single { get<QuibloDatabase>().categoryOverrideDao() }
     single { get<QuibloDatabase>().channelDao() }
     single { get<QuibloDatabase>().resumePositionDao() }

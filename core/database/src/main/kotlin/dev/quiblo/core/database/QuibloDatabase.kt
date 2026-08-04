@@ -24,6 +24,7 @@ import androidx.room.Room
 import androidx.room.RoomDatabase
 import dev.quiblo.core.database.dao.CategoryOverrideDao
 import dev.quiblo.core.database.dao.ChannelDao
+import dev.quiblo.core.database.dao.ChannelLogoDao
 import dev.quiblo.core.database.dao.FavoriteDao
 import dev.quiblo.core.database.dao.ProgrammeDao
 import dev.quiblo.core.database.dao.ResumePositionDao
@@ -31,6 +32,7 @@ import dev.quiblo.core.database.dao.SourceDao
 import dev.quiblo.core.database.dao.TitleMetadataDao
 import dev.quiblo.core.database.entity.CategoryOverrideEntity
 import dev.quiblo.core.database.entity.ChannelEntity
+import dev.quiblo.core.database.entity.ChannelLogoEntity
 import dev.quiblo.core.database.entity.FavoriteEntity
 import dev.quiblo.core.database.entity.ProgrammeEntity
 import dev.quiblo.core.database.entity.ResumePositionEntity
@@ -50,8 +52,9 @@ import dev.quiblo.core.database.entity.TitleMetadataEntity
         ProgrammeEntity::class,
         TitleMetadataEntity::class,
         CategoryOverrideEntity::class,
+        ChannelLogoEntity::class,
     ],
-    version = 7,
+    version = 9,
     exportSchema = true,
 )
 abstract class QuibloDatabase : RoomDatabase() {
@@ -65,6 +68,8 @@ abstract class QuibloDatabase : RoomDatabase() {
     abstract fun favoriteDao(): FavoriteDao
 
     abstract fun titleMetadataDao(): TitleMetadataDao
+
+    abstract fun channelLogoDao(): ChannelLogoDao
 
     abstract fun categoryOverrideDao(): CategoryOverrideDao
 
@@ -90,6 +95,8 @@ abstract class QuibloDatabase : RoomDatabase() {
                     MIGRATION_4_5,
                     MIGRATION_5_6,
                     MIGRATION_6_7,
+                    MIGRATION_7_8,
+                    MIGRATION_8_9,
                 )
                 .build()
     }

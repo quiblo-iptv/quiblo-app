@@ -27,4 +27,6 @@
     <string name="series_episode_label">Episode %1$d: %2$s</string>
     <string name="series_season_label">Season %1$d</string>
     <string name="series_resume">Resume S%1$d E%2$d · %3$s</string>
+    <string name="series_start_over">Start from beginning</string>
+    <string name="series_remove_history">Remove from history</string>
 </resources>

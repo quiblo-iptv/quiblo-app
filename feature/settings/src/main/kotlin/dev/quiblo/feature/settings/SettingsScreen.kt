@@ -73,6 +73,7 @@ fun SettingsScreen(
     val categoryKind by viewModel.selectedCategoryKind.collectAsStateWithLifecycle()
     val categories by viewModel.categories.collectAsStateWithLifecycle()
     val appearance by viewModel.appearance.collectAsStateWithLifecycle()
+    val channelLogosEnabled by viewModel.channelLogosEnabled.collectAsStateWithLifecycle()
     val context = LocalContext.current
 
     // SAF, so the file lands wherever the user chooses and the app needs no storage
@@ -154,6 +155,13 @@ fun SettingsScreen(
             check = tmdbCheck,
             onSave = viewModel::saveTmdbKey,
             onClear = viewModel::clearTmdbKey,
+        )
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        ChannelLogoSettingsCard(
+            isEnabled = channelLogosEnabled,
+            onToggle = viewModel::setChannelLogosEnabled,
         )
 
         Spacer(modifier = Modifier.height(16.dp))

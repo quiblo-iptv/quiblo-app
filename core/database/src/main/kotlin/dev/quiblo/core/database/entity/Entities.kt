@@ -107,16 +107,41 @@ data class FavoriteEntity(
 )
 
 /**
- * Where the user got to in a VOD item.
+ * Where the user got to in a VOD item, and enough about it to list it as history.
  *
  * Keyed by the provider's stable identity rather than a row id, so a playlist refresh
  * that renumbers everything does not lose the resume point (AC-PLAY-03).
+ *
+ * The descriptive columns are denormalised rather than joined to [ChannelEntity], because
+ * for a series episode there is nothing to join to: an episode's identity is its stream
+ * URL, and episodes are never rows in the channel table — they are fetched per series and
+ * held for a session. A history list that joined would show films and silently drop every
+ * episode, which is most of what anyone actually resumes.
+ *
+ * Rows written before this table carried any of that keep resuming correctly and are
+ * excluded from history by their empty [title]: a tile with no name and no artwork is
+ * worse than one row of history missing.
  */
-@Entity(tableName = "resume_positions")
+@Entity(
+    tableName = "resume_positions",
+    indices = [Index("sourceId", "kind", "updatedAtEpochMillis")],
+)
 data class ResumePositionEntity(
     @PrimaryKey val stableKey: String,
     val positionMillis: Long,
     val updatedAtEpochMillis: Long,
+    val sourceId: Long = 0L,
+    /** A [dev.quiblo.core.model.MediaKind] name. Empty on rows written before v8. */
+    val kind: String = "",
+    /** The film's or series' name — never the episode's. Empty on rows written before v8. */
+    val title: String = "",
+    val artworkUrl: String? = null,
+    /** The item's full length, or 0 when the player never reported one. */
+    val durationMillis: Long = 0L,
+    /** The parent series' stable key when this row is an episode; null for a film. */
+    val seriesStableKey: String? = null,
+    val seasonNumber: Int? = null,
+    val episodeNumber: Int? = null,
 )
 
 /**
@@ -194,6 +219,24 @@ data class TitleMetadataEntity(
      * one request and a detail screen upgrade the same row rather than duplicate it.
      */
     val isPartial: Boolean = false,
+)
+
+/**
+ * A logo for a channel the user's playlist gave none for, from the reference list.
+ *
+ * Keyed by a normalised match key rather than by anything belonging to the user's source:
+ * this is a copy of a public catalogue, not a fact about their playlist. The same row
+ * therefore serves every source they configure, and a playlist refresh has no bearing on it.
+ *
+ * A whole table for what could be a column on `channels` is deliberate. The column would be
+ * destroyed on every refresh — the same reasoning that keeps favourites out of that table —
+ * and it would be re-downloaded to rebuild, which is the one thing this cache exists to
+ * prevent.
+ */
+@Entity(tableName = "channel_logos")
+data class ChannelLogoEntity(
+    @PrimaryKey val matchKey: String,
+    val logoUrl: String,
 )
 
 /**

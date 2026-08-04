@@ -83,12 +83,15 @@ fun QuibloNavHost(
             SeriesDetailScreen(
                 channelId = route.channelId,
                 onBack = { navController.popBackStack() },
-                onEpisodeClick = { episode, seriesChannel ->
+                onEpisodeClick = { episode, seriesChannel, startMillis ->
                     navController.navigate(
                         PlayerRoute(
                             channelId = seriesChannel.id,
                             streamUrl = episode.streamUrl,
                             title = "${seriesChannel.name} - ${episode.title}",
+                            startPositionMillis = startMillis,
+                            seasonNumber = episode.seasonNumber,
+                            episodeNumber = episode.episodeNumber,
                         ),
                     )
                 },
@@ -104,6 +107,8 @@ fun QuibloNavHost(
                 streamUrl = route.streamUrl,
                 title = route.title,
                 startPositionMillis = route.startPositionMillis,
+                seasonNumber = route.seasonNumber,
+                episodeNumber = route.episodeNumber,
                 onBack = { navController.popBackStack() },
             )
         }

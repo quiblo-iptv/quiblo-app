@@ -24,5 +24,5 @@ import org.koin.core.module.dsl.viewModel
 import org.koin.dsl.module
 
 val seriesModule: Module = module {
-    viewModel { (channelId: Long) -> SeriesDetailViewModel(channelId, get(), get()) }
+    viewModel { (channelId: Long) -> SeriesDetailViewModel(channelId, get(), get(), get()) }
 }

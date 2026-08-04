@@ -75,6 +75,14 @@ data class PlayerRoute(
      * position rather than being silently ignored.
      */
     val startPositionMillis: Long? = null,
+    /**
+     * Where this episode sits in its series, when it is one.
+     *
+     * Carried so the history entry can say "S2 E4" without the player having to go back to
+     * the provider for an episode list it was never given.
+     */
+    val seasonNumber: Int? = null,
+    val episodeNumber: Int? = null,
 )
 
 /**

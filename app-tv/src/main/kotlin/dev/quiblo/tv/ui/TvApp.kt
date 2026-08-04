@@ -66,7 +66,10 @@ import dev.quiblo.core.model.MediaKind
 import dev.quiblo.tv.R
 import dev.quiblo.tv.ui.browse.TvPosterRows
 import dev.quiblo.tv.ui.live.TvLiveScreen
+import dev.quiblo.tv.ui.player.TvPlaybackRequest
 import dev.quiblo.tv.ui.player.TvPlayerScreen
+import dev.quiblo.tv.ui.player.playbackRequestFor
+import dev.quiblo.tv.ui.series.TvSeriesScreen
 import dev.quiblo.tv.ui.sources.TvSourcesScreen
 
 /**
@@ -85,25 +88,50 @@ fun TvApp() {
     // full screen, and leaving the bar drawn over video would be the same mistake the phone
     // app made for a fortnight.
     //
-    // The queue travels with the selection because zapping needs it. Up and down on a
-    // television move through the list you came from, and the player cannot know what that
-    // was — only the screen that launched it does.
-    var queue: List<Channel> by remember { mutableStateOf(emptyList()) }
-    var playingIndex by remember { mutableIntStateOf(-1) }
+    // What is being played is now a request rather than a row plus an index, because the
+    // three kinds are played differently and flattening them is what bug #009 was. A series
+    // is not among them at all: it has no stream of its own, so it opens a screen instead.
+    var playing: TvPlaybackRequest? by remember { mutableStateOf(null) }
+    var openSeries: Channel? by remember { mutableStateOf(null) }
 
-    val playing = queue.getOrNull(playingIndex)
-    if (playing != null) {
+    playing?.let { request ->
         TvPlayerScreen(
-            channel = playing,
-            onBack = { playingIndex = -1 },
+            request = request,
+            onBack = { playing = null },
+            // Only live has a queue to move through, and the key map means only live gets
+            // here at all.
             onZap = { direction ->
-                // Wraps, as a television does: past the last channel is the first. Stopping
-                // dead at the end of a 20,000-channel list would feel like a fault.
-                val size = queue.size
-                if (size > 0) playingIndex = ((playingIndex + direction) % size + size) % size
+                playing = (request as? TvPlaybackRequest.Live)?.zappedBy(direction) ?: request
             },
         )
         return
+    }
+
+    openSeries?.let { series ->
+        TvSeriesScreen(
+            channel = series,
+            onPlayEpisode = { episode, resumeFrom ->
+                playing = TvPlaybackRequest.Episode(
+                    channel = series,
+                    streamUrl = episode.streamUrl,
+                    episodeTitle = episode.title,
+                    seasonNumber = episode.seasonNumber,
+                    episodeNumber = episode.episodeNumber,
+                    startPositionMillis = resumeFrom,
+                )
+            },
+            onBack = { openSeries = null },
+            modifier = Modifier.padding(SCREEN_PADDING),
+        )
+        return
+    }
+
+    // A series carries no stream of its own, so `playbackRequestFor` answers null for one
+    // and it opens a screen rather than the player. Decided per item rather than per
+    // screen, because a favourites list holds every kind at once.
+    fun open(items: List<Channel>, index: Int) {
+        val request = playbackRequestFor(items, index)
+        if (request == null) openSeries = items.getOrNull(index) else playing = request
     }
 
     // Focus starts in the bar, so the first thing a viewer sees is where they are. An app
@@ -133,36 +161,16 @@ fun TvApp() {
                 .focusGroup(),
         ) {
             when (TvTab.entries[selectedTab]) {
-                TvTab.LIVE -> TvLiveScreen(
-                    onPlay = { channels, index ->
-                        queue = channels
-                        playingIndex = index
-                    },
-                )
+                TvTab.LIVE -> TvLiveScreen(onPlay = ::open)
 
-                TvTab.MOVIES -> TvPosterRows(
-                    kind = MediaKind.VOD,
-                    onPlay = { items, index ->
-                        queue = items
-                        playingIndex = index
-                    },
-                )
+                TvTab.MOVIES -> TvPosterRows(kind = MediaKind.VOD, onPlay = ::open)
 
-                TvTab.SERIES -> TvPosterRows(
-                    kind = MediaKind.SERIES,
-                    onPlay = { items, index ->
-                        queue = items
-                        playingIndex = index
-                    },
-                )
+                TvTab.SERIES -> TvPosterRows(kind = MediaKind.SERIES, onPlay = ::open)
 
                 TvTab.FAVOURITES -> TvPosterRows(
                     kind = MediaKind.VOD,
                     favouritesOnly = true,
-                    onPlay = { items, index ->
-                        queue = items
-                        playingIndex = index
-                    },
+                    onPlay = ::open,
                 )
 
                 TvTab.SOURCES -> TvSourcesScreen()

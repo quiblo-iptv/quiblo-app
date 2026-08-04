@@ -35,6 +35,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -60,6 +61,7 @@ import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
@@ -118,13 +120,14 @@ fun TvSourcesScreen(modifier: Modifier = Modifier, viewModel: SourcesViewModel =
 
                 AddSourceForm(
                     focusRequester = focusRequester,
+                    // The form closes only when the save was actually accepted. It used to
+                    // close either way, so a rejected save left no source, no message, and
+                    // nothing to distinguish it from never having pressed Save.
                     onAddM3u = { name, url ->
-                        viewModel.addM3uSource(name, url)
-                        showForm = false
+                        viewModel.addM3uSource(name, url).also { showForm = !it }
                     },
                     onAddXtream = { name, url, user, pass ->
-                        viewModel.addXtreamSource(name, url, user, pass)
-                        showForm = false
+                        viewModel.addXtreamSource(name, url, user, pass).also { showForm = !it }
                     },
                     onCancel = { showForm = false },
                 )
@@ -290,14 +293,18 @@ private fun FocusRow(label: String, onClick: () -> Unit, modifier: Modifier = Mo
 @Composable
 private fun AddSourceForm(
     focusRequester: FocusRequester,
-    onAddM3u: (String, String) -> Unit,
-    onAddXtream: (String, String, String, String) -> Unit,
+    onAddM3u: (String, String) -> Boolean,
+    onAddXtream: (String, String, String, String) -> Boolean,
     onCancel: () -> Unit,
 ) {
     var name by remember { mutableStateOf("") }
     var url by remember { mutableStateOf("") }
     var username by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
+
+    // Set when a save was refused, so the refusal says something. A form that simply does
+    // nothing when Save is pressed is indistinguishable from a broken button.
+    var wasRejected by remember { mutableStateOf(false) }
 
     val canSubmit = url.isNotBlank()
 
@@ -312,6 +319,14 @@ private fun AddSourceForm(
             color = Color.White.copy(alpha = 0.6f),
             style = MaterialTheme.typography.bodyMedium,
         )
+
+        if (wasRejected) {
+            Text(
+                text = stringResource(R.string.tv_sources_incomplete),
+                color = MaterialTheme.colorScheme.error,
+                style = MaterialTheme.typography.bodyMedium,
+            )
+        }
 
         TvField(
             value = name,
@@ -335,18 +350,21 @@ private fun AddSourceForm(
             onValueChange = { password = it },
             label = stringResource(R.string.tv_sources_password),
             isPassword = true,
+            isLast = true,
         )
 
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             FocusRow(
                 label = stringResource(R.string.tv_sources_save),
                 onClick = {
-                    if (!canSubmit) return@FocusRow
-                    if (username.isBlank() && password.isBlank()) {
-                        onAddM3u(name, url)
-                    } else {
-                        onAddXtream(name, url, username, password)
+                    val accepted = when {
+                        !canSubmit -> false
+                        // Neither credential given means a playlist; either one given means
+                        // an account, and an account needs both.
+                        username.isBlank() && password.isBlank() -> onAddM3u(name, url)
+                        else -> onAddXtream(name, url, username, password)
                     }
+                    wasRejected = !accepted
                 },
                 modifier = Modifier.width(BUTTON_WIDTH),
             )
@@ -360,16 +378,22 @@ private fun AddSourceForm(
 }
 
 /**
- * A text field a remote can actually leave.
+ * A text field a remote can actually leave — with the keyboard up or down.
  *
- * A Compose text field consumes the D-pad's up and down — it treats them as cursor
- * movement within the text — so focus enters the field and never comes out. On a phone
- * that is invisible, because a finger simply taps the next field; on a television it is a
- * dead end, and the form cannot be completed at all.
+ * Two different traps, and only one of them was handled.
  *
- * Intercepting the two keys before the field sees them and moving focus explicitly is the
- * fix. Left and right are deliberately left alone: those really are cursor movement, and a
- * viewer editing a long URL needs them.
+ * **Keyboard down.** A Compose text field treats the D-pad's up and down as cursor movement
+ * within the text, so focus enters and never comes out. Intercepting the two keys before
+ * the field sees them and moving focus explicitly is the fix, and that is what
+ * [onPreviewKeyEvent] below does. Left and right are deliberately left alone: those really
+ * are cursor movement, and a viewer editing a long URL needs them.
+ *
+ * **Keyboard up, which is the usual case on a television and was the broken one.** The IME
+ * takes the D-pad for itself — it is how a viewer moves around the on-screen keys — so
+ * `onPreviewKeyEvent` never runs at all. Every field typed went into whichever field was
+ * focused when the keyboard first appeared, silently, appending to whatever was already
+ * there. The way out is the keyboard's own action key: [ImeAction.Next] turns it into
+ * "next field", and [ImeAction.Done] on the last one dismisses rather than moving nowhere.
  */
 @Composable
 private fun TvField(
@@ -379,6 +403,7 @@ private fun TvField(
     modifier: Modifier = Modifier,
     keyboardType: KeyboardType = KeyboardType.Text,
     isPassword: Boolean = false,
+    isLast: Boolean = false,
 ) {
     val focusManager = LocalFocusManager.current
 
@@ -392,7 +417,16 @@ private fun TvField(
         } else {
             VisualTransformation.None
         },
-        keyboardOptions = KeyboardOptions(keyboardType = keyboardType),
+        keyboardOptions = KeyboardOptions(
+            keyboardType = keyboardType,
+            imeAction = if (isLast) ImeAction.Done else ImeAction.Next,
+        ),
+        keyboardActions = KeyboardActions(
+            onNext = { focusManager.moveFocus(FocusDirection.Down) },
+            // Clearing focus is what dismisses the keyboard, which is what a viewer wants
+            // from the last field — the buttons below are unreachable until it is gone.
+            onDone = { focusManager.clearFocus() },
+        ),
         modifier = modifier
             .fillMaxWidth(FIELD_WIDTH_FRACTION)
             .onPreviewKeyEvent { event ->

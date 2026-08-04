@@ -37,6 +37,8 @@
 
     <string name="tv_no_content">Nothing here yet.</string>
 
+    <string name="tv_sources_incomplete">Fill in the address, and either both the username and password or neither.</string>
+
     <!-- Settings -->
     <string name="tv_settings_playback">Playback</string>
     <string name="tv_settings_artwork">Artwork</string>

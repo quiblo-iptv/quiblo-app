@@ -65,8 +65,16 @@ class SourcesViewModel(
      * @param name the user's label. Falls back to a derived name when left blank, because
      *   forcing a name before the user knows what the playlist contains is friction.
      */
-    fun addM3uSource(name: String, location: String) {
-        if (location.isBlank()) return
+    /**
+     * @return false when the input was rejected without anything being attempted.
+     *
+     * A caller needs to know, because "nothing happened" and "something is happening" look
+     * identical on screen otherwise. The television form used to close on a rejected save,
+     * leaving no source, no message, and no way to tell that from never having pressed the
+     * button at all.
+     */
+    fun addM3uSource(name: String, location: String): Boolean {
+        if (location.isBlank()) return false
 
         _addState.value = AddSourceState.Working
         viewModelScope.launch {
@@ -80,6 +88,7 @@ class SourcesViewModel(
                 )
             }
         }
+        return true
     }
 
     /**
@@ -89,8 +98,13 @@ class SourcesViewModel(
      * in this ViewModel's state, so it cannot survive in a saved-state bundle or reach a
      * crash trace (AC-XT-04).
      */
-    fun addXtreamSource(name: String, baseUrl: String, username: String, password: String) {
-        if (baseUrl.isBlank() || username.isBlank() || password.isBlank()) return
+    fun addXtreamSource(
+        name: String,
+        baseUrl: String,
+        username: String,
+        password: String,
+    ): Boolean {
+        if (baseUrl.isBlank() || username.isBlank() || password.isBlank()) return false
 
         _addState.value = AddSourceState.Working
         viewModelScope.launch {
@@ -109,6 +123,7 @@ class SourcesViewModel(
                 )
             }
         }
+        return true
     }
 
     fun refresh(sourceId: Long) {

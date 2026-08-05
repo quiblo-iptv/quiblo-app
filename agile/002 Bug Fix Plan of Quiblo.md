@@ -45,8 +45,8 @@ rather than ticked off.
 | #005 Movies missing info | 2.3 | **Fixed** — verified on the emulator |
 | #006 Movies missing history row | 2.4 | **Built**, not yet seen with real history |
 | #007 Series missing everything Movies has | 2.3 | **Fixed** |
-| #008 Screen wobble while scrolling | 1.3 | **Open — diagnosis was wrong**, see below |
-| #009 The player is broken | 1.5 | **Half fixed** — see below |
+| #008 Screen wobble while scrolling | 1.3 | **Fixed** — see below |
+| #009 The player is broken | 1.5 | **Fixed** — architecture and playback lifecycle |
 | #010 App frozen (mobile) | 1.1 | **Fixed**, pending on-device confirmation |
 
 ### #004 — done, and what it dragged out with it
@@ -91,7 +91,28 @@ is correctly empty and its filled state — artwork, progress bar, the season an
 label — is untested. Watch a few minutes of anything and it should appear at the top of
 Movies and Series.
 
-### #008 — the diagnosis in this plan was wrong
+### #008 — solved, after two wrong answers
+
+The first explanation in this plan (a row growing when its guide arrives) was disproven by
+arithmetic: a fixed 40dp logo dominates the row height. The second (the list needing content
+padding) was shipped as a candidate and did not work either.
+
+The video settled it. Measuring the recording in horizontal bands showed the tab bar
+perfectly still while the whole content area jumped together by three or four dp, flipping
+sign dozens of times a second — an oscillation rather than a scroll, and ours rather than
+camera shake, because a camera moves the chrome too.
+
+**The cause is a feedback loop.** A focused poster is scaled by a graphics layer, which draws
+past its layout bounds without changing them. The drawing spills outside the row, the list
+scrolls to bring the focused item fully into view, that changes what is on screen, and the
+correction runs again. The first row never wobbled because it is already visible and needs no
+scroll — exactly the pattern reported.
+
+Padding the row or the list could not fix it, because the overflow is relative to the *item*.
+Each poster now reserves the room it grows into, so its drawing never leaves its own bounds
+and there is nothing left to chase.
+
+### #008 — superseded notes
 
 §1.3 claimed a Live row grows taller when its guide arrives, relaying out the list. It does
 not. `ChannelLogo` is a fixed 64x40 box, so the row is `max(24, 40, 24, …) + 20 = 60dp`

@@ -26,9 +26,14 @@ import dev.quiblo.core.media.PlaybackError
  *
  * AC-PLAY-05 requires a clear error rather than a hang, and never a raw engine
  * exception. The wording lives here so it stays translatable (AC-NFR-08).
+ *
+ * Public rather than `internal` because both frontends need it and there is only one set
+ * of words. The television screen was written without it, which is the whole of bug #011:
+ * a viewer with a dead stream was told nothing, on the one screen where the reason matters
+ * most. A second copy of these sentences would only mean a second thing to translate.
  */
 @StringRes
-internal fun PlaybackError?.messageRes(): Int = when (this) {
+fun PlaybackError?.messageRes(): Int = when (this) {
     PlaybackError.NETWORK -> R.string.player_error_network
     PlaybackError.UNREACHABLE -> R.string.player_error_unreachable
     PlaybackError.TIMEOUT -> R.string.player_error_timeout

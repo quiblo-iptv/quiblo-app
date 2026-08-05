@@ -115,6 +115,31 @@ class TvPlayerKeyMapTest {
         assertEquals(2, controlsShown)
     }
 
-    private fun press(key: Key, isSeekable: Boolean, canZap: Boolean) =
-        handleKey(key = key, isSeekable = isSeekable, canZap = canZap, actions = actions)
+    @Test
+    fun `a failed stream answers no key at all`() {
+        // Bug #011. The transport keys all mean something about playback, and there is no
+        // playback — so every one of them is left for the error screen's buttons, which
+        // are the only controls on that screen that do anything.
+        assertFalse(press(Key.DirectionCenter, isSeekable = true, canZap = false, hasFailed = true))
+        assertFalse(press(Key.DirectionDown, isSeekable = true, canZap = false, hasFailed = true))
+        assertFalse(press(Key.DirectionLeft, isSeekable = true, canZap = false, hasFailed = true))
+        assertFalse(press(Key.DirectionRight, isSeekable = true, canZap = false, hasFailed = true))
+        assertFalse(press(Key.DirectionUp, isSeekable = false, canZap = true, hasFailed = true))
+        assertFalse(press(Key.Menu, isSeekable = true, canZap = false, hasFailed = true))
+
+        assertEquals(0, playPauses)
+        assertEquals(0, controlsShown)
+        assertEquals(0, skipped)
+        assertEquals(0, zapped)
+        assertEquals(0, aspectCycles)
+    }
+
+    private fun press(key: Key, isSeekable: Boolean, canZap: Boolean, hasFailed: Boolean = false) =
+        handleKey(
+            key = key,
+            isSeekable = isSeekable,
+            canZap = canZap,
+            actions = actions,
+            hasFailed = hasFailed,
+        )
 }

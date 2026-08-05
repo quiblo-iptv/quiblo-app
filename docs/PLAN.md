@@ -1,6 +1,6 @@
 # Execution Plan — Quiblo v1.0
 
-**Repo:** `quiblo-tv/quiblo` · **Application ID:** `dev.quiblo.player` · **Namespace:** `dev.quiblo.*`
+**Repo:** `quiblo-iptv/quiblo-app` · **Application ID:** `dev.quiblo.player` · **Namespace:** `dev.quiblo.*`
 
 ---
 

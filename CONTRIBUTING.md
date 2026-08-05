@@ -51,7 +51,7 @@ Each of these is a deliberate decision, not an oversight. See `docs/FREEZE.md` Â
 - No Android Studio required â€” IntelliJ IDEA works, and so does the command line
 
 ```bash
-git clone https://github.com/quiblo-tv/quiblo.git
+git clone https://github.com/quiblo-iptv/quiblo-app.git
 cd quiblo
 ./gradlew build
 ```

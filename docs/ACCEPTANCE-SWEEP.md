@@ -296,10 +296,12 @@ the store. It is **not** the sweep: the emulator is x86_64 with desktop memory, 
 Haier is `armeabi-v7a` with 1.84 GB, and it has a different IME. No performance figure from
 it transfers, and neither does AC-TV-10.
 
-**Two items in `agile/001` remain open and are not criteria failures yet — they are
-undiagnosed.** #008 (a wobble while scrolling) had its stated cause disproven and needs
-watching on the device; the "slow and glitchy" half of #009 has no diagnosis at all. Both
-want an hour with the television before anything else is changed for them.
+**One item in `agile/001` remains undiagnosed.** The "slow and glitchy" half of #009 has no
+diagnosis at all and wants an hour with the television. #008 (a wobble while scrolling) is
+diagnosed and fixed: the focusable sat inside the animating focus scale, so a focused poster
+reported bounds that grew every frame and the vertical list chased them. It is pinned by
+`TvBrowseScrollStabilityTest`, which measures the catalogue's position frame by frame, and it
+still wants confirming on the device.
 
 **Continue watching has never been seen populated.** Nothing has been watched on the
 emulator, so the row is correctly empty and its filled state is untested.

@@ -145,18 +145,22 @@ fun TvPosterRows(
             )
         }
 
-        else -> LazyColumn(
-            modifier = modifier.fillMaxSize(),
-            // Each row reserves FOCUS_GROWTH above and below itself, so the spacing between
-            // rows is reduced by the same amount to keep the rhythm on screen unchanged.
-            // The gap a viewer sees is still about 28dp.
-            verticalArrangement = Arrangement.spacedBy(ROW_SPACING),
-        ) {
+        else -> TvCategoryList(
+            rows = rows,
+            ratings = state.ratings,
+            onVisible = viewModel::onPosterVisible,
+            // The position travels with the item rather than being searched for. It is
+            // indexed against the flat list so zapping walks every item on screen, not just
+            // the row the viewer happened to start in.
+            onItemClick = { item -> onPlay(state.items, item.flatIndex) },
+            modifier = modifier,
             // First, above the catalogue, because it is what a returning viewer came for.
             // Empty on Favourites and on Live, which the ViewModel decides — a channel is
             // not something anyone continues, and Favourites is a list built by hand.
-            if (state.history.isNotEmpty()) {
-                item(key = CONTINUE_ROW_KEY) {
+            continueWatching = if (state.history.isEmpty()) {
+                null
+            } else {
+                {
                     TvContinueWatchingRow(
                         entries = state.history,
                         posters = state.posters,
@@ -170,26 +174,54 @@ fun TvPosterRows(
                         },
                     )
                 }
-            }
+            },
+        )
+    }
+}
 
-            items(items = rows, key = { it.title }) { row ->
-                CategoryRow(
-                    category = row.title,
-                    items = row.items,
-                    ratings = state.ratings,
-                    onVisible = viewModel::onPosterVisible,
-                    // The position travels with the item rather than being searched for.
-                    // It is indexed against the flat list so zapping walks every item on
-                    // screen, not just the row the viewer happened to start in.
-                    onItemClick = { item -> onPlay(state.items, item.flatIndex) },
-                )
-            }
+/**
+ * The catalogue itself: the rows, and the continue-watching row above them.
+ *
+ * Split out from [TvPosterRows] so it can be driven from a test with rows handed to it
+ * directly. That matters more here than the usual argument for testable seams: #008 was a
+ * screen that would not hold still, four analyses of it were wrong, and the only way to
+ * settle such a thing is to measure the real composables rather than a copy of them that
+ * can quietly drift. `TvBrowseScrollStabilityTest` composes this function.
+ */
+@Composable
+internal fun TvCategoryList(
+    rows: List<TvCategoryRow>,
+    ratings: Map<String, Double>,
+    onVisible: (Channel) -> Unit,
+    onItemClick: (TvRowItem) -> Unit,
+    modifier: Modifier = Modifier,
+    continueWatching: (@Composable () -> Unit)? = null,
+) {
+    LazyColumn(
+        modifier = modifier.fillMaxSize(),
+        // Each row reserves FOCUS_GROWTH above and below itself, so the spacing between
+        // rows is reduced by the same amount to keep the rhythm on screen unchanged.
+        // The gap a viewer sees is still about 28dp.
+        verticalArrangement = Arrangement.spacedBy(ROW_SPACING),
+    ) {
+        if (continueWatching != null) {
+            item(key = CONTINUE_ROW_KEY) { continueWatching() }
+        }
+
+        items(items = rows, key = { it.title }) { row ->
+            CategoryRow(
+                category = row.title,
+                items = row.items,
+                ratings = ratings,
+                onVisible = onVisible,
+                onItemClick = onItemClick,
+            )
         }
     }
 }
 
 /** One category's worth of posters, ready to render. */
-private data class TvCategoryRow(val title: String, val items: List<TvRowItem>)
+internal data class TvCategoryRow(val title: String, val items: List<TvRowItem>)
 
 /**
  * A poster and where it sits in the flat list.
@@ -198,7 +230,7 @@ private data class TvCategoryRow(val title: String, val items: List<TvRowItem>)
  * of every item in the catalogue on each press — unnoticeable on a short list, and on a
  * large one a pause between pressing a film and anything happening.
  */
-private data class TvRowItem(val channel: Channel, val flatIndex: Int)
+internal data class TvRowItem(val channel: Channel, val flatIndex: Int)
 
 /**
  * Groups the catalogue into rows, recording each item's flat position as it goes.
@@ -297,23 +329,12 @@ private fun Poster(channel: Channel, rating: Double?, onClick: () -> Unit) {
     )
 
     /*
-     * The growth room belongs to the item, not to the row.
+     * Room for the focused poster to grow into. A `LazyRow` clips to its own bounds, so
+     * without this the top of a scaled card is cut off flat and the first card in a row is
+     * clipped at the left edge (#003).
      *
-     * This is the wobble, and it took a video to see it. Measuring the recording band by
-     * band showed the tab bar perfectly still at 0 while the whole content area jumped
-     * together by three or four dp, flipping sign dozens of times a second — an oscillation,
-     * not a scroll, and therefore ours rather than a shaky hand.
-     *
-     * The cause is a feedback loop. A focused poster is scaled by a graphics layer, which
-     * draws past the item's layout bounds without changing them. The scaled drawing spills
-     * outside the row, the list scrolls a little to bring the focused thing fully into view,
-     * that scroll changes what is on screen, and the correction runs again. Padding the row
-     * did not help because the overflow is relative to the item, not to the row's ends.
-     *
-     * Reserving the space *inside* each item fixes it at the source: the item is always
-     * wide and tall enough to contain itself at full scale, so the drawing never leaves its
-     * own bounds and there is nothing for bring-into-view to chase. It also keeps the first
-     * card in a row clear of the left edge, which is what the padding was added for.
+     * This padding is *not* what stopped the shake, though it was twice believed to be. The
+     * shake is the modifier order two lines below, and the note there says why.
      */
     Box(
         modifier = Modifier.padding(
@@ -324,11 +345,49 @@ private fun Poster(channel: Channel, rating: Double?, onClick: () -> Unit) {
         Column(
             modifier = Modifier
                 .width(POSTER_WIDTH)
+                /*
+                 * `clickable` before `graphicsLayer`, and the order is the whole of #008.
+                 *
+                 * A modifier chain applies outside-in, so anything to the right of
+                 * `graphicsLayer` sits inside that layer — and `clickable` used to, which put
+                 * the *focusable* node inside the animating scale. A focus node's bounds are
+                 * resolved through every layer between it and the scrollable above it, so for
+                 * the length of the scale animation this poster reported a rectangle that
+                 * grew a little every frame.
+                 *
+                 * The vertical list reads exactly that rectangle to decide whether the
+                 * focused thing is on screen. From the second row down the answer is "only
+                 * just", so it scrolls until the poster is flush with the bottom edge — and
+                 * flush is the one position where the next frame's growth immediately puts it
+                 * out of view again. Press right, and the whole catalogue twitches upward
+                 * while the new poster inflates. Hold the remote down and it does that on
+                 * every repeat. That is the wobble, and it is why the **first row never
+                 * shook**: a poster there fits with room to spare, so the list never scrolls
+                 * and there is no equilibrium to fall off.
+                 *
+                 * With the focusable outside the layer its bounds are a constant 150dp box
+                 * whatever the scale is doing. The poster still grows; nothing is asked to
+                 * chase it, and every poster in a row now reports the same rectangle as its
+                 * neighbours — so moving along a row gives the vertical list nothing to
+                 * react to at all.
+                 *
+                 * Measured, not reasoned: `TvBrowseScrollStabilityTest` walks the remote
+                 * along a row and reads the catalogue's position off every frame. Before this
+                 * line it moved 11px on the second row and 12px on the fourth while the first
+                 * stayed at zero, which is the asymmetry that was reported from the sofa.
+                 * After it, all three are flat.
+                 *
+                 * Note for anyone changing this tile: the resting position is still *flush*
+                 * with the viewport edge, which tolerates nothing. Anything that makes a
+                 * focused poster's measured bounds vary — a focus-dependent size, a border
+                 * that takes up layout, a label that grows a line — will start the loop
+                 * again. The test is what will tell you.
+                 */
+                .clickable(interactionSource = interactionSource, indication = null, onClick = onClick)
                 .graphicsLayer {
                     scaleX = scale
                     scaleY = scale
-                }
-                .clickable(interactionSource = interactionSource, indication = null, onClick = onClick),
+                },
         ) {
             Box(
                 modifier = Modifier
@@ -368,18 +427,13 @@ private fun Poster(channel: Channel, rating: Double?, onClick: () -> Unit) {
                 }
             }
 
-            // No marquee, and that is the fix for the shake rather than a simplification.
+            // No marquee. This was once thought to be the fix for the shake and it was not —
+            // the shake was the modifier order above, and the recording that seemed to
+            // implicate a marquee had truncated early, so its "idle" tail still had key
+            // presses in it.
             //
-            // A marquee never stops. Inside a lazy row it keeps the focused item
-            // invalidating for as long as it holds focus, and the row creeps sideways with
-            // it: a recording taken four seconds after the last key press still showed
-            // every poster in the row ghosted twice, offset horizontally. It reads as a
-            // shimmer that will not settle, and it is worst exactly where it was reported —
-            // moving left and right along a row, which restarts the animation on each new
-            // title.
-            //
-            // An ellipsis says the same thing and holds still. On a ten-foot display a
-            // title that never stops moving is harder to read than one politely truncated.
+            // It stays gone on its own merits: on a ten-foot display a title that never stops
+            // moving is harder to read than one politely truncated.
             Text(
                 text = channel.name,
                 color = Color.White.copy(alpha = if (isFocused) 1f else 0.7f),

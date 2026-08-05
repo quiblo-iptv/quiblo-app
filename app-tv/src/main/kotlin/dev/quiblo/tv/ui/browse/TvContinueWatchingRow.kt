@@ -122,14 +122,18 @@ private fun ContinueTile(entry: HistoryEntry, artworkUrl: String?, onClick: () -
         label = "continueScale",
     )
 
+    // `clickable` outside `graphicsLayer`, so this tile's focusable does not sit inside the
+    // animating scale and report a size that grows every frame. The reasoning is `Poster`'s
+    // and is written out at length there; the same fault was in this tile, and a continue
+    // row that shook while the catalogue below it held still would be its own bug.
     Column(
         modifier = Modifier
             .width(TILE_WIDTH)
+            .clickable(interactionSource = interactionSource, indication = null, onClick = onClick)
             .graphicsLayer {
                 scaleX = scale
                 scaleY = scale
-            }
-            .clickable(interactionSource = interactionSource, indication = null, onClick = onClick),
+            },
     ) {
         Box(
             modifier = Modifier

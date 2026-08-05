@@ -58,6 +58,14 @@ android {
         buildConfig = true
     }
 
+    testOptions {
+        unitTests {
+            // Robolectric renders the real Compose UI, which needs the module's resources
+            // and a working `android.*` implementation rather than stubbed methods.
+            isIncludeAndroidResources = true
+        }
+    }
+
     signingConfigs {
         if (hasReleaseSigning) {
             create("release") {
@@ -122,4 +130,15 @@ dependencies {
     implementation(libs.coil.network.okhttp)
 
     debugImplementation(libs.compose.ui.tooling)
+
+    // A screen that moves when it should be still cannot be caught by reading code — four
+    // confident diagnoses of #008 were wrong before one was measured. Robolectric drives the
+    // real composables frame by frame on the JVM, so the movement is a number in CI rather
+    // than something to be argued about. See `TvBrowseScrollStabilityTest`.
+    testImplementation(platform(libs.compose.bom))
+    testImplementation(libs.compose.ui.test.junit4)
+    testImplementation(libs.robolectric)
+    testImplementation(libs.androidx.test.junit)
+    testRuntimeOnly(libs.junit.vintage.engine)
+    debugImplementation(libs.compose.ui.test.manifest)
 }

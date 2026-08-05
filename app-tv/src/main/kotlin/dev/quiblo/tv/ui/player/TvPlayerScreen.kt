@@ -62,6 +62,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -72,13 +73,17 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import dev.quiblo.core.media.PlaybackError
 import dev.quiblo.core.media.PlaybackStatus
 import dev.quiblo.core.model.AspectRatioMode
 import dev.quiblo.core.model.videoScale
 import dev.quiblo.feature.player.PlayerViewModel
+import dev.quiblo.feature.player.messageRes
 import dev.quiblo.tv.R
+import dev.quiblo.tv.ui.detail.DetailButton
 import kotlinx.coroutines.delay
 import org.koin.androidx.compose.koinViewModel
+import dev.quiblo.feature.player.R as PlayerR
 
 /**
  * Playback, driven by a remote.
@@ -129,8 +134,12 @@ fun TvPlayerScreen(
         }
     }
 
-    // Immersive, and awake. Nobody touches a television for two hours, so without this the
-    // display timeout treats a viewer as an idle user and dims mid-film.
+    // Playback has failed and stopped trying. The status only becomes ERROR once the
+    // controller has exhausted its retries, so this is the point where there is nothing
+    // left to wait for.
+    val hasFailed = state.status == PlaybackStatus.ERROR
+
+    // Immersive.
     val view = LocalView.current
     DisposableEffect(view) {
         val window = (view.context as? android.app.Activity)?.window
@@ -139,12 +148,12 @@ fun TvPlayerScreen(
             hide(WindowInsetsCompat.Type.systemBars())
             systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
         }
-        window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         onDispose {
             insets?.show(WindowInsetsCompat.Type.systemBars())
-            window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         }
     }
+
+    KeepScreenAwake(enabled = !hasFailed)
 
     // Back closes the controls first and leaves playback second, so a viewer who opened the
     // controls by accident does not lose the stream getting rid of them (AC-TV-03).
@@ -189,6 +198,11 @@ fun TvPlayerScreen(
                 if (event.type != KeyEventType.KeyDown) return@onKeyEvent false
                 handleKey(
                     key = event.key,
+                    // Nothing is playing, so nothing the transport keys mean applies —
+                    // pausing a dead stream, seeking it, cycling its aspect ratio. Left
+                    // unhandled so the same presses reach the Try again and Back buttons
+                    // instead, which is the only thing a viewer can usefully do here.
+                    hasFailed = hasFailed,
                     isSeekable = state.isSeekable,
                     // Only a live channel has anything to zap to. On a film, up and
                     // channel-up used to jump to whatever film happened to sit next in the
@@ -217,25 +231,22 @@ fun TvPlayerScreen(
         )
 
         if (state.status == PlaybackStatus.BUFFERING) {
-            // TalkBack runs on Android TV too, and a spinner tells it nothing. Announced
-            // politely so it does not talk over whatever the user just navigated to.
-            val buffering = stringResource(R.string.tv_a11y_buffering)
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .semantics {
-                        liveRegion = LiveRegionMode.Polite
-                        contentDescription = buffering
-                    },
-                contentAlignment = Alignment.Center,
-            ) {
-                CircularProgressIndicator(color = Color.White)
-            }
+            Buffering(retryAttempt = state.retryAttempt)
+        }
+
+        if (hasFailed) {
+            PlaybackFailure(
+                error = state.error,
+                onRetry = viewModel::retry,
+                onBack = onBack,
+            )
         }
 
         zapNotice?.let { ZapNotice(name = it) }
 
-        if (controlsVisible) {
+        // Never over the error. The controls describe keys that do nothing once playback
+        // has failed, and they would sit on top of the only two that do.
+        if (controlsVisible && !hasFailed) {
             Controls(
                 title = state.item?.title.orEmpty(),
                 isPlaying = state.isPlaying,
@@ -303,64 +314,70 @@ internal fun handleKey(
     isSeekable: Boolean,
     canZap: Boolean,
     actions: KeyActions,
-): Boolean = when (key) {
-    Key.DirectionDown -> {
-        actions.showControls()
-        true
-    }
+    hasFailed: Boolean = false,
+): Boolean {
+    // A failed stream has no transport. Every key belongs to the error screen's buttons.
+    if (hasFailed) return false
 
-    Key.DirectionCenter, Key.Enter, Key.MediaPlayPause -> {
-        actions.playPause()
-        true
-    }
+    return when (key) {
+        Key.DirectionDown -> {
+            actions.showControls()
+            true
+        }
 
-    // Seeking is meaningless on a live stream, so the keys are left unhandled there rather
-    // than silently doing nothing — the same rule the phone app applies to its skip buttons.
-    Key.DirectionLeft, Key.MediaRewind -> if (isSeekable) {
-        actions.skip(-1)
-        actions.showControls()
-        true
-    } else {
-        false
-    }
+        Key.DirectionCenter, Key.Enter, Key.MediaPlayPause -> {
+            actions.playPause()
+            true
+        }
 
-    Key.DirectionRight, Key.MediaFastForward -> if (isSeekable) {
-        actions.skip(1)
-        actions.showControls()
-        true
-    } else {
-        false
-    }
+        // Seeking is meaningless on a live stream, so the keys are left unhandled there rather
+        // than silently doing nothing — the same rule the phone app applies to its skip buttons.
+        Key.DirectionLeft, Key.MediaRewind -> if (isSeekable) {
+            actions.skip(-1)
+            actions.showControls()
+            true
+        } else {
+            false
+        }
 
-    // Aspect ratio. The controls have always *announced* the current mode, and until now
-    // nothing could change it — a readout for a control that did not exist.
-    //
-    // Menu is the natural key and many remotes have it; the Haier's does not, so up doubles
-    // as the aspect key on a film, where it is otherwise dead because zapping is live-only.
-    // Every remote therefore has a way to reach it on both kinds of content.
-    Key.Menu, Key.Info -> {
-        actions.cycleAspect()
-        true
-    }
+        Key.DirectionRight, Key.MediaFastForward -> if (isSeekable) {
+            actions.skip(1)
+            actions.showControls()
+            true
+        } else {
+            false
+        }
 
-    // Up and down the channel list, which is what a television remote's channel keys and
-    // its D-pad up both mean to a viewer watching live.
-    Key.DirectionUp, Key.ChannelUp -> if (canZap) {
-        actions.zap(-1)
-        true
-    } else {
-        actions.cycleAspect()
-        true
-    }
+        // Aspect ratio. The controls have always *announced* the current mode, and until now
+        // nothing could change it — a readout for a control that did not exist.
+        //
+        // Menu is the natural key and many remotes have it; the Haier's does not, so up doubles
+        // as the aspect key on a film, where it is otherwise dead because zapping is live-only.
+        // Every remote therefore has a way to reach it on both kinds of content.
+        Key.Menu, Key.Info -> {
+            actions.cycleAspect()
+            true
+        }
 
-    Key.ChannelDown -> if (canZap) {
-        actions.zap(1)
-        true
-    } else {
-        false
-    }
+        // Up and down the channel list, which is what a television remote's channel keys and
+        // its D-pad up both mean to a viewer watching live.
+        Key.DirectionUp, Key.ChannelUp -> if (canZap) {
+            actions.zap(-1)
+            true
+        } else {
+            actions.cycleAspect()
+            true
+        }
 
-    else -> false
+        Key.ChannelDown -> if (canZap) {
+            actions.zap(1)
+            true
+        } else {
+            false
+        }
+
+        else -> false
+    }
 }
 
 @Composable
@@ -393,6 +410,127 @@ private fun VideoSurface(
 
     DisposableEffect(Unit) {
         onDispose { controller.detachSurface() }
+    }
+}
+
+/**
+ * Holds the display on, for as long as there is something to watch.
+ *
+ * Nobody touches a television for two hours, so without the flag the display timeout
+ * treats a viewer as an idle user and dims mid-film. It used to be held for the whole life
+ * of the player screen, which meant a dead stream held the panel on at full brightness, on
+ * a black frame, until somebody walked over to the remote. An error is not playback; the
+ * television is allowed to sleep through one.
+ */
+@Composable
+private fun KeepScreenAwake(enabled: Boolean) {
+    val view = LocalView.current
+    DisposableEffect(view, enabled) {
+        val window = (view.context as? android.app.Activity)?.window
+        if (enabled) {
+            window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        } else {
+            window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        }
+        onDispose { window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) }
+    }
+}
+
+/**
+ * Waiting — and, when the controller is retrying, waiting for what.
+ *
+ * A bare spinner cannot distinguish a stream that is loading slowly from one that is
+ * coming back from one that is already gone. The attempt count is the difference between
+ * a viewer waiting and a viewer wondering.
+ */
+@Composable
+private fun Buffering(retryAttempt: Int) {
+    val isReconnecting = retryAttempt > 0
+    val reconnecting = stringResource(PlayerR.string.player_reconnecting, retryAttempt)
+
+    // TalkBack runs on Android TV too, and a spinner tells it nothing. Announced politely
+    // so it does not talk over whatever the user just navigated to.
+    val announcement = if (isReconnecting) reconnecting else stringResource(R.string.tv_a11y_buffering)
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .semantics {
+                liveRegion = LiveRegionMode.Polite
+                contentDescription = announcement
+            },
+        contentAlignment = Alignment.Center,
+    ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            CircularProgressIndicator(color = Color.White)
+            if (isReconnecting) {
+                Text(
+                    text = reconnecting,
+                    color = Color.White,
+                    fontSize = 18.sp,
+                    modifier = Modifier.padding(top = 16.dp),
+                )
+            }
+        }
+    }
+}
+
+/**
+ * The stream is gone, and this says so.
+ *
+ * The one place on this screen with focusable controls, and deliberately so: everywhere
+ * else the remote drives playback directly, so a focus layer would only get in the way.
+ * Here there is no playback to drive, and two choices worth offering — which is exactly
+ * when buttons earn their place.
+ *
+ * Focus lands on Try again, so the common case is one press of OK. The wording is the
+ * phone's, unchanged: there is one set of reasons a stream can fail and one set of words
+ * for them ([messageRes]).
+ */
+@Composable
+private fun PlaybackFailure(
+    error: PlaybackError?,
+    onRetry: () -> Unit,
+    onBack: () -> Unit,
+) {
+    val retryFocus = remember { FocusRequester() }
+    LaunchedEffect(Unit) { retryFocus.requestFocus() }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            // Over the last decoded frame, which is otherwise still sitting there behind
+            // the message looking like something that might resume.
+            .background(Color.Black.copy(alpha = 0.85f))
+            .padding(48.dp),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Text(
+            text = stringResource(error.messageRes()),
+            color = Color.White,
+            fontSize = 26.sp,
+            fontWeight = FontWeight.SemiBold,
+            textAlign = TextAlign.Center,
+            // Assertive rather than polite: playback has stopped and will not resume on
+            // its own, so this is worth interrupting for.
+            modifier = Modifier.semantics { liveRegion = LiveRegionMode.Assertive },
+        )
+        Row(
+            modifier = Modifier.padding(top = 28.dp),
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            DetailButton(
+                label = stringResource(PlayerR.string.player_retry),
+                onClick = onRetry,
+                modifier = Modifier.focusRequester(retryFocus),
+                isPrimary = true,
+            )
+            DetailButton(
+                label = stringResource(PlayerR.string.player_back),
+                onClick = onBack,
+            )
+        }
     }
 }
 

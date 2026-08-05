@@ -7,14 +7,18 @@ recorded rather than fixed in it.
 
 ---
 
-| Bug | Platform | Description |
-| :---- | :---- | :---- |
-| #011 A failed stream shows nothing at all | TV | When playback fails on television the screen goes black and stays black. No message, no retry, no way forward except Back — which a viewer has no reason to believe will help. The phone build shows the reason and a Try again button. |
+| Bug | Platform | Status | Description |
+| :---- | :---- | :---- | :---- |
+| #011 A failed stream shows nothing at all | TV | **Fixed** | When playback fails on television the screen goes black and stays black. No message, no retry, no way forward except Back — which a viewer has no reason to believe will help. The phone build shows the reason and a Try again button. |
 
 ## #011 — A failed stream shows nothing at all
 
 **Severity: release blocker.** This is not a missing nicety; it is an acceptance criterion the
 television frontend does not meet.
+
+**Fixed 2026-08-05.** What was built is under "What 'fixed' means" below, all five points.
+Still to be confirmed on the Haier against a URL that genuinely fails — the code path is one
+a device run should exercise deliberately, because normal use never reaches it.
 
 ### What happens
 

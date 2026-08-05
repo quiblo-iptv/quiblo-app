@@ -144,6 +144,15 @@ data class PlaybackState(
      * rather than a matter of opinion.
      */
     val rebufferCount: Int = 0,
+    /**
+     * Milliseconds from [PlayerController.prepare] to the first playable frame, or zero
+     * until that happens.
+     *
+     * The zapping target is under half a second, and there was no way to tell whether it
+     * was met. Same purpose as [rebufferCount]: a number the sweep can check, not an
+     * impression.
+     */
+    val loadTimeMillis: Long = 0L,
     val audioTracks: List<TrackOption> = emptyList(),
     val textTracks: List<TrackOption> = emptyList(),
     /**

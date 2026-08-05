@@ -19,6 +19,7 @@
 package dev.quiblo.core.media
 
 import android.content.Context
+import android.os.SystemClock
 import android.view.SurfaceView
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
@@ -101,6 +102,14 @@ class Media3PlayerController(
      * same situation as a stream that died.
      */
     private var hasEverBeenReady = false
+
+    /**
+     * When the current item was handed to the engine.
+     *
+     * Uptime rather than wall clock, so a clock correction mid-load cannot produce a
+     * negative or absurd duration.
+     */
+    private var prepareStartedAtMillis = 0L
 
     private var settings = PlayerSettings()
 
@@ -212,6 +221,7 @@ class Media3PlayerController(
     override fun prepare(item: PlayableItem) {
         retryJob?.cancel()
         hasEverBeenReady = false
+        prepareStartedAtMillis = SystemClock.uptimeMillis()
         rebuildIfNeeded(EngineProfile(settings.bufferMode, item.isLive))
         _state.value = PlaybackState(status = PlaybackStatus.BUFFERING, item = item)
         startWatchdog()
@@ -388,9 +398,15 @@ class Media3PlayerController(
                 )
 
                 Player.STATE_READY -> {
+                    val firstReady = !hasEverBeenReady
                     hasEverBeenReady = true
                     watchdogJob?.cancel()
                     current.copy(
+                        loadTimeMillis = if (firstReady) {
+                            SystemClock.uptimeMillis() - prepareStartedAtMillis
+                        } else {
+                            current.loadTimeMillis
+                        },
                         status = if (player.playWhenReady) PlaybackStatus.PLAYING else PlaybackStatus.PAUSED,
                         // A live stream reports no duration, which tells the UI to hide the
                         // seek bar rather than render an unusable one (AC-PLAY-02).

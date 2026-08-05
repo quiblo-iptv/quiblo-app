@@ -45,7 +45,7 @@ rather than ticked off.
 | #005 Movies missing info | 2.3 | **Fixed** — verified on the emulator |
 | #006 Movies missing history row | 2.4 | **Built**, not yet seen with real history |
 | #007 Series missing everything Movies has | 2.3 | **Fixed** |
-| #008 Screen wobble while scrolling | 1.3 | **Fixed** — see below; wants a device run |
+| #008 Screen wobble while scrolling | 1.3 | **Fixed** — confirmed on the Haier |
 | #009 The player is broken | 1.5 | **Fixed** — architecture and playback lifecycle |
 | #010 App frozen (mobile) | 1.1 | **Fixed**, pending on-device confirmation |
 
@@ -94,8 +94,7 @@ Movies and Series.
 ## Round two — the TV QA pass (2026-08-05)
 
 Eleven faults were reported after running the television build on the Haier with the real
-account. Ten are fixed and verified on the device; the shake is fixed and measured, and is
-the one thing still wanting a look on the television.
+account. All eleven are fixed and verified on the device; the shake was the last of them.
 
 **Three root causes explained nine of them, and all three are the same species — something
 outliving or overflowing what was meant to contain it.**
@@ -159,5 +158,31 @@ recording that seemed to implicate it had truncated early, so its "idle" tail st
 key presses. Check frames divided by frame rate against the duration you asked for before
 concluding anything from a recording on this television.
 
-**Still to confirm on the Haier.** The mechanism is measured and the geometry in the harness
-matches the panel, but a JVM test is not a television.
+**Confirmed on the Haier, 2026-08-06.** The build was installed on the television and the
+fourth row of Movies was driven left and right by remote while the screen was recorded. Frames
+were scaled to 960 wide — the panel is 960dp wide, so one pixel is one dp — and each band was
+aligned against the previous frame by brute force.
+
+| Band | Should | Horizontal | **Vertical** |
+| :---- | :---- | :---- | :---- |
+| Tab bar | hold still | 0 of 64 frames | **0dp** |
+| Labels of the row above | hold still | 0 of 64 | **0dp** |
+| The focused row's own title | hold still | 0 of 64 | **0dp** |
+| The next row's title | hold still | 0 of 64 | **0dp** |
+| The focused row's posters | scroll | 44 of 64, up to 75dp | **0dp** |
+
+The row title is the one that settles it: it sits in the same list item as the posters, so a
+vertical scroll would carry it along. It did not move on any frame. Each band reports its own
+contrast (23 to 69) so that a zero can be told apart from a match against blank space.
+
+Stronger still, and free: **after a burst of presses the screen did not change a single pixel
+for 4.90 seconds.** `screenrecord` encodes a frame only when something changes, so a wobble of
+a few dp would have written some three hundred frames into that window. It wrote none.
+
+**The recording trap is now understood rather than worked around.** `screenrecord` on this
+television is frame-capped, not time-capped: it stops after roughly a hundred *encoded* frames
+whatever `--time-limit` says, and it encodes only on change — so the more the screen moves, the
+shorter the clip. Twelve presses gave 5.7s, sixteen gave 3.8s, five gave 8.0s. That, and not
+"it stops at the last input", is why an idle tail kept arriving with key presses still in it.
+Use few presses and long waits, and put the window you care about **between** two bursts of
+motion rather than at the end, where truncation can eat it.

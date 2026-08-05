@@ -298,10 +298,11 @@ it transfers, and neither does AC-TV-10.
 
 **One item in `agile/001` remains undiagnosed.** The "slow and glitchy" half of #009 has no
 diagnosis at all and wants an hour with the television. #008 (a wobble while scrolling) is
-diagnosed and fixed: the focusable sat inside the animating focus scale, so a focused poster
-reported bounds that grew every frame and the vertical list chased them. It is pinned by
+closed: the focusable sat inside the animating focus scale, so a focused poster reported bounds
+that grew every frame and the vertical list chased them. It is pinned by
 `TvBrowseScrollStabilityTest`, which measures the catalogue's position frame by frame, and it
-still wants confirming on the device.
+was confirmed on the Haier on 2026-08-06 — every band that should hold still measured 0dp of
+movement on every frame while the row scrolled underneath it.
 
 **Continue watching has never been seen populated.** Nothing has been watched on the
 emulator, so the row is correctly empty and its filled state is untested.

@@ -29,6 +29,7 @@ import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -37,6 +38,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -138,147 +140,158 @@ private fun Loaded(
     onPlayEpisode: (Episode, Long?) -> Unit,
     onToggleFavorite: () -> Unit,
 ) {
-    // Seasons are picked, episodes are walked. A panel can return thirty seasons and a
-    // season can hold a hundred episodes, so a single flat list would put the remote a very
-    // long way from anything.
     var selectedSeason by remember(state.details.seriesId) { mutableIntStateOf(0) }
     val seasons = state.details.seasons
     val episodes = seasons.getOrNull(selectedSeason)?.episodes.orEmpty()
 
-    val episodeFocus = remember { FocusRequester() }
-    LaunchedEffect(state.details.seriesId) { runCatching { episodeFocus.requestFocus() } }
+    val firstAction = remember { FocusRequester() }
+    LaunchedEffect(state.details.seriesId) { runCatching { firstAction.requestFocus() } }
 
-    Column(modifier = Modifier.fillMaxSize()) {
-        // Everything a film's screen shows, because #007 asks for exactly that: a series
-        // was missing the information, the score and the history a film had.
-        Row(horizontalArrangement = Arrangement.spacedBy(DETAIL_COLUMN_GAP)) {
-            DetailArtwork(
-                url = state.channel.logoUrl?.takeIf { it.isNotBlank() }
-                    ?: state.details.coverUrl
-                    ?: state.metadata?.posterUrl,
-            )
-
-            Column(modifier = Modifier.fillMaxWidth()) {
-                DetailTitle(state.details.title)
-
-                DetailFacts(
-                    rating = state.metadata?.rating,
-                    ageRating = state.metadata?.ageRating,
-                    genres = state.metadata.genresOrEmpty(),
-                    extra = pluralSeasons(seasons.size),
+    /*
+     * The whole screen is one scrolling list, header included.
+     *
+     * It used to be a fixed header above a list that got whatever height was left. On this
+     * hardware that is close to nothing: the panel is 960x540dp, so after overscan there are
+     * 444dp to spend, and the cover, title, plot and actions consumed nearly all of it. The
+     * episode list was a sliver, and the season picker sat below the fold with no way to
+     * reach it, so a series with more than one season could not be navigated at all.
+     *
+     * As one list, every part is an item the remote walks through in order: actions, then
+     * seasons, then episodes. Nothing can be pushed out of reach, because reaching something
+     * is now just scrolling to it.
+     */
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+        contentPadding = PaddingValues(bottom = 24.dp),
+    ) {
+        item(key = "header") {
+            Row(horizontalArrangement = Arrangement.spacedBy(DETAIL_COLUMN_GAP)) {
+                DetailArtwork(
+                    url = state.channel.logoUrl?.takeIf { it.isNotBlank() }
+                        ?: state.details.coverUrl
+                        ?: state.metadata?.posterUrl,
                 )
 
-                DetailOverview(
-                    overview = state.details.overview?.takeIf { it.isNotBlank() }
-                        ?: state.metadata?.overview,
-                    // False, and not `metadata == null`. The panel's own details are
-                    // already loaded by the time this composes, and the metadata service is
-                    // only asked at all when a key is configured — so "no metadata" is the
-                    // permanent answer for most users, and a spinner against it would never
-                    // resolve. `SeriesDetailViewModel` exposes no in-flight flag to do
-                    // better with; when it does, this is the line to change.
-                    isEnriching = false,
-                    author = state.metadata?.author,
-                    authorLabel = state.metadata?.authorLabel?.name
-                        ?.lowercase()?.replaceFirstChar(Char::uppercase),
-                    cast = state.metadata?.topCast.orEmpty(),
-                )
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    DetailTitle(state.details.title)
 
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    modifier = Modifier
-                        .padding(top = 20.dp)
-                        .focusGroup(),
-                ) {
-                    // Continue where the viewer left off, which for a series means the
-                    // episode last touched rather than the furthest through.
-                    state.resumeEpisode?.let { episode ->
-                        DetailButton(
-                            label = stringResource(
-                                R.string.tv_series_resume,
-                                episode.seasonNumber,
-                                episode.episodeNumber,
-                            ),
-                            onClick = { onPlayEpisode(episode, state.resumePositionMillis) },
-                            isPrimary = true,
-                        )
-                    }
+                    DetailFacts(
+                        rating = state.metadata?.rating,
+                        ageRating = state.metadata?.ageRating,
+                        genres = state.metadata.genresOrEmpty(),
+                        extra = pluralSeasons(seasons.size),
+                    )
 
-                    state.firstEpisode?.let { first ->
-                        DetailButton(
-                            label = stringResource(
-                                if (state.resumeEpisode == null) {
-                                    R.string.tv_detail_play
+                    DetailOverview(
+                        overview = state.details.overview?.takeIf { it.isNotBlank() }
+                            ?: state.metadata?.overview,
+                        // False rather than a null check on metadata: the panel details are
+                        // already loaded, and the metadata service is only asked when a key
+                        // is configured, so "no metadata" is the permanent answer for most
+                        // users and a spinner against it would never resolve.
+                        isEnriching = false,
+                        author = state.metadata?.author,
+                        authorLabel = state.metadata?.authorLabel?.name
+                            ?.lowercase()?.replaceFirstChar(Char::uppercase),
+                        cast = state.metadata?.topCast.orEmpty(),
+                    )
+
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        modifier = Modifier
+                            .padding(top = 14.dp)
+                            .focusGroup(),
+                    ) {
+                        state.resumeEpisode?.let { episode ->
+                            DetailButton(
+                                label = stringResource(
+                                    R.string.tv_series_resume,
+                                    episode.seasonNumber,
+                                    episode.episodeNumber,
+                                ),
+                                onClick = { onPlayEpisode(episode, state.resumePositionMillis) },
+                                isPrimary = true,
+                                modifier = Modifier.focusRequester(firstAction),
+                            )
+                        }
+
+                        state.firstEpisode?.let { first ->
+                            DetailButton(
+                                label = stringResource(
+                                    if (state.resumeEpisode == null) {
+                                        R.string.tv_detail_play
+                                    } else {
+                                        R.string.tv_detail_from_start
+                                    },
+                                ),
+                                onClick = { onPlayEpisode(first, null) },
+                                isPrimary = state.resumeEpisode == null,
+                                modifier = if (state.resumeEpisode == null) {
+                                    Modifier.focusRequester(firstAction)
                                 } else {
-                                    R.string.tv_detail_from_start
+                                    Modifier
+                                },
+                            )
+                        }
+
+                        DetailButton(
+                            label = stringResource(
+                                if (state.isFavorite) {
+                                    R.string.tv_detail_unfavourite
+                                } else {
+                                    R.string.tv_detail_favourite
                                 },
                             ),
-                            onClick = { onPlayEpisode(first, null) },
-                            isPrimary = state.resumeEpisode == null,
+                            onClick = onToggleFavorite,
                         )
                     }
-
-                    DetailButton(
-                        label = stringResource(
-                            if (state.isFavorite) {
-                                R.string.tv_detail_unfavourite
-                            } else {
-                                R.string.tv_detail_favourite
-                            },
-                        ),
-                        onClick = onToggleFavorite,
-                    )
                 }
             }
         }
 
         if (seasons.isEmpty()) {
-            Centered {
+            item(key = "empty") {
                 Text(
                     text = stringResource(R.string.tv_series_no_episodes),
                     color = Color.White.copy(alpha = 0.65f),
-                    style = MaterialTheme.typography.headlineSmall,
+                    style = MaterialTheme.typography.titleMedium,
+                    modifier = Modifier.padding(top = 24.dp),
                 )
             }
-            return@Column
+            return@LazyColumn
         }
 
         if (seasons.size > 1) {
-            LazyRow(
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-                modifier = Modifier.padding(bottom = 16.dp),
-            ) {
-                items(items = seasons, key = { it.seasonNumber }) { season ->
-                    SeasonChip(
-                        label = season.name.ifBlank {
-                            stringResource(R.string.tv_series_season, season.seasonNumber)
-                        },
-                        isSelected = seasons.indexOf(season) == selectedSeason,
-                        onClick = { selectedSeason = seasons.indexOf(season) },
-                    )
+            item(key = "seasons") {
+                LazyRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.padding(top = 6.dp),
+                ) {
+                    itemsIndexed(
+                        items = seasons,
+                        key = { _, season -> season.seasonNumber },
+                    ) { index, season ->
+                        SeasonChip(
+                            label = season.name.ifBlank {
+                                stringResource(R.string.tv_series_season, season.seasonNumber)
+                            },
+                            isSelected = index == selectedSeason,
+                            onClick = { selectedSeason = index },
+                        )
+                    }
                 }
             }
         }
 
-        LazyColumn(
-            verticalArrangement = Arrangement.spacedBy(4.dp),
-            modifier = Modifier
-                .padding(top = 20.dp)
-                .fillMaxSize()
-                .focusRequester(episodeFocus)
-                .focusGroup(),
-        ) {
-            items(items = episodes, key = { it.id }) { episode ->
-                val isResume = episode.id == state.resumeEpisode?.id
-                EpisodeRow(
-                    episode = episode,
-                    // Only the episode actually left part-way through resumes. Every other
-                    // one starts at the beginning, which is what pressing it means.
-                    onClick = {
-                        onPlayEpisode(episode, state.resumePositionMillis.takeIf { isResume })
-                    },
-                )
-            }
+        items(items = episodes, key = { it.id }) { episode ->
+            val isResume = episode.id == state.resumeEpisode?.id
+            EpisodeRow(
+                episode = episode,
+                onClick = {
+                    onPlayEpisode(episode, state.resumePositionMillis.takeIf { isResume })
+                },
+            )
         }
     }
 }

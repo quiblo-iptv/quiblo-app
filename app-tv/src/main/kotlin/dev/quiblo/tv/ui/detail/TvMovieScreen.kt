@@ -26,6 +26,8 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -107,81 +109,87 @@ private fun Loaded(
     val firstAction = remember { FocusRequester() }
     LaunchedEffect(state.channel.id) { runCatching { firstAction.requestFocus() } }
 
-    Row(
-        modifier = modifier.fillMaxSize(),
-        horizontalArrangement = Arrangement.spacedBy(DETAIL_COLUMN_GAP),
+    // Scrolls, for the same reason the series screen does: 444dp of usable height is not
+    // enough to guarantee a cover, a plot and a row of actions all fit. A film has no
+    // episode list, so this is a single column rather than a lazy one — but it must still
+    // be reachable when a panel supplies a long description.
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState()),
     ) {
-        // The provider's own artwork first, and the metadata service's only where there is
-        // none. A panel's cover is the cover for the thing it is serving.
-        DetailArtwork(
-            url = state.channel.logoUrl?.takeIf { it.isNotBlank() }
-                ?: state.details?.coverUrl
-                ?: state.metadata?.posterUrl,
-        )
-
-        Column(modifier = Modifier.fillMaxWidth()) {
-            DetailTitle(state.details?.title ?: state.channel.name)
-
-            DetailFacts(
-                rating = state.metadata?.rating,
-                ageRating = state.metadata?.ageRating,
-                genres = state.metadata.genresOrEmpty()
-                    .ifEmpty { listOfNotNull(state.details?.genre?.takeIf { it.isNotBlank() }) },
-                extra = state.details?.releaseDate?.takeIf { it.isNotBlank() },
+        Row(horizontalArrangement = Arrangement.spacedBy(DETAIL_COLUMN_GAP)) {
+            // The provider own artwork first, and the metadata service only where there is
+            // none. A panel cover is the cover for the thing it is serving.
+            DetailArtwork(
+                url = state.channel.logoUrl?.takeIf { it.isNotBlank() }
+                    ?: state.details?.coverUrl
+                    ?: state.metadata?.posterUrl,
             )
 
-            DetailOverview(
-                // The panel's own description wins: it describes the thing being served,
-                // where the metadata service describes whatever title matched the name.
-                overview = state.details?.overview?.takeIf { it.isNotBlank() }
-                    ?: state.metadata?.overview,
-                isEnriching = state.isEnriching,
-                author = state.metadata?.author,
-                authorLabel = state.metadata?.authorLabel?.name
-                    ?.lowercase()?.replaceFirstChar(Char::uppercase),
-                cast = state.metadata?.topCast.orEmpty(),
-            )
+            Column(modifier = Modifier.fillMaxWidth()) {
+                DetailTitle(state.details?.title ?: state.channel.name)
 
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                modifier = Modifier
-                    .padding(top = 24.dp)
-                    .focusGroup(),
-            ) {
-                // Resume first when there is one, because it is what a returning viewer
-                // came for. "Start from the beginning" stays available beside it rather
-                // than being buried — a viewer who wants to rewatch should not have to
-                // resume and then seek backwards.
-                if (state.canResume) {
+                DetailFacts(
+                    rating = state.metadata?.rating,
+                    ageRating = state.metadata?.ageRating,
+                    genres = state.metadata.genresOrEmpty()
+                        .ifEmpty { listOfNotNull(state.details?.genre?.takeIf { it.isNotBlank() }) },
+                    extra = state.details?.releaseDate?.takeIf { it.isNotBlank() },
+                )
+
+                DetailOverview(
+                    // The panel own description wins: it describes the thing being served,
+                    // where the metadata service describes whatever title matched the name.
+                    overview = state.details?.overview?.takeIf { it.isNotBlank() }
+                        ?: state.metadata?.overview,
+                    isEnriching = state.isEnriching,
+                    author = state.metadata?.author,
+                    authorLabel = state.metadata?.authorLabel?.name
+                        ?.lowercase()?.replaceFirstChar(Char::uppercase),
+                    cast = state.metadata?.topCast.orEmpty(),
+                )
+
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    modifier = Modifier
+                        .padding(top = 14.dp)
+                        .focusGroup(),
+                ) {
+                    // Resume first when there is one, because it is what a returning viewer
+                    // came for. Start from the beginning stays beside it rather than being
+                    // buried: rewatching should not mean resuming and then seeking back.
+                    if (state.canResume) {
+                        DetailButton(
+                            label = stringResource(R.string.tv_detail_resume),
+                            onClick = { onPlay(state.resumePositionMillis) },
+                            isPrimary = true,
+                            modifier = Modifier.focusRequester(firstAction),
+                        )
+                        DetailButton(
+                            label = stringResource(R.string.tv_detail_from_start),
+                            onClick = { onPlay(0L) },
+                        )
+                    } else {
+                        DetailButton(
+                            label = stringResource(R.string.tv_detail_play),
+                            onClick = { onPlay(null) },
+                            isPrimary = true,
+                            modifier = Modifier.focusRequester(firstAction),
+                        )
+                    }
+
                     DetailButton(
-                        label = stringResource(R.string.tv_detail_resume),
-                        onClick = { onPlay(state.resumePositionMillis) },
-                        isPrimary = true,
-                        modifier = Modifier.focusRequester(firstAction),
-                    )
-                    DetailButton(
-                        label = stringResource(R.string.tv_detail_from_start),
-                        onClick = { onPlay(0L) },
-                    )
-                } else {
-                    DetailButton(
-                        label = stringResource(R.string.tv_detail_play),
-                        onClick = { onPlay(null) },
-                        isPrimary = true,
-                        modifier = Modifier.focusRequester(firstAction),
+                        label = stringResource(
+                            if (state.isFavorite) {
+                                R.string.tv_detail_unfavourite
+                            } else {
+                                R.string.tv_detail_favourite
+                            },
+                        ),
+                        onClick = onToggleFavorite,
                     )
                 }
-
-                DetailButton(
-                    label = stringResource(
-                        if (state.isFavorite) {
-                            R.string.tv_detail_unfavourite
-                        } else {
-                            R.string.tv_detail_favourite
-                        },
-                    ),
-                    onClick = onToggleFavorite,
-                )
             }
         }
     }

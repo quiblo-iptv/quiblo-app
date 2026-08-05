@@ -150,10 +150,21 @@ fun TvPosterRows(
 
         else -> LazyColumn(
             modifier = modifier.fillMaxSize(),
-            // Each row now reserves FOCUS_GROWTH above and below itself, so the spacing
-            // between rows is reduced by the same amount to keep the rhythm on screen
-            // unchanged. The gap a viewer sees is still about 28dp.
+            // Each row reserves FOCUS_GROWTH above and below itself, so the spacing between
+            // rows is reduced by the same amount to keep the rhythm on screen unchanged.
+            // The gap a viewer sees is still about 28dp.
             verticalArrangement = Arrangement.spacedBy(ROW_SPACING),
+            // Margin at both ends, so bringing a row into view never lands it flush against
+            // an edge.
+            //
+            // This is the standing suspect for the reported wobble, and the symptom fits:
+            // it is never seen on the first row, which is already fully visible and needs no
+            // scroll, only on rows with neighbours above and below — the ones that do. With
+            // no padding, focusing such a row scrolls it exactly to the edge, and the card
+            // that then scales up overflows that same edge, which can provoke a second
+            // corrective scroll. Reserving a margin means the row arrives with room to grow
+            // into and the second scroll has nothing to correct.
+            contentPadding = PaddingValues(vertical = ROW_BRING_INTO_VIEW_MARGIN),
         ) {
             // First, above the catalogue, because it is what a returning viewer came for.
             // Empty on Favourites and on Live, which the ViewModel decides — a channel is
@@ -413,6 +424,9 @@ private val FOCUS_GROWTH = 14.dp
  * Rounded up, and the row reserves it so the first and last cards are not clipped.
  */
 private val FOCUS_GROWTH_HORIZONTAL = 9.dp
+
+/** Breathing room at the top and bottom of the vertical list. See the LazyColumn above. */
+private val ROW_BRING_INTO_VIEW_MARGIN = 24.dp
 
 /** Clear space under a category title, over and above the growth reserved in the row. */
 private val TITLE_GAP = 16.dp

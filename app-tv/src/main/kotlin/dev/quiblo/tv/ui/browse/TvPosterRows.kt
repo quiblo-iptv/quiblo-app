@@ -29,7 +29,6 @@ import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -154,17 +153,6 @@ fun TvPosterRows(
             // rows is reduced by the same amount to keep the rhythm on screen unchanged.
             // The gap a viewer sees is still about 28dp.
             verticalArrangement = Arrangement.spacedBy(ROW_SPACING),
-            // Margin at both ends, so bringing a row into view never lands it flush against
-            // an edge.
-            //
-            // This is the standing suspect for the reported wobble, and the symptom fits:
-            // it is never seen on the first row, which is already fully visible and needs no
-            // scroll, only on rows with neighbours above and below — the ones that do. With
-            // no padding, focusing such a row scrolls it exactly to the edge, and the card
-            // that then scales up overflows that same edge, which can provoke a second
-            // corrective scroll. Reserving a margin means the row arrives with room to grow
-            // into and the second scroll has nothing to correct.
-            contentPadding = PaddingValues(vertical = ROW_BRING_INTO_VIEW_MARGIN),
         ) {
             // First, above the catalogue, because it is what a returning viewer came for.
             // Empty on Favourites and on Live, which the ViewModel decides — a channel is
@@ -271,16 +259,9 @@ private fun CategoryRow(
         // Room above and below for the focused poster to grow into. A `LazyRow` clips to its
         // own bounds, so without this the top of a scaled card is cut off flat — and the gap
         // under the title has to clear the same growth or the two touch (#003).
-        // Room on all four sides for the focused poster to grow into. Vertical was there;
-        // horizontal was not, so the *first* card in every row grew straight into the left
-        // edge of the content area and was clipped along its side (#8).
-        LazyRow(
-            horizontalArrangement = Arrangement.spacedBy(14.dp),
-            contentPadding = PaddingValues(
-                horizontal = FOCUS_GROWTH_HORIZONTAL,
-                vertical = FOCUS_GROWTH,
-            ),
-        ) {
+        // No content padding, and no spacing beyond what the items carry themselves. Both
+        // used to live here; both now live inside the poster. See `Poster`.
+        LazyRow {
             items(items = items, key = { it.channel.id }) { item ->
                 // Per poster on screen, not per category: a category row can hold hundreds
                 // of films, and only the handful the remote has actually reached are
@@ -318,67 +299,93 @@ private fun Poster(channel: Channel, rating: Double?, onClick: () -> Unit) {
         label = "posterScale",
     )
 
-    Column(
-        modifier = Modifier
-            .width(POSTER_WIDTH)
-            .graphicsLayer {
-                scaleX = scale
-                scaleY = scale
-            }
-            .clickable(interactionSource = interactionSource, indication = null, onClick = onClick),
+    /*
+     * The growth room belongs to the item, not to the row.
+     *
+     * This is the wobble, and it took a video to see it. Measuring the recording band by
+     * band showed the tab bar perfectly still at 0 while the whole content area jumped
+     * together by three or four dp, flipping sign dozens of times a second — an oscillation,
+     * not a scroll, and therefore ours rather than a shaky hand.
+     *
+     * The cause is a feedback loop. A focused poster is scaled by a graphics layer, which
+     * draws past the item's layout bounds without changing them. The scaled drawing spills
+     * outside the row, the list scrolls a little to bring the focused thing fully into view,
+     * that scroll changes what is on screen, and the correction runs again. Padding the row
+     * did not help because the overflow is relative to the item, not to the row's ends.
+     *
+     * Reserving the space *inside* each item fixes it at the source: the item is always
+     * wide and tall enough to contain itself at full scale, so the drawing never leaves its
+     * own bounds and there is nothing for bring-into-view to chase. It also keeps the first
+     * card in a row clear of the left edge, which is what the padding was added for.
+     */
+    Box(
+        modifier = Modifier.padding(
+            horizontal = FOCUS_GROWTH_HORIZONTAL,
+            vertical = FOCUS_GROWTH,
+        ),
     ) {
-        Box(
+        Column(
             modifier = Modifier
-                .fillMaxWidth()
-                .aspectRatio(POSTER_ASPECT_RATIO)
-                .clip(RoundedCornerShape(8.dp))
-                .border(
-                    width = if (isFocused) 3.dp else 0.dp,
-                    color = if (isFocused) Color.White else Color.Transparent,
-                    shape = RoundedCornerShape(8.dp),
-                ),
+                .width(POSTER_WIDTH)
+                .graphicsLayer {
+                    scaleX = scale
+                    scaleY = scale
+                }
+                .clickable(interactionSource = interactionSource, indication = null, onClick = onClick),
         ) {
-            if (channel.logoUrl.isNullOrBlank()) {
-                ArtworkPlaceholder()
-            } else {
-                SubcomposeAsyncImage(
-                    model = channel.logoUrl,
-                    contentDescription = null,
-                    contentScale = if (isLogo) ContentScale.Fit else ContentScale.Crop,
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(if (isLogo) LOGO_PADDING else 0.dp),
-                    loading = { ArtworkPlaceholder() },
-                    error = { ArtworkPlaceholder() },
-                )
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .aspectRatio(POSTER_ASPECT_RATIO)
+                    .clip(RoundedCornerShape(8.dp))
+                    .border(
+                        width = if (isFocused) 3.dp else 0.dp,
+                        color = if (isFocused) Color.White else Color.Transparent,
+                        shape = RoundedCornerShape(8.dp),
+                    ),
+            ) {
+                if (channel.logoUrl.isNullOrBlank()) {
+                    ArtworkPlaceholder()
+                } else {
+                    SubcomposeAsyncImage(
+                        model = channel.logoUrl,
+                        contentDescription = null,
+                        contentScale = if (isLogo) ContentScale.Fit else ContentScale.Crop,
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(if (isLogo) LOGO_PADDING else 0.dp),
+                        loading = { ArtworkPlaceholder() },
+                        error = { ArtworkPlaceholder() },
+                    )
+                }
+
+                // Top left, where the phone's card puts it, so the two apps agree about what a
+                // poster looks like.
+                rating?.let {
+                    RatingBadge(
+                        rating = it,
+                        modifier = Modifier
+                            .align(Alignment.TopStart)
+                            .padding(6.dp),
+                    )
+                }
             }
 
-            // Top left, where the phone's card puts it, so the two apps agree about what a
-            // poster looks like.
-            rating?.let {
-                RatingBadge(
-                    rating = it,
-                    modifier = Modifier
-                        .align(Alignment.TopStart)
-                        .padding(6.dp),
-                )
-            }
+            Text(
+                text = channel.name,
+                color = Color.White.copy(alpha = if (isFocused) 1f else 0.7f),
+                fontSize = 14.sp,
+                maxLines = 1,
+                softWrap = false,
+                // Only the focused poster scrolls its title. Every title scrolling at once would
+                // be unreadable, and marquee is a no-op when the text already fits.
+                overflow = if (isFocused) TextOverflow.Clip else TextOverflow.Ellipsis,
+                modifier = Modifier
+                    .padding(top = 8.dp)
+                    .fillMaxWidth()
+                    .then(if (isFocused) Modifier.basicMarquee() else Modifier),
+            )
         }
-
-        Text(
-            text = channel.name,
-            color = Color.White.copy(alpha = if (isFocused) 1f else 0.7f),
-            fontSize = 14.sp,
-            maxLines = 1,
-            softWrap = false,
-            // Only the focused poster scrolls its title. Every title scrolling at once would
-            // be unreadable, and marquee is a no-op when the text already fits.
-            overflow = if (isFocused) TextOverflow.Clip else TextOverflow.Ellipsis,
-            modifier = Modifier
-                .padding(top = 8.dp)
-                .fillMaxWidth()
-                .then(if (isFocused) Modifier.basicMarquee() else Modifier),
-        )
     }
 }
 
@@ -423,16 +430,13 @@ private val FOCUS_GROWTH = 14.dp
  * Half of what it gains in width: 150dp scaled by 1.1 is 15dp wider, so 7.5dp each side.
  * Rounded up, and the row reserves it so the first and last cards are not clipped.
  */
-private val FOCUS_GROWTH_HORIZONTAL = 9.dp
-
-/** Breathing room at the top and bottom of the vertical list. See the LazyColumn above. */
-private val ROW_BRING_INTO_VIEW_MARGIN = 24.dp
+private val FOCUS_GROWTH_HORIZONTAL = 10.dp
 
 /** Clear space under a category title, over and above the growth reserved in the row. */
 private val TITLE_GAP = 16.dp
 
-/** Between rows, net of the [FOCUS_GROWTH] each one now reserves on both sides. */
-private val ROW_SPACING = 14.dp
+/** Between rows, net of the [FOCUS_GROWTH] every poster reserves above and below itself. */
+private val ROW_SPACING = 4.dp
 
 /** Stable across catalogues, so the row is not rebuilt when the titles beneath it change. */
 private const val CONTINUE_ROW_KEY = "__continue__"

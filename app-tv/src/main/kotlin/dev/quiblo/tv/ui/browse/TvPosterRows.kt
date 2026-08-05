@@ -19,9 +19,7 @@
 package dev.quiblo.tv.ui.browse
 
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
-import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -284,7 +282,6 @@ private fun CategoryRow(
  * television the only way to know where you are is that one thing looks different from
  * everything else.
  */
-@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun Poster(channel: Channel, rating: Double?, onClick: () -> Unit) {
     // A live channel's artwork is a small wide logo, not a poster. Cropping one to 2:3
@@ -371,19 +368,27 @@ private fun Poster(channel: Channel, rating: Double?, onClick: () -> Unit) {
                 }
             }
 
+            // No marquee, and that is the fix for the shake rather than a simplification.
+            //
+            // A marquee never stops. Inside a lazy row it keeps the focused item
+            // invalidating for as long as it holds focus, and the row creeps sideways with
+            // it: a recording taken four seconds after the last key press still showed
+            // every poster in the row ghosted twice, offset horizontally. It reads as a
+            // shimmer that will not settle, and it is worst exactly where it was reported —
+            // moving left and right along a row, which restarts the animation on each new
+            // title.
+            //
+            // An ellipsis says the same thing and holds still. On a ten-foot display a
+            // title that never stops moving is harder to read than one politely truncated.
             Text(
                 text = channel.name,
                 color = Color.White.copy(alpha = if (isFocused) 1f else 0.7f),
                 fontSize = 14.sp,
                 maxLines = 1,
-                softWrap = false,
-                // Only the focused poster scrolls its title. Every title scrolling at once would
-                // be unreadable, and marquee is a no-op when the text already fits.
-                overflow = if (isFocused) TextOverflow.Clip else TextOverflow.Ellipsis,
+                overflow = TextOverflow.Ellipsis,
                 modifier = Modifier
                     .padding(top = 8.dp)
-                    .fillMaxWidth()
-                    .then(if (isFocused) Modifier.basicMarquee() else Modifier),
+                    .fillMaxWidth(),
             )
         }
     }

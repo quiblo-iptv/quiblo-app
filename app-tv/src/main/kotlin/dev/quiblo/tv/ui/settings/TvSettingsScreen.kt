@@ -29,15 +29,21 @@ import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -326,49 +332,120 @@ private fun CategoryEditRow(
     onToggleHidden: () -> Unit,
     onRename: (String?) -> Unit,
 ) {
+    // Editing is opened, not always present.
+    //
+    // Every category used to carry its own text field, so a source with two hundred
+    // categories was two hundred input boxes stacked down the screen — visually heavy, and
+    // slow to walk past with a remote when all you wanted was to hide one. The pencil is a
+    // single focusable that reveals the field when you press it.
+    var isEditing by remember(category.title) { mutableStateOf(false) }
     var draft by remember(category.title) { mutableStateOf(category.customName.orEmpty()) }
 
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 4.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(
-            text = category.title,
-            color = Color.White.copy(alpha = if (category.isHidden) 0.4f else 0.9f),
-            fontSize = 15.sp,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.width(LABEL_WIDTH),
-        )
-
-        TvTextField(
-            value = draft,
-            onValueChange = { draft = it },
-            label = stringResource(R.string.tv_settings_rename_field),
-            modifier = Modifier.width(RENAME_WIDTH),
-        )
-
+    Column(modifier = Modifier.padding(vertical = 2.dp)) {
         Row(
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-            modifier = Modifier.padding(start = 12.dp),
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            OptionChip(
-                label = stringResource(R.string.tv_settings_apply),
-                isSelected = false,
-                // A blank rename means "use the provider's name", which is also how the
-                // override row is removed rather than left saying nothing.
-                onClick = { onRename(draft.ifBlank { null }) },
-            )
-            OptionChip(
-                label = stringResource(
-                    if (category.isHidden) R.string.tv_settings_show else R.string.tv_settings_hide,
-                ),
-                isSelected = category.isHidden,
-                onClick = onToggleHidden,
-            )
+            Column(modifier = Modifier.width(LABEL_WIDTH)) {
+                Text(
+                    text = category.displayTitle,
+                    color = Color.White.copy(alpha = if (category.isHidden) 0.4f else 0.9f),
+                    fontSize = 16.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                // Only when a rename is in force, so the row stays one line for the many
+                // categories nobody has touched.
+                if (category.customName != null) {
+                    Text(
+                        text = category.title,
+                        color = Color.White.copy(alpha = 0.4f),
+                        fontSize = 12.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.width(COLUMN_GAP))
+
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                IconChip(
+                    icon = Icons.Filled.Edit,
+                    contentDescription = stringResource(R.string.tv_settings_rename_field),
+                    isActive = isEditing,
+                    onClick = { isEditing = !isEditing },
+                )
+                OptionChip(
+                    label = stringResource(
+                        if (category.isHidden) R.string.tv_settings_show else R.string.tv_settings_hide,
+                    ),
+                    isSelected = category.isHidden,
+                    onClick = onToggleHidden,
+                )
+            }
         }
+
+        if (isEditing) {
+            Row(
+                modifier = Modifier.padding(start = LABEL_WIDTH + COLUMN_GAP, top = 8.dp, bottom = 6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                TvTextField(
+                    value = draft,
+                    onValueChange = { draft = it },
+                    label = stringResource(R.string.tv_settings_rename_field),
+                    isLast = true,
+                    modifier = Modifier.width(RENAME_WIDTH),
+                )
+                OptionChip(
+                    label = stringResource(R.string.tv_settings_apply),
+                    isSelected = false,
+                    // A blank rename means "use the provider name", which is also how the
+                    // override row is removed rather than left saying nothing.
+                    onClick = {
+                        onRename(draft.ifBlank { null })
+                        isEditing = false
+                    },
+                )
+            }
+        }
+    }
+}
+
+/** A square control carrying an icon rather than a word. Same focus treatment as a chip. */
+@Composable
+private fun IconChip(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    contentDescription: String,
+    isActive: Boolean,
+    onClick: () -> Unit,
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isFocused by interactionSource.collectIsFocusedAsState()
+
+    Box(
+        modifier = Modifier
+            .size(38.dp)
+            .background(
+                color = if (isActive) Color.White.copy(alpha = 0.20f) else Color.Transparent,
+                shape = RoundedCornerShape(8.dp),
+            )
+            .border(
+                width = if (isFocused) 2.dp else 0.dp,
+                color = if (isFocused) Color.White else Color.Transparent,
+                shape = RoundedCornerShape(8.dp),
+            )
+            .clickable(interactionSource = interactionSource, indication = null, onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = contentDescription,
+            tint = Color.White.copy(alpha = if (isFocused || isActive) 1f else 0.6f),
+            modifier = Modifier.size(19.dp),
+        )
     }
 }
 
@@ -444,10 +521,11 @@ private fun backupMessage(state: BackupUiState): String? = when (state) {
 private fun SectionHeading(text: String) {
     Text(
         text = text.uppercase(),
-        color = Color.White.copy(alpha = 0.5f),
-        fontSize = 13.sp,
-        fontWeight = FontWeight.SemiBold,
-        modifier = Modifier.padding(top = 20.dp, bottom = 6.dp),
+        color = Color.White.copy(alpha = 0.45f),
+        fontSize = 12.sp,
+        fontWeight = FontWeight.Bold,
+        letterSpacing = 1.6.sp,
+        modifier = Modifier.padding(top = 26.dp, bottom = 10.dp),
     )
 }
 
@@ -471,20 +549,25 @@ private fun <T> OptionRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 6.dp),
-        verticalAlignment = Alignment.CenterVertically,
+            .padding(vertical = 10.dp),
+        // Top, not centre. A two-line description used to centre itself against the chips,
+        // so the chips landed beside the middle of the sentence and read as part of it.
+        verticalAlignment = Alignment.Top,
     ) {
         Column(modifier = Modifier.width(LABEL_WIDTH)) {
-            Text(text = label, color = Color.White, fontSize = 17.sp)
+            Text(text = label, color = Color.White, fontSize = 17.sp, lineHeight = 22.sp)
             description?.let {
                 Text(
                     text = it,
                     color = Color.White.copy(alpha = 0.55f),
                     fontSize = 13.sp,
-                    modifier = Modifier.padding(top = 2.dp),
+                    lineHeight = 18.sp,
+                    modifier = Modifier.padding(top = 3.dp),
                 )
             }
         }
+
+        Spacer(modifier = Modifier.width(COLUMN_GAP))
 
         Row(
             horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -526,7 +609,11 @@ private fun OptionChip(label: String, isSelected: Boolean, onClick: () -> Unit) 
     )
 }
 
-private val LABEL_WIDTH = 360.dp
+/** The names column. Wide enough for a two-line description without crowding it. */
+private val LABEL_WIDTH = 400.dp
+
+/** Air between the names and their controls. Without it the two columns read as one. */
+private val COLUMN_GAP = 40.dp
 private val FIELD_WIDTH = 460.dp
 private val RENAME_WIDTH = 320.dp
 private const val MBPS = 1_000_000

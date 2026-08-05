@@ -33,12 +33,17 @@ import org.koin.dsl.module
  * The controller is created per request rather than as a singleton: the player screen
  * owns its lifetime and releases it, so a decoder is never held while the user is merely
  * browsing (AC-PLAY-09).
+ *
+ * The `OkHttpClient` is the app's single instance, supplied by `:core:network`. Resolving
+ * it here rather than building one is the whole point: a second client would mean a second
+ * connection pool, and the player would be back to a handshake per segment.
  */
 val mediaModule: Module = module {
     factory<PlayerController> {
         Media3PlayerController(
             context = get<Context>(),
             scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate),
+            okHttpClient = get(),
         )
     }
 }

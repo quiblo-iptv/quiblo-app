@@ -23,6 +23,7 @@ import dev.quiblo.core.network.AndroidConnectivityChecker
 import dev.quiblo.core.network.ConnectivityChecker
 import dev.quiblo.core.network.HttpContentFetcher
 import dev.quiblo.core.network.createHttpClient
+import dev.quiblo.core.network.createOkHttpClient
 import org.koin.core.module.Module
 import org.koin.dsl.module
 
@@ -32,9 +33,14 @@ import org.koin.dsl.module
  * Ktor is constructed and kept here so it never reaches a consumer's compile classpath.
  * There is exactly one client, and it is only ever pointed at hosts the user configured
  * (AC-NFR-03).
+ *
+ * The `OkHttpClient` underneath it is the one exception, published on purpose: `:core:media`
+ * hands it to the player so streaming and API traffic share a connection pool instead of
+ * opening a socket per segment.
  */
 val networkModule: Module = module {
-    single { createHttpClient() }
+    single { createOkHttpClient() }
+    single { createHttpClient(get()) }
     single<ConnectivityChecker> { AndroidConnectivityChecker(get<Context>()) }
     single { HttpContentFetcher(get(), get()) }
 }

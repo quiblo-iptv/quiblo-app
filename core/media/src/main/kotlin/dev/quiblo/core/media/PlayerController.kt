@@ -136,6 +136,14 @@ data class PlaybackState(
     val isSeekable: Boolean = false,
     val error: PlaybackError? = null,
     val retryAttempt: Int = 0,
+    /**
+     * Stalls after playback first started, for the current item.
+     *
+     * Not shown to the user. It exists so "it stutters" can be checked against a number
+     * during the acceptance sweep, and so a regression in buffering behaviour is visible
+     * rather than a matter of opinion.
+     */
+    val rebufferCount: Int = 0,
     val audioTracks: List<TrackOption> = emptyList(),
     val textTracks: List<TrackOption> = emptyList(),
     /**

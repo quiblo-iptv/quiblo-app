@@ -30,10 +30,15 @@ import androidx.media3.common.TrackSelectionParameters
 import androidx.media3.common.Tracks
 import androidx.media3.common.VideoSize
 import androidx.media3.common.util.UnstableApi
+import androidx.media3.datasource.DataSource
+import androidx.media3.datasource.DefaultDataSource
+import androidx.media3.datasource.okhttp.OkHttpDataSource
 import androidx.media3.exoplayer.DefaultLoadControl
+import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.exoplayer.upstream.DefaultLoadErrorHandlingPolicy
+import androidx.media3.exoplayer.upstream.LoadErrorHandlingPolicy
 import dev.quiblo.core.model.BufferMode
 import dev.quiblo.core.model.MaxBitrateCap
 import dev.quiblo.core.model.PlayerSettings
@@ -44,6 +49,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import okhttp3.OkHttpClient
 
 /**
  * The Media3 implementation of [PlayerController].
@@ -61,9 +67,23 @@ import kotlinx.coroutines.launch
 class Media3PlayerController(
     context: Context,
     private val scope: CoroutineScope,
+    okHttpClient: OkHttpClient,
 ) : PlayerController {
 
     private val appContext = context.applicationContext
+
+    /**
+     * OkHttp for network reads, wrapped so local files still resolve.
+     *
+     * Media3 defaults to `DefaultHttpDataSource`, which is `HttpURLConnection` and holds no
+     * pool we control — every segment paid a fresh TCP and TLS handshake. The wrapper
+     * matters as much as the swap: a playlist the user imported from storage is a `file://`
+     * URI, and an HTTP-only factory would simply fail to open it.
+     */
+    private val dataSourceFactory: DataSource.Factory = DefaultDataSource.Factory(
+        appContext,
+        OkHttpDataSource.Factory(okHttpClient).setUserAgent(STREAM_USER_AGENT),
+    )
 
     private val _state = MutableStateFlow(PlaybackState())
     override val state: StateFlow<PlaybackState> = _state.asStateFlow()
@@ -85,37 +105,47 @@ class Media3PlayerController(
     private var settings = PlayerSettings()
 
     /**
-     * The buffer mode the live engine was built with.
+     * What the live engine was built with.
      *
-     * Tracked separately from [settings] because `LoadControl` is fixed at build time, so
-     * the two legitimately disagree between a settings change and the next [prepare].
+     * Tracked separately from [settings] and from the current item because both the
+     * `LoadControl` and the load-error policy are fixed when the engine is constructed, so
+     * the two legitimately disagree between a change and the next [prepare].
+     *
+     * Starts as live because that is what the app opens on; the first VOD item rebuilds.
      */
-    private var builtWithBufferMode = settings.bufferMode
+    private var builtWith = EngineProfile(settings.bufferMode, isLive = true)
 
     /** Kept so the surface can be rebound after the engine is rebuilt. */
     private var attachedSurface: SurfaceView? = null
 
-    private var player: ExoPlayer = buildPlayer(builtWithBufferMode)
+    private var player: ExoPlayer = buildPlayer(builtWith)
 
-    private fun buildPlayer(bufferMode: BufferMode): ExoPlayer = ExoPlayer.Builder(appContext)
+    private fun buildPlayer(profile: EngineProfile): ExoPlayer = ExoPlayer.Builder(
+        appContext,
+        // A failing hardware decoder is the single most common way playback dies on cheap
+        // TV boxes: a corrupt header, a stream the vendor's codec mis-handles, and the
+        // frame goes green or audio plays over a black screen. Fallback lets the engine
+        // try the next decoder that claims the format — in practice the platform software
+        // one — instead of surfacing an error the user can do nothing about.
+        DefaultRenderersFactory(appContext).setEnableDecoderFallback(true),
+    )
         .setMediaSourceFactory(
-            DefaultMediaSourceFactory(appContext).setLoadErrorHandlingPolicy(
-                // ExoPlayer's default policy retries a failed load several times, with its
-                // own backoff, before it ever calls onPlayerError. Stacked under our retry
-                // logic that pushed a dead URL far past the 15 second budget in AC-PLAY-05.
-                // One internal attempt; reconnection is our decision to make, not the
-                // engine's.
-                object : DefaultLoadErrorHandlingPolicy(ENGINE_LOAD_RETRIES) {},
-            ),
+            DefaultMediaSourceFactory(appContext)
+                .setDataSourceFactory(dataSourceFactory)
+                .setLoadErrorHandlingPolicy(loadErrorPolicy(profile.isLive)),
         )
         .setLoadControl(
             DefaultLoadControl.Builder()
                 .setBufferDurationsMs(
-                    bufferMode.minBufferMillis,
-                    bufferMode.maxBufferMillis,
-                    bufferMode.bufferForPlaybackMillis,
-                    bufferMode.bufferForReplayMillis,
+                    profile.bufferMode.minBufferMillis,
+                    profile.bufferMode.maxBufferMillis,
+                    profile.bufferMode.bufferForPlaybackMillis,
+                    profile.bufferMode.bufferForReplayMillis,
                 )
+                // Honour the durations above even when the byte thresholds disagree. A
+                // high-bitrate remux hits the size ceiling long before the time target,
+                // and the user picked a time.
+                .setPrioritizeTimeOverSizeThresholds(true)
                 .build(),
         )
         .build()
@@ -145,25 +175,44 @@ class Media3PlayerController(
     }
 
     /**
-     * Swaps in an engine built with the current buffer mode.
+     * How hard the engine tries before it hands us a load error.
+     *
+     * These are opposite problems and they were being given one answer.
+     *
+     * **Live** keeps the fail-fast count. AC-PLAY-05 caps a dead stream at 15 seconds, and
+     * the engine's default ladder stacked under our own retry logic blew that budget.
+     *
+     * **VOD** gets the engine's default ladder back. A film or an episode is one long read
+     * from one host, and a transient hiccup partway through is normal. Failing after a
+     * single attempt handed the error to [scheduleRetry], which restarts the whole media
+     * source — reopening the connection and rebuffering — for something the engine would
+     * have absorbed by retrying the same byte range. Because `STATE_READY` resets the
+     * attempt counter, that loop never escalated to an error and never stopped: it just
+     * stalled for a second or two, every few seconds, forever. That is the stutter.
+     */
+    private fun loadErrorPolicy(isLive: Boolean): LoadErrorHandlingPolicy =
+        if (isLive) DefaultLoadErrorHandlingPolicy(LIVE_ENGINE_LOAD_RETRIES) else DefaultLoadErrorHandlingPolicy()
+
+    /**
+     * Swaps in an engine built for [wanted].
      *
      * Only called from [prepare], where a rebuild is invisible: playback is about to
      * restart anyway. Doing it while something is playing would black the screen out.
      */
-    private fun rebuildForBufferModeIfNeeded() {
-        if (settings.bufferMode == builtWithBufferMode) return
+    private fun rebuildIfNeeded(wanted: EngineProfile) {
+        if (wanted == builtWith) return
 
         progressJob?.cancel()
         player.release()
-        player = buildPlayer(settings.bufferMode)
-        builtWithBufferMode = settings.bufferMode
+        player = buildPlayer(wanted)
+        builtWith = wanted
         attachedSurface?.let(player::setVideoSurfaceView)
     }
 
     override fun prepare(item: PlayableItem) {
         retryJob?.cancel()
         hasEverBeenReady = false
-        rebuildForBufferModeIfNeeded()
+        rebuildIfNeeded(EngineProfile(settings.bufferMode, item.isLive))
         _state.value = PlaybackState(status = PlaybackStatus.BUFFERING, item = item)
         startWatchdog()
 
@@ -331,7 +380,12 @@ class Media3PlayerController(
         override fun onPlaybackStateChanged(playbackState: Int) {
             val current = _state.value
             _state.value = when (playbackState) {
-                Player.STATE_BUFFERING -> current.copy(status = PlaybackStatus.BUFFERING)
+                // Buffering after the first frame is a stall the user sees. Counted so the
+                // acceptance sweep can measure smoothness instead of arguing about it.
+                Player.STATE_BUFFERING -> current.copy(
+                    status = PlaybackStatus.BUFFERING,
+                    rebufferCount = current.rebufferCount + if (hasEverBeenReady) 1 else 0,
+                )
 
                 Player.STATE_READY -> {
                     hasEverBeenReady = true
@@ -415,10 +469,19 @@ class Media3PlayerController(
 
     private companion object {
         /**
-         * Let the engine attempt a load once. Reconnection strategy is ours to decide,
-         * and stacking its ladder under ours blew the AC-PLAY-05 budget.
+         * Live only: let the engine attempt a load once. Reconnection strategy is ours to
+         * decide there, and stacking its ladder under ours blew the AC-PLAY-05 budget.
+         * VOD deliberately keeps the engine default — see [loadErrorPolicy].
          */
-        const val ENGINE_LOAD_RETRIES = 1
+        const val LIVE_ENGINE_LOAD_RETRIES = 1
+
+        /**
+         * Sent on stream requests, matching what the API client already sends. Some panels
+         * gate on a recognised player agent, and answering as two different clients on the
+         * same account invites exactly the attention we do not want. Carries no device
+         * identifier.
+         */
+        const val STREAM_USER_AGENT = "IPTVSmartersPlayer"
 
         /** AC-PLAY-08: the engine pauses and resumes us as focus moves. */
         const val HANDLE_AUDIO_FOCUS = true
@@ -431,6 +494,17 @@ class Media3PlayerController(
         const val INITIAL_LOAD_TIMEOUT_MILLIS = 12_000L
     }
 }
+
+/**
+ * The engine settings that can only be chosen when the player is constructed.
+ *
+ * Grouped into one value so there is a single thing to compare against, rather than a
+ * growing list of `builtWithX` fields that can drift apart.
+ */
+internal data class EngineProfile(
+    val bufferMode: BufferMode,
+    val isLive: Boolean,
+)
 
 /** Maps an engine exception to a typed error. No engine detail reaches the UI. */
 internal fun PlaybackException.toPlaybackError(): PlaybackError = when (errorCode) {

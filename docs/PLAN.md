@@ -14,7 +14,7 @@
 | Navigation | Navigation Compose, type-safe routes | |
 | DI | **Koin** | Lighter and faster to iterate than Hilt; no KAPT/KSP tax. Hilt is the alternative if you prefer compile-time safety. |
 | Async | Coroutines + Flow | |
-| HTTP | Ktor Client (OkHttp engine) | Same coroutine idiom throughout; Retrofit is equally valid |
+| HTTP | Ktor Client (OkHttp engine) | Same coroutine idiom throughout; Retrofit is equally valid. One `OkHttpClient` for the whole app — the player shares its connection pool, or it pays a handshake per segment |
 | JSON | kotlinx.serialization | Configure `isLenient` + `coerceInputValues` — panel APIs are inconsistent (AC-XT-06) |
 | DB | Room | |
 | Prefs | DataStore (Proto or Preferences) | |
@@ -36,7 +36,7 @@
 :core:common              — Result types, dispatchers, extensions
 :core:database            — Room entities, DAOs, migrations
 :core:datastore           — settings, encrypted credentials
-:core:network             — Ktor client, interceptors, error mapping
+:core:network             — Ktor client, the shared OkHttpClient, error mapping
 :core:media               — PlayerController interface + Media3 implementation
 :core:data                — repositories; the only layer features talk to
 

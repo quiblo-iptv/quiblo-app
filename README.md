@@ -14,11 +14,12 @@
 Quiblo plays Live TV, movies, and series from playlists **you** supply — an M3U/M3U8
 URL or file, or an Xtream Codes account. No ads, no accounts, no tracking, no backend.
 
-> **Status: release candidate.** Milestones M0–M6 are complete: sources, playback,
-> browse, favourites, Xtream, EPG, export/import, and release engineering. What remains
-> before v1.0.0 is the full acceptance sweep on physical devices
-> ([`docs/ACCEPTANCE.md`](docs/ACCEPTANCE.md)). See [`docs/PLAN.md`](docs/PLAN.md) for the
-> roadmap.
+> **Status: 0.2.0, in alpha.** Milestones M0–M6 are complete: sources, playback, browse,
+> favourites, Xtream, EPG, export/import, and release engineering. What stands between
+> this and v1.0.0 is the full acceptance sweep on physical devices
+> ([`docs/ACCEPTANCE.md`](docs/ACCEPTANCE.md)) — not a formality, since the bugs that have
+> mattered most were all found on hardware. See [`docs/PLAN.md`](docs/PLAN.md) for the
+> roadmap and [`agile/`](agile/) for what each round changed.
 
 ## Quiblo supplies no content
 

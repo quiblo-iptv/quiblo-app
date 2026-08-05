@@ -154,8 +154,12 @@ It is a release blocker: the television frontend does not meet AC-PLAY-05.
 | The stutter is fixed in reasoning only | A device run on the same episode, comparing rebuffer counts before and after |
 | Zap latency against the sub-500ms target | The new `loadTimeMillis`, read on hardware |
 | Search timing against AC-FAV-05 | A real playlist at twenty thousand rows |
-| ~~TV error UI~~ | **Done.** Reported as #011 and fixed; a device run on a dead URL still confirms it |
+| ~~TV error UI~~ | **Closed.** Reported as #011, fixed, and confirmed on the Haier |
 | Codec fallback | A box that actually fails to decode; it cannot be proven on a device that never had the problem |
+
+The first three no longer need a build putting on anything: 0.2.0 is installed on the Haier
+as of 2026-08-05, and `rebufferCount` and `loadTimeMillis` are in it. What they need now is
+somebody watching an episode and reading the numbers off.
 
 An FFmpeg software decoder — the rubric's full Pillar 6 — is a **separate decision**, not an
 omission. Media3's FFmpeg extension is not on Maven and has to be built from source, which

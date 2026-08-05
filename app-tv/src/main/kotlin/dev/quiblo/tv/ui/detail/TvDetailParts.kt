@@ -200,7 +200,7 @@ fun DetailButton(
                 shape = RoundedCornerShape(10.dp),
             )
             .clickable(interactionSource = interactionSource, indication = null, onClick = onClick)
-            .padding(horizontal = 24.dp, vertical = 12.dp),
+            .padding(horizontal = 18.dp, vertical = 9.dp),
         contentAlignment = Alignment.Center,
     ) {
         Text(
@@ -208,7 +208,7 @@ fun DetailButton(
             // Inverted while focused: a white fill needs dark text, and the focused control
             // has to be unmistakable from the other side of a room.
             color = if (isFocused) Color.Black else Color.White,
-            fontSize = 16.sp,
+            fontSize = 15.sp,
             fontWeight = if (isPrimary || isFocused) FontWeight.SemiBold else FontWeight.Normal,
             maxLines = 1,
         )
@@ -221,11 +221,11 @@ fun DetailTitle(title: String) {
     Text(
         text = title,
         color = Color.White,
-        fontSize = 30.sp,
+        fontSize = 26.sp,
         // Without an explicit line height the default is too tight for type this large and
         // the two lines overlap — visible immediately on any title long enough to wrap,
         // which on a panel's own naming is most of them.
-        lineHeight = 38.sp,
+        lineHeight = 33.sp,
         fontWeight = FontWeight.SemiBold,
         maxLines = 2,
         overflow = TextOverflow.Ellipsis,
@@ -250,6 +250,16 @@ fun TitleMetadata?.genresOrEmpty(): List<String> = this?.genres.orEmpty()
 /** The gap between the artwork and everything written beside it. */
 val DETAIL_COLUMN_GAP = 32.dp
 
-private val ARTWORK_WIDTH = 260.dp
+/**
+ * Cover width, sized for the screen rather than for a design mock.
+ *
+ * The target panel is 960x540dp, and after overscan there are 444dp of height to spend. At
+ * the old 260dp the artwork alone was 390dp of that — nearly the whole screen — which left a
+ * sliver for an episode list and pushed the season picker out of reach entirely. 160dp is
+ * 240dp tall, which leaves room for the actions and the start of the list beneath them.
+ */
+private val ARTWORK_WIDTH = 160.dp
 private const val POSTER_ASPECT_RATIO = 2f / 3f
-private const val OVERVIEW_MAX_LINES = 6
+
+/** Three lines beside a 240dp cover, so the plot never pushes the actions off screen. */
+private const val OVERVIEW_MAX_LINES = 3

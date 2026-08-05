@@ -154,7 +154,7 @@ It is a release blocker: the television frontend does not meet AC-PLAY-05.
 | The stutter is fixed in reasoning only | A device run on the same episode, comparing rebuffer counts before and after |
 | Zap latency against the sub-500ms target | The new `loadTimeMillis`, read on hardware |
 | Search timing against AC-FAV-05 | A real playlist at twenty thousand rows |
-| TV error UI | A bug report and a fix |
+| ~~TV error UI~~ | **Done.** Reported as #011 and fixed; a device run on a dead URL still confirms it |
 | Codec fallback | A box that actually fails to decode; it cannot be proven on a device that never had the problem |
 
 An FFmpeg software decoder — the rubric's full Pillar 6 — is a **separate decision**, not an

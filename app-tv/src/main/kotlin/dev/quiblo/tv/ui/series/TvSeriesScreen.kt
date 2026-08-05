@@ -58,6 +58,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.quiblo.core.model.Channel
 import dev.quiblo.core.model.Episode
@@ -99,6 +100,14 @@ fun TvSeriesScreen(
         parameters = { parametersOf(channel.id) },
     )
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+
+    // The same staleness as the film screen: this ViewModel outlives the screen, so the
+    // episode a viewer was last on has to be re-read rather than trusted from when the
+    // series was first opened.
+    LifecycleResumeEffect(viewModel) {
+        viewModel.refreshResumePosition()
+        onPauseOrDispose {}
+    }
 
     BackHandler(onBack = onBack)
 

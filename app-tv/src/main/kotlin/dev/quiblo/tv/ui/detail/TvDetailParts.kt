@@ -221,7 +221,11 @@ fun DetailTitle(title: String) {
     Text(
         text = title,
         color = Color.White,
-        fontSize = 34.sp,
+        fontSize = 30.sp,
+        // Without an explicit line height the default is too tight for type this large and
+        // the two lines overlap — visible immediately on any title long enough to wrap,
+        // which on a panel's own naming is most of them.
+        lineHeight = 38.sp,
         fontWeight = FontWeight.SemiBold,
         maxLines = 2,
         overflow = TextOverflow.Ellipsis,

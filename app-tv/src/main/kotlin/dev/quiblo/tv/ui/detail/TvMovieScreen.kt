@@ -35,6 +35,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.quiblo.core.model.Channel
 import dev.quiblo.feature.vod.MovieDetailUiState
@@ -66,6 +67,18 @@ fun TvMovieScreen(
         parameters = { parametersOf(channel.id) },
     )
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+
+    // Re-read the resume point every time this screen is shown.
+    //
+    // Not optional, and not merely an optimisation. The ViewModel is keyed per film and
+    // lives as long as the activity, so coming back from the player reuses the instance that
+    // loaded *before* anything had been watched — the position it holds is stale by exactly
+    // the amount the viewer just watched. That is why a film played, backed out of and
+    // reopened still offered Play rather than Resume.
+    LifecycleResumeEffect(viewModel) {
+        viewModel.refreshResumePosition()
+        onPauseOrDispose {}
+    }
 
     BackHandler(onBack = onBack)
 

@@ -120,8 +120,15 @@ fun TvPosterRows(
     // Favourites holds every kind at once, so it groups by kind instead — "Live TV" and
     // "Movies" are the distinction that matters there, and the provider's categories are
     // not even loaded for it.
-    val rows by produceState(initialValue = emptyList<TvCategoryRow>(), state.items, favouritesOnly) {
-        value = withContext(Dispatchers.Default) { groupIntoRows(state.items, favouritesOnly) }
+    val rows by produceState(
+        initialValue = emptyList<TvCategoryRow>(),
+        state.items,
+        state.categories,
+        favouritesOnly,
+    ) {
+        value = withContext(Dispatchers.Default) {
+            groupIntoRows(state.items, state.categories.map { it.title }, favouritesOnly)
+        }
     }
 
     when {
@@ -202,13 +209,35 @@ private data class TvRowItem(val channel: Channel, val flatIndex: Int)
  * One pass rather than a `groupBy` followed by a lookup per item: the position is known
  * while iterating and is thrown away by any approach that groups first.
  */
-private fun groupIntoRows(items: List<Channel>, favouritesOnly: Boolean): List<TvCategoryRow> {
+private fun groupIntoRows(
+    items: List<Channel>,
+    categoryOrder: List<String>,
+    favouritesOnly: Boolean,
+): List<TvCategoryRow> {
     val grouped = LinkedHashMap<String, MutableList<TvRowItem>>()
     items.forEachIndexed { index, channel ->
         val title = if (favouritesOnly) channel.kind.name else channel.groupTitle
         grouped.getOrPut(title) { mutableListOf() }.add(TvRowItem(channel, index))
     }
-    return grouped.map { (title, rowItems) -> TvCategoryRow(title, rowItems) }
+
+    // Rows follow the provider's *category* order, not the order the first item of each
+    // happens to appear in.
+    //
+    // Those are different, and only for films and series: a panel returns its categories in
+    // one order and its streams in another. Grouping alone therefore produced a row order
+    // that disagreed with the one the settings screen shows for the very same source —
+    // reported, and correct to call a bug.
+    //
+    // Anything the order does not mention keeps its grouped position at the end, so a
+    // category that exists only in the stream list is still reachable.
+    if (favouritesOnly || categoryOrder.isEmpty()) {
+        return grouped.map { (title, rowItems) -> TvCategoryRow(title, rowItems) }
+    }
+
+    val ranked = categoryOrder.withIndex().associate { (index, title) -> title to index }
+    return grouped.entries
+        .sortedBy { ranked[it.key] ?: Int.MAX_VALUE }
+        .map { (title, rowItems) -> TvCategoryRow(title, rowItems) }
 }
 
 @Composable
@@ -231,9 +260,15 @@ private fun CategoryRow(
         // Room above and below for the focused poster to grow into. A `LazyRow` clips to its
         // own bounds, so without this the top of a scaled card is cut off flat — and the gap
         // under the title has to clear the same growth or the two touch (#003).
+        // Room on all four sides for the focused poster to grow into. Vertical was there;
+        // horizontal was not, so the *first* card in every row grew straight into the left
+        // edge of the content area and was clipped along its side (#8).
         LazyRow(
             horizontalArrangement = Arrangement.spacedBy(14.dp),
-            contentPadding = PaddingValues(vertical = FOCUS_GROWTH),
+            contentPadding = PaddingValues(
+                horizontal = FOCUS_GROWTH_HORIZONTAL,
+                vertical = FOCUS_GROWTH,
+            ),
         ) {
             items(items = items, key = { it.channel.id }) { item ->
                 // Per poster on screen, not per category: a category row can hold hundreds
@@ -370,6 +405,14 @@ private val LOGO_PADDING = 12.dp
  * the three constants above change, this is the line to revisit.
  */
 private val FOCUS_GROWTH = 14.dp
+
+/**
+ * How far a focused poster grows past its own left and right edges.
+ *
+ * Half of what it gains in width: 150dp scaled by 1.1 is 15dp wider, so 7.5dp each side.
+ * Rounded up, and the row reserves it so the first and last cards are not clipped.
+ */
+private val FOCUS_GROWTH_HORIZONTAL = 9.dp
 
 /** Clear space under a category title, over and above the growth reserved in the row. */
 private val TITLE_GAP = 16.dp

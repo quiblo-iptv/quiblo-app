@@ -105,7 +105,7 @@
     <string name="tv_player_hint_pause">OK to pause</string>
     <string name="tv_player_hint_seek">◀ ▶ to skip %1$d s</string>
     <string name="tv_player_hint_zap">▲ to change channel</string>
-    <string name="tv_player_hint_aspect">Aspect: %1$s</string>
+    <string name="tv_player_hint_aspect">Menu or up: %1$s</string>
     <plurals name="tv_series_seasons">
         <item quantity="one">%1$d season</item>
         <item quantity="other">%1$d seasons</item>

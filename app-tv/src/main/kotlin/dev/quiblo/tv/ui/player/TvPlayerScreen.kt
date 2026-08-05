@@ -64,6 +64,9 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.quiblo.core.media.PlaybackStatus
 import dev.quiblo.core.model.AspectRatioMode
@@ -145,6 +148,33 @@ fun TvPlayerScreen(
         if (controlsVisible) controlsVisible = false else onBack()
     }
 
+    /*
+     * Tell the player it is finished — on the way out, and on the way to the background.
+     *
+     * Neither happened before, and one omission caused three separate faults. This
+     * ViewModel is activity-scoped, so leaving the player composition never cleared it:
+     * `onCleared` did not run, the controller was never released, and audio kept playing
+     * behind the catalogue. The same call is what persists the resume point, so nothing was
+     * ever written either — which is why films offered no Resume and the continue-watching
+     * row stayed empty however much had been watched.
+     *
+     * `onStopped` both pauses and saves, which is exactly the pair wanted here. The phone
+     * has had this observer since AC-PLAY-09; the television simply never got one.
+     */
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_STOP) viewModel.onStopped()
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+            // Leaving the screen is leaving playback. Without this, backing out to the
+            // catalogue left the stream running and unreachable.
+            viewModel.onStopped()
+        }
+    }
+
     Box(
         modifier = modifier
             .fillMaxSize()
@@ -168,6 +198,10 @@ fun TvPlayerScreen(
                         },
                         skip = { viewModel.skipBy(it) },
                         zap = onZap,
+                        cycleAspect = {
+                            viewModel.cycleAspectRatio()
+                            controlsVisible = true
+                        },
                     ),
                 )
             },
@@ -246,6 +280,7 @@ internal data class KeyActions(
     val playPause: () -> Unit,
     val skip: (Int) -> Unit,
     val zap: (Int) -> Unit,
+    val cycleAspect: () -> Unit,
 )
 
 internal fun handleKey(
@@ -282,17 +317,25 @@ internal fun handleKey(
         false
     }
 
+    // Aspect ratio. The controls have always *announced* the current mode, and until now
+    // nothing could change it — a readout for a control that did not exist.
+    //
+    // Menu is the natural key and many remotes have it; the Haier's does not, so up doubles
+    // as the aspect key on a film, where it is otherwise dead because zapping is live-only.
+    // Every remote therefore has a way to reach it on both kinds of content.
+    Key.Menu, Key.Info -> {
+        actions.cycleAspect()
+        true
+    }
+
     // Up and down the channel list, which is what a television remote's channel keys and
     // its D-pad up both mean to a viewer watching live.
-    //
-    // Left unhandled on a film or an episode rather than doing nothing, so the key falls
-    // through to the system instead of being silently swallowed — the same rule the seek
-    // keys follow on a live stream just above.
     Key.DirectionUp, Key.ChannelUp -> if (canZap) {
         actions.zap(-1)
         true
     } else {
-        false
+        actions.cycleAspect()
+        true
     }
 
     Key.ChannelDown -> if (canZap) {

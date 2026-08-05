@@ -37,12 +37,14 @@ class TvPlayerKeyMapTest {
     private var skipped = 0
     private var playPauses = 0
     private var controlsShown = 0
+    private var aspectCycles = 0
 
     private val actions = KeyActions(
         showControls = { controlsShown++ },
         playPause = { playPauses++ },
         skip = { skipped += it },
         zap = { zapped += it },
+        cycleAspect = { aspectCycles++ },
     )
 
     @Test
@@ -56,14 +58,35 @@ class TvPlayerKeyMapTest {
     }
 
     @Test
-    fun `channel keys do nothing on a film`() {
-        assertFalse(press(Key.ChannelUp, isSeekable = true, canZap = false))
-        assertFalse(press(Key.DirectionUp, isSeekable = true, canZap = false))
-        assertFalse(press(Key.ChannelDown, isSeekable = true, canZap = false))
+    fun `channel keys never zap on a film`() {
+        press(Key.ChannelUp, isSeekable = true, canZap = false)
+        press(Key.DirectionUp, isSeekable = true, canZap = false)
+        press(Key.ChannelDown, isSeekable = true, canZap = false)
 
-        // Unhandled rather than handled-and-ignored, so the key falls through to the system
-        // instead of being silently swallowed by a player that has nothing to do with it.
         assertEquals(0, zapped)
+    }
+
+    @Test
+    fun `aspect can be reached on both kinds of content`() {
+        // The controls have always announced the current mode. Until this binding existed
+        // nothing could change it — a readout for a control that was not there.
+        assertTrue(press(Key.Menu, isSeekable = false, canZap = true))
+        assertTrue(press(Key.Info, isSeekable = true, canZap = false))
+
+        // Up doubles as the aspect key on a film, where zapping does not apply and the key
+        // is otherwise dead. The Haier's remote has no Menu key, so without this there is no
+        // way to reach aspect on a film at all.
+        assertTrue(press(Key.DirectionUp, isSeekable = true, canZap = false))
+
+        assertEquals(3, aspectCycles)
+    }
+
+    @Test
+    fun `up still zaps on a live stream rather than changing aspect`() {
+        assertTrue(press(Key.DirectionUp, isSeekable = false, canZap = true))
+
+        assertEquals(-1, zapped)
+        assertEquals(0, aspectCycles)
     }
 
     @Test

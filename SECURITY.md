@@ -6,7 +6,7 @@
 
 Report it privately through GitHub's private vulnerability reporting:
 
-1. Go to the [Security tab](https://github.com/quiblo-tv/quiblo/security/advisories) of this repository.
+1. Go to the [Security tab](https://github.com/quiblo-iptv/quiblo-app/security/advisories) of this repository.
 2. Choose **Report a vulnerability**.
 3. Describe the issue, the affected version, and how to reproduce it.
 

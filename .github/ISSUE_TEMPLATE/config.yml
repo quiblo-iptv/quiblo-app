@@ -5,13 +5,13 @@
 blank_issues_enabled: false
 contact_links:
   - name: Security vulnerability
-    url: https://github.com/quiblo-tv/quiblo/security/advisories
+    url: https://github.com/quiblo-iptv/quiblo-app/security/advisories
     about: Report privately. Never open a public issue for a security problem.
 
   - name: Request for a playlist, provider, or content
-    url: https://github.com/quiblo-tv/quiblo/blob/main/README.md
+    url: https://github.com/quiblo-iptv/quiblo-app/blob/main/README.md
     about: Quiblo supplies no content and will not help you find any. These requests are closed without discussion.
 
   - name: Feature already ruled out for v1.0
-    url: https://github.com/quiblo-tv/quiblo/blob/main/docs/FREEZE.md
+    url: https://github.com/quiblo-iptv/quiblo-app/blob/main/docs/FREEZE.md
     about: Android TV, DRM, recording and cloud sync are deliberate non-goals. Read the freeze document first.

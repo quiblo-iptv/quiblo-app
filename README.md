@@ -8,7 +8,7 @@
 
 **A free, open source IPTV player for Android. Bring your own playlist.**
 
-[![CI](https://github.com/quiblo-tv/quiblo/actions/workflows/ci.yml/badge.svg)](https://github.com/quiblo-tv/quiblo/actions/workflows/ci.yml)
+[![CI](https://github.com/quiblo-iptv/quiblo-app/actions/workflows/ci.yml/badge.svg)](https://github.com/quiblo-iptv/quiblo-app/actions/workflows/ci.yml)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
 
 Quiblo plays Live TV, movies, and series from playlists **you** supply — an M3U/M3U8
@@ -79,7 +79,7 @@ Requires **JDK 17+** and the **Android SDK** (platform 37, build-tools 37.0.0). 
 Studio is not required.
 
 ```bash
-git clone https://github.com/quiblo-tv/quiblo.git
+git clone https://github.com/quiblo-iptv/quiblo-app.git
 cd quiblo
 ./gradlew build             # compile, test, detekt, lint
 ./gradlew :app:installDebug     # phone and tablet

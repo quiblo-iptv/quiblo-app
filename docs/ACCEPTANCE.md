@@ -52,6 +52,9 @@ IDs are stable — reference them in commits and issues (`fix: AC-PL-04 crash on
 | AC-PLAY-08 | Given playback is active, when an incoming call or another app takes audio focus, then playback pauses and resumes appropriately. |
 | AC-PLAY-09 | Given the player is open, when the user backgrounds the app, then video playback stops and no audio leaks (no background playback in v1). |
 | AC-PLAY-10 | Given full-screen playback, when the user taps once, then controls appear and auto-hide after 3s of inactivity. |
+| AC-PLAY-11 | Given a VOD episode or film of at least 20 minutes, when played through without touching the controls, then `PlaybackState.rebufferCount` stays at 0 on a connection that streams the same file continuously elsewhere. |
+| AC-PLAY-12 | Given a live channel is playing, when the user zaps to another, then `PlaybackState.loadTimeMillis` for the new channel is under 500ms. |
+| AC-PLAY-13 | Given TalkBack is on, when a stream buffers or fails, then the state is spoken. A silent spinner is a failure of this criterion. |
 
 ## AC-FAV — Favourites and Groups
 

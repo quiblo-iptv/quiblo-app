@@ -80,6 +80,10 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -433,7 +437,24 @@ private fun VideoSurface(
 
 @Composable
 private fun BufferingIndicator(state: PlaybackState) {
-    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+    // A spinner is silent to a screen reader: the stream stops, nothing is said, and the
+    // user cannot tell a slow stream from a dead one. Polite, so it waits for whatever
+    // TalkBack is already saying rather than cutting across it.
+    val announcement = if (state.retryAttempt > 0) {
+        stringResource(R.string.player_reconnecting, state.retryAttempt)
+    } else {
+        stringResource(R.string.player_a11y_buffering)
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .semantics {
+                liveRegion = LiveRegionMode.Polite
+                contentDescription = announcement
+            },
+        contentAlignment = Alignment.Center,
+    ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             CircularProgressIndicator(color = Color.White)
             if (state.retryAttempt > 0) {
@@ -466,6 +487,9 @@ private fun PlaybackErrorMessage(
             color = Color.White,
             style = MaterialTheme.typography.bodyLarge,
             textAlign = TextAlign.Center,
+            // Assertive rather than polite: playback has stopped and will not resume on
+            // its own, so this is worth interrupting for.
+            modifier = Modifier.semantics { liveRegion = LiveRegionMode.Assertive },
         )
         Row(modifier = Modifier.padding(top = 20.dp)) {
             Button(onClick = onRetry) { Text(stringResource(R.string.player_retry)) }

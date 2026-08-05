@@ -57,6 +57,10 @@ import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -213,7 +217,18 @@ fun TvPlayerScreen(
         )
 
         if (state.status == PlaybackStatus.BUFFERING) {
-            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            // TalkBack runs on Android TV too, and a spinner tells it nothing. Announced
+            // politely so it does not talk over whatever the user just navigated to.
+            val buffering = stringResource(R.string.tv_a11y_buffering)
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .semantics {
+                        liveRegion = LiveRegionMode.Polite
+                        contentDescription = buffering
+                    },
+                contentAlignment = Alignment.Center,
+            ) {
                 CircularProgressIndicator(color = Color.White)
             }
         }

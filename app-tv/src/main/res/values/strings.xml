@@ -106,6 +106,9 @@
     <string name="tv_player_hint_seek">◀ ▶ to skip %1$d s</string>
     <string name="tv_player_hint_zap">▲ to change channel</string>
     <string name="tv_player_hint_aspect">Menu or up: %1$s</string>
+
+    <!-- Spoken, not shown. TalkBack runs on Android TV and a spinner is silent to it. -->
+    <string name="tv_a11y_buffering">Buffering</string>
     <plurals name="tv_series_seasons">
         <item quantity="one">%1$d season</item>
         <item quantity="other">%1$d seasons</item>

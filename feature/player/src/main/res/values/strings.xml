@@ -20,6 +20,12 @@
     <string name="player_live">LIVE</string>
     <string name="player_reconnecting">Reconnecting… (attempt %1$d of 3)</string>
 
+    <!--
+      Spoken, not shown. A spinner says nothing to a screen reader, so buffering and
+      failure are announced instead of leaving the user with silence and a still frame.
+    -->
+    <string name="player_a11y_buffering">Buffering</string>
+
     <!-- AC-PLAY-05: a specific message, never a bare "Error" or a stack trace. -->
     <string name="player_error_network">Lost the connection to this stream.</string>
     <string name="player_error_unreachable">Could not reach this stream.</string>

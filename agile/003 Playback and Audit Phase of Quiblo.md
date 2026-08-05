@@ -142,8 +142,10 @@ have not shown is slow.
 `PlaybackStatus.BUFFERING` and nothing at all for `PlaybackStatus.ERROR`. On a television a
 dead stream shows a black screen with no message and no retry, while the phone build has
 `PlaybackErrorMessage` with both. This is the same shape as the bugs in `001` — parity
-assumed, not verified — and it should be a bug on its own sheet rather than smuggled into
-this phase.
+assumed, not verified — and it belongs on its own sheet rather than smuggled into this phase.
+
+Written up as **#011** in [`004`](004%20Bug%20Reporting%20of%20Quiblo%20—%20Round%202.md).
+It is a release blocker: the television frontend does not meet AC-PLAY-05.
 
 ## What is still open
 

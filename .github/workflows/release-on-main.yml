@@ -75,16 +75,20 @@ jobs:
           # in principle (docs/RELEASING.md), and in practice have always been in step —
           # letting them drift would mean two numbers to reason about and one release to
           # name, so they are moved together and asserted equal below.
-          CURRENT_NAME=$(grep -oP 'versionName = "\K[0-9]+\.[0-9]+\.[0-9]+' app/build.gradle.kts | head -n 1)
-          CURRENT_CODE=$(grep -oP 'versionCode = \K[0-9]+' app/build.gradle.kts | head -n 1)
+          # `|| true` on every one of these. Under `set -o pipefail` a grep that matches
+          # nothing fails the whole pipeline, which would abort the step before the checks
+          # below could say what was actually wrong — a build file that had been reformatted
+          # would fail with a bare exit code and no clue.
+          CURRENT_NAME=$(grep -oP 'versionName = "\K[0-9]+\.[0-9]+\.[0-9]+' app/build.gradle.kts | head -n 1 || true)
+          CURRENT_CODE=$(grep -oP 'versionCode = \K[0-9]+' app/build.gradle.kts | head -n 1 || true)
 
           if [ -z "$CURRENT_NAME" ] || [ -z "$CURRENT_CODE" ]; then
             echo "::error::Could not read versionName/versionCode from app/build.gradle.kts."
             exit 1
           fi
 
-          TV_NAME=$(grep -oP 'versionName = "\K[0-9]+\.[0-9]+\.[0-9]+' app-tv/build.gradle.kts | head -n 1)
-          TV_CODE=$(grep -oP 'versionCode = \K[0-9]+' app-tv/build.gradle.kts | head -n 1)
+          TV_NAME=$(grep -oP 'versionName = "\K[0-9]+\.[0-9]+\.[0-9]+' app-tv/build.gradle.kts | head -n 1 || true)
+          TV_CODE=$(grep -oP 'versionCode = \K[0-9]+' app-tv/build.gradle.kts | head -n 1 || true)
           if [ "$TV_NAME" != "$CURRENT_NAME" ] || [ "$TV_CODE" != "$CURRENT_CODE" ]; then
             echo "::error::app is $CURRENT_NAME/$CURRENT_CODE but app-tv is $TV_NAME/$TV_CODE. They are released together under one tag, so they must start from the same version."
             exit 1

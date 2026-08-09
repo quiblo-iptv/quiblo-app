@@ -18,12 +18,14 @@
 
 package dev.quiblo.core.data
 
+import dev.quiblo.core.database.dao.CachedTitleKey
 import dev.quiblo.core.database.dao.TitleGenreRow
 import dev.quiblo.core.database.dao.TitleMetadataDao
 import dev.quiblo.core.database.entity.TitleMetadataEntity
 import dev.quiblo.core.datastore.TmdbKeyStore
 import dev.quiblo.core.model.MediaKind
 import dev.quiblo.core.model.TitleMetadata
+import dev.quiblo.source.tmdb.TmdbAnswer
 import dev.quiblo.source.tmdb.TmdbClient
 import dev.quiblo.source.tmdb.TmdbKind
 import io.mockk.coEvery
@@ -61,7 +63,7 @@ class TitleMetadataRepositoryTest {
     @DisplayName("a poster's score costs one request, and a second poster costs none")
     fun `a rating is fetched once and then served from the cache`() = runTest {
         coEvery { client.summary(any(), any(), any(), any()) } returns
-            TitleMetadata(rating = 8.2, isPartial = true)
+            TmdbAnswer.Found(TitleMetadata(rating = 8.2, isPartial = true))
 
         assertEquals(8.2, repository.ratingFor("The Matrix (1999)", MediaKind.VOD))
         assertEquals(8.2, repository.ratingFor("The Matrix (1999)", MediaKind.VOD))
@@ -73,9 +75,15 @@ class TitleMetadataRepositoryTest {
     @DisplayName("a record fetched for a tile is not good enough for a detail screen")
     fun `a partial record is upgraded rather than served to a detail screen`() = runTest {
         coEvery { client.summary(any(), any(), any(), any()) } returns
-            TitleMetadata(rating = 8.2, isPartial = true)
+            TmdbAnswer.Found(TitleMetadata(rating = 8.2, isPartial = true))
         coEvery { client.lookup(any(), any(), any(), any()) } returns
-            TitleMetadata(rating = 8.2, overview = "A hacker learns the truth.", topCast = listOf("Someone"))
+            TmdbAnswer.Found(
+                TitleMetadata(
+                    rating = 8.2,
+                    overview = "A hacker learns the truth.",
+                    topCast = listOf("Someone"),
+                ),
+            )
 
         repository.ratingFor("The Matrix", MediaKind.VOD)
         val full = repository.forTitle("The Matrix", MediaKind.VOD)
@@ -89,7 +97,7 @@ class TitleMetadataRepositoryTest {
     @Test
     @DisplayName("a title that matched nothing is never asked about twice")
     fun `a cached miss is not re-requested by either caller`() = runTest {
-        coEvery { client.lookup(any(), any(), any(), any()) } returns null
+        coEvery { client.lookup(any(), any(), any(), any()) } returns TmdbAnswer.NoMatch
 
         assertNull(repository.forTitle("Nonexistent", MediaKind.VOD))
         assertNull(repository.forTitle("Nonexistent", MediaKind.VOD))
@@ -103,8 +111,10 @@ class TitleMetadataRepositoryTest {
     @Test
     @DisplayName("Fargo the film and Fargo the series are two records")
     fun `kind is part of the key`() = runTest {
-        coEvery { client.lookup(any(), any(), TmdbKind.MOVIE, any()) } returns TitleMetadata(rating = 8.1)
-        coEvery { client.lookup(any(), any(), TmdbKind.SERIES, any()) } returns TitleMetadata(rating = 8.9)
+        coEvery { client.lookup(any(), any(), TmdbKind.MOVIE, any()) } returns
+            TmdbAnswer.Found(TitleMetadata(rating = 8.1))
+        coEvery { client.lookup(any(), any(), TmdbKind.SERIES, any()) } returns
+            TmdbAnswer.Found(TitleMetadata(rating = 8.9))
 
         assertEquals(8.1, repository.forTitle("Fargo", MediaKind.VOD)?.rating)
         assertEquals(8.9, repository.forTitle("Fargo", MediaKind.SERIES)?.rating)
@@ -126,6 +136,10 @@ class TitleMetadataRepositoryTest {
 
         override suspend fun find(searchTitle: String, kind: String): TitleMetadataEntity? =
             rows[searchTitle to kind]
+
+        override suspend fun allKeys(): List<CachedTitleKey> = rows.values.map {
+            CachedTitleKey(it.searchTitle, it.kind, it.fetchedAtEpochMillis)
+        }
 
         override suspend fun allGenreRows(): List<TitleGenreRow> = rows.values.map {
             TitleGenreRow(searchTitle = it.searchTitle, kind = it.kind, genres = it.genres, isMiss = it.isMiss)

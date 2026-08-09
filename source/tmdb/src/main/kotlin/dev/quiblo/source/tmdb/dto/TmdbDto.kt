@@ -41,7 +41,20 @@ internal data class SearchResult(
     @SerialName("vote_average") val voteAverage: Double? = null,
     @SerialName("poster_path") val posterPath: String? = null,
     @SerialName("backdrop_path") val backdropPath: String? = null,
+    /**
+     * Numbers, not names — the search endpoint never spells its genres out.
+     *
+     * Translating them costs one call to the genre list per catalogue, held for the life of
+     * the process. That is what lets a genre arrive with the one-request record rather than
+     * only with the two-request one, and it is the whole reason a catalogue scan is an hour
+     * rather than two.
+     */
+    @SerialName("genre_ids") val genreIds: List<Int> = emptyList(),
 )
+
+/** `/genre/movie/list` and `/genre/tv/list`: the whole vocabulary, in one call each. */
+@Serializable
+internal data class GenreListResponse(val genres: List<GenreDto> = emptyList())
 
 @Serializable
 internal data class MovieDetailsDto(
@@ -88,7 +101,7 @@ internal data class ContentRatingDto(
 )
 
 @Serializable
-internal data class GenreDto(val name: String? = null)
+internal data class GenreDto(val id: Int? = null, val name: String? = null)
 
 @Serializable
 internal data class CreditsDto(
@@ -153,8 +166,11 @@ internal fun TvDetailsDto.toMetadata(): TitleMetadata = TitleMetadata(
  * Marked partial so a detail screen knows to ask properly rather than render a record with
  * no cast and call it complete.
  */
-internal fun SearchResult.toPartialMetadata(): TitleMetadata = TitleMetadata(
+internal fun SearchResult.toPartialMetadata(genreNames: Map<Int, String>): TitleMetadata = TitleMetadata(
     overview = overview?.takeIf { it.isNotBlank() },
+    // An id with no name is dropped rather than rendered as a number. TMDB adds genres from
+    // time to time, and a vocabulary fetched before one was added simply does not have it.
+    genres = genreIds.mapNotNull { genreNames[it] },
     rating = voteAverage?.takeIf { it > 0.0 },
     posterUrl = posterPath?.let { TmdbClient.IMAGE_BASE_URL + it },
     backdropUrl = backdropPath?.let { TmdbClient.IMAGE_BASE_URL + it },

@@ -25,6 +25,7 @@ import dev.quiblo.source.tmdb.dto.toMetadata
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.mock.MockEngine
 import io.ktor.client.engine.mock.respond
+import io.ktor.client.request.HttpRequestData
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.headersOf
 import kotlinx.coroutines.test.runTest
@@ -253,27 +254,20 @@ class TmdbTest {
     }
 
     @Nested
-    @DisplayName("the cheap half, for poster tiles")
+    @DisplayName("the cheap half, for poster tiles and the catalogue scan")
     inner class Summaries {
 
         @Test
         @DisplayName("a score costs one request, not two")
         fun `summary does not fetch the full record`() = runTest {
             val paths = mutableListOf<String>()
-            val client = TmdbClient(
-                HttpClient(
-                    MockEngine { request ->
-                        paths += request.url.encodedPath
-                        respond(
-                            """{"results":[{"id":603,"vote_average":8.2,"poster_path":"/p.jpg"}]}""",
-                            HttpStatusCode.OK,
-                            headersOf("Content-Type", "application/json"),
-                        )
-                    },
-                ),
-            )
+            val client = clientRespondingWith { request ->
+                paths += request.url.encodedPath
+                """{"results":[{"id":603,"vote_average":8.2,"poster_path":"/p.jpg"}]}"""
+            }
 
-            val metadata = client.summary("key", "The Matrix", TmdbKind.MOVIE)
+            val answer = client.summary("key", "The Matrix", TmdbKind.MOVIE)
+            val metadata = answer.metadataOrNull()
 
             assertEquals(8.2, metadata?.rating)
             // Marked partial, so a detail screen knows to ask properly rather than render a
@@ -283,17 +277,52 @@ class TmdbTest {
         }
 
         @Test
+        @DisplayName("genres arrive with the cheap record, at the cost of one call for the vocabulary")
+        fun `genre ids are translated to names`() = runTest {
+            val paths = mutableListOf<String>()
+            val client = clientRespondingWith { request ->
+                paths += request.url.encodedPath
+                if (request.url.encodedPath.contains("/genre/")) {
+                    """{"genres":[{"id":28,"name":"Action"},{"id":878,"name":"Science Fiction"}]}"""
+                } else {
+                    """{"results":[{"id":603,"genre_ids":[28,878],"vote_average":8.2}]}"""
+                }
+            }
+
+            val first = client.summary("key", "The Matrix", TmdbKind.MOVIE).metadataOrNull()
+
+            // This is what makes the scan worth an hour rather than two: the search response
+            // names no genres, and the whole vocabulary costs one call.
+            assertEquals(listOf("Action", "Science Fiction"), first?.genres)
+
+            client.summary("key", "Inception", TmdbKind.MOVIE)
+
+            // Learned once. A second title asks only for itself.
+            assertEquals(1, paths.count { it.contains("/genre/") })
+        }
+
+        @Test
+        @DisplayName("an unknown genre id is dropped rather than rendered as a number")
+        fun `genre ids with no name are ignored`() = runTest {
+            val client = clientRespondingWith { request ->
+                if (request.url.encodedPath.contains("/genre/")) {
+                    """{"genres":[{"id":28,"name":"Action"}]}"""
+                } else {
+                    """{"results":[{"id":1,"genre_ids":[28,9999]}]}"""
+                }
+            }
+
+            assertEquals(listOf("Action"), client.summary("key", "A Film", TmdbKind.MOVIE).metadataOrNull()?.genres)
+        }
+
+        @Test
         @DisplayName("a series is searched in the television catalogue")
         fun `series search uses the tv endpoint and its year parameter`() = runTest {
             var url = ""
-            val client = TmdbClient(
-                HttpClient(
-                    MockEngine { request ->
-                        url = request.url.toString()
-                        respond("""{"results":[]}""", HttpStatusCode.OK, headersOf("Content-Type", "application/json"))
-                    },
-                ),
-            )
+            val client = clientRespondingWith { request ->
+                if (!request.url.encodedPath.contains("/genre/")) url = request.url.toString()
+                """{"results":[]}"""
+            }
 
             client.summary("key", "Fargo (2014)", TmdbKind.SERIES, year = 2014)
 
@@ -304,6 +333,12 @@ class TmdbTest {
         }
     }
 
+    /**
+     * The distinction the cache depends on.
+     *
+     * Every one of these used to be the same `null`, and a bulk scan would have written each
+     * of them down as "this title matches nothing" for a fortnight.
+     */
     @Nested
     @DisplayName("failure handling")
     inner class Failures {
@@ -313,16 +348,56 @@ class TmdbTest {
         )
 
         @Test
-        @DisplayName("a rejected key yields no metadata rather than an error")
-        fun `unauthorised returns null`() = runTest {
-            // Enrichment is decoration on a screen that already works. Every failure has the
-            // same correct response: show what the provider supplied and nothing more.
-            assertNull(clientReturning(HttpStatusCode.Unauthorized).lookup("bad-key", "The Matrix", TmdbKind.MOVIE))
+        @DisplayName("a rejected key is a refusal, not an absent title")
+        fun `unauthorised refuses`() = runTest {
+            val answer = clientReturning(HttpStatusCode.Unauthorized).lookup("bad-key", "The Matrix", TmdbKind.MOVIE)
+
+            assertEquals(TmdbAnswer.Refused(TmdbRefusal.KEY_REJECTED), answer)
         }
 
         @Test
-        fun `a rate limit yields no metadata`() = runTest {
-            assertNull(clientReturning(HttpStatusCode.TooManyRequests).lookup("key", "The Matrix", TmdbKind.MOVIE))
+        fun `a rate limit refuses, and carries the wait the service asked for`() = runTest {
+            val client = TmdbClient(
+                HttpClient(
+                    MockEngine {
+                        respond(
+                            "{}",
+                            HttpStatusCode.TooManyRequests,
+                            headersOf("Retry-After", "30"),
+                        )
+                    },
+                ),
+            )
+
+            val answer = client.lookup("key", "The Matrix", TmdbKind.MOVIE)
+
+            assertEquals(TmdbAnswer.Refused(TmdbRefusal.RATE_LIMITED, retryAfterSeconds = 30), answer)
+        }
+
+        @Test
+        fun `a server error refuses rather than reporting an absent title`() = runTest {
+            val answer = clientReturning(HttpStatusCode.InternalServerError).lookup("key", "The Matrix", TmdbKind.MOVIE)
+
+            assertEquals(TmdbAnswer.Refused(TmdbRefusal.UNAVAILABLE), answer)
+        }
+
+        @Test
+        @DisplayName("a body that will not parse is a refusal, not a miss")
+        fun `nonsense in a 200 refuses`() = runTest {
+            // A proxy or a captive portal answering 200 with HTML is the realistic case, and
+            // caching it as "no such film" would be a bug preserved for a fortnight.
+            val answer = clientReturning(HttpStatusCode.OK, "<html>who knows</html>")
+                .summary("key", "The Matrix", TmdbKind.MOVIE)
+
+            assertEquals(TmdbAnswer.Refused(TmdbRefusal.UNAVAILABLE), answer)
+        }
+
+        @Test
+        @DisplayName("an empty result set is an answer: TMDB has nothing under that name")
+        fun `no results is a miss`() = runTest {
+            val client = clientReturning(HttpStatusCode.OK, """{"results":[]}""")
+
+            assertEquals(TmdbAnswer.NoMatch, client.lookup("key", "Nonexistent", TmdbKind.MOVIE))
         }
 
         @Test
@@ -337,15 +412,16 @@ class TmdbTest {
                 ),
             )
 
-            assertNull(client.lookup("key", "|AR| [1080p] HD", TmdbKind.MOVIE))
+            assertEquals(TmdbAnswer.NoMatch, client.lookup("key", "|AR| [1080p] HD", TmdbKind.MOVIE))
             assertEquals(0, requests, "a blank search must not be sent")
         }
-
-        @Test
-        fun `no match yields no metadata`() = runTest {
-            val client = clientReturning(HttpStatusCode.OK, """{"results":[]}""")
-
-            assertNull(client.lookup("key", "Nonexistent", TmdbKind.MOVIE))
-        }
     }
+
+    private fun clientRespondingWith(body: (HttpRequestData) -> String) = TmdbClient(
+        HttpClient(
+            MockEngine { request ->
+                respond(body(request), HttpStatusCode.OK, headersOf("Content-Type", "application/json"))
+            },
+        ),
+    )
 }

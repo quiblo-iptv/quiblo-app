@@ -24,9 +24,11 @@ import dev.quiblo.core.datastore.TmdbKeyStore
 import dev.quiblo.core.model.AuthorLabel
 import dev.quiblo.core.model.MediaKind
 import dev.quiblo.core.model.TitleMetadata
+import dev.quiblo.source.tmdb.TmdbAnswer
 import dev.quiblo.source.tmdb.TmdbClient
 import dev.quiblo.source.tmdb.TmdbKind
 import dev.quiblo.source.tmdb.cleanedForSearch
+import dev.quiblo.source.tmdb.metadataOrNull
 import dev.quiblo.source.tmdb.yearInTitle
 import kotlinx.coroutines.flow.StateFlow
 
@@ -93,14 +95,28 @@ class TitleMetadataRepository(
         title: String,
         kind: MediaKind,
         acceptPartial: Boolean,
-    ): TitleMetadata? {
+    ): TitleMetadata? = answerFor(title, kind, acceptPartial).metadataOrNull()
+
+    /**
+     * The same work as [cachedOrFetched], with the outcome intact.
+     *
+     * Internal because only the catalogue scan needs it: it is the one caller that has to
+     * stop when TMDB stops answering, rather than carrying on through thirty thousand titles
+     * collecting nulls.
+     */
+    internal suspend fun answerFor(
+        title: String,
+        kind: MediaKind,
+        acceptPartial: Boolean = true,
+    ): TmdbAnswer {
         val key = keyStore.apiKey.value?.takeIf { it.isNotBlank() }
         val tmdbKind = kind.toTmdbKind()
         val cacheKey = title.cleanedForSearch().lowercase().takeIf { it.isNotBlank() }
 
         // Three ways there is nothing to look up: the feature is off, the item is a live
-        // channel, or the title cleaned down to nothing worth searching for.
-        if (key == null || tmdbKind == null || cacheKey == null) return null
+        // channel, or the title cleaned down to nothing worth searching for. None of them is
+        // a failure, and none of them is worth asking about twice.
+        if (key == null || tmdbKind == null || cacheKey == null) return TmdbAnswer.NoMatch
 
         return resolve(key, tmdbKind, title, kind, cacheKey, acceptPartial)
     }
@@ -113,12 +129,12 @@ class TitleMetadataRepository(
         kind: MediaKind,
         cacheKey: String,
         acceptPartial: Boolean,
-    ): TitleMetadata? {
+    ): TmdbAnswer {
         val fresh = dao.find(cacheKey, kind.name)
             ?.takeIf { now() - it.fetchedAtEpochMillis < CACHE_TTL_MILLIS }
 
         if (fresh != null && fresh.answers(acceptPartial)) {
-            return if (fresh.isMiss) null else fresh.toMetadata()
+            return if (fresh.isMiss) TmdbAnswer.NoMatch else TmdbAnswer.Found(fresh.toMetadata())
         }
 
         return fetchAndCache(
@@ -131,6 +147,14 @@ class TitleMetadataRepository(
         )
     }
 
+    /**
+     * Asks TMDB and writes down whatever comes back, if it is the sort of thing worth
+     * writing down.
+     *
+     * Returns the answer rather than the record, because callers that fetch in bulk need to
+     * tell a title that matched nothing from a request that never landed. Everything on a
+     * screen ignores the distinction and takes [TmdbAnswer.metadataOrNull].
+     */
     @Suppress("LongParameterList")
     private suspend fun fetchAndCache(
         apiKey: String,
@@ -139,27 +163,53 @@ class TitleMetadataRepository(
         tmdbKind: TmdbKind,
         cacheKey: String,
         partial: Boolean,
-    ): TitleMetadata? {
+    ): TmdbAnswer {
         // The year narrows a search that would otherwise match a remake. Provider titles
         // carry it often enough to be worth reading.
         val year = title.yearInTitle()
-        val metadata = if (partial) {
+        val answer = if (partial) {
             client.summary(apiKey = apiKey, title = title, kind = tmdbKind, year = year)
         } else {
             client.lookup(apiKey = apiKey, title = title, kind = tmdbKind, year = year)
         }
 
-        dao.upsert(
-            metadata?.toEntity(cacheKey, kind.name, now())
-                // A miss is recorded rather than forgotten, so the next visit costs nothing.
-                ?: TitleMetadataEntity(
+        when (answer) {
+            is TmdbAnswer.Found -> dao.upsert(answer.metadata.toEntity(cacheKey, kind.name, now()))
+
+            // A miss is recorded rather than forgotten, so the next visit costs nothing.
+            TmdbAnswer.NoMatch -> dao.upsert(
+                TitleMetadataEntity(
                     searchTitle = cacheKey,
                     kind = kind.name,
                     fetchedAtEpochMillis = now(),
                     isMiss = true,
                 ),
-        )
-        return metadata
+            )
+
+            // Nothing at all. A refusal is not an answer about this title, and caching it as
+            // one would put a fortnight's worth of "matches nothing" behind a single bad
+            // minute on the network — or behind a rate limit met half way through a scan of
+            // thirty thousand titles, which is where this stopped being theoretical.
+            is TmdbAnswer.Refused -> Unit
+        }
+
+        return answer
+    }
+
+    /**
+     * The titles the cache can already answer for, misses included.
+     *
+     * Only the fresh ones: an expired row will be asked about again the moment anything
+     * needs it, so counting it as known would leave the scan reporting work as done that it
+     * has not done. The freshness rule lives here rather than at the caller because the TTL
+     * is this class's business and two copies of it would drift.
+     */
+    internal suspend fun freshlyCachedKeys(): Set<Pair<String, String>> {
+        val horizon = now() - CACHE_TTL_MILLIS
+        return dao.allKeys()
+            .asSequence()
+            .filter { it.fetchedAtEpochMillis > horizon }
+            .mapTo(HashSet()) { it.searchTitle to it.kind }
     }
 
     suspend fun setApiKey(apiKey: String?) {

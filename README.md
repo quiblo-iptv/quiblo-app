@@ -132,6 +132,10 @@ rounds including the failures, because those are the part worth reading:
   test, and **took the app down on the screen that needed it**.
 - **Nine features nobody could reach**, deleted rather than kept.
 - A UI shake that took **four wrong answers** before the real cause turned up.
+- **Two releases published that contained nothing** — `0.2.1` and `0.2.2`, where `0.2.2` is
+  the same application as `0.2.1` with a different number, because "a merge to main is a
+  release" had no opinion about *what* had merged. The fix reads the Conventional Commit
+  types the project was already writing ([`docs/RELEASE-MANAGEMENT.md`](docs/RELEASE-MANAGEMENT.md) §6).
 
 The through-line: the leverage was real, and the verification was never optional.
 

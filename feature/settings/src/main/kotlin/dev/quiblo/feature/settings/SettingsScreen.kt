@@ -70,6 +70,7 @@ fun SettingsScreen(
     val playerSettings by viewModel.playerSettings.collectAsStateWithLifecycle()
     val tmdbKey by viewModel.tmdbApiKey.collectAsStateWithLifecycle()
     val tmdbCheck by viewModel.tmdbCheck.collectAsStateWithLifecycle()
+    val metadataScan by viewModel.metadataScan.collectAsStateWithLifecycle()
     val categoryKind by viewModel.selectedCategoryKind.collectAsStateWithLifecycle()
     val categories by viewModel.categories.collectAsStateWithLifecycle()
     val appearance by viewModel.appearance.collectAsStateWithLifecycle()
@@ -155,6 +156,10 @@ fun SettingsScreen(
             check = tmdbCheck,
             onSave = viewModel::saveTmdbKey,
             onClear = viewModel::clearTmdbKey,
+            scan = metadataScan,
+            onStartScan = viewModel::startMetadataScan,
+            onCancelScan = viewModel::cancelMetadataScan,
+            onDismissScan = viewModel::dismissMetadataScan,
         )
 
         Spacer(modifier = Modifier.height(16.dp))

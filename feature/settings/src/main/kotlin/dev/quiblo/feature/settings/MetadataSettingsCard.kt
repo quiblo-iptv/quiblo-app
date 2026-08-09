@@ -26,6 +26,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -40,6 +41,8 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
+import dev.quiblo.core.data.MetadataScanState
+import dev.quiblo.core.data.ScanRefusal
 
 /**
  * Optional film information from The Movie Database.
@@ -58,6 +61,10 @@ internal fun MetadataSettingsCard(
     check: TmdbCheck,
     onSave: (String) -> Unit,
     onClear: () -> Unit,
+    scan: MetadataScanState,
+    onStartScan: () -> Unit,
+    onCancelScan: () -> Unit,
+    onDismissScan: () -> Unit,
 ) {
     var draft by remember(savedKey) { mutableStateOf(savedKey.orEmpty()) }
 
@@ -108,6 +115,17 @@ internal fun MetadataSettingsCard(
 
             CheckStatus(check = check, hasSavedKey = !savedKey.isNullOrBlank())
 
+            // Only with a key. Without one there is nothing to ask, and a button that cannot
+            // work is worse than an absent one.
+            if (!savedKey.isNullOrBlank()) {
+                CatalogueScan(
+                    state = scan,
+                    onStart = onStartScan,
+                    onCancel = onCancelScan,
+                    onDismiss = onDismissScan,
+                )
+            }
+
             // TMDB's terms require this wording wherever their data is used.
             Text(
                 text = stringResource(R.string.settings_metadata_attribution),
@@ -117,6 +135,102 @@ internal fun MetadataSettingsCard(
             )
         }
     }
+}
+
+/**
+ * Looking up the whole catalogue at once, rather than a poster at a time as somebody browses.
+ *
+ * A progress bar and a count, because on a large playlist this is the better part of an hour
+ * and a spinner for an hour says nothing. The scan does not belong to this screen — leaving
+ * and coming back finds it where it is.
+ */
+@Composable
+private fun CatalogueScan(
+    state: MetadataScanState,
+    onStart: () -> Unit,
+    onCancel: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val isWorking = state is MetadataScanState.Preparing || state is MetadataScanState.Running
+
+    Column(modifier = Modifier.padding(top = 14.dp)) {
+        Text(
+            text = stringResource(R.string.settings_metadata_scan_title),
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.SemiBold,
+        )
+        Text(
+            text = stringResource(R.string.settings_metadata_scan_summary),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = 4.dp),
+        )
+
+        if (state is MetadataScanState.Running && state.total > 0) {
+            LinearProgressIndicator(
+                progress = { state.done.toFloat() / state.total },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 12.dp),
+            )
+        }
+
+        scanMessage(state)?.let {
+            Text(
+                text = it,
+                style = MaterialTheme.typography.bodySmall,
+                color = if (state is MetadataScanState.Stopped) {
+                    MaterialTheme.colorScheme.error
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                },
+                modifier = Modifier.padding(top = 8.dp),
+            )
+        }
+
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.padding(top = 12.dp),
+        ) {
+            if (isWorking) {
+                OutlinedButton(onClick = onCancel) {
+                    Text(stringResource(R.string.settings_metadata_scan_stop))
+                }
+            } else {
+                Button(onClick = onStart) {
+                    Text(stringResource(R.string.settings_metadata_scan_start))
+                }
+                if (state !is MetadataScanState.Idle) {
+                    OutlinedButton(onClick = onDismiss) {
+                        Text(stringResource(R.string.settings_metadata_scan_dismiss))
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun scanMessage(state: MetadataScanState): String? = when (state) {
+    MetadataScanState.Idle -> null
+    MetadataScanState.Preparing -> stringResource(R.string.settings_metadata_scan_preparing)
+    is MetadataScanState.Running ->
+        stringResource(R.string.settings_metadata_scan_progress, state.done, state.total, state.found)
+
+    is MetadataScanState.Finished ->
+        stringResource(R.string.settings_metadata_scan_finished, state.found, state.missing)
+
+    is MetadataScanState.Cancelled ->
+        stringResource(R.string.settings_metadata_scan_cancelled, state.found)
+
+    is MetadataScanState.Stopped -> stringResource(
+        when (state.reason) {
+            ScanRefusal.RATE_LIMITED -> R.string.settings_metadata_scan_rate_limited
+            ScanRefusal.KEY_REJECTED -> R.string.settings_metadata_scan_key_rejected
+            ScanRefusal.UNAVAILABLE -> R.string.settings_metadata_scan_unavailable
+        },
+        state.found,
+    )
 }
 
 @Composable

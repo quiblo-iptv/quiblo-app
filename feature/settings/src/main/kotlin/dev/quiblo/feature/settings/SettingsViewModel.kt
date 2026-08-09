@@ -22,9 +22,11 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dev.quiblo.core.data.CategoryRepository
 import dev.quiblo.core.data.ChannelLogoRepository
+import dev.quiblo.core.data.MetadataScanState
 import dev.quiblo.core.data.PlayerSettingsRepository
 import dev.quiblo.core.data.SourceRepository
 import dev.quiblo.core.data.TitleMetadataRepository
+import dev.quiblo.core.data.TitleMetadataScanner
 import dev.quiblo.core.data.backup.BackupRepository
 import dev.quiblo.core.data.backup.ImportResult
 import dev.quiblo.core.model.Appearance
@@ -41,6 +43,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
@@ -75,12 +78,13 @@ sealed interface BackupUiState {
     data object Failed : BackupUiState
 }
 
-// One function per control on a screen that is a list of unrelated controls: backup,
-// appearance, playback tuning, categories, film metadata, channel logos. The count tracks
-// the number of settings, not any tangle between them — each is two or three lines that
-// touch one repository — so splitting it would produce six ViewModels for one screen and a
-// composable that has to fetch all six.
-@Suppress("TooManyFunctions")
+// One function per control, and one dependency per area, on a screen that is a list of
+// unrelated controls: backup, appearance, playback tuning, categories, film metadata,
+// channel logos, and now the catalogue scan. Both counts track the number of settings rather
+// than any tangle between them — each is two or three lines that touch one repository — so
+// splitting it would produce seven ViewModels for one screen and a composable that has to
+// fetch all seven. A holder object bundling the seven would be the same list with a name.
+@Suppress("TooManyFunctions", "LongParameterList")
 class SettingsViewModel(
     private val backupRepository: BackupRepository,
     private val playerSettingsRepository: PlayerSettingsRepository,
@@ -88,7 +92,34 @@ class SettingsViewModel(
     private val categoryRepository: CategoryRepository,
     private val sourceRepository: SourceRepository,
     private val channelLogoRepository: ChannelLogoRepository,
+    private val metadataScanner: TitleMetadataScanner,
 ) : ViewModel() {
+
+    /**
+     * How far a catalogue scan has got.
+     *
+     * Straight from the scanner rather than mirrored into this ViewModel, because the scan
+     * outlives every screen that watches it — leaving settings and coming back should find
+     * it where it is, not find it reset.
+     */
+    val metadataScan: StateFlow<MetadataScanState> = metadataScanner.state
+
+    /**
+     * Fills in film and series information for the whole catalogue.
+     *
+     * The genre filter and the scores on posters are only as complete as what has been
+     * browsed past, which on a fresh install is nothing. This is the one control that fixes
+     * that without asking a viewer to scroll through their entire catalogue first.
+     */
+    fun startMetadataScan() = viewModelScope.launch {
+        val sourceId = sourceRepository.observeSources().first().firstOrNull()?.id ?: return@launch
+        metadataScanner.start(sourceId)
+    }
+
+    fun cancelMetadataScan() = metadataScanner.cancel()
+
+    /** Puts the finished or stopped report away, so the row goes back to offering a scan. */
+    fun dismissMetadataScan() = metadataScanner.acknowledge()
 
     private val categoryKind = MutableStateFlow(MediaKind.LIVE)
     val selectedCategoryKind: StateFlow<MediaKind> = categoryKind.asStateFlow()

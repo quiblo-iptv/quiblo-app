@@ -28,6 +28,7 @@ import dev.quiblo.core.data.PlayerSettingsRepository
 import dev.quiblo.core.data.SearchRepository
 import dev.quiblo.core.data.SourceRepository
 import dev.quiblo.core.data.TitleMetadataRepository
+import dev.quiblo.core.data.TitleMetadataScanner
 import dev.quiblo.core.data.WatchHistoryRepository
 import dev.quiblo.core.data.backup.BackupRepository
 import dev.quiblo.core.model.SourceKind
@@ -72,6 +73,9 @@ val dataModule: Module = module {
     single { WatchHistoryRepository(get()) }
     single { CategoryRepository(get(), get()) }
     single { SearchRepository(get(), get(), get()) }
+    // A singleton because its scope is the application's: a scan started in settings has to
+    // outlive the screen that started it, and an hour of lookups outlives several.
+    single { TitleMetadataScanner(channelDao = get(), metadataRepository = get()) }
     single { GuideRepository(get(), get(), get()) }
     single { BackupRepository(get(), get()) }
     single { PlayerSettingsRepository(get()) }

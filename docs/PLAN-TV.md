@@ -281,6 +281,14 @@ same film as both a film and a one-episode series.
 - Sources leaves the tab bar for Settings (§3.5), which is what makes room for it.
 - **Exit:** AC-TV-14 and AC-TV-15 pass on the television.
 
+### T8 — Profiles (2026-08-09)
+
+Who is watching, asked before the catalogue is drawn. Favourites and continue watching belong
+to a profile; everything else on the television stays shared. Guest keeps nothing, and keeps
+that promise through a power cut rather than only through a polite exit.
+
+- **Exit:** AC-PROF-01…06 pass on the television, AC-PROF-05 — the upgrade — first.
+
 ### T5 — Release (week 6)
 - Second release track, TV banner and store assets, size budget.
 - Full AC sweep on the television alongside the phone sweep.

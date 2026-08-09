@@ -290,6 +290,8 @@ enough, and a subsequent `adb connect <ip>:5555` is refused).
 | AC-TV-13 | Not run on hardware | Category filtering in Live. Confirmed on the emulator against 11,923 channels; count the requests at the source, not by eye |
 | AC-TV-14 | Not run | Search from the bar's first tab: a title found whichever kind it was filed under, results opened with the D-pad, and the query count watched while a term is typed. Do it against the 67k account, not a small one — the cap is the point |
 | AC-TV-15 | Not run | Playlists reached from Settings and left again by back, with no Sources tab anywhere in the bar |
+| AC-META-01…06 | Not run | The catalogue scan: no requests without a key, one per distinct title, the sustained rate held for the whole run, a refusal never cached, resume after stopping, progress surviving a screen change. Count requests at the source |
+| AC-PROF-01…06 | Not run | Profiles: nothing shown before choosing, two profiles that cannot see each other's favourites, settings unchanged by switching, a guest gone after a force-stop, **an upgrade that keeps every existing favourite**, and deleting one profile leaving the others intact |
 
 **What has been seen on an emulator, and what that is worth.** The television emulator
 (`Television_4K`, overridden to 1920x1080 @320dpi — the target device's geometry) was driven

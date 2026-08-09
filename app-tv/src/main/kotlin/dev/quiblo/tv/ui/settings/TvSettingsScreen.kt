@@ -35,6 +35,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -44,6 +45,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -53,6 +55,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -63,6 +66,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.quiblo.core.data.MetadataScanState
 import dev.quiblo.core.data.ScanRefusal
+import dev.quiblo.core.data.progressFraction
 import dev.quiblo.core.model.BufferMode
 import dev.quiblo.core.model.Category
 import dev.quiblo.core.model.MaxBitrateCap
@@ -416,6 +420,8 @@ private fun MetadataScanRow(
                 },
             )
 
+            ScanProgressBar(state)
+
             scanMessage(state)?.let {
                 Text(
                     text = it,
@@ -429,6 +435,52 @@ private fun MetadataScanRow(
                     modifier = Modifier.padding(top = 8.dp),
                 )
             }
+        }
+    }
+}
+
+/**
+ * The bar, which is what a viewer across a room actually reads.
+ *
+ * The counts stay underneath it — from the sofa a bar says "how much longer" at a glance and
+ * cannot say "61 of these matched nothing", and both are worth knowing. Indeterminate while
+ * the work list is being built, because until it exists there is no denominator and a bar
+ * pinned at either end would be a claim rather than a wait.
+ *
+ * A stopped or cancelled scan keeps its bar where it stopped: that is the picture of what
+ * starting again will skip.
+ */
+@Composable
+private fun ScanProgressBar(state: MetadataScanState) {
+    val shape = RoundedCornerShape(4.dp)
+    val barModifier = Modifier
+        .padding(top = 12.dp)
+        .width(BAR_WIDTH)
+        .height(BAR_HEIGHT)
+        .clip(shape)
+
+    when {
+        state is MetadataScanState.Preparing -> LinearProgressIndicator(
+            modifier = barModifier,
+            color = Color.White,
+            trackColor = Color.White.copy(alpha = 0.20f),
+        )
+
+        else -> state.progressFraction?.let { fraction ->
+            LinearProgressIndicator(
+                progress = { fraction },
+                modifier = barModifier,
+                color = if (state is MetadataScanState.Stopped) {
+                    MaterialTheme.colorScheme.error
+                } else {
+                    Color.White
+                },
+                trackColor = Color.White.copy(alpha = 0.20f),
+                // No gap and no stop mark: at three metres they read as flecks of dirt on
+                // the panel rather than as parts of a control.
+                gapSize = 0.dp,
+                drawStopIndicator = {},
+            )
         }
     }
 }
@@ -760,6 +812,12 @@ private val LABEL_WIDTH = 400.dp
 /** Air between the names and their controls. Without it the two columns read as one. */
 private val COLUMN_GAP = 40.dp
 private val FIELD_WIDTH = 460.dp
+
+/** As wide as the chips it sits under, so the two read as one control rather than two. */
+private val BAR_WIDTH = 420.dp
+
+/** Thick enough to read from a sofa. A 4dp bar is a hairline at three metres. */
+private val BAR_HEIGHT = 10.dp
 private val RENAME_WIDTH = 320.dp
 private const val MBPS = 1_000_000
 private const val BACKUP_MIME_TYPE = "application/json"

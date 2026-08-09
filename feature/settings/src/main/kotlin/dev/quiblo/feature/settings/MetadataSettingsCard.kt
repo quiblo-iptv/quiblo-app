@@ -43,6 +43,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import dev.quiblo.core.data.MetadataScanState
 import dev.quiblo.core.data.ScanRefusal
+import dev.quiblo.core.data.progressFraction
 
 /**
  * Optional film information from The Movie Database.
@@ -166,13 +167,19 @@ private fun CatalogueScan(
             modifier = Modifier.padding(top = 4.dp),
         )
 
-        if (state is MetadataScanState.Running && state.total > 0) {
-            LinearProgressIndicator(
-                progress = { state.done.toFloat() / state.total },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 12.dp),
-            )
+        // Indeterminate until the work list exists, because until then there is no
+        // denominator and a bar at either end would be a claim rather than a wait. A stopped
+        // scan keeps its bar where it stopped: that is the picture of what resuming skips.
+        val barModifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 12.dp)
+
+        if (state is MetadataScanState.Preparing) {
+            LinearProgressIndicator(modifier = barModifier)
+        } else {
+            state.progressFraction?.let { fraction ->
+                LinearProgressIndicator(progress = { fraction }, modifier = barModifier)
+            }
         }
 
         scanMessage(state)?.let {

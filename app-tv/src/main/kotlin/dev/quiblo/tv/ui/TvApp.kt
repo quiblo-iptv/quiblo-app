@@ -85,7 +85,11 @@ import dev.quiblo.tv.ui.sources.TvSourcesScreen
  */
 @Composable
 fun TvApp() {
-    var selectedTab by remember { mutableIntStateOf(TvTab.LIVE.ordinal) }
+    // Opens on Search, which is also where Back comes to rest — so the first tab is the home
+    // tab in both directions rather than only one. Focus starts in the bar rather than in the
+    // field, so opening the app does not open a keyboard at somebody who came here to watch
+    // something.
+    var selectedTab by remember { mutableIntStateOf(TvTab.SEARCH.ordinal) }
 
     // What is on top of the shell, if anything.
     //

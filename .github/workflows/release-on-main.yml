@@ -1,0 +1,149 @@
+# Quiblo — a free, open source IPTV player.
+# Copyright (C) 2026 The Quiblo Authors
+# Licensed under the GNU General Public License v3.0 or later. See LICENSE.
+
+# A merge to main is a release.
+#
+# Three jobs in a line, and the order is the whole point: nothing is versioned until the
+# gate is green, and nothing is published until it is versioned. The gate and the release
+# procedure are both reused from the files that already define them (ci.yml, release.yml)
+# rather than copied here — a second copy of a build is a second thing to keep true.
+name: Release on merge to main
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+# Serialised, never cancelled. Two merges landing a minute apart must not both bump from the
+# same version, and a release cancelled halfway leaves a tag with no build behind it — the
+# one state on the releases page that cannot be fixed by running something again.
+concurrency:
+  group: release-on-main
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  # Exactly what a pull request has to pass. Assemble, unit tests, detekt, parser coverage
+  # and Android Lint.
+  gate:
+    name: Gate
+    uses: ./.github/workflows/ci.yml
+
+  version:
+    name: Bump the version and tag it
+    needs: gate
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.bump.outputs.tag }}
+
+    steps:
+      # Checked here, before anything is written, rather than where it is used.
+      #
+      # The signing step is most of the way through the *next* job, and by then this one has
+      # already committed a version bump to main and pushed a tag. A missing secret would
+      # leave the repository claiming to have released a version that has no release — and
+      # the guard below, which refuses to reuse a tag, would then block the retry. Failing
+      # here costs a red run and changes nothing.
+      - name: Check the release can be signed
+        env:
+          KEYSTORE_BASE64: ${{ secrets.QUIBLO_KEYSTORE_BASE64 }}
+        run: |
+          set -euo pipefail
+          if [ -z "${KEYSTORE_BASE64:-}" ]; then
+            echo "::error::QUIBLO_KEYSTORE_BASE64 is not set, so nothing merged to main can be released. Add the four signing secrets (see docs/RELEASING.md) — no version has been bumped and no tag has been cut."
+            exit 1
+          fi
+
+      - name: Check out main
+        uses: actions/checkout@v4
+        with:
+          # The branch, not the commit that triggered this. A detached HEAD has nothing to
+          # push the bump back onto.
+          ref: ${{ github.ref_name }}
+          # Tags are needed to tell an already-released version from a new one.
+          fetch-depth: 0
+
+      - name: Work out the next version
+        id: bump
+        run: |
+          set -euo pipefail
+
+          # :app is the reference for both. The two application ids keep their own sequences
+          # in principle (docs/RELEASING.md), and in practice have always been in step —
+          # letting them drift would mean two numbers to reason about and one release to
+          # name, so they are moved together and asserted equal below.
+          CURRENT_NAME=$(grep -oP 'versionName = "\K[0-9]+\.[0-9]+\.[0-9]+' app/build.gradle.kts | head -n 1)
+          CURRENT_CODE=$(grep -oP 'versionCode = \K[0-9]+' app/build.gradle.kts | head -n 1)
+
+          if [ -z "$CURRENT_NAME" ] || [ -z "$CURRENT_CODE" ]; then
+            echo "::error::Could not read versionName/versionCode from app/build.gradle.kts."
+            exit 1
+          fi
+
+          TV_NAME=$(grep -oP 'versionName = "\K[0-9]+\.[0-9]+\.[0-9]+' app-tv/build.gradle.kts | head -n 1)
+          TV_CODE=$(grep -oP 'versionCode = \K[0-9]+' app-tv/build.gradle.kts | head -n 1)
+          if [ "$TV_NAME" != "$CURRENT_NAME" ] || [ "$TV_CODE" != "$CURRENT_CODE" ]; then
+            echo "::error::app is $CURRENT_NAME/$CURRENT_CODE but app-tv is $TV_NAME/$TV_CODE. They are released together under one tag, so they must start from the same version."
+            exit 1
+          fi
+
+          IFS=. read -r MAJOR MINOR PATCH <<< "$CURRENT_NAME"
+          NEXT_NAME="$MAJOR.$MINOR.$((PATCH + 1))"
+          NEXT_CODE=$((CURRENT_CODE + 1))
+          TAG="v$NEXT_NAME"
+
+          # A tag that already exists means this version has been released before, and
+          # overwriting it would change what a published download contains.
+          if git rev-parse -q --verify "refs/tags/$TAG" >/dev/null; then
+            echo "::error::$TAG already exists. Bump the version by hand and merge again."
+            exit 1
+          fi
+
+          for FILE in app/build.gradle.kts app-tv/build.gradle.kts; do
+            sed -i -E "s/versionCode = [0-9]+/versionCode = $NEXT_CODE/" "$FILE"
+            sed -i -E "s/versionName = \"[0-9]+\.[0-9]+\.[0-9]+\"/versionName = \"$NEXT_NAME\"/" "$FILE"
+          done
+
+          # A sed that matched nothing exits 0 and changes nothing, which would tag an
+          # unchanged version and publish a second release of it.
+          if [ -z "$(git diff --name-only)" ]; then
+            echo "::error::The version bump changed no files. Check the versionCode and versionName lines in both build files."
+            exit 1
+          fi
+
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "Releasing $CURRENT_NAME (code $CURRENT_CODE) → $NEXT_NAME (code $NEXT_CODE)."
+
+      - name: Commit and tag
+        env:
+          TAG: ${{ steps.bump.outputs.tag }}
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email 'github-actions[bot]@users.noreply.github.com'
+
+          # [skip ci] is belt and braces: a push made with GITHUB_TOKEN does not start
+          # another workflow run, so this cannot loop even without it.
+          git add app/build.gradle.kts app-tv/build.gradle.kts
+          git commit -m "chore(release): ${TAG#v} [skip ci]"
+          git tag -a "$TAG" -m "Quiblo ${TAG#v}"
+
+          # The branch first, then the tag. A tag pushed before its commit points at an
+          # object main does not contain yet.
+          git push origin "HEAD:${{ github.ref_name }}"
+          git push origin "$TAG"
+
+  publish:
+    name: Publish
+    needs: version
+    # The release procedure as release.yml defines it: signs both APKs, enforces the 25 MB
+    # budget, writes the checksums and attaches all four files.
+    uses: ./.github/workflows/release.yml
+    with:
+      tag: ${{ needs.version.outputs.tag }}
+      # The gate above ran on this same tree. See `run-gate` in release.yml.
+      run-gate: false
+    secrets: inherit

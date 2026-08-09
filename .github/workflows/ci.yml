@@ -5,15 +5,25 @@
 name: CI
 
 on:
-  push:
-    branches: [ main ]
   pull_request:
     branches: [ main ]
   workflow_dispatch:
+  # Called by release-on-main.yml, which is what runs on a merge to main. The gate a release
+  # has to pass and the gate a pull request has to pass are the same gate, defined once —
+  # a second copy of this file is a second place for the two to drift apart, and the copy
+  # that matters least is the one that would be kept up to date.
+  workflow_call:
 
-# A new push to the same branch cancels the previous run.
+# A new push to the same pull request cancels the previous run.
+#
+# **Keyed on the pull request, not on `github.workflow`.** A reusable workflow keeps its own
+# concurrency but reports its *caller's* name in `github.workflow`, so the obvious spelling
+# put every release run into one cancelling group: a second merge to main would cancel the
+# first one's gate, and with it a release already halfway through signing. Falling back to
+# `run_id` — unique per run — means a called run cancels nothing and is cancelled by nothing,
+# which is the only safe behaviour when a tag is about to be cut from the result.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ci-${{ github.event.pull_request.number || github.run_id }}
   cancel-in-progress: true
 
 permissions:

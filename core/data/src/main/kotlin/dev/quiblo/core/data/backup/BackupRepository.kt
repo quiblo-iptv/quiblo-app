@@ -18,6 +18,7 @@
 
 package dev.quiblo.core.data.backup
 
+import dev.quiblo.core.data.ProfileRepository
 import dev.quiblo.core.database.dao.FavoriteDao
 import dev.quiblo.core.database.dao.SourceDao
 import dev.quiblo.core.database.entity.FavoriteEntity
@@ -57,6 +58,15 @@ sealed interface ImportResult {
 class BackupRepository(
     private val sourceDao: SourceDao,
     private val favoriteDao: FavoriteDao,
+    /**
+     * Whose favourites are exported, and whose they become on import.
+     *
+     * The backup format has no notion of a profile and deliberately keeps none: a file that
+     * carried them would have to answer what happens when it is imported onto a device where
+     * those people do not exist. So a backup is one person's favourites — whoever is watching
+     * when it is written, and whoever is watching when it is read.
+     */
+    private val profiles: ProfileRepository,
     private val now: () -> Long = System::currentTimeMillis,
 ) {
 
@@ -74,7 +84,7 @@ class BackupRepository(
         }
 
         val backupFavorites = sources.flatMap { entity ->
-            favoriteDao.allFor(entity.id).map { favorite ->
+            favoriteDao.allFor(profiles.activeProfileId, entity.id).map { favorite ->
                 BackupFavorite(
                     sourceUrl = entity.url,
                     stableKey = favorite.stableKey,
@@ -149,6 +159,7 @@ class BackupRepository(
                     sourceId = sourceId,
                     stableKey = favorite.stableKey,
                     favoritedAtEpochMillis = favorite.favoritedAtEpochMillis,
+                    profileId = profiles.activeProfileId,
                 ),
             )
             favoritesRestored++

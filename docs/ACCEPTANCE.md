@@ -129,6 +129,19 @@ the app spending it badly.
 | AC-META-05 | A scan interrupted by cancelling, leaving the app, or a refusal resumes from where it stopped rather than from the beginning, and re-running it immediately after it completes issues no requests at all. |
 | AC-META-06 | Progress is visible while it runs and survives leaving the screen and returning. |
 
+## AC-PROF — Profiles
+
+Added 2026-08-09 by `FREEZE.md` Amendment 6.
+
+| ID | Criterion |
+|---|---|
+| AC-PROF-01 | On a device where nobody has been chosen, no catalogue, favourite or resume point is shown until a profile or Guest is chosen. |
+| AC-PROF-02 | Favourites and continue-watching differ between two profiles on the same source, and neither can see the other's. |
+| AC-PROF-03 | Playlists, player settings, hidden categories and the metadata key are unchanged by switching profile. |
+| AC-PROF-04 | A guest session's favourites and resume points are gone after leaving it, **and** after force-stopping the app mid-session and reopening it. |
+| AC-PROF-05 | Upgrading from a build without profiles keeps every favourite and resume point, reachable under a profile named Default. |
+| AC-PROF-06 | Deleting a profile deletes its favourites and resume points and leaves every other profile's intact. |
+
 ## AC-LEGAL — Licensing and Compliance
 
 | ID | Criterion |

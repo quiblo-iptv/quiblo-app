@@ -26,6 +26,7 @@ import androidx.compose.runtime.getValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.quiblo.core.data.PlayerSettingsRepository
 import dev.quiblo.core.model.Appearance
+import dev.quiblo.player.ui.ProfileGate
 import dev.quiblo.player.ui.QuibloApp
 import dev.quiblo.player.ui.theme.QuibloTheme
 import org.koin.android.ext.android.inject
@@ -45,7 +46,7 @@ class MainActivity : ComponentActivity() {
             // against one value, and a change applies without restarting the app.
             val appearance by appearanceRepository.appearance.collectAsStateWithLifecycle(Appearance())
             QuibloTheme(appearance = appearance) {
-                QuibloApp()
+                ProfileGate { QuibloApp() }
             }
         }
     }

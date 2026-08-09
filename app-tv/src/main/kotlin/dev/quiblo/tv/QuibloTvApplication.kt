@@ -19,11 +19,17 @@
 package dev.quiblo.tv
 
 import android.app.Application
+import dev.quiblo.core.data.ProfileRepository
 import dev.quiblo.tv.di.tvModules
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 import org.koin.android.ext.koin.androidContext
 import org.koin.android.ext.koin.androidLogger
 import org.koin.core.context.startKoin
 import org.koin.core.logger.Level
+import org.koin.mp.KoinPlatform.getKoin
 
 /**
  * Starts Koin and nothing else.
@@ -40,6 +46,26 @@ class QuibloTvApplication : Application() {
             androidLogger(if (BuildConfig.DEBUG) Level.ERROR else Level.NONE)
             androidContext(this@QuibloTvApplication)
             modules(tvModules)
+        }
+
+        endAnyGuestSession()
+    }
+
+    /**
+     * Deletes a guest left over from last time, before anything is drawn.
+     *
+     * A guest session is promised not to outlive itself, and the only moment that promise can
+     * be kept for certain is startup: a process the system killed never got to tidy up, and a
+     * television is switched off at the wall rather than exited. Deleting the row takes its
+     * favourites and resume points with it by foreign key.
+     *
+     * It also makes the chooser reappear, because the stored profile id now points at nothing
+     * — which is exactly what should happen after a guest.
+     */
+    private fun endAnyGuestSession() {
+        val profiles: ProfileRepository = getKoin().get()
+        CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
+            profiles.endGuestSessions()
         }
     }
 }

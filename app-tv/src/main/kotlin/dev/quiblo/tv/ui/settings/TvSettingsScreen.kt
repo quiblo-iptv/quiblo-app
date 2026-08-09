@@ -106,6 +106,9 @@ fun TvSettingsScreen(
      * and this is where configuration lives.
      */
     onOpenSources: () -> Unit,
+    /** The name on screen, so settings says whose favourites the app is currently keeping. */
+    activeProfileName: String?,
+    onSwitchProfile: () -> Unit,
     modifier: Modifier = Modifier,
     viewModel: SettingsViewModel = koinViewModel(key = "tv-settings"),
 ) {
@@ -165,8 +168,19 @@ fun TvSettingsScreen(
             )
         }
 
-        // First, because it is the one setting an app with nothing in it needs, and because
-        // a viewer arriving here from an empty catalogue is looking for exactly this.
+        // Whose settings these partly are. First, because a viewer who finds somebody else's
+        // favourites is looking for this and nothing else on the screen.
+        item { SectionHeading(stringResource(R.string.tv_settings_profile)) }
+
+        item {
+            ActionRow(
+                label = activeProfileName ?: stringResource(R.string.tv_profile_guest),
+                description = stringResource(R.string.tv_settings_profile_detail),
+                action = stringResource(R.string.tv_settings_profile_switch),
+                onClick = onSwitchProfile,
+            )
+        }
+
         item { SectionHeading(stringResource(R.string.tv_settings_sources)) }
 
         item {

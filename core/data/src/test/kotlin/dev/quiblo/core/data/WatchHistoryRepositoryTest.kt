@@ -36,11 +36,11 @@ import org.junit.jupiter.api.Test
 class WatchHistoryRepositoryTest {
 
     private val dao: ResumePositionDao = mockk(relaxed = true)
-    private val repository = WatchHistoryRepository(dao, now = { FIXED_NOW })
+    private val repository = WatchHistoryRepository(dao, fakeProfiles(PROFILE_ID), now = { FIXED_NOW })
 
     @Test
     fun `collapses a series to the episode last watched`() = runTest {
-        every { dao.observeHistory(any(), any(), any()) } returns flowOf(
+        every { dao.observeHistory(any(), any(), any(), any()) } returns flowOf(
             listOf(
                 episodeRow("s1e4", season = 1, episode = 4, watchedAt = 300L),
                 episodeRow("s1e3", season = 1, episode = 3, watchedAt = 200L),
@@ -59,7 +59,7 @@ class WatchHistoryRepositoryTest {
 
     @Test
     fun `keeps different series apart while collapsing each one`() = runTest {
-        every { dao.observeHistory(any(), any(), any()) } returns flowOf(
+        every { dao.observeHistory(any(), any(), any(), any()) } returns flowOf(
             listOf(
                 episodeRow("a2", series = "series-a", watchedAt = 400L),
                 episodeRow("b1", series = "series-b", watchedAt = 300L),
@@ -76,7 +76,7 @@ class WatchHistoryRepositoryTest {
     fun `films collapse to themselves rather than to each other`() = runTest {
         // Films carry no parent key. Grouping on a null would fold the entire film history
         // into a single entry — the failure this test exists to pin down.
-        every { dao.observeHistory(any(), any(), any()) } returns flowOf(
+        every { dao.observeHistory(any(), any(), any(), any()) } returns flowOf(
             listOf(
                 filmRow("film-1", watchedAt = 200L),
                 filmRow("film-2", watchedAt = 100L),
@@ -111,7 +111,7 @@ class WatchHistoryRepositoryTest {
 
     @Test
     fun `an item never played has no resume point`() = runTest {
-        every { dao.observeHistory(any(), any(), any()) } returns flowOf(emptyList())
+        every { dao.observeHistory(any(), any(), any(), any()) } returns flowOf(emptyList())
 
         // Zero, not null: callers seek to this, and "start at the beginning" is the right
         // answer for something nobody has watched.
@@ -127,6 +127,7 @@ class WatchHistoryRepositoryTest {
         watchedAt: Long,
     ) = ResumePositionEntity(
         stableKey = key,
+        profileId = PROFILE_ID,
         positionMillis = 60_000L,
         updatedAtEpochMillis = watchedAt,
         sourceId = SOURCE_ID,
@@ -139,6 +140,7 @@ class WatchHistoryRepositoryTest {
 
     private fun filmRow(key: String, watchedAt: Long) = ResumePositionEntity(
         stableKey = key,
+        profileId = PROFILE_ID,
         positionMillis = 60_000L,
         updatedAtEpochMillis = watchedAt,
         sourceId = SOURCE_ID,
@@ -148,6 +150,7 @@ class WatchHistoryRepositoryTest {
 
     private companion object {
         const val SOURCE_ID = 1L
+        const val PROFILE_ID = 1L
         const val FIXED_NOW = 1_700_000_000_000L
     }
 }

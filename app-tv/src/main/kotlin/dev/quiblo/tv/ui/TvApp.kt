@@ -48,6 +48,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -62,6 +63,8 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import dev.quiblo.core.data.ProfileRepository
 import dev.quiblo.core.model.Channel
 import dev.quiblo.core.model.MediaKind
 import dev.quiblo.tv.R
@@ -70,10 +73,13 @@ import dev.quiblo.tv.ui.detail.TvMovieScreen
 import dev.quiblo.tv.ui.live.TvLiveScreen
 import dev.quiblo.tv.ui.player.TvPlaybackRequest
 import dev.quiblo.tv.ui.player.TvPlayerScreen
+import dev.quiblo.tv.ui.profiles.TvProfileScreen
 import dev.quiblo.tv.ui.search.TvSearchScreen
 import dev.quiblo.tv.ui.series.TvSeriesScreen
 import dev.quiblo.tv.ui.settings.TvSettingsScreen
 import dev.quiblo.tv.ui.sources.TvSourcesScreen
+import kotlinx.coroutines.launch
+import org.koin.compose.koinInject
 
 /**
  * The television shell: a text tab bar across the top, content beneath it.
@@ -85,6 +91,22 @@ import dev.quiblo.tv.ui.sources.TvSourcesScreen
  */
 @Composable
 fun TvApp() {
+    // Nobody watches anything until the app knows whose favourites it would be reading. The
+    // gate is here rather than inside the shell so that no screen below it ever has to cope
+    // with there being no profile — they simply are not composed yet.
+    val profiles: ProfileRepository = koinInject()
+    val activeProfile by profiles.activeProfile.collectAsStateWithLifecycle()
+
+    if (activeProfile == null) {
+        TvProfileScreen()
+        return
+    }
+
+    // Leaving a profile is a suspending write, and the screen it is triggered from is about
+    // to stop existing — so it runs on a scope that outlives the composition.
+    val scope = rememberCoroutineScope()
+    val profileSwitch = { scope.launch { profiles.signOut() } }
+
     // Opens on Search, which is also where Back comes to rest — so the first tab is the home
     // tab in both directions rather than only one. Focus starts in the bar rather than in the
     // field, so opening the app does not open a keyboard at somebody who came here to watch
@@ -112,7 +134,12 @@ fun TvApp() {
             onOpenChannel = { channel -> overlay = detailFor(channel) },
         )
     } else {
-        TvOverlayScreen(overlay = current, onOverlay = { overlay = it })
+        TvOverlayScreen(
+            overlay = current,
+            onOverlay = { overlay = it },
+            activeProfileName = activeProfile?.name,
+            onSwitchProfile = { profileSwitch() },
+        )
     }
 }
 
@@ -125,7 +152,12 @@ fun TvApp() {
  * in view at once.
  */
 @Composable
-private fun TvOverlayScreen(overlay: TvOverlay, onOverlay: (TvOverlay?) -> Unit) {
+private fun TvOverlayScreen(
+    overlay: TvOverlay,
+    onOverlay: (TvOverlay?) -> Unit,
+    activeProfileName: String?,
+    onSwitchProfile: () -> Unit,
+) {
     when (overlay) {
         is TvOverlay.Playing -> TvPlayerScreen(
             request = overlay.request,
@@ -174,6 +206,10 @@ private fun TvOverlayScreen(overlay: TvOverlay, onOverlay: (TvOverlay?) -> Unit)
         TvOverlay.Settings -> TvSettingsScreen(
             onBack = { onOverlay(null) },
             onOpenSources = { onOverlay(TvOverlay.Sources) },
+            activeProfileName = activeProfileName,
+            // Straight back to the chooser: there is nothing to confirm, and whatever was on
+            // screen belonged to the profile being left.
+            onSwitchProfile = onSwitchProfile,
             modifier = Modifier.padding(SCREEN_PADDING),
         )
 

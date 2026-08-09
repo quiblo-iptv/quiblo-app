@@ -210,3 +210,35 @@ than new work:
 host: the scan asks the same service the detail screens already ask, with the same key the
 user supplied, and asks for the *cheap* record — a search hit, whose genre ids are translated
 by one call per catalogue — rather than the full one. Nothing is fetched for live channels.
+
+### Amendment 6 — local profiles (2026-08-09)
+
+**Decision.** The app asks who is watching. A profile owns **favourites and resume positions**
+and nothing else; playlists, player settings, hidden categories and the metadata key stay
+app-wide. Alongside the named profiles there is **Guest**, whose favourites and resume points
+are deleted when the session ends. There is no PIN and nothing is hidden from anybody.
+
+**Rationale.** `docs/PLAN.md` §6 parks "multiple profiles, parental PIN" in Phase 2, and this
+is the first half of that item arriving early — deliberately without the second half. The
+reason is that continue-watching is the feature most damaged by being shared: a household
+using one television has been getting one list of half-watched films belonging to nobody in
+particular, and it is precisely the row the app puts first on every catalogue screen.
+
+**What is explicitly not in it.** No password, no PIN, no per-profile locking of categories or
+of anything else. Those make this a parental-controls feature, which is a different promise
+with different failure modes — a control that *appears* to restrict is worse than no control
+— and it stays parked. Guest is not a weaker profile; it is a session, which is why its data
+is deleted rather than merely hidden.
+
+**How guest keeps its promise.** Guest is a row in `profiles` with the favourites and resume
+tables carrying a foreign key onto it, so deleting the row deletes the data by cascade rather
+than by a routine somebody has to remember to call. It is deleted when the guest leaves *and*
+at every startup, because a television is switched off at the wall and a process the system
+kills runs no tidy-up. A promise kept only on the happy path is not kept.
+
+**What it costs on upgrade.** Schema 10 → 11 rebuilds both tables to put the profile in their
+primary key, and **adopts everything already stored into a profile named "Default"** rather
+than dropping it. Nobody upgrading loses a favourite. Backup keeps its existing format: a
+file holds one person's favourites — whoever was watching when it was written, and whoever is
+watching when it is read — because a format that carried profiles would have to answer what
+happens when it lands on a device where those people do not exist.

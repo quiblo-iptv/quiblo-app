@@ -30,6 +30,7 @@ import dev.quiblo.core.database.entity.CategoryOverrideEntity
 import dev.quiblo.core.database.entity.ChannelEntity
 import dev.quiblo.core.database.entity.ChannelLogoEntity
 import dev.quiblo.core.database.entity.FavoriteEntity
+import dev.quiblo.core.database.entity.ProfileEntity
 import dev.quiblo.core.database.entity.ProgrammeEntity
 import dev.quiblo.core.database.entity.ResumePositionEntity
 import dev.quiblo.core.database.entity.SourceEntity
@@ -116,6 +117,7 @@ interface ChannelDao {
         SELECT c.*, (f.stableKey IS NOT NULL) AS isFavorite
         FROM channels c
         LEFT JOIN favorites f ON f.sourceId = c.sourceId AND f.stableKey = c.stableKey
+              AND f.profileId = :profileId
         WHERE c.sourceId = :sourceId
           AND c.kind = :kind
           AND (:groupTitle IS NULL OR c.groupTitle = :groupTitle)
@@ -124,7 +126,9 @@ interface ChannelDao {
         ORDER BY c.sortIndex ASC
         """,
     )
+    @Suppress("LongParameterList")
     fun observeBrowse(
+        profileId: Long,
         sourceId: Long,
         kind: String,
         groupTitle: String?,
@@ -138,12 +142,13 @@ interface ChannelDao {
         SELECT c.*, 1 AS isFavorite
         FROM channels c
         INNER JOIN favorites f ON f.sourceId = c.sourceId AND f.stableKey = c.stableKey
+          AND f.profileId = :profileId
         WHERE c.sourceId = :sourceId
           AND (:query = '' OR c.name LIKE '%' || :query || '%')
         ORDER BY c.kind ASC, c.sortIndex ASC
         """,
     )
-    fun observeFavorites(sourceId: Long, query: String): Flow<List<ChannelWithFavorite>>
+    fun observeFavorites(profileId: Long, sourceId: Long, query: String): Flow<List<ChannelWithFavorite>>
 
     /**
      * Categories in the provider's own order, not alphabetically.
@@ -179,6 +184,7 @@ interface ChannelDao {
         SELECT c.*, (f.stableKey IS NOT NULL) AS isFavorite
         FROM channels c
         LEFT JOIN favorites f ON f.sourceId = c.sourceId AND f.stableKey = c.stableKey
+              AND f.profileId = :profileId
         WHERE c.sourceId = :sourceId
           AND c.kind = :kind
           AND c.name LIKE '%' || :query || '%'
@@ -186,7 +192,13 @@ interface ChannelDao {
         LIMIT :limit
         """,
     )
-    suspend fun search(sourceId: Long, kind: String, query: String, limit: Int): List<ChannelWithFavorite>
+    suspend fun search(
+        profileId: Long,
+        sourceId: Long,
+        kind: String,
+        query: String,
+        limit: Int,
+    ): List<ChannelWithFavorite>
 
     /**
      * Every film and series title a source carries, as strings.
@@ -205,11 +217,12 @@ interface ChannelDao {
         SELECT c.*, (f.stableKey IS NOT NULL) AS isFavorite
         FROM channels c
         LEFT JOIN favorites f ON f.sourceId = c.sourceId AND f.stableKey = c.stableKey
+              AND f.profileId = :profileId
         WHERE c.id IN (:ids)
         ORDER BY c.sortIndex ASC
         """,
     )
-    suspend fun findAllByIds(ids: List<Long>): List<ChannelWithFavorite>
+    suspend fun findAllByIds(profileId: Long, ids: List<Long>): List<ChannelWithFavorite>
 
     @Query("SELECT COUNT(*) FROM channels WHERE sourceId = :sourceId")
     suspend fun countForSource(sourceId: Long): Int
@@ -254,8 +267,8 @@ interface ChannelDao {
 @Dao
 interface ResumePositionDao {
 
-    @Query("SELECT positionMillis FROM resume_positions WHERE stableKey = :stableKey")
-    suspend fun positionFor(stableKey: String): Long?
+    @Query("SELECT positionMillis FROM resume_positions WHERE profileId = :profileId AND stableKey = :stableKey")
+    suspend fun positionFor(profileId: Long, stableKey: String): Long?
 
     /**
      * The most recently watched of [stableKeys], for resuming a series where it was left.
@@ -264,10 +277,10 @@ interface ResumePositionDao {
      * is not the one a viewer was last on.
      */
     @Query(
-        "SELECT * FROM resume_positions WHERE stableKey IN (:stableKeys) " +
+        "SELECT * FROM resume_positions WHERE profileId = :profileId AND stableKey IN (:stableKeys) " +
             "ORDER BY updatedAtEpochMillis DESC LIMIT 1",
     )
-    suspend fun mostRecentOf(stableKeys: List<String>): ResumePositionEntity?
+    suspend fun mostRecentOf(profileId: Long, stableKeys: List<String>): ResumePositionEntity?
 
     /**
      * Everything watched of one kind, most recent first.
@@ -283,19 +296,24 @@ interface ResumePositionDao {
     @Query(
         """
         SELECT * FROM resume_positions
-        WHERE sourceId = :sourceId AND kind = :kind AND title != ''
+        WHERE profileId = :profileId AND sourceId = :sourceId AND kind = :kind AND title != ''
         ORDER BY updatedAtEpochMillis DESC
         LIMIT :limit
         """,
     )
-    fun observeHistory(sourceId: Long, kind: String, limit: Int): Flow<List<ResumePositionEntity>>
+    fun observeHistory(
+        profileId: Long,
+        sourceId: Long,
+        kind: String,
+        limit: Int,
+    ): Flow<List<ResumePositionEntity>>
 
-    @Query("DELETE FROM resume_positions WHERE stableKey = :stableKey")
-    suspend fun delete(stableKey: String)
+    @Query("DELETE FROM resume_positions WHERE profileId = :profileId AND stableKey = :stableKey")
+    suspend fun delete(profileId: Long, stableKey: String)
 
     /** Forgets every episode of one series, which is what "remove from history" means there. */
-    @Query("DELETE FROM resume_positions WHERE seriesStableKey = :seriesStableKey")
-    suspend fun deleteForSeries(seriesStableKey: String)
+    @Query("DELETE FROM resume_positions WHERE profileId = :profileId AND seriesStableKey = :seriesStableKey")
+    suspend fun deleteForSeries(profileId: Long, seriesStableKey: String)
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(position: ResumePositionEntity)
@@ -304,8 +322,11 @@ interface ResumePositionDao {
 @Dao
 interface FavoriteDao {
 
-    @Query("SELECT EXISTS(SELECT 1 FROM favorites WHERE sourceId = :sourceId AND stableKey = :stableKey)")
-    suspend fun isFavorite(sourceId: Long, stableKey: String): Boolean
+    @Query(
+        "SELECT EXISTS(SELECT 1 FROM favorites " +
+            "WHERE profileId = :profileId AND sourceId = :sourceId AND stableKey = :stableKey)",
+    )
+    suspend fun isFavorite(profileId: Long, sourceId: Long, stableKey: String): Boolean
 
     /**
      * The same fact as a stream, for a screen that both shows and changes it.
@@ -313,21 +334,24 @@ interface FavoriteDao {
      * A detail screen cannot read it once: it owns the toggle, so a one-shot read would
      * leave the heart it just filled in showing the state from before the tap.
      */
-    @Query("SELECT EXISTS(SELECT 1 FROM favorites WHERE sourceId = :sourceId AND stableKey = :stableKey)")
-    fun observeIsFavorite(sourceId: Long, stableKey: String): Flow<Boolean>
+    @Query(
+        "SELECT EXISTS(SELECT 1 FROM favorites " +
+            "WHERE profileId = :profileId AND sourceId = :sourceId AND stableKey = :stableKey)",
+    )
+    fun observeIsFavorite(profileId: Long, sourceId: Long, stableKey: String): Flow<Boolean>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun add(favorite: FavoriteEntity)
 
-    @Query("DELETE FROM favorites WHERE sourceId = :sourceId AND stableKey = :stableKey")
-    suspend fun remove(sourceId: Long, stableKey: String)
+    @Query("DELETE FROM favorites WHERE profileId = :profileId AND sourceId = :sourceId AND stableKey = :stableKey")
+    suspend fun remove(profileId: Long, sourceId: Long, stableKey: String)
 
-    @Query("SELECT COUNT(*) FROM favorites WHERE sourceId = :sourceId")
-    suspend fun countFor(sourceId: Long): Int
+    @Query("SELECT COUNT(*) FROM favorites WHERE profileId = :profileId AND sourceId = :sourceId")
+    suspend fun countFor(profileId: Long, sourceId: Long): Int
 
     /** Every favourite for one source, for export (AC-DATA-01). */
-    @Query("SELECT * FROM favorites WHERE sourceId = :sourceId")
-    suspend fun allFor(sourceId: Long): List<FavoriteEntity>
+    @Query("SELECT * FROM favorites WHERE profileId = :profileId AND sourceId = :sourceId")
+    suspend fun allFor(profileId: Long, sourceId: Long): List<FavoriteEntity>
 }
 
 @Dao
@@ -484,4 +508,35 @@ interface CategoryOverrideDao {
 
     @Query("DELETE FROM category_overrides WHERE kind = :kind AND originalTitle = :originalTitle")
     suspend fun clear(kind: String, originalTitle: String)
+}
+
+@Dao
+interface ProfileDao {
+
+    /** Everyone, guest included — the chooser shows a guest session in progress as itself. */
+    @Query("SELECT * FROM profiles ORDER BY isGuest ASC, createdAtEpochMillis ASC")
+    fun observeAll(): Flow<List<ProfileEntity>>
+
+    @Query("SELECT * FROM profiles WHERE id = :id")
+    suspend fun find(id: Long): ProfileEntity?
+
+    @Query("SELECT COUNT(*) FROM profiles WHERE isGuest = 0")
+    suspend fun countNamed(): Int
+
+    @Insert
+    suspend fun insert(profile: ProfileEntity): Long
+
+    @Query("DELETE FROM profiles WHERE id = :id")
+    suspend fun delete(id: Long)
+
+    /**
+     * Ends every guest session there has ever been.
+     *
+     * The favourites and resume points go with the row, by foreign key rather than by a
+     * second statement here — which is the point of guest being a row at all. Called at
+     * startup as well as on leaving, because a process killed by the system never gets to
+     * run a tidy-up and a promise kept only on the happy path is not kept.
+     */
+    @Query("DELETE FROM profiles WHERE isGuest = 1")
+    suspend fun deleteGuests()
 }

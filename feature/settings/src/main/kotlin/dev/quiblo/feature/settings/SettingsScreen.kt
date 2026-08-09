@@ -71,6 +71,8 @@ fun SettingsScreen(
     val tmdbKey by viewModel.tmdbApiKey.collectAsStateWithLifecycle()
     val tmdbCheck by viewModel.tmdbCheck.collectAsStateWithLifecycle()
     val metadataScan by viewModel.metadataScan.collectAsStateWithLifecycle()
+    val profilesViewModel: ProfilesViewModel = koinViewModel()
+    val profilesState by profilesViewModel.uiState.collectAsStateWithLifecycle()
     val categoryKind by viewModel.selectedCategoryKind.collectAsStateWithLifecycle()
     val categories by viewModel.categories.collectAsStateWithLifecycle()
     val appearance by viewModel.appearance.collectAsStateWithLifecycle()
@@ -128,6 +130,14 @@ fun SettingsScreen(
             appearance = appearance,
             onThemeMode = viewModel::setThemeMode,
             onDynamicColor = viewModel::setDynamicColor,
+        )
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        ProfileCard(
+            name = profilesState.active?.name,
+            isGuest = profilesState.active?.isGuest == true,
+            onSwitch = profilesViewModel::switchProfile,
         )
 
         Spacer(modifier = Modifier.height(16.dp))

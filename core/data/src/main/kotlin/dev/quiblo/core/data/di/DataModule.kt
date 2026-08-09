@@ -25,6 +25,7 @@ import dev.quiblo.core.data.ChannelRepository
 import dev.quiblo.core.data.GuideRepository
 import dev.quiblo.core.data.LocalFileContentFetcher
 import dev.quiblo.core.data.PlayerSettingsRepository
+import dev.quiblo.core.data.SearchRepository
 import dev.quiblo.core.data.SourceRepository
 import dev.quiblo.core.data.TitleMetadataRepository
 import dev.quiblo.core.data.WatchHistoryRepository
@@ -70,6 +71,7 @@ val dataModule: Module = module {
     single { ChannelRepository(get(), get(), get(), get()) }
     single { WatchHistoryRepository(get()) }
     single { CategoryRepository(get(), get()) }
+    single { SearchRepository(get(), get(), get()) }
     single { GuideRepository(get(), get(), get()) }
     single { BackupRepository(get(), get()) }
     single { PlayerSettingsRepository(get()) }

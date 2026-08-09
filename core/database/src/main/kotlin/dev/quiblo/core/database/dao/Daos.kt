@@ -82,6 +82,21 @@ data class CategoryCount(
     val itemCount: Int,
 )
 
+/**
+ * Just enough of a channel to decide whether it belongs in an answer.
+ *
+ * A projection rather than the whole row, because the genre filter has to consider *every*
+ * film and series a source carries — the metadata cache is keyed by a cleaned title, and no
+ * SQL predicate can clean a title. Reading three columns of 60,000 rows is a list of strings;
+ * reading the rows themselves is the browse screen's whole working set, twice over, for
+ * something that will be narrowed to a screenful.
+ */
+data class ChannelTitle(
+    val id: Long,
+    val name: String,
+    val kind: String,
+)
+
 @Dao
 interface ChannelDao {
 
@@ -148,6 +163,53 @@ interface ChannelDao {
         """,
     )
     fun observeCategoriesByKind(sourceId: Long, kind: String): Flow<List<CategoryCount>>
+
+    /**
+     * One kind's worth of matches for a search term, capped.
+     *
+     * A one-shot read rather than a [Flow], because search is a question asked once per
+     * keystroke and answered once — a subscription per kind that stays open would re-run
+     * three queries on every write to the table while the viewer is still typing.
+     *
+     * The cap is what makes searching a 67,000-channel account safe: a two-letter term
+     * matches thousands of rows, and nobody scrolls past the first screenful of them.
+     */
+    @Query(
+        """
+        SELECT c.*, (f.stableKey IS NOT NULL) AS isFavorite
+        FROM channels c
+        LEFT JOIN favorites f ON f.sourceId = c.sourceId AND f.stableKey = c.stableKey
+        WHERE c.sourceId = :sourceId
+          AND c.kind = :kind
+          AND c.name LIKE '%' || :query || '%'
+        ORDER BY c.sortIndex ASC
+        LIMIT :limit
+        """,
+    )
+    suspend fun search(sourceId: Long, kind: String, query: String, limit: Int): List<ChannelWithFavorite>
+
+    /**
+     * Every film and series title a source carries, as strings.
+     *
+     * For the genre filter, which matches a channel against the metadata cache by cleaned
+     * title — an operation SQLite cannot express, so the comparison happens in Kotlin and
+     * this is the cheapest thing that can be handed to it. Live channels are excluded because
+     * nothing looks a television channel up in a film database.
+     */
+    @Query("SELECT id, name, kind FROM channels WHERE sourceId = :sourceId AND kind IN ('VOD', 'SERIES')")
+    suspend fun titlesForMetadata(sourceId: Long): List<ChannelTitle>
+
+    /** The full rows behind ids the genre filter has already chosen. */
+    @Query(
+        """
+        SELECT c.*, (f.stableKey IS NOT NULL) AS isFavorite
+        FROM channels c
+        LEFT JOIN favorites f ON f.sourceId = c.sourceId AND f.stableKey = c.stableKey
+        WHERE c.id IN (:ids)
+        ORDER BY c.sortIndex ASC
+        """,
+    )
+    suspend fun findAllByIds(ids: List<Long>): List<ChannelWithFavorite>
 
     @Query("SELECT COUNT(*) FROM channels WHERE sourceId = :sourceId")
     suspend fun countForSource(sourceId: Long): Int
@@ -318,11 +380,36 @@ interface ProgrammeDao {
     }
 }
 
+/**
+ * What the metadata cache knows about one title, minus everything a filter has no use for.
+ *
+ * The plot, the cast and two artwork URLs are the bulk of a cached row and none of them
+ * answer "which of these is a crime film". Read as a projection so the genre index stays a
+ * few kilobytes rather than the whole cache.
+ */
+data class TitleGenreRow(
+    val searchTitle: String,
+    val kind: String,
+    val genres: String?,
+    val isMiss: Boolean,
+)
+
 @Dao
 interface TitleMetadataDao {
 
     @Query("SELECT * FROM title_metadata WHERE searchTitle = :searchTitle AND kind = :kind")
     suspend fun find(searchTitle: String, kind: String): TitleMetadataEntity?
+
+    /**
+     * Every answer the cache holds, misses included.
+     *
+     * Misses are part of the answer to "how much of your catalogue has been looked up",
+     * which is the number the search screen quotes. A title that matched nothing has been
+     * asked about; it is known, and pretending otherwise would make the figure creep
+     * upward forever without ever arriving.
+     */
+    @Query("SELECT searchTitle, kind, genres, isMiss FROM title_metadata")
+    suspend fun allGenreRows(): List<TitleGenreRow>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(entity: TitleMetadataEntity)

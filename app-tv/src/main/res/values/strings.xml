@@ -45,6 +45,7 @@
     <string name="tv_search_empty">Nothing matched that.</string>
     <string name="tv_search_no_source">No playlist yet. Add one under Settings.</string>
     <string name="tv_search_clear">Clear</string>
+    <string name="tv_search_advanced">Advanced</string>
     <string name="tv_search_live">Live channels</string>
     <string name="tv_search_movies">Films</string>
     <string name="tv_search_series">Series</string>

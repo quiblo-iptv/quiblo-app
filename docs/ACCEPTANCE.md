@@ -111,6 +111,8 @@ except where a criterion names an input method the television does not have.
 | AC-TV-11 | Opening a film shows what it is before it plays, and offers Resume separately from Start from the beginning whenever a stored position exists. |
 | AC-TV-12 | Opening a series shows its seasons and episodes, and the same information a film shows — artwork, plot, score, cast, favouriting. Pressing a series never sends its own URL to the player. |
 | AC-TV-13 | A live source with more than one category can be filtered from the Live list by remote, and filtering never issues a request per category passed over. |
+| AC-TV-14 | A title can be found by name from one screen whichever kind the provider filed it under, and every result is reachable and openable with the D-pad. A term typed on the on-screen keyboard does not put a query to the database per keystroke, and no term returns more rows than a viewer could walk. |
+| AC-TV-15 | Playlists and accounts are reachable from Settings, and back from them returns to Settings rather than to the catalogue. They are not in the tab bar. |
 
 ## AC-LEGAL — Licensing and Compliance
 
@@ -131,3 +133,7 @@ Every AC above passes on a physical Android 11 device and a physical Android 14 
 Since Amendment 1 the television is part of v1.0, so there is a third row: **AC-TV-\* and the phone criteria that still apply pass on a physical Android TV device, driven by its remote alone.** A green phone sweep is not a v1.0. Progress against all three is recorded in [`ACCEPTANCE-SWEEP.md`](ACCEPTANCE-SWEEP.md).
 
 Amendment 4 added AC-TV-09…13 for the settings and detail screens the television gained on 2026-08-04. They are part of that third row and not a separate gate.
+
+AC-TV-14 and 15 arrived with the search screen on 2026-08-09, which is `PLAN-TV.md` §3.1
+being delivered rather than new scope: the bar in that document has always had a magnifier on
+the far left and has never had Sources in it. Same third row, still not a separate gate.

@@ -181,7 +181,12 @@ here rather than reverting that deletion.
 
 ### 3.5 Sources and Settings
 
-Straight ports of the existing screens with focusable rows. Two constraints:
+Straight ports of the existing screens with focusable rows. **Sources is reached from
+Settings, not from the tab bar** — as of 2026-08-09, and as §3.1's bar always implied: the
+reference has five destinations and none of them is a playlist form. Adding a source is done
+once; the tab bar is for what is done every evening.
+
+Two constraints:
 
 - **Text entry is miserable on a remote.** Adding an Xtream account means typing a URL, a
   username and a password on an on-screen keyboard. Offer the existing **import** flow as
@@ -258,6 +263,23 @@ milestone existed at all rather than being a matter of writing screens:
   pulled the remote out of the tab bar entirely.
 - The IME ate the D-pad, so field-to-field movement never ran and every field typed went
   into the same box. Movement now goes through the keyboard's own next-field action.
+
+### T7 — Search (2026-08-09)
+
+The magnifier §3.1 has drawn since the first version of this document, finally behind
+something. One screen searching live, films and series at once — a viewer looking for a title
+does not know which of the three their panel filed it under, and panels routinely file the
+same film as both a film and a one-episode series.
+
+- A term is debounced and asked once, capped per kind, and the newest term cancels the one
+  before it: a remote's on-screen keyboard delivers characters in bursts, and every burst
+  would otherwise queue a query nobody is waiting for.
+- A genre filter built from metadata already cached for titles the viewer has browsed past,
+  so it costs no requests and works with the key switched off, minus the genres. It says on
+  screen how much of the catalogue it can describe, because a filter that silently omits nine
+  films in ten is worse than one that admits it.
+- Sources leaves the tab bar for Settings (§3.5), which is what makes room for it.
+- **Exit:** AC-TV-14 and AC-TV-15 pass on the television.
 
 ### T5 — Release (week 6)
 - Second release track, TV banner and store assets, size budget.

@@ -47,7 +47,7 @@ immediate ban — see [`CONTRIBUTING.md`](CONTRIBUTING.md).
 | **Playback Tuning** | Skip interval, buffering profile and a maximum-bitrate cap, all in Settings |
 | **Movies & Series** | Detail screens with artwork and overview, and Resume or Start from beginning |
 | **Continue watching** | A row of what you started and have not finished, with how far in you were. A series appears once, at the episode you were last on |
-| **Layout & Search** | Poster grids for movies and series, category filter, list/grid toggle, expandable search |
+| **Layout & Search** | Poster grids for movies and series, category filter, list/grid toggle, expandable search. On the television, one search across live channels, films and series at once, filterable by genre |
 | **Theme & Design** | Material 3 Expressive, dark and light |
 | **Resume** | Playback position remembered per item, and per episode within a series |
 | **Favourites** | Survive playlist refresh |

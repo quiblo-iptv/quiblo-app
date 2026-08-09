@@ -38,8 +38,89 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       tag: ${{ steps.bump.outputs.tag }}
+      release: ${{ steps.class.outputs.release }}
 
     steps:
+      - name: Check out main
+        uses: actions/checkout@v4
+        with:
+          # The branch, not the commit that triggered this. A detached HEAD has nothing to
+          # push the bump back onto.
+          ref: ${{ github.ref_name }}
+          # Tags are needed to tell an already-released version from a new one, and to find
+          # where the last release ended so the step below knows what to read.
+          fetch-depth: 0
+
+      # Whether this merge releases at all, and as what.
+      #
+      # A merge to main is a release *when something released changed*. A typo in a README,
+      # a new test, a CI tweak — none of those alter a single byte a user runs, and shipping
+      # them as versions teaches people that release notes are not worth reading. The commit
+      # types are already there to be read: every commit in this repository is written to
+      # Conventional Commits, so the decision needs no new tool and no new discipline.
+      #
+      #   feat:            → minor    (docs/RELEASE-MANAGEMENT.md §1)
+      #   fix:             → patch
+      #   anything else    → no release; main moves, nothing publishes
+      #   ! or BREAKING    → stop and ask a human (§2)
+      #
+      # Majors are deliberately *not* inferred. §2 defines a major by consequences a prefix
+      # cannot see — an export format that stops loading, a raised minSdk, a withdrawn
+      # feature — so a `!` somebody typed is a reason to stop and decide, not a licence to
+      # spend the first number.
+      - name: Work out the release class
+        id: class
+        run: |
+          set -euo pipefail
+
+          LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || true)
+          if [ -z "$LAST_TAG" ]; then
+            RANGE="HEAD"
+            echo "No tag yet — reading the whole history."
+          else
+            RANGE="$LAST_TAG..HEAD"
+            echo "Reading commits since $LAST_TAG."
+          fi
+
+          # --no-merges because a merge commit's subject is prose, not a conventional type;
+          # the commits it brings in are in the range on their own and carry the types.
+          SUBJECTS=$(git log --no-merges --format='%s' "$RANGE" || true)
+          BODIES=$(git log --no-merges --format='%B' "$RANGE" || true)
+
+          if [ -z "$SUBJECTS" ]; then
+            echo "::notice::No commits since $LAST_TAG. Nothing to release."
+            echo "release=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "Commits considered:"
+          echo "$SUBJECTS" | sed 's/^/  /'
+
+          # A trailing ! on the type, or a BREAKING CHANGE footer. Either is a claim that
+          # something a user relies on stops working, and that is not ours to automate.
+          if echo "$SUBJECTS" | grep -qE '^[a-z]+(\([^)]*\))?!:' || echo "$BODIES" | grep -q '^BREAKING CHANGE:'; then
+            echo "::error::A breaking change is present, and a major is never inferred. Set the major version by hand in both build files and merge again — see docs/RELEASE-MANAGEMENT.md §2."
+            exit 1
+          fi
+
+          if echo "$SUBJECTS" | grep -qE '^feat(\([^)]*\))?:'; then
+            CLASS=minor
+          elif echo "$SUBJECTS" | grep -qE '^fix(\([^)]*\))?:'; then
+            CLASS=patch
+          else
+            CLASS=none
+          fi
+
+          if [ "$CLASS" = "none" ]; then
+            echo "::notice::Nothing here changes what a user runs — no feat: or fix: since ${LAST_TAG:-the beginning}. Main is updated and no release is published."
+            echo "release=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "release=true" >> "$GITHUB_OUTPUT"
+          echo "class=$CLASS" >> "$GITHUB_OUTPUT"
+          echo "Release class: $CLASS"
+
       # Checked here, before anything is written, rather than where it is used.
       #
       # The signing step is most of the way through the *next* job, and by then this one has
@@ -48,6 +129,7 @@ jobs:
       # the guard below, which refuses to reuse a tag, would then block the retry. Failing
       # here costs a red run and changes nothing.
       - name: Check the release can be signed
+        if: steps.class.outputs.release == 'true'
         env:
           KEYSTORE_BASE64: ${{ secrets.QUIBLO_KEYSTORE_BASE64 }}
         run: |
@@ -57,17 +139,11 @@ jobs:
             exit 1
           fi
 
-      - name: Check out main
-        uses: actions/checkout@v4
-        with:
-          # The branch, not the commit that triggered this. A detached HEAD has nothing to
-          # push the bump back onto.
-          ref: ${{ github.ref_name }}
-          # Tags are needed to tell an already-released version from a new one.
-          fetch-depth: 0
-
       - name: Work out the next version
         id: bump
+        if: steps.class.outputs.release == 'true'
+        env:
+          CLASS: ${{ steps.class.outputs.class }}
         run: |
           set -euo pipefail
 
@@ -94,8 +170,20 @@ jobs:
             exit 1
           fi
 
+          # Which number moves is the class the step above worked out, not a fixed choice.
+          # A minor resets the patch: 0.2.2 with a feat: in it becomes 0.3.0, not 0.2.3.
           IFS=. read -r MAJOR MINOR PATCH <<< "$CURRENT_NAME"
-          NEXT_NAME="$MAJOR.$MINOR.$((PATCH + 1))"
+          case "$CLASS" in
+            minor) NEXT_NAME="$MAJOR.$((MINOR + 1)).0" ;;
+            patch) NEXT_NAME="$MAJOR.$MINOR.$((PATCH + 1))" ;;
+            *)
+              echo "::error::Unknown release class '$CLASS'. This job should not have run."
+              exit 1
+              ;;
+          esac
+
+          # versionCode never expresses the class — Android only requires that it increases,
+          # and the name carries the meaning. See docs/RELEASE-MANAGEMENT.md §6.
           NEXT_CODE=$((CURRENT_CODE + 1))
           TAG="v$NEXT_NAME"
 
@@ -119,9 +207,10 @@ jobs:
           fi
 
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
-          echo "Releasing $CURRENT_NAME (code $CURRENT_CODE) → $NEXT_NAME (code $NEXT_CODE)."
+          echo "Releasing $CURRENT_NAME (code $CURRENT_CODE) → $NEXT_NAME (code $NEXT_CODE), a $CLASS."
 
       - name: Commit and tag
+        if: steps.class.outputs.release == 'true'
         env:
           TAG: ${{ steps.bump.outputs.tag }}
         run: |
@@ -143,6 +232,10 @@ jobs:
   publish:
     name: Publish
     needs: version
+    # Skipped entirely when the merge changed nothing a user runs. The job does not fail in
+    # that case, it does not exist — a red run for a corrected typo would be a worse lie
+    # than a pointless release.
+    if: needs.version.outputs.release == 'true'
     # The release procedure as release.yml defines it: signs both APKs, enforces the 25 MB
     # budget, writes the checksums and attaches all four files.
     uses: ./.github/workflows/release.yml

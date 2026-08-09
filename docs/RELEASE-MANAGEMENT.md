@@ -175,12 +175,40 @@ named, and the number says so.
 The suffix is `-<stage>.<number>`, always with the number, always from 1. `-beta` on its own
 sorts unpredictably against `-beta.2` and reads as though there will only ever be one.
 
-### A merge to main is a release
+### A merge to main is a release — when something released changed
 
 `.github/workflows/release-on-main.yml` gates, versions, tags and publishes, in that order,
 each step conditional on the one before. The version is decided by the workflow, not by a
 person, and the numbers in the two build files are the record of what has already shipped.
 `RELEASING.md` describes the machinery.
+
+**But a merge that changes nothing a user runs publishes nothing.** `0.2.1` and `0.2.2` were
+both cut before this rule existed, and `0.2.2` is — in every way a user can detect — the same
+application as `0.2.1`. A README and a funding file. That is the cost of publishing on every
+merge, and it is worth naming: a project that ships versions containing nothing teaches people
+its release notes are not worth reading, and then the one release that *does* matter is read
+by nobody.
+
+So the workflow reads the **Conventional Commit types since the last tag** and decides:
+
+| Since the last tag | Result |
+|---|---|
+| any `feat:` | **Minor.** `0.2.2` → `0.3.0` — the patch resets |
+| any `fix:`, no `feat:` | **Patch.** `0.2.2` → `0.2.3` |
+| only `docs:` `test:` `ci:` `chore:` `refactor:` `style:` `build:` | **No release.** Main moves, the run is green, nothing publishes |
+| any `type!:` or a `BREAKING CHANGE:` footer | **Stops and asks a person** |
+
+This needed no new tool and no new discipline: every commit here is already written to
+Conventional Commits, so the information was there to be read and simply was not being read.
+
+**A skipped release is a green run, not a red one.** The publish job does not fail when
+nothing is releasable — it does not run at all. A red build for a corrected typo would be a
+worse lie than a pointless release.
+
+**Majors are never inferred.** A `!` is a claim, and §2 defines a major by consequences no
+prefix can see: an export file that stops loading, a raised `minSdk`, a withdrawn feature. So
+a breaking marker **stops the lane** and asks for the version to be set by hand — the same
+escape hatch as below, used deliberately rather than automatically.
 
 Which means **the branch protection on `main` is a release control, not a code-review
 control.** A push that reaches `main` is published. Required: a pull request, the `ci.yml`

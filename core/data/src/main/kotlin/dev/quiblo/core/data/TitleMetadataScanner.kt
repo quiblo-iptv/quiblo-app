@@ -94,6 +94,29 @@ sealed interface MetadataScanState {
 }
 
 /**
+ * How far along a scan is, from 0 to 1, or null when there is no bar to draw.
+ *
+ * Null while preparing — the total is not known until the work list is built, and a bar
+ * drawn against a total of zero would sit at either end and mean neither. A stopped or
+ * cancelled scan keeps its fraction rather than clearing it: where it got to is exactly what
+ * a viewer needs, since starting again carries on from there.
+ *
+ * Shared by both settings screens so the phone and the television cannot disagree about what
+ * "half way" means.
+ */
+val MetadataScanState.progressFraction: Float?
+    get() = when (this) {
+        is MetadataScanState.Running -> fractionOf(done, total)
+        is MetadataScanState.Stopped -> fractionOf(done, total)
+        is MetadataScanState.Cancelled -> fractionOf(done, total)
+        MetadataScanState.Idle, MetadataScanState.Preparing -> null
+        is MetadataScanState.Finished -> 1f
+    }
+
+private fun fractionOf(done: Int, total: Int): Float? =
+    if (total > 0) (done.toFloat() / total).coerceIn(0f, 1f) else null
+
+/**
  * Fills the metadata cache for a whole catalogue, one title at a time.
  *
  * The genre filter and the scores on posters are only as complete as this cache, and the

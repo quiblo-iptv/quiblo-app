@@ -1,0 +1,9 @@
+# Quiblo — a free, open source IPTV player.
+# Copyright (C) 2026 The Quiblo Authors
+# Licensed under the GNU General Public License v3.0 or later. See LICENSE.
+
+# Renders the Sponsor button on the repository. What sponsorship does and does not buy is
+# stated in the README rather than here, because a funding file nobody reads is the wrong
+# place for a promise: no feature is ever paywalled, no sponsor influences the roadmap, and
+# no sponsor logo goes in the app.
+github: [quiblo-iptv]

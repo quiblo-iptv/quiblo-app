@@ -52,7 +52,8 @@ rows are still open.
 **Since `FREEZE.md` Amendment 1 (2026-08-03) the television is part of v1.0**, so this sweep
 has a third target: the Haier MatrixTV EE (Google TV, Android 14) recorded in `PLAN-TV.md`
 §0. The TV app now exists — T0–T4 are built, and Amendment 4 added its settings and detail
-screens — but **none of AC-TV-01…13 have been run as a sweep**, which is a different thing
+screens, and search arrived on 2026-08-09 — but **none of AC-TV-01…15 have been run as a
+sweep**, which is a different thing
 from having watched a feature work while writing it. They are listed in §7. v1.0.0 cannot be
 tagged on a green phone sweep alone.
 
@@ -287,6 +288,8 @@ enough, and a subsequent `adb connect <ip>:5555` is refused).
 | AC-TV-11 | Not run on hardware | Film detail with Resume separate from Start from the beginning. Rendering confirmed on the emulator; **resume has never been exercised with a real stored position** |
 | AC-TV-12 | Not run on hardware | Series detail with seasons, episodes and the same information a film shows |
 | AC-TV-13 | Not run on hardware | Category filtering in Live. Confirmed on the emulator against 11,923 channels; count the requests at the source, not by eye |
+| AC-TV-14 | Not run | Search from the bar's first tab: a title found whichever kind it was filed under, results opened with the D-pad, and the query count watched while a term is typed. Do it against the 67k account, not a small one — the cap is the point |
+| AC-TV-15 | Not run | Playlists reached from Settings and left again by back, with no Sources tab anywhere in the bar |
 
 **What has been seen on an emulator, and what that is worth.** The television emulator
 (`Television_4K`, overridden to 1920x1080 @320dpi — the target device's geometry) was driven

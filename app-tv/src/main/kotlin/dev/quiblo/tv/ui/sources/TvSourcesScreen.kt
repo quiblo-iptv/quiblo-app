@@ -72,9 +72,16 @@ import org.koin.androidx.compose.koinViewModel
  * username and a password typed on an on-screen keyboard, in front of whoever is in the
  * room. It is offered because it has to be, but the form is kept as short as the protocol
  * allows and nothing optional is asked for.
+ *
+ * Opened from Settings rather than from the tab bar, so it carries its own heading and its
+ * own way out: what used to name this screen was the tab that selected it.
  */
 @Composable
-fun TvSourcesScreen(modifier: Modifier = Modifier, viewModel: SourcesViewModel = koinViewModel(key = "tv-sources")) {
+fun TvSourcesScreen(
+    onBack: () -> Unit,
+    modifier: Modifier = Modifier,
+    viewModel: SourcesViewModel = koinViewModel(key = "tv-sources"),
+) {
     val sources by viewModel.sources.collectAsStateWithLifecycle()
     val addState by viewModel.addState.collectAsStateWithLifecycle()
 
@@ -95,6 +102,12 @@ fun TvSourcesScreen(modifier: Modifier = Modifier, viewModel: SourcesViewModel =
     LaunchedEffect(showForm, addState is AddSourceState.Working) {
         if (hasComposed) focusRequester.tryRequestFocus() else hasComposed = true
     }
+
+    // Explicitly disabled while the form is open rather than relying on which handler was
+    // composed last: the form's own back — the one that saves whatever has been typed from a
+    // stray press — has to win, and "the innermost one wins" is a rule that survives exactly
+    // until somebody moves a composable.
+    BackHandler(enabled = !showForm, onBack = onBack)
 
     Column(modifier = modifier.fillMaxSize()) {
         when {
@@ -160,6 +173,16 @@ private fun SourceList(
     onDismissResult: () -> Unit,
 ) {
     LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        item {
+            Text(
+                text = stringResource(R.string.tv_sources_title),
+                color = Color.White,
+                fontSize = 30.sp,
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.padding(bottom = 18.dp),
+            )
+        }
+
         item {
             ResultBanner(addState = addState, onDismiss = onDismissResult)
         }

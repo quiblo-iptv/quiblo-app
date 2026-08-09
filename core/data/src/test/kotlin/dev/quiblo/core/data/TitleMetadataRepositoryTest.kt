@@ -18,6 +18,7 @@
 
 package dev.quiblo.core.data
 
+import dev.quiblo.core.database.dao.TitleGenreRow
 import dev.quiblo.core.database.dao.TitleMetadataDao
 import dev.quiblo.core.database.entity.TitleMetadataEntity
 import dev.quiblo.core.datastore.TmdbKeyStore
@@ -125,6 +126,10 @@ class TitleMetadataRepositoryTest {
 
         override suspend fun find(searchTitle: String, kind: String): TitleMetadataEntity? =
             rows[searchTitle to kind]
+
+        override suspend fun allGenreRows(): List<TitleGenreRow> = rows.values.map {
+            TitleGenreRow(searchTitle = it.searchTitle, kind = it.kind, genres = it.genres, isMiss = it.isMiss)
+        }
 
         override suspend fun upsert(entity: TitleMetadataEntity) {
             rows[entity.searchTitle to entity.kind] = entity

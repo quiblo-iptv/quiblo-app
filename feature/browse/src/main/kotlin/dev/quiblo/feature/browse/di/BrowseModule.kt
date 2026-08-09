@@ -21,6 +21,7 @@ package dev.quiblo.feature.browse.di
 import dev.quiblo.core.model.MediaKind
 import dev.quiblo.feature.browse.BrowseFeed
 import dev.quiblo.feature.browse.BrowseViewModel
+import dev.quiblo.feature.browse.SearchViewModel
 import org.koin.core.module.Module
 import org.koin.core.module.dsl.viewModel
 import org.koin.core.parameter.parametersOf
@@ -43,6 +44,14 @@ val browseModule: Module = module {
             metadataRepository = get(),
             historyRepository = get(),
             channelLogoRepository = get(),
+        )
+    }
+
+    viewModel {
+        SearchViewModel(
+            sourceRepository = get(),
+            searchRepository = get(),
+            metadataRepository = get(),
         )
     }
 }

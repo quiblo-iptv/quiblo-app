@@ -17,7 +17,7 @@
     <string name="tv_placeholder">%1$s content appears here.</string>
     <string name="tv_no_channels">No channels yet. Add a playlist on your phone and import it here.</string>
 
-    <string name="tv_tab_sources">Sources</string>
+    <string name="tv_sources_title">Playlists and accounts</string>
     <string name="tv_sources_add">Add a playlist or account</string>
     <string name="tv_sources_empty">No sources yet.</string>
     <string name="tv_sources_working">Loading…</string>
@@ -39,7 +39,24 @@
 
     <string name="tv_sources_incomplete">Fill in the address, and either both the username and password or neither.</string>
 
+    <!-- Search -->
+    <string name="tv_search_field">Search</string>
+    <string name="tv_search_prompt">Search live channels, films and series at once.</string>
+    <string name="tv_search_empty">Nothing matched that.</string>
+    <string name="tv_search_no_source">No playlist yet. Add one under Settings.</string>
+    <string name="tv_search_clear">Clear</string>
+    <string name="tv_search_live">Live channels</string>
+    <string name="tv_search_movies">Films</string>
+    <string name="tv_search_series">Series</string>
+    <string name="tv_search_genres_coverage">Genres describe %1$d%% of your catalogue so far — browsing fills in the rest.</string>
+    <string name="tv_search_genres_empty">Browse some films or series and you will be able to filter by genre here.</string>
+    <string name="tv_search_genres_disabled">Add a Movie Database key under Settings to filter by genre.</string>
+
     <!-- Settings -->
+    <string name="tv_settings_sources">Playlists</string>
+    <string name="tv_settings_sources_label">Playlists and accounts</string>
+    <string name="tv_settings_sources_detail">Add, refresh or remove the sources this app plays from.</string>
+    <string name="tv_settings_sources_manage">Manage</string>
     <string name="tv_settings_playback">Playback</string>
     <string name="tv_settings_artwork">Artwork</string>
     <string name="tv_settings_seek_interval">Skip forward and back by</string>

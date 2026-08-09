@@ -18,6 +18,7 @@
 
 package dev.quiblo.tv.ui
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.focusGroup
@@ -37,6 +38,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -68,6 +70,7 @@ import dev.quiblo.tv.ui.detail.TvMovieScreen
 import dev.quiblo.tv.ui.live.TvLiveScreen
 import dev.quiblo.tv.ui.player.TvPlaybackRequest
 import dev.quiblo.tv.ui.player.TvPlayerScreen
+import dev.quiblo.tv.ui.search.TvSearchScreen
 import dev.quiblo.tv.ui.series.TvSeriesScreen
 import dev.quiblo.tv.ui.settings.TvSettingsScreen
 import dev.quiblo.tv.ui.sources.TvSourcesScreen
@@ -92,91 +95,120 @@ fun TvApp() {
     // to keep proving it never happens.
     var overlay: TvOverlay? by remember { mutableStateOf(null) }
 
-    /**
-     * What pressing a row in a catalogue does.
-     *
-     * Only live plays immediately, because only a live channel is a thing you simply watch.
-     * A film opens its own screen — that is #005, and it is where a resume point can be
-     * offered at all — and a series has no stream of its own to play.
-     *
-     * Decided per item rather than per screen, because a favourites list holds every kind
-     * at once and deciding it per screen is how a series reached the player.
-     */
-    fun open(items: List<Channel>, index: Int) {
-        val channel = items.getOrNull(index) ?: return
-        overlay = when (channel.kind) {
-            MediaKind.LIVE -> TvOverlay.Playing(TvPlaybackRequest.Live(channel, items, index))
-            MediaKind.VOD -> TvOverlay.Movie(channel)
-            MediaKind.SERIES -> TvOverlay.Series(channel)
-        }
-    }
-
     // Playing replaces the whole shell rather than sitting inside it: a television plays
     // full screen, and leaving the bar drawn over video would be the same mistake the phone
     // app made for a fortnight.
-    when (val current = overlay) {
+    val current = overlay
+    if (current == null) {
+        TvShell(
+            selectedTab = selectedTab,
+            onSelectTab = { selectedTab = it },
+            onOpenSettings = { overlay = TvOverlay.Settings },
+            onOpen = { items, index -> overlay = overlayFor(items, index) ?: overlay },
+            onOpenChannel = { channel -> overlay = detailFor(channel) },
+        )
+    } else {
+        TvOverlayScreen(overlay = current, onOverlay = { overlay = it })
+    }
+}
+
+/**
+ * Whichever screen is currently drawn over the shell.
+ *
+ * Separated from [TvApp] so that one holds the state and this one spends it. They were a
+ * single function until Sources moved in here from the tab bar, at which point the routing
+ * and the state-keeping between them were more than any one function should be asked to hold
+ * in view at once.
+ */
+@Composable
+private fun TvOverlayScreen(overlay: TvOverlay, onOverlay: (TvOverlay?) -> Unit) {
+    when (overlay) {
         is TvOverlay.Playing -> TvPlayerScreen(
-            request = current.request,
-            onBack = { overlay = null },
+            request = overlay.request,
+            onBack = { onOverlay(null) },
             // Only live has a queue to move through, and the key map means only live gets
             // here at all.
             onZap = { direction ->
-                val live = current.request as? TvPlaybackRequest.Live
-                if (live != null) overlay = TvOverlay.Playing(live.zappedBy(direction))
+                val live = overlay.request as? TvPlaybackRequest.Live
+                if (live != null) onOverlay(TvOverlay.Playing(live.zappedBy(direction)))
             },
         )
 
         is TvOverlay.Series -> TvSeriesScreen(
-            channel = current.channel,
+            channel = overlay.channel,
             onPlayEpisode = { episode, resumeFrom ->
-                overlay = TvOverlay.Playing(
-                    TvPlaybackRequest.Episode(
-                        channel = current.channel,
-                        streamUrl = episode.streamUrl,
-                        episodeTitle = episode.title,
-                        seasonNumber = episode.seasonNumber,
-                        episodeNumber = episode.episodeNumber,
-                        startPositionMillis = resumeFrom,
+                onOverlay(
+                    TvOverlay.Playing(
+                        TvPlaybackRequest.Episode(
+                            channel = overlay.channel,
+                            streamUrl = episode.streamUrl,
+                            episodeTitle = episode.title,
+                            seasonNumber = episode.seasonNumber,
+                            episodeNumber = episode.episodeNumber,
+                            startPositionMillis = resumeFrom,
+                        ),
                     ),
                 )
             },
             // Back from an episode list lands on the catalogue it came from, not on the
             // player it might have opened (AC-TV-03).
-            onBack = { overlay = null },
+            onBack = { onOverlay(null) },
             modifier = Modifier.padding(SCREEN_PADDING),
         )
 
         is TvOverlay.Movie -> TvMovieScreen(
-            channel = current.channel,
+            channel = overlay.channel,
             // A null position means "whatever was stored", which is what the player does
             // with a film by default; zero means the viewer chose to start again.
             onPlay = { startAt ->
-                overlay = TvOverlay.Playing(
-                    TvPlaybackRequest.Film(current.channel, startPositionMillis = startAt),
-                )
+                onOverlay(TvOverlay.Playing(TvPlaybackRequest.Film(overlay.channel, startPositionMillis = startAt)))
             },
-            onBack = { overlay = null },
+            onBack = { onOverlay(null) },
             modifier = Modifier.padding(SCREEN_PADDING),
         )
 
         TvOverlay.Settings -> TvSettingsScreen(
-            onBack = { overlay = null },
+            onBack = { onOverlay(null) },
+            onOpenSources = { onOverlay(TvOverlay.Sources) },
             modifier = Modifier.padding(SCREEN_PADDING),
         )
 
-        null -> TvShell(
-            selectedTab = selectedTab,
-            onSelectTab = { selectedTab = it },
-            onOpenSettings = { overlay = TvOverlay.Settings },
-            onOpen = ::open,
-            onOpenChannel = { channel ->
-                overlay = when (channel.kind) {
-                    MediaKind.SERIES -> TvOverlay.Series(channel)
-                    else -> TvOverlay.Movie(channel)
-                }
-            },
+        // Reached from Settings, and back returns there rather than to the catalogue: a
+        // viewer who went two steps in expects two steps out (AC-TV-03).
+        TvOverlay.Sources -> TvSourcesScreen(
+            onBack = { onOverlay(TvOverlay.Settings) },
+            modifier = Modifier.padding(SCREEN_PADDING),
         )
     }
+}
+
+/**
+ * What pressing a row in a catalogue opens.
+ *
+ * Only live plays immediately, because only a live channel is a thing you simply watch. A
+ * film opens its own screen — that is #005, and it is where a resume point can be offered at
+ * all — and a series has no stream of its own to play.
+ *
+ * Decided per item rather than per screen, because a favourites list and a page of search
+ * results both hold every kind at once, and deciding it per screen is how a series reached
+ * the player.
+ *
+ * Null when the index does not exist, which leaves the viewer where they are rather than
+ * opening a screen about nothing.
+ */
+private fun overlayFor(items: List<Channel>, index: Int): TvOverlay? {
+    val channel = items.getOrNull(index) ?: return null
+    return when (channel.kind) {
+        MediaKind.LIVE -> TvOverlay.Playing(TvPlaybackRequest.Live(channel, items, index))
+        MediaKind.VOD -> TvOverlay.Movie(channel)
+        MediaKind.SERIES -> TvOverlay.Series(channel)
+    }
+}
+
+/** Where a title already begun is picked up: its own screen, never the player directly. */
+private fun detailFor(channel: Channel): TvOverlay = when (channel.kind) {
+    MediaKind.SERIES -> TvOverlay.Series(channel)
+    else -> TvOverlay.Movie(channel)
 }
 
 /**
@@ -189,6 +221,7 @@ private sealed interface TvOverlay {
     data class Series(val channel: Channel) : TvOverlay
     data class Movie(val channel: Channel) : TvOverlay
     data object Settings : TvOverlay
+    data object Sources : TvOverlay
 }
 
 /** The tab bar and whichever catalogue is selected beneath it. */
@@ -206,6 +239,16 @@ private fun TvShell(
     val contentFocusRequester = remember { FocusRequester() }
 
     LaunchedEffect(Unit) { barFocusRequester.tryRequestFocus() }
+
+    // Back walks to the first tab, and only then leaves the app.
+    //
+    // The alternative — back exiting from wherever the viewer happens to be — is how a
+    // television app loses somebody three tabs deep with one stray press. Focus returns to
+    // the bar with it, so the remote is visibly somewhere rather than apparently dead.
+    BackHandler(enabled = selectedTab != TvTab.SEARCH.ordinal) {
+        onSelectTab(TvTab.SEARCH.ordinal)
+        barFocusRequester.tryRequestFocus()
+    }
 
     Column(
         modifier = Modifier
@@ -228,6 +271,8 @@ private fun TvShell(
                 .focusGroup(),
         ) {
             when (TvTab.entries[selectedTab]) {
+                TvTab.SEARCH -> TvSearchScreen(onOpen = onOpen)
+
                 TvTab.LIVE -> TvLiveScreen(onPlay = onOpen)
 
                 TvTab.MOVIES -> TvPosterRows(
@@ -248,8 +293,6 @@ private fun TvShell(
                     onPlay = onOpen,
                     onResume = onOpenChannel,
                 )
-
-                TvTab.SOURCES -> TvSourcesScreen()
             }
         }
     }
@@ -330,15 +373,25 @@ private fun TvTopBar(
         horizontalArrangement = Arrangement.spacedBy(28.dp),
     ) {
         TvTab.entries.forEachIndexed { index, tab ->
-            TextTab(
-                label = stringResource(tab.labelRes),
-                isSelected = index == selectedTab,
-                // Bright only when the bar itself holds the remote *and* the remote is on
-                // the tabs rather than the gear. While focus is down in the content the
-                // selected tab stays legible but recedes, which is how a viewer tells where
-                // a press will land.
-                isBarFocused = isFocused && !onGear,
-            )
+            // Bright only when the bar itself holds the remote *and* the remote is on the
+            // tabs rather than the gear. While focus is down in the content the selected tab
+            // stays legible but recedes, which is how a viewer tells where a press will land.
+            val isBarFocused = isFocused && !onGear
+
+            if (tab.isIconOnly) {
+                IconTab(
+                    icon = Icons.Filled.Search,
+                    contentDescription = stringResource(tab.labelRes),
+                    isSelected = index == selectedTab,
+                    isBarFocused = isBarFocused,
+                )
+            } else {
+                TextTab(
+                    label = stringResource(tab.labelRes),
+                    isSelected = index == selectedTab,
+                    isBarFocused = isBarFocused,
+                )
+            }
         }
 
         Spacer(modifier = Modifier.weight(1f))
@@ -395,6 +448,56 @@ private fun TextTab(
     }
 }
 
+/**
+ * A tab carrying a magnifier instead of a word.
+ *
+ * Same underline, same alpha rules, same rhythm as [TextTab] — it is a tab, and the only
+ * thing different about it is that it needs no translating. The icon sits in a box the height
+ * of a tab label so the underlines along the bar stay on one line.
+ */
+@Composable
+private fun IconTab(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    contentDescription: String,
+    isSelected: Boolean,
+    isBarFocused: Boolean,
+) {
+    val alpha by animateFloatAsState(
+        targetValue = when {
+            isSelected && isBarFocused -> 1f
+            isSelected -> SELECTED_ALPHA
+            else -> IDLE_ALPHA
+        },
+        label = "iconTabAlpha",
+    )
+
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Box(
+            modifier = Modifier.height(TAB_LABEL_HEIGHT),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = contentDescription,
+                tint = Color.White.copy(alpha = alpha),
+                modifier = Modifier.size(TAB_ICON_SIZE),
+            )
+        }
+
+        Spacer(modifier = Modifier.height(6.dp))
+
+        Box(
+            modifier = Modifier
+                .width(UNDERLINE_WIDTH)
+                .height(2.dp)
+                .background(
+                    color = if (isSelected) Color.White else Color.Transparent,
+                    shape = RoundedCornerShape(1.dp),
+                ),
+        )
+    }
+}
+
 @Composable
 private fun BarIcon(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
@@ -425,6 +528,10 @@ private fun BarIcon(
 private val SCREEN_PADDING = 48.dp
 private val UNDERLINE_WIDTH = 28.dp
 private val TAB_TEXT_SIZE = 20.sp
+
+/** A 20sp label's line box, near enough — what an icon tab matches so the bar stays level. */
+private val TAB_LABEL_HEIGHT = 24.dp
+private val TAB_ICON_SIZE = 22.dp
 private const val SELECTED_ALPHA = 0.90f
 private const val IDLE_ALPHA = 0.55f
 

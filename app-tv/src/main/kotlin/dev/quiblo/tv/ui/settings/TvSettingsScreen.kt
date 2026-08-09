@@ -70,6 +70,7 @@ import dev.quiblo.feature.settings.BackupUiState
 import dev.quiblo.feature.settings.SettingsViewModel
 import dev.quiblo.feature.settings.TmdbCheck
 import dev.quiblo.tv.R
+import dev.quiblo.tv.ui.common.TvChip
 import dev.quiblo.tv.ui.common.TvTextField
 import org.koin.androidx.compose.koinViewModel
 
@@ -91,6 +92,14 @@ import org.koin.androidx.compose.koinViewModel
 @Composable
 fun TvSettingsScreen(
     onBack: () -> Unit,
+    /**
+     * Opens the playlists and accounts.
+     *
+     * Sources used to be a tab of its own, which put a thing done once — typing a URL and a
+     * password on a remote — beside the four things done every evening. It is configuration,
+     * and this is where configuration lives.
+     */
+    onOpenSources: () -> Unit,
     modifier: Modifier = Modifier,
     viewModel: SettingsViewModel = koinViewModel(key = "tv-settings"),
 ) {
@@ -146,6 +155,19 @@ fun TvSettingsScreen(
                 fontSize = 30.sp,
                 fontWeight = FontWeight.SemiBold,
                 modifier = Modifier.padding(bottom = 18.dp),
+            )
+        }
+
+        // First, because it is the one setting an app with nothing in it needs, and because
+        // a viewer arriving here from an empty catalogue is looking for exactly this.
+        item { SectionHeading(stringResource(R.string.tv_settings_sources)) }
+
+        item {
+            ActionRow(
+                label = stringResource(R.string.tv_settings_sources_label),
+                description = stringResource(R.string.tv_settings_sources_detail),
+                action = stringResource(R.string.tv_settings_sources_manage),
+                onClick = onOpenSources,
             )
         }
 
@@ -284,12 +306,12 @@ private fun TmdbKeyRow(
             horizontalArrangement = Arrangement.spacedBy(10.dp),
             modifier = Modifier.padding(start = LABEL_WIDTH, top = 8.dp),
         ) {
-            OptionChip(
+            TvChip(
                 label = stringResource(R.string.tv_settings_save),
                 isSelected = false,
                 onClick = { onSave(draft) },
             )
-            OptionChip(
+            TvChip(
                 label = stringResource(R.string.tv_settings_clear),
                 isSelected = false,
                 onClick = onClear,
@@ -376,7 +398,7 @@ private fun CategoryEditRow(
                     isActive = isEditing,
                     onClick = { isEditing = !isEditing },
                 )
-                OptionChip(
+                TvChip(
                     label = stringResource(
                         if (category.isHidden) R.string.tv_settings_show else R.string.tv_settings_hide,
                     ),
@@ -399,7 +421,7 @@ private fun CategoryEditRow(
                     isLast = true,
                     modifier = Modifier.width(RENAME_WIDTH),
                 )
-                OptionChip(
+                TvChip(
                     label = stringResource(R.string.tv_settings_apply),
                     isSelected = false,
                     // A blank rename means "use the provider name", which is also how the
@@ -469,12 +491,12 @@ private fun BackupRow(state: BackupUiState, onExport: () -> Unit, onImport: () -
             }
 
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                OptionChip(
+                TvChip(
                     label = stringResource(R.string.tv_settings_export),
                     isSelected = false,
                     onClick = onExport,
                 )
-                OptionChip(
+                TvChip(
                     label = stringResource(R.string.tv_settings_import),
                     isSelected = false,
                     onClick = onImport,
@@ -574,7 +596,7 @@ private fun <T> OptionRow(
             modifier = Modifier.focusGroup(),
         ) {
             options.forEach { option ->
-                OptionChip(
+                TvChip(
                     label = labelFor(option),
                     isSelected = option == selected,
                     onClick = { onSelect(option) },
@@ -584,29 +606,36 @@ private fun <T> OptionRow(
     }
 }
 
+/**
+ * A row that leads somewhere rather than setting a value.
+ *
+ * Laid out exactly like [OptionRow] — the same names column, the same gap, the same chip — so
+ * that "go here" and "choose this" read as one list to a viewer walking down it with a
+ * remote, rather than as two kinds of thing that happen to share a screen.
+ */
 @Composable
-private fun OptionChip(label: String, isSelected: Boolean, onClick: () -> Unit) {
-    val interactionSource = remember { MutableInteractionSource() }
-    val isFocused by interactionSource.collectIsFocusedAsState()
-
-    Text(
-        text = label,
-        color = Color.White.copy(alpha = if (isFocused || isSelected) 1f else 0.6f),
-        fontSize = 15.sp,
-        fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
+private fun ActionRow(label: String, description: String, action: String, onClick: () -> Unit) {
+    Row(
         modifier = Modifier
-            .background(
-                color = if (isSelected) Color.White.copy(alpha = 0.20f) else Color.Transparent,
-                shape = RoundedCornerShape(8.dp),
+            .fillMaxWidth()
+            .padding(vertical = 10.dp),
+        verticalAlignment = Alignment.Top,
+    ) {
+        Column(modifier = Modifier.width(LABEL_WIDTH)) {
+            Text(text = label, color = Color.White, fontSize = 17.sp, lineHeight = 22.sp)
+            Text(
+                text = description,
+                color = Color.White.copy(alpha = 0.55f),
+                fontSize = 13.sp,
+                lineHeight = 18.sp,
+                modifier = Modifier.padding(top = 3.dp),
             )
-            .border(
-                width = if (isFocused) 2.dp else 0.dp,
-                color = if (isFocused) Color.White else Color.Transparent,
-                shape = RoundedCornerShape(8.dp),
-            )
-            .clickable(interactionSource = interactionSource, indication = null, onClick = onClick)
-            .padding(horizontal = 16.dp, vertical = 8.dp),
-    )
+        }
+
+        Spacer(modifier = Modifier.width(COLUMN_GAP))
+
+        TvChip(label = action, isSelected = false, onClick = onClick)
+    }
 }
 
 /** The names column. Wide enough for a two-line description without crowding it. */

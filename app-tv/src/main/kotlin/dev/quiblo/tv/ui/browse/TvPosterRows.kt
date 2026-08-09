@@ -195,6 +195,14 @@ internal fun TvCategoryList(
     onVisible: (Channel) -> Unit,
     onItemClick: (TvRowItem) -> Unit,
     modifier: Modifier = Modifier,
+    /**
+     * Artwork for titles the provider gave none for, keyed as the metadata cache keys it.
+     *
+     * Empty for the catalogue screens, which show what the playlist carries. The search
+     * results fill it in, because a search is where a viewer meets titles they have never
+     * scrolled to, and a grid of grey rectangles answers nothing.
+     */
+    posters: Map<String, String> = emptyMap(),
     continueWatching: (@Composable () -> Unit)? = null,
 ) {
     LazyColumn(
@@ -213,6 +221,7 @@ internal fun TvCategoryList(
                 category = row.title,
                 items = row.items,
                 ratings = ratings,
+                posters = posters,
                 onVisible = onVisible,
                 onItemClick = onItemClick,
             )
@@ -274,6 +283,7 @@ private fun CategoryRow(
     category: String,
     items: List<TvRowItem>,
     ratings: Map<String, Double>,
+    posters: Map<String, String>,
     onVisible: (Channel) -> Unit,
     onItemClick: (TvRowItem) -> Unit,
 ) {
@@ -297,9 +307,10 @@ private fun CategoryRow(
                 // of films, and only the handful the remote has actually reached are
                 // displaying a score to fetch.
                 LaunchedEffect(item.channel.id) { onVisible(item.channel) }
-                Poster(
+                TvPoster(
                     channel = item.channel,
                     rating = ratings[item.channel.stableKey],
+                    fallbackArtworkUrl = posters[item.channel.stableKey],
                     onClick = { onItemClick(item) },
                 )
             }
@@ -313,13 +324,31 @@ private fun CategoryRow(
  * Focus scales it up and gives it a border, and that is the whole affordance: on a
  * television the only way to know where you are is that one thing looks different from
  * everything else.
+ *
+ * Internal rather than private because the search screen draws the same tile. Shared rather
+ * than copied for one specific reason: the modifier order inside it is the whole of #008, and
+ * a second copy is a second place for that to be undone by somebody tidying up.
  */
 @Composable
-private fun Poster(channel: Channel, rating: Double?, onClick: () -> Unit) {
+internal fun TvPoster(
+    channel: Channel,
+    rating: Double?,
+    onClick: () -> Unit,
+    /**
+     * Artwork to use when the playlist supplied none.
+     *
+     * Only ever a substitute. What the provider sent is what the viewer's other devices
+     * show, and a looked-up poster that disagrees with it is a title that appears to be two
+     * different things depending on where it is opened.
+     */
+    fallbackArtworkUrl: String? = null,
+) {
     // A live channel's artwork is a small wide logo, not a poster. Cropping one to 2:3
     // shows a corner of a logo — the exact mistake PLAN-TV.md §3.3 exists to avoid — so a
     // live item keeps its whole logo inside the same tile instead.
     val isLogo = channel.kind == MediaKind.LIVE
+    val artworkUrl = channel.logoUrl?.takeIf { it.isNotBlank() }
+        ?: fallbackArtworkUrl?.takeIf { it.isNotBlank() }
     val interactionSource = remember { MutableInteractionSource() }
     val isFocused by interactionSource.collectIsFocusedAsState()
 
@@ -400,11 +429,11 @@ private fun Poster(channel: Channel, rating: Double?, onClick: () -> Unit) {
                         shape = RoundedCornerShape(8.dp),
                     ),
             ) {
-                if (channel.logoUrl.isNullOrBlank()) {
+                if (artworkUrl == null) {
                     ArtworkPlaceholder()
                 } else {
                     SubcomposeAsyncImage(
-                        model = channel.logoUrl,
+                        model = artworkUrl,
                         contentDescription = null,
                         contentScale = if (isLogo) ContentScale.Fit else ContentScale.Crop,
                         modifier = Modifier

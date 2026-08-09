@@ -14,6 +14,20 @@
     <string name="tv_tab_favourites">Favourites</string>
     <string name="tv_settings">Settings</string>
 
+    <!-- Profiles -->
+    <string name="tv_profile_welcome">Welcome to Quiblo</string>
+    <string name="tv_profile_who">Who is watching?</string>
+    <string name="tv_profile_detail">Favourites and what you have half-watched are kept per person. Everything else is shared.</string>
+    <string name="tv_profile_add">Add profile</string>
+    <string name="tv_profile_guest">Guest</string>
+    <string name="tv_profile_guest_detail">Nothing is kept</string>
+    <string name="tv_profile_name">Name</string>
+    <string name="tv_profile_save">Save</string>
+    <string name="tv_profile_cancel">Cancel</string>
+    <string name="tv_settings_profile">Who is watching</string>
+    <string name="tv_settings_profile_detail">Favourites and continue watching belong to this profile. Switching asks again.</string>
+    <string name="tv_settings_profile_switch">Switch</string>
+
     <string name="tv_placeholder">%1$s content appears here.</string>
     <string name="tv_no_channels">No channels yet. Add a playlist on your phone and import it here.</string>
 

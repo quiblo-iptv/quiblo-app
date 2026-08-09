@@ -18,6 +18,7 @@
 
 package dev.quiblo.core.data.backup
 
+import dev.quiblo.core.data.fakeProfiles
 import dev.quiblo.core.database.dao.FavoriteDao
 import dev.quiblo.core.database.dao.SourceDao
 import dev.quiblo.core.database.entity.FavoriteEntity
@@ -57,20 +58,23 @@ class BackupRepositoryTest {
     private class FakeFavoriteDao(initial: List<FavoriteEntity> = emptyList()) : FavoriteDao {
         val rows = initial.toMutableList()
 
-        override suspend fun isFavorite(sourceId: Long, stableKey: String): Boolean =
+        override suspend fun isFavorite(profileId: Long, sourceId: Long, stableKey: String): Boolean =
             rows.any { it.sourceId == sourceId && it.stableKey == stableKey }
 
-        override fun observeIsFavorite(sourceId: Long, stableKey: String): Flow<Boolean> =
+        override fun observeIsFavorite(profileId: Long, sourceId: Long, stableKey: String): Flow<Boolean> =
             flowOf(rows.any { it.sourceId == sourceId && it.stableKey == stableKey })
 
         override suspend fun add(favorite: FavoriteEntity) {
             rows += favorite
         }
 
-        override suspend fun remove(sourceId: Long, stableKey: String) = Unit
-        override suspend fun countFor(sourceId: Long): Int = rows.count { it.sourceId == sourceId }
-        override suspend fun allFor(sourceId: Long): List<FavoriteEntity> =
-            rows.filter { it.sourceId == sourceId }
+        override suspend fun remove(profileId: Long, sourceId: Long, stableKey: String) = Unit
+
+        override suspend fun countFor(profileId: Long, sourceId: Long): Int =
+            rows.count { it.sourceId == sourceId }
+
+        override suspend fun allFor(profileId: Long, sourceId: Long): List<FavoriteEntity> =
+            rows.filter { it.sourceId == sourceId && it.profileId == profileId }
     }
 
     private val xtreamSource = SourceEntity(
@@ -88,6 +92,7 @@ class BackupRepositoryTest {
         val repository = BackupRepository(
             sourceDao = FakeSourceDao(listOf(xtreamSource)),
             favoriteDao = FakeFavoriteDao(),
+            profiles = fakeProfiles(),
             now = { 42L },
         )
 
@@ -106,13 +111,20 @@ class BackupRepositoryTest {
     fun `export then import restores everything on an empty device`() = runTest {
         val source = FakeSourceDao(listOf(xtreamSource))
         val favorites = FakeFavoriteDao(
-            listOf(FavoriteEntity(sourceId = 1L, stableKey = "xtream-live-77", favoritedAtEpochMillis = 9L)),
+            listOf(
+                FavoriteEntity(
+                    sourceId = 1L,
+                    stableKey = "xtream-live-77",
+                    favoritedAtEpochMillis = 9L,
+                    profileId = 1L,
+                ),
+            ),
         )
-        val json = BackupRepository(source, favorites).export()
+        val json = BackupRepository(source, favorites, fakeProfiles()).export()
 
         val freshSources = FakeSourceDao()
         val freshFavorites = FakeFavoriteDao()
-        val result = BackupRepository(freshSources, freshFavorites).import(json)
+        val result = BackupRepository(freshSources, freshFavorites, fakeProfiles()).import(json)
 
         val success = assertInstanceOf(ImportResult.Success::class.java, result)
         assertEquals(1, success.sourcesRestored)
@@ -142,7 +154,7 @@ class BackupRepositoryTest {
             }
         """.trimIndent()
 
-        val result = BackupRepository(sources, favorites).import(future)
+        val result = BackupRepository(sources, favorites, fakeProfiles()).import(future)
 
         val rejected = assertInstanceOf(ImportResult.VersionTooNew::class.java, result)
         assertEquals(BackupFile.CURRENT_SCHEMA_VERSION + 1, rejected.fileVersion)
@@ -152,7 +164,7 @@ class BackupRepositoryTest {
 
     @Test
     fun `import reports unreadable input rather than throwing`() = runTest {
-        val result = BackupRepository(FakeSourceDao(), FakeFavoriteDao()).import("not json at all")
+        val result = BackupRepository(FakeSourceDao(), FakeFavoriteDao(), fakeProfiles()).import("not json at all")
         assertEquals(ImportResult.Unreadable, result)
     }
 
@@ -161,9 +173,9 @@ class BackupRepositoryTest {
     fun `import is additive and skips sources already configured`() = runTest {
         val sources = FakeSourceDao(listOf(xtreamSource))
         val favorites = FakeFavoriteDao()
-        val json = BackupRepository(FakeSourceDao(listOf(xtreamSource)), FakeFavoriteDao()).export()
+        val json = BackupRepository(FakeSourceDao(listOf(xtreamSource)), FakeFavoriteDao(), fakeProfiles()).export()
 
-        val result = BackupRepository(sources, favorites).import(json)
+        val result = BackupRepository(sources, favorites, fakeProfiles()).import(json)
 
         val success = assertInstanceOf(ImportResult.Success::class.java, result)
         assertEquals(0, success.sourcesRestored)

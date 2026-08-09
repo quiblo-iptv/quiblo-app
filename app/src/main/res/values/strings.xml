@@ -12,4 +12,14 @@
     <string name="destination_favorites">Favourites</string>
     <string name="destination_sources">Sources</string>
     <string name="destination_settings">Settings</string>
+
+    <!-- Profiles -->
+    <string name="profile_welcome">Welcome to Quiblo</string>
+    <string name="profile_who">Who is watching?</string>
+    <string name="profile_detail">Favourites and what you have half-watched are kept per person. Playlists and settings are shared.</string>
+    <string name="profile_add">Add</string>
+    <string name="profile_name">Name</string>
+    <string name="profile_guest">Guest</string>
+    <string name="profile_guest_detail">Nothing is kept when the session ends</string>
+    <string name="profile_continue_as_guest">Continue as guest</string>
 </resources>

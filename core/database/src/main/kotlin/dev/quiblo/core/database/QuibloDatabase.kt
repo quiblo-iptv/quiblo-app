@@ -26,6 +26,7 @@ import dev.quiblo.core.database.dao.CategoryOverrideDao
 import dev.quiblo.core.database.dao.ChannelDao
 import dev.quiblo.core.database.dao.ChannelLogoDao
 import dev.quiblo.core.database.dao.FavoriteDao
+import dev.quiblo.core.database.dao.ProfileDao
 import dev.quiblo.core.database.dao.ProgrammeDao
 import dev.quiblo.core.database.dao.ResumePositionDao
 import dev.quiblo.core.database.dao.SourceDao
@@ -34,6 +35,7 @@ import dev.quiblo.core.database.entity.CategoryOverrideEntity
 import dev.quiblo.core.database.entity.ChannelEntity
 import dev.quiblo.core.database.entity.ChannelLogoEntity
 import dev.quiblo.core.database.entity.FavoriteEntity
+import dev.quiblo.core.database.entity.ProfileEntity
 import dev.quiblo.core.database.entity.ProgrammeEntity
 import dev.quiblo.core.database.entity.ResumePositionEntity
 import dev.quiblo.core.database.entity.SourceEntity
@@ -53,8 +55,9 @@ import dev.quiblo.core.database.entity.TitleMetadataEntity
         TitleMetadataEntity::class,
         CategoryOverrideEntity::class,
         ChannelLogoEntity::class,
+        ProfileEntity::class,
     ],
-    version = 10,
+    version = 11,
     exportSchema = true,
 )
 abstract class QuibloDatabase : RoomDatabase() {
@@ -74,6 +77,8 @@ abstract class QuibloDatabase : RoomDatabase() {
     abstract fun categoryOverrideDao(): CategoryOverrideDao
 
     abstract fun programmeDao(): ProgrammeDao
+
+    abstract fun profileDao(): ProfileDao
 
     companion object {
         const val NAME = "quiblo.db"
@@ -98,6 +103,7 @@ abstract class QuibloDatabase : RoomDatabase() {
                     MIGRATION_7_8,
                     MIGRATION_8_9,
                     MIGRATION_9_10,
+                    MIGRATION_10_11,
                 )
                 .build()
     }

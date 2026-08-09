@@ -108,4 +108,10 @@
     <string name="settings_channel_logos_on">On. The channel list is downloaded once — a few megabytes — and refreshed about every two weeks. Your playlist’s own logos are always used where it has them.</string>
     <string name="settings_channel_logos_off">Off. Nothing is downloaded and iptv-org is never contacted.</string>
     <string name="settings_channel_logos_attribution">Channel data from the iptv-org project.</string>
+
+    <string name="settings_profile_title">Who is watching</string>
+    <string name="settings_profile_none">Nobody chosen</string>
+    <string name="settings_profile_summary">Favourites and continue watching belong to this profile. Playlists and settings are shared.</string>
+    <string name="settings_profile_guest">Guest — favourites and continue watching are deleted when this session ends.</string>
+    <string name="settings_profile_switch">Switch profile</string>
 </resources>

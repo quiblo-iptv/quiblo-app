@@ -97,14 +97,38 @@ data class ChannelEntity(
 )
 
 /**
+ * Who is watching.
+ *
+ * A profile owns favourites and resume positions and nothing else — player settings, hidden
+ * categories and the metadata key stay app-wide, because they describe the television rather
+ * than the person in front of it.
+ *
+ * **Guest is a row like any other, flagged.** The alternative — a reserved id with no row —
+ * would mean every delete of guest data was a routine somebody has to remember to call. As a
+ * row it is deleted instead, and the cascades below take its favourites and its resume
+ * points with it. The database enforces the promise rather than the code repeating it.
+ */
+@Entity(tableName = "profiles")
+data class ProfileEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0L,
+    val name: String,
+    val createdAtEpochMillis: Long,
+    /** True for the one throwaway profile. At most one exists at a time. */
+    val isGuest: Boolean = false,
+)
+
+/**
  * A favourite, keyed by provider identity rather than by row id.
  *
  * Surviving a refresh in which the stream URL changed is the entire point (AC-FAV-03), so
  * this table is deliberately not joined to [ChannelEntity] by primary key.
+ *
+ * The profile is part of the key rather than a column beside it: two people may each
+ * favourite the same channel of the same source, and those are two facts.
  */
 @Entity(
     tableName = "favorites",
-    primaryKeys = ["sourceId", "stableKey"],
+    primaryKeys = ["profileId", "sourceId", "stableKey"],
     foreignKeys = [
         ForeignKey(
             entity = SourceEntity::class,
@@ -112,12 +136,20 @@ data class ChannelEntity(
             childColumns = ["sourceId"],
             onDelete = ForeignKey.CASCADE,
         ),
+        ForeignKey(
+            entity = ProfileEntity::class,
+            parentColumns = ["id"],
+            childColumns = ["profileId"],
+            onDelete = ForeignKey.CASCADE,
+        ),
     ],
+    indices = [Index("profileId")],
 )
 data class FavoriteEntity(
     val sourceId: Long,
     val stableKey: String,
     val favoritedAtEpochMillis: Long,
+    val profileId: Long,
 )
 
 /**
@@ -138,10 +170,20 @@ data class FavoriteEntity(
  */
 @Entity(
     tableName = "resume_positions",
-    indices = [Index("sourceId", "kind", "updatedAtEpochMillis")],
+    primaryKeys = ["profileId", "stableKey"],
+    foreignKeys = [
+        ForeignKey(
+            entity = ProfileEntity::class,
+            parentColumns = ["id"],
+            childColumns = ["profileId"],
+            onDelete = ForeignKey.CASCADE,
+        ),
+    ],
+    indices = [Index("profileId", "sourceId", "kind", "updatedAtEpochMillis")],
 )
 data class ResumePositionEntity(
-    @PrimaryKey val stableKey: String,
+    val stableKey: String,
+    val profileId: Long,
     val positionMillis: Long,
     val updatedAtEpochMillis: Long,
     val sourceId: Long = 0L,

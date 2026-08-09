@@ -19,11 +19,17 @@
 package dev.quiblo.player
 
 import android.app.Application
+import dev.quiblo.core.data.ProfileRepository
 import dev.quiblo.player.di.appModules
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 import org.koin.android.ext.koin.androidContext
 import org.koin.android.ext.koin.androidLogger
 import org.koin.core.context.startKoin
 import org.koin.core.logger.Level
+import org.koin.mp.KoinPlatform.getKoin
 
 /**
  * Application entry point.
@@ -41,6 +47,23 @@ class QuibloApplication : Application() {
             androidLogger(if (BuildConfig.DEBUG) Level.ERROR else Level.NONE)
             androidContext(this@QuibloApplication)
             modules(appModules)
+        }
+
+        endAnyGuestSession()
+    }
+
+    /**
+     * Deletes a guest left over from last time, before anything is drawn.
+     *
+     * The one moment the promise can be kept for certain: a process the system killed never
+     * got to tidy up after itself. Deleting the row takes its favourites and resume points
+     * with it by foreign key, and leaves the stored profile id pointing at nothing — which is
+     * what puts the chooser back.
+     */
+    private fun endAnyGuestSession() {
+        val profiles: ProfileRepository = getKoin().get()
+        CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
+            profiles.endGuestSessions()
         }
     }
 }

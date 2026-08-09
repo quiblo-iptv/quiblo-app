@@ -22,7 +22,10 @@ import dev.quiblo.core.database.dao.ResumePositionDao
 import dev.quiblo.core.database.entity.ResumePositionEntity
 import dev.quiblo.core.model.HistoryEntry
 import dev.quiblo.core.model.MediaKind
+import dev.quiblo.core.model.Profile
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 
 /**
@@ -38,8 +41,11 @@ import kotlinx.coroutines.flow.map
  * user who removes something from "continue watching" has said they are not continuing it,
  * so a resume point outliving the removal would be a bug wearing a feature's clothes.
  */
+@OptIn(ExperimentalCoroutinesApi::class)
 class WatchHistoryRepository(
     private val resumePositionDao: ResumePositionDao,
+    /** Whose history this is. Resolved here so no caller can forget to say. */
+    private val profiles: ProfileRepository,
     private val now: () -> Long = System::currentTimeMillis,
 ) {
 
@@ -55,7 +61,14 @@ class WatchHistoryRepository(
      * the answer.
      */
     fun observeHistory(sourceId: Long, kind: MediaKind, limit: Int = DEFAULT_HISTORY_LIMIT): Flow<List<HistoryEntry>> =
-        resumePositionDao.observeHistory(sourceId, kind.name, HISTORY_SCAN_LIMIT)
+        profiles.activeProfile.flatMapLatest { profile ->
+            resumePositionDao.observeHistory(
+                profileId = profile?.id ?: Profile.NONE_ID,
+                sourceId = sourceId,
+                kind = kind.name,
+                limit = HISTORY_SCAN_LIMIT,
+            )
+        }
             .map { rows ->
                 rows.map { it.toDomain() }
                     .distinctBy { it.titleKey }
@@ -63,7 +76,8 @@ class WatchHistoryRepository(
             }
 
     /** Where the user got to in this item, or 0 if it has never been played (AC-PLAY-03). */
-    suspend fun resumePosition(stableKey: String): Long = resumePositionDao.positionFor(stableKey) ?: 0L
+    suspend fun resumePosition(stableKey: String): Long =
+        resumePositionDao.positionFor(profiles.activeProfileId, stableKey) ?: 0L
 
     /**
      * The most recently watched of [stableKeys], with where it stopped.
@@ -73,7 +87,7 @@ class WatchHistoryRepository(
      */
     suspend fun mostRecentlyWatched(stableKeys: List<String>): Pair<String, Long>? {
         if (stableKeys.isEmpty()) return null
-        val entity = resumePositionDao.mostRecentOf(stableKeys) ?: return null
+        val entity = resumePositionDao.mostRecentOf(profiles.activeProfileId, stableKeys) ?: return null
         return entity.stableKey to entity.positionMillis
     }
 
@@ -88,6 +102,7 @@ class WatchHistoryRepository(
         resumePositionDao.upsert(
             ResumePositionEntity(
                 stableKey = entry.stableKey,
+                profileId = profiles.activeProfileId,
                 positionMillis = entry.positionMillis,
                 updatedAtEpochMillis = now(),
                 sourceId = entry.sourceId,
@@ -103,11 +118,12 @@ class WatchHistoryRepository(
     }
 
     /** Forgets one item, resume point and all. */
-    suspend fun removeFromHistory(stableKey: String) = resumePositionDao.delete(stableKey)
+    suspend fun removeFromHistory(stableKey: String) =
+        resumePositionDao.delete(profiles.activeProfileId, stableKey)
 
     /** Forgets every episode of one series — what "remove from history" means on a series. */
     suspend fun removeSeriesFromHistory(seriesStableKey: String) =
-        resumePositionDao.deleteForSeries(seriesStableKey)
+        resumePositionDao.deleteForSeries(profiles.activeProfileId, seriesStableKey)
 
     private companion object {
         /** How many titles a "continue watching" row offers before it is just a catalogue. */

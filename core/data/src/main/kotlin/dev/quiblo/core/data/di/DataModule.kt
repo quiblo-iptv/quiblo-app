@@ -25,6 +25,7 @@ import dev.quiblo.core.data.ChannelRepository
 import dev.quiblo.core.data.GuideRepository
 import dev.quiblo.core.data.LocalFileContentFetcher
 import dev.quiblo.core.data.PlayerSettingsRepository
+import dev.quiblo.core.data.ProfileRepository
 import dev.quiblo.core.data.SearchRepository
 import dev.quiblo.core.data.SourceRepository
 import dev.quiblo.core.data.TitleMetadataRepository
@@ -69,15 +70,16 @@ val dataModule: Module = module {
     }
 
     single { SourceRepository(get(), get(), get(), get()) }
-    single { ChannelRepository(get(), get(), get(), get()) }
-    single { WatchHistoryRepository(get()) }
+    single { ProfileRepository(profileDao = get(), profileStore = get()) }
+    single { ChannelRepository(get(), get(), get(), get(), get(), get()) }
+    single { WatchHistoryRepository(get(), get()) }
     single { CategoryRepository(get(), get()) }
-    single { SearchRepository(get(), get(), get()) }
+    single { SearchRepository(get(), get(), get(), get()) }
     // A singleton because its scope is the application's: a scan started in settings has to
     // outlive the screen that started it, and an hour of lookups outlives several.
     single { TitleMetadataScanner(channelDao = get(), metadataRepository = get()) }
     single { GuideRepository(get(), get(), get()) }
-    single { BackupRepository(get(), get()) }
+    single { BackupRepository(get(), get(), get()) }
     single { PlayerSettingsRepository(get()) }
     single { TmdbClient(get<HttpClient>()) }
     single { TitleMetadataRepository(get(), get(), get()) }

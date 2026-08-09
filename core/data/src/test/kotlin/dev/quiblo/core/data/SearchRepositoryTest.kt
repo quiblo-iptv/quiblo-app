@@ -55,6 +55,7 @@ class SearchRepositoryTest {
 
     private val repository = SearchRepository(
         channelDao = channelDao,
+        profiles = fakeProfiles(),
         titleMetadataDao = titleMetadataDao,
         metadataRepository = metadataRepository,
         // Unconfined would let assertions read state mid-flight; the default pool is what
@@ -68,18 +69,18 @@ class SearchRepositoryTest {
         val results = repository.search(sourceId = SOURCE_ID, query = "   ")
 
         assertTrue(results.isEmpty)
-        coVerify(exactly = 0) { channelDao.search(any(), any(), any(), any()) }
+        coVerify(exactly = 0) { channelDao.search(any(), any(), any(), any(), any()) }
         coVerify(exactly = 0) { channelDao.titlesForMetadata(any()) }
     }
 
     @Test
     @DisplayName("one term, three answers, kept apart")
     fun `searches every kind and keeps the results separate`() = runTest {
-        coEvery { channelDao.search(SOURCE_ID, MediaKind.LIVE.name, "bbc", any()) } returns
+        coEvery { channelDao.search(any(), SOURCE_ID, MediaKind.LIVE.name, "bbc", any()) } returns
             listOf(row(id = 1L, name = "BBC One", kind = MediaKind.LIVE))
-        coEvery { channelDao.search(SOURCE_ID, MediaKind.VOD.name, "bbc", any()) } returns
+        coEvery { channelDao.search(any(), SOURCE_ID, MediaKind.VOD.name, "bbc", any()) } returns
             listOf(row(id = 2L, name = "BBC Earth: A Perfect Planet", kind = MediaKind.VOD))
-        coEvery { channelDao.search(SOURCE_ID, MediaKind.SERIES.name, "bbc", any()) } returns
+        coEvery { channelDao.search(any(), SOURCE_ID, MediaKind.SERIES.name, "bbc", any()) } returns
             emptyList()
 
         val results = repository.search(sourceId = SOURCE_ID, query = "bbc")
@@ -103,7 +104,7 @@ class SearchRepositoryTest {
             ChannelTitle(id = 10L, name = "Fargo (1996) [FHD]", kind = MediaKind.VOD.name),
             ChannelTitle(id = 11L, name = "Speed", kind = MediaKind.VOD.name),
         )
-        coEvery { channelDao.findAllByIds(listOf(10L)) } returns
+        coEvery { channelDao.findAllByIds(any(), listOf(10L)) } returns
             listOf(row(id = 10L, name = "Fargo (1996) [FHD]", kind = MediaKind.VOD))
 
         val results = repository.search(sourceId = SOURCE_ID, query = "", genre = "Crime")
@@ -111,7 +112,7 @@ class SearchRepositoryTest {
         assertEquals(listOf("Fargo (1996) [FHD]"), results.movies.map { it.name })
         // The rows are read for the chosen ids only. Reading them all and filtering afterwards
         // would be the whole browse working set for a screenful of answers.
-        coVerify(exactly = 1) { channelDao.findAllByIds(listOf(10L)) }
+        coVerify(exactly = 1) { channelDao.findAllByIds(any(), listOf(10L)) }
     }
 
     @Test

@@ -24,6 +24,7 @@ import dev.quiblo.core.database.dao.SourceDao
 import dev.quiblo.core.database.entity.FavoriteEntity
 import dev.quiblo.core.model.Channel
 import dev.quiblo.core.model.MediaKind
+import dev.quiblo.core.model.Profile
 import dev.quiblo.core.model.SeriesDetails
 import dev.quiblo.core.model.SourceKind
 import dev.quiblo.core.model.VodDetails
@@ -36,7 +37,9 @@ import dev.quiblo.source.api.VodDetailsResult
 import dev.quiblo.source.api.VodSource
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import java.util.concurrent.ConcurrentHashMap
@@ -60,9 +63,23 @@ import java.util.concurrent.ConcurrentHashMap
  * ANR, and it was reported as one. Keeping the SQL cheap was never enough on its own,
  * because the work after the SQL was the larger half.
  */
+// Seven collaborators, and each is a different question this repository answers: two DAOs,
+// whose data it is, where sources come from, how to fetch them, the clock, and the thread to
+// map on. Bundling them behind a holder would rename the list rather than shorten it.
+@Suppress("LongParameterList")
+@OptIn(ExperimentalCoroutinesApi::class)
 class ChannelRepository(
     private val channelDao: ChannelDao,
     private val favoriteDao: FavoriteDao,
+    /**
+     * Who is watching.
+     *
+     * Read here rather than passed in by every caller. A favourite belongs to a person, but
+     * no screen in this app needs to know that to ask for its own catalogue — and threading
+     * an id through every ViewModel would be an invitation for one of them to forget, which
+     * shows up as one person's favourites appearing in another's list.
+     */
+    private val profiles: ProfileRepository,
     private val sourceDao: SourceDao? = null,
     private val mediaSources: Map<SourceKind, MediaSource> = emptyMap(),
     private val now: () -> Long = System::currentTimeMillis,
@@ -88,19 +105,25 @@ class ChannelRepository(
         query: String = "",
         favoritesOnly: Boolean = false,
     ): Flow<List<Channel>> =
-        channelDao.observeBrowse(
-            sourceId = sourceId,
-            kind = kind.name,
-            groupTitle = groupTitle,
-            query = query.trim(),
-            favoritesOnly = if (favoritesOnly) 1 else 0,
-        ).map { rows -> rows.map { it.channel.toDomain(isFavorite = it.isFavorite) } }
+        // Re-queried when the profile changes, so switching redraws the hearts rather than
+        // leaving the previous viewer's on screen until something else invalidates them.
+        profiles.activeProfile.flatMapLatest { profile ->
+            channelDao.observeBrowse(
+                profileId = profile?.id ?: Profile.NONE_ID,
+                sourceId = sourceId,
+                kind = kind.name,
+                groupTitle = groupTitle,
+                query = query.trim(),
+                favoritesOnly = if (favoritesOnly) 1 else 0,
+            )
+        }.map { rows -> rows.map { it.channel.toDomain(isFavorite = it.isFavorite) } }
             .flowOn(browseDispatcher)
 
     /** Favourites across every content type (AC-FAV-01). */
     fun observeFavorites(sourceId: Long, query: String = ""): Flow<List<Channel>> =
-        channelDao.observeFavorites(sourceId, query.trim())
-            .map { rows -> rows.map { it.channel.toDomain(isFavorite = true) } }
+        profiles.activeProfile.flatMapLatest { profile ->
+            channelDao.observeFavorites(profile?.id ?: Profile.NONE_ID, sourceId, query.trim())
+        }.map { rows -> rows.map { it.channel.toDomain(isFavorite = true) } }
             .flowOn(browseDispatcher)
 
     /**
@@ -111,14 +134,16 @@ class ChannelRepository(
      * reinserted with a new id (AC-FAV-03).
      */
     suspend fun toggleFavorite(channel: Channel) {
-        if (favoriteDao.isFavorite(channel.sourceId, channel.stableKey)) {
-            favoriteDao.remove(channel.sourceId, channel.stableKey)
+        val profileId = profiles.activeProfileId
+        if (favoriteDao.isFavorite(profileId, channel.sourceId, channel.stableKey)) {
+            favoriteDao.remove(profileId, channel.sourceId, channel.stableKey)
         } else {
             favoriteDao.add(
                 FavoriteEntity(
                     sourceId = channel.sourceId,
                     stableKey = channel.stableKey,
                     favoritedAtEpochMillis = now(),
+                    profileId = profileId,
                 ),
             )
         }
@@ -131,9 +156,12 @@ class ChannelRepository(
      * stable identity [toggleFavorite] writes, so the two cannot disagree.
      */
     fun observeIsFavorite(channel: Channel): Flow<Boolean> =
-        favoriteDao.observeIsFavorite(channel.sourceId, channel.stableKey)
+        profiles.activeProfile.flatMapLatest { profile ->
+            favoriteDao.observeIsFavorite(profile?.id ?: Profile.NONE_ID, channel.sourceId, channel.stableKey)
+        }
 
-    suspend fun favoriteCount(sourceId: Long): Int = favoriteDao.countFor(sourceId)
+    suspend fun favoriteCount(sourceId: Long): Int =
+        favoriteDao.countFor(profiles.activeProfileId, sourceId)
 
     suspend fun channelCount(sourceId: Long): Int = channelDao.countForSource(sourceId)
 

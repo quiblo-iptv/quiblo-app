@@ -67,6 +67,8 @@ data class GenreIndex(
  */
 class SearchRepository(
     private val channelDao: ChannelDao,
+    /** Whose favourites the results should show as favourited. */
+    private val profiles: ProfileRepository,
     private val titleMetadataDao: TitleMetadataDao,
     private val metadataRepository: TitleMetadataRepository,
     /**
@@ -162,7 +164,7 @@ class SearchRepository(
 
     private suspend fun matches(sourceId: Long, kind: MediaKind, term: String, limit: Int): List<Channel> {
         if (term.isBlank()) return emptyList()
-        return channelDao.search(sourceId, kind.name, term, limit)
+        return channelDao.search(profiles.activeProfileId, sourceId, kind.name, term, limit)
             .map { it.channel.toDomain(isFavorite = it.isFavorite) }
     }
 
@@ -199,7 +201,8 @@ class SearchRepository(
         val rows = if (wantedIds.isEmpty()) {
             emptyList()
         } else {
-            channelDao.findAllByIds(wantedIds).map { it.channel.toDomain(isFavorite = it.isFavorite) }
+            channelDao.findAllByIds(profiles.activeProfileId, wantedIds)
+                .map { it.channel.toDomain(isFavorite = it.isFavorite) }
         }
 
         return SearchResults(

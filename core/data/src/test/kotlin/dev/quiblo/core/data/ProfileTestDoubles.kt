@@ -16,16 +16,21 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-package dev.quiblo.feature.settings.di
+package dev.quiblo.core.data
 
-import dev.quiblo.feature.settings.ProfilesViewModel
-import dev.quiblo.feature.settings.SettingsViewModel
-import org.koin.core.module.Module
-import org.koin.core.module.dsl.viewModelOf
-import org.koin.dsl.module
+import dev.quiblo.core.model.Profile
+import io.mockk.every
+import io.mockk.mockk
+import kotlinx.coroutines.flow.MutableStateFlow
 
-/** Wiring owned by `:feature:settings`. Aggregated by `:app`. */
-val settingsModule: Module = module {
-    viewModelOf(::SettingsViewModel)
-    viewModelOf(::ProfilesViewModel)
+/**
+ * A profile repository standing in for a chosen profile.
+ *
+ * Every profile-scoped query takes the id from here, so a test that did not supply one would
+ * be testing the "nobody has chosen yet" path — which reads nothing and writes nowhere, and
+ * would make every assertion below pass for the wrong reason.
+ */
+internal fun fakeProfiles(id: Long = 1L): ProfileRepository = mockk<ProfileRepository>().apply {
+    every { activeProfileId } returns id
+    every { activeProfile } returns MutableStateFlow(Profile(id = id, name = "Test"))
 }

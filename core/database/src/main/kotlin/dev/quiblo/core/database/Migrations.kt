@@ -261,3 +261,98 @@ val MIGRATION_9_10 = object : Migration(9, 10) {
         )
     }
 }
+
+/**
+ * Profiles: favourites and resume positions become somebody's rather than the device's.
+ *
+ * Both tables are rebuilt rather than altered, because the profile belongs in their primary
+ * key — two people may each favourite the same channel, and those are two rows. SQLite cannot
+ * add a column to a primary key in place.
+ *
+ * **Everything already stored is adopted by a profile named "Default" rather than dropped.**
+ * A viewer upgrading has favourites and half-watched films on this device already, and a
+ * migration that quietly emptied them would be the data-loss bug the database is built to
+ * avoid (AC-DATA-04). The Default profile is a real profile: it appears in the chooser, and
+ * whoever was using the app before is still using it.
+ */
+val MIGRATION_10_11 = object : Migration(10, 11) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        createProfiles(db)
+        rebuildFavourites(db)
+        rebuildResumePositions(db)
+    }
+
+    private fun createProfiles(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            "CREATE TABLE IF NOT EXISTS `profiles` (" +
+                "`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                "`name` TEXT NOT NULL, " +
+                "`createdAtEpochMillis` INTEGER NOT NULL, " +
+                "`isGuest` INTEGER NOT NULL)",
+        )
+
+        // Everything that exists now belongs to whoever has been using the app.
+        db.execSQL(
+            "INSERT INTO `profiles` (`id`, `name`, `createdAtEpochMillis`, `isGuest`) " +
+                "VALUES (1, 'Default', 0, 0)",
+        )
+    }
+
+    private fun rebuildFavourites(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            "CREATE TABLE IF NOT EXISTS `favorites_new` (" +
+                "`sourceId` INTEGER NOT NULL, " +
+                "`stableKey` TEXT NOT NULL, " +
+                "`favoritedAtEpochMillis` INTEGER NOT NULL, " +
+                "`profileId` INTEGER NOT NULL, " +
+                "PRIMARY KEY(`profileId`, `sourceId`, `stableKey`), " +
+                "FOREIGN KEY(`sourceId`) REFERENCES `sources`(`id`) " +
+                "ON UPDATE NO ACTION ON DELETE CASCADE , " +
+                "FOREIGN KEY(`profileId`) REFERENCES `profiles`(`id`) " +
+                "ON UPDATE NO ACTION ON DELETE CASCADE )",
+        )
+        db.execSQL(
+            "INSERT INTO `favorites_new` (`sourceId`, `stableKey`, `favoritedAtEpochMillis`, `profileId`) " +
+                "SELECT `sourceId`, `stableKey`, `favoritedAtEpochMillis`, 1 FROM `favorites`",
+        )
+        db.execSQL("DROP TABLE `favorites`")
+        db.execSQL("ALTER TABLE `favorites_new` RENAME TO `favorites`")
+        db.execSQL("CREATE INDEX IF NOT EXISTS `index_favorites_profileId` ON `favorites` (`profileId`)")
+    }
+
+    private fun rebuildResumePositions(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            "CREATE TABLE IF NOT EXISTS `resume_positions_new` (" +
+                "`stableKey` TEXT NOT NULL, " +
+                "`profileId` INTEGER NOT NULL, " +
+                "`positionMillis` INTEGER NOT NULL, " +
+                "`updatedAtEpochMillis` INTEGER NOT NULL, " +
+                "`sourceId` INTEGER NOT NULL, " +
+                "`kind` TEXT NOT NULL, " +
+                "`title` TEXT NOT NULL, " +
+                "`artworkUrl` TEXT, " +
+                "`durationMillis` INTEGER NOT NULL, " +
+                "`seriesStableKey` TEXT, " +
+                "`seasonNumber` INTEGER, " +
+                "`episodeNumber` INTEGER, " +
+                "PRIMARY KEY(`profileId`, `stableKey`), " +
+                "FOREIGN KEY(`profileId`) REFERENCES `profiles`(`id`) " +
+                "ON UPDATE NO ACTION ON DELETE CASCADE )",
+        )
+        db.execSQL(
+            "INSERT INTO `resume_positions_new` (" +
+                "`stableKey`, `profileId`, `positionMillis`, `updatedAtEpochMillis`, `sourceId`, " +
+                "`kind`, `title`, `artworkUrl`, `durationMillis`, `seriesStableKey`, " +
+                "`seasonNumber`, `episodeNumber`) " +
+                "SELECT `stableKey`, 1, `positionMillis`, `updatedAtEpochMillis`, `sourceId`, " +
+                "`kind`, `title`, `artworkUrl`, `durationMillis`, `seriesStableKey`, " +
+                "`seasonNumber`, `episodeNumber` FROM `resume_positions`",
+        )
+        db.execSQL("DROP TABLE `resume_positions`")
+        db.execSQL("ALTER TABLE `resume_positions_new` RENAME TO `resume_positions`")
+        db.execSQL(
+            "CREATE INDEX IF NOT EXISTS `index_resume_positions_profileId_sourceId_kind_updatedAtEpochMillis` " +
+                "ON `resume_positions` (`profileId`, `sourceId`, `kind`, `updatedAtEpochMillis`)",
+        )
+    }
+}

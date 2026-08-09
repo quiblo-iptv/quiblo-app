@@ -30,6 +30,10 @@
 
     <string name="tv_placeholder">%1$s content appears here.</string>
     <string name="tv_no_channels">No channels yet. Add a playlist on your phone and import it here.</string>
+    <!-- Shown wherever a catalogue is empty because nothing has been configured at all. One
+         string for every such screen: "no playlist" is the same fact on Live as on Search,
+         and the answer to it is the same one press away. -->
+    <string name="tv_no_source">No playlist yet. Add one under Settings.</string>
 
     <string name="tv_sources_title">Playlists and accounts</string>
     <string name="tv_sources_add">Add a playlist or account</string>
@@ -57,7 +61,6 @@
     <string name="tv_search_field">Search</string>
     <string name="tv_search_prompt">Search live channels, films and series at once.</string>
     <string name="tv_search_empty">Nothing matched that.</string>
-    <string name="tv_search_no_source">No playlist yet. Add one under Settings.</string>
     <string name="tv_search_clear">Clear</string>
     <string name="tv_search_advanced">Advanced</string>
     <string name="tv_search_live">Live channels</string>

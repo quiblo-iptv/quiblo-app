@@ -51,17 +51,17 @@ internal class PanelRateLimiter(
     suspend fun acquire() {
         val waitMillis = mutex.withLock {
             refill()
-            if (tokens >= 1.0) {
-                tokens -= 1.0
-                0L
-            } else {
-                // Take the token anyway and pay for it by waiting. Ordering does not matter
-                // here — every caller is a background prefetch or one of a refresh's seven
-                // calls, and none of them is a user waiting on a single answer.
-                val deficit = 1.0 - tokens
-                tokens = 0.0
-                (deficit * MILLIS_PER_TOKEN).toLong()
-            }
+            // Take the token anyway and pay for it by waiting. Ordering does not matter
+            // here — every caller is a background prefetch or one of a refresh's seven
+            // calls, and none of them is a user waiting on a single answer.
+            //
+            // The balance goes negative rather than stopping at zero, and that detail is the
+            // sustained rate. Clamping at zero let the wait accrue a token the *next* caller
+            // found waiting for it, so requests left in pairs and the real pacing was one
+            // every 200 ms rather than the 400 ms below. Corrected 2026-08-09; it had been
+            // running at twice the documented rate since the guard was written.
+            tokens -= 1.0
+            if (tokens < 0) (-tokens * MILLIS_PER_TOKEN).toLong() else 0L
         }
         if (waitMillis > 0) pause(waitMillis)
     }

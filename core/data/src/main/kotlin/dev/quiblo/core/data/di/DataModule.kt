@@ -71,7 +71,21 @@ val dataModule: Module = module {
 
     single { SourceRepository(get(), get(), get(), get()) }
     single { ProfileRepository(profileDao = get(), profileStore = get()) }
-    single { ChannelRepository(get(), get(), get(), get(), get(), get()) }
+    // Named, and deliberately so. This class takes three collaborators followed by four
+    // parameters that carry defaults — a clock and a dispatcher among them — and a positional
+    // list cannot tell the two groups apart. Inserting `profiles` in the middle and appending
+    // one more `get()` at the end is how the sixth argument came to land on `now: () -> Long`,
+    // which Koin has no definition for and never will. It compiled, and it brought down every
+    // catalogue screen in both apps the moment one was opened.
+    single {
+        ChannelRepository(
+            channelDao = get(),
+            favoriteDao = get(),
+            profiles = get(),
+            sourceDao = get(),
+            mediaSources = get(),
+        )
+    }
     single { WatchHistoryRepository(get(), get()) }
     single { CategoryRepository(get(), get()) }
     single { SearchRepository(get(), get(), get(), get()) }

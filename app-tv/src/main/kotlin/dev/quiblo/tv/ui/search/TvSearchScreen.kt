@@ -123,7 +123,7 @@ fun TvSearchScreen(
                 .weight(1f),
         ) {
             when {
-                !state.hasSource -> Message(stringResource(R.string.tv_search_no_source))
+                !state.hasSource -> Message(stringResource(R.string.tv_no_source))
 
                 // At rest the name and the field have already said what this screen is for.
                 // A sentence under them repeating it is furniture.

@@ -135,16 +135,14 @@ fun TvLiveScreen(
         val listState = remember(state.selectedCategory) { LazyListState() }
 
         when {
-            state.items.isEmpty() -> Box(
-                modifier = Modifier.fillMaxSize(),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text(
-                    text = stringResource(R.string.tv_no_channels),
-                    color = Color.White.copy(alpha = 0.65f),
-                    style = MaterialTheme.typography.headlineSmall,
-                )
-            }
+            // "No playlist" and "a playlist with no live channels" are two different things
+            // to be told, and only one of them is the viewer's to fix. Search has drawn the
+            // distinction since it was written; this screen told everyone to import a
+            // playlist they had never added, which reads as a failure rather than as a step
+            // they have not taken yet.
+            !state.hasSource -> Message(stringResource(R.string.tv_no_source))
+
+            state.items.isEmpty() -> Message(stringResource(R.string.tv_no_channels))
 
             else -> LazyColumn(
                 state = listState,
@@ -165,6 +163,18 @@ fun TvLiveScreen(
                 }
             }
         }
+    }
+}
+
+/** Whatever this screen has to say when it has no list to draw. */
+@Composable
+private fun Message(text: String) {
+    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        Text(
+            text = text,
+            color = Color.White.copy(alpha = 0.65f),
+            style = MaterialTheme.typography.headlineSmall,
+        )
     }
 }
 

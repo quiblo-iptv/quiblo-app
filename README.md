@@ -51,7 +51,7 @@ immediate ban — see [`CONTRIBUTING.md`](CONTRIBUTING.md).
 | **Theme & Design** | Material 3 Expressive, dark and light |
 | **Resume** | Playback position remembered per item, and per episode within a series |
 | **Favourites** | Survive playlist refresh |
-| **Film information** | Optional descriptions, genres, certificates, ratings, director and cast from The Movie Database, using your own API key. Off by default |
+| **Film information** | Optional descriptions, genres, certificates, ratings, director and cast from The Movie Database, using your own API key. Off by default. A one-off scan in Settings can describe the whole catalogue at once, so genres and scores are there before you browse |
 | **Backup** | Versioned export and import of sources and favourites, to a file you choose |
 | **Storage & Privacy** | Entirely on-device with zero telemetry |
 

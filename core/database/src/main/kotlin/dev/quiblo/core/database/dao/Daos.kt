@@ -394,6 +394,20 @@ data class TitleGenreRow(
     val isMiss: Boolean,
 )
 
+/**
+ * Which titles the cache holds an answer for, and how old each answer is.
+ *
+ * Two columns and a timestamp, for the catalogue scan to subtract from its work list. It
+ * asks about tens of thousands of titles and most of them are already known by the second
+ * run; reading whole rows to find that out would be reading the entire cache to decide not
+ * to use it.
+ */
+data class CachedTitleKey(
+    val searchTitle: String,
+    val kind: String,
+    val fetchedAtEpochMillis: Long,
+)
+
 @Dao
 interface TitleMetadataDao {
 
@@ -410,6 +424,10 @@ interface TitleMetadataDao {
      */
     @Query("SELECT searchTitle, kind, genres, isMiss FROM title_metadata")
     suspend fun allGenreRows(): List<TitleGenreRow>
+
+    /** Every key the cache holds, with its age, for the scan to skip what it already knows. */
+    @Query("SELECT searchTitle, kind, fetchedAtEpochMillis FROM title_metadata")
+    suspend fun allKeys(): List<CachedTitleKey>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(entity: TitleMetadataEntity)

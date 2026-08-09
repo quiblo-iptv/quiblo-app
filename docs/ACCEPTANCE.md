@@ -114,6 +114,21 @@ except where a criterion names an input method the television does not have.
 | AC-TV-14 | A title can be found by name from one screen whichever kind the provider filed it under, and every result is reachable and openable with the D-pad. A term typed on the on-screen keyboard does not put a query to the database per keystroke, and no term returns more rows than a viewer could walk. |
 | AC-TV-15 | Playlists and accounts are reachable from Settings, and back from them returns to Settings rather than to the catalogue. They are not in the tab bar. |
 
+## AC-META — Film and series information
+
+Added 2026-08-09 with the catalogue scan (`FREEZE.md` Amendment 5). Every one of these is
+about a service the user pays for with their own key, and the failure they guard against is
+the app spending it badly.
+
+| ID | Criterion |
+|---|---|
+| AC-META-01 | With no key configured, nothing here issues a request. A scan cannot be started, and a packet capture shows no contact with the service (this is AC-NFR-03, restated where it is easiest to break). |
+| AC-META-02 | A scan of a catalogue with duplicate quality variants issues **one request per distinct cleaned title**, not one per row. Counted at the source, not by eye. |
+| AC-META-03 | The sustained request rate stays within the documented budget for the whole run, however many workers are in flight. A concurrency cap does not satisfy this. |
+| AC-META-04 | A refusal — rate limit, rejected key, unreachable host — stops the scan and is **never cached as an answer**. After one, the cache holds no row for the titles that were being asked about. |
+| AC-META-05 | A scan interrupted by cancelling, leaving the app, or a refusal resumes from where it stopped rather than from the beginning, and re-running it immediately after it completes issues no requests at all. |
+| AC-META-06 | Progress is visible while it runs and survives leaving the screen and returning. |
+
 ## AC-LEGAL — Licensing and Compliance
 
 | ID | Criterion |

@@ -171,3 +171,42 @@ design (`QuibloTvTheme` documents why), and a television has no wallpaper for a 
 palette to be drawn from, so both controls would change nothing on screen. Shipping a control
 that does nothing is the "hollow feature" shape this project has already had to delete nine
 of; a documented absence is better than a switch that lies.
+
+### Amendment 5 — the catalogue can be described in one go (2026-08-09)
+
+**Decision.** The optional metadata feature gains a **scan**: one control in Settings that
+looks up every film and series in the user's catalogue and fills the cache, rather than
+filling it a poster at a time as somebody browses. One request per distinct title, paced,
+resumable, and stoppable. It is off unless started, like the key it depends on.
+
+**Rationale.** Search on the television (2026-08-09) can filter by genre, and the genre
+filter is built from the metadata cache — so a viewer who has browsed four rows can filter by
+the genres of four rows. The screen quotes its own coverage honestly, which turns out to be
+the argument for this: a figure of 3% invites exactly one question, and until now the only
+answer was "scroll past your entire catalogue".
+
+**What it costs, stated plainly.** On the account this project is tested against it is tens
+of thousands of requests against the user's own key, over the better part of an hour. That is
+a great deal more than this app has ever asked of anything, so it is deliberate, visible,
+started by hand, and never automatic. It also stops at the first refusal instead of pushing
+through one.
+
+**What it changes about how we ask.** Two things, both of which were latent defects rather
+than new work:
+
+1. `TmdbClient` returned `null` for every failure alike, and the cache wrote `null` down as
+   "this title matches nothing" for a fortnight. Harmless a poster at a time; ruinous in
+   bulk — a scan that met a rate limit half way would have recorded tens of thousands of
+   false misses and left the search screen reporting a described catalogue with no genres in
+   it. Failures are now typed, and only a genuine no-match is cached.
+2. The token bucket that paces panel requests allowed the balance to stop at zero rather than
+   go negative, so each wait accrued a token the next caller spent immediately: requests left
+   in pairs, at **twice** the documented sustained rate. That guard exists because this
+   project got a user's account blocked twice. It has been running at 5 requests a second
+   while claiming 2.5 since the day it was written, and it is fixed here with a regression
+   test that pins the rate rather than the concurrency.
+
+**What does not change.** Every non-goal in §2 stands. No bundled key, no key of ours, no new
+host: the scan asks the same service the detail screens already ask, with the same key the
+user supplied, and asks for the *cheap* record — a search hit, whose genre ids are translated
+by one call per catalogue — rather than the full one. Nothing is fetched for live channels.

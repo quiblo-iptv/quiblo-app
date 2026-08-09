@@ -83,6 +83,17 @@
     <string name="tv_settings_tmdb_accepted">Key accepted.</string>
     <string name="tv_settings_tmdb_rejected">That key was not accepted.</string>
     <string name="tv_settings_tmdb_cleared">Key removed.</string>
+    <string name="tv_settings_scan">Fill in every film and series</string>
+    <string name="tv_settings_scan_detail">Looks up your whole catalogue once, so genres and scores are there before you browse. Takes a while on a large playlist — you can leave this screen, and it picks up where it stopped.</string>
+    <string name="tv_settings_scan_start">Start</string>
+    <string name="tv_settings_scan_stop">Stop</string>
+    <string name="tv_settings_scan_preparing">Working out what needs looking up…</string>
+    <string name="tv_settings_scan_progress">%1$d of %2$d looked up · %3$d found</string>
+    <string name="tv_settings_scan_finished">Done. %1$d titles described, %2$d not found.</string>
+    <string name="tv_settings_scan_cancelled">Stopped. %1$d titles kept — starting again carries on from here.</string>
+    <string name="tv_settings_scan_rate_limited">The Movie Database asked us to slow down, so the scan stopped. %1$d titles kept. Try again later.</string>
+    <string name="tv_settings_scan_key_rejected">The Movie Database rejected the key. %1$d titles kept. Check the key above.</string>
+    <string name="tv_settings_scan_unavailable">The Movie Database could not be reached. %1$d titles kept. Check the connection and try again.</string>
     <string name="tv_settings_save">Save</string>
     <string name="tv_settings_clear">Clear</string>
     <string name="tv_settings_backup">Backup</string>

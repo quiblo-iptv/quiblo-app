@@ -61,6 +61,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import dev.quiblo.core.data.MetadataScanState
+import dev.quiblo.core.data.ScanRefusal
 import dev.quiblo.core.model.BufferMode
 import dev.quiblo.core.model.Category
 import dev.quiblo.core.model.MaxBitrateCap
@@ -110,6 +112,7 @@ fun TvSettingsScreen(
     val categoryKind by viewModel.selectedCategoryKind.collectAsStateWithLifecycle()
     val categories by viewModel.categories.collectAsStateWithLifecycle()
     val backupState by viewModel.backupState.collectAsStateWithLifecycle()
+    val scanState by viewModel.metadataScan.collectAsStateWithLifecycle()
 
     BackHandler(onBack = onBack)
 
@@ -231,6 +234,19 @@ fun TvSettingsScreen(
             )
         }
 
+        // Only with a key, because without one there is nothing to ask and the control would
+        // be the sort of button that does nothing this project has already deleted nine of.
+        if (!tmdbApiKey.isNullOrBlank()) {
+            item {
+                MetadataScanRow(
+                    state = scanState,
+                    onStart = viewModel::startMetadataScan,
+                    onCancel = viewModel::cancelMetadataScan,
+                    onDismiss = viewModel::dismissMetadataScan,
+                )
+            }
+        }
+
         item { SectionHeading(stringResource(R.string.tv_settings_categories)) }
 
         item {
@@ -340,6 +356,106 @@ private fun TmdbKeyRow(
             }
         }
     }
+}
+
+/**
+ * The catalogue scan: one control, and a running count of what it has learned.
+ *
+ * The count is on screen rather than a spinner because this takes the better part of an hour
+ * on a large account, and an hour of spinner is indistinguishable from an hour of nothing
+ * happening. It is also what tells a viewer they can leave — the numbers keep moving when
+ * they come back, because the scan does not belong to this screen.
+ */
+@Composable
+private fun MetadataScanRow(
+    state: MetadataScanState,
+    onStart: () -> Unit,
+    onCancel: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 10.dp),
+        verticalAlignment = Alignment.Top,
+    ) {
+        Column(modifier = Modifier.width(LABEL_WIDTH)) {
+            Text(
+                text = stringResource(R.string.tv_settings_scan),
+                color = Color.White,
+                fontSize = 17.sp,
+                lineHeight = 22.sp,
+            )
+            Text(
+                text = stringResource(R.string.tv_settings_scan_detail),
+                color = Color.White.copy(alpha = 0.55f),
+                fontSize = 13.sp,
+                lineHeight = 18.sp,
+                modifier = Modifier.padding(top = 3.dp),
+            )
+        }
+
+        Spacer(modifier = Modifier.width(COLUMN_GAP))
+
+        Column {
+            val isWorking = state is MetadataScanState.Preparing || state is MetadataScanState.Running
+            TvChip(
+                label = stringResource(
+                    if (isWorking) R.string.tv_settings_scan_stop else R.string.tv_settings_scan_start,
+                ),
+                isSelected = isWorking,
+                onClick = {
+                    when {
+                        isWorking -> onCancel()
+                        // A report has to be put away before the control offers a new scan,
+                        // so a finished count is not replaced by a fresh zero on a stray
+                        // press — on a remote, a stray press is the normal kind.
+                        state !is MetadataScanState.Idle -> onDismiss()
+                        else -> onStart()
+                    }
+                },
+            )
+
+            scanMessage(state)?.let {
+                Text(
+                    text = it,
+                    color = if (state is MetadataScanState.Stopped) {
+                        MaterialTheme.colorScheme.error
+                    } else {
+                        Color.White.copy(alpha = 0.75f)
+                    },
+                    fontSize = 14.sp,
+                    lineHeight = 19.sp,
+                    modifier = Modifier.padding(top = 8.dp),
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun scanMessage(state: MetadataScanState): String? = when (state) {
+    MetadataScanState.Idle -> null
+    MetadataScanState.Preparing -> stringResource(R.string.tv_settings_scan_preparing)
+    is MetadataScanState.Running ->
+        stringResource(R.string.tv_settings_scan_progress, state.done, state.total, state.found)
+
+    is MetadataScanState.Finished ->
+        stringResource(R.string.tv_settings_scan_finished, state.found, state.missing)
+
+    is MetadataScanState.Cancelled ->
+        stringResource(R.string.tv_settings_scan_cancelled, state.found)
+
+    // Named rather than vague, because the three refusals need three different responses
+    // from the viewer: wait, fix the key, or check the network.
+    is MetadataScanState.Stopped -> stringResource(
+        when (state.reason) {
+            ScanRefusal.RATE_LIMITED -> R.string.tv_settings_scan_rate_limited
+            ScanRefusal.KEY_REJECTED -> R.string.tv_settings_scan_key_rejected
+            ScanRefusal.UNAVAILABLE -> R.string.tv_settings_scan_unavailable
+        },
+        state.found,
+    )
 }
 
 /**

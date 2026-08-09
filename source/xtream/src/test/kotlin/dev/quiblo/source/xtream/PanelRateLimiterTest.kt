@@ -68,6 +68,22 @@ class PanelRateLimiterTest {
     }
 
     @Test
+    @DisplayName("a long scroll is paced at the documented rate, not twice it")
+    fun `the sustained rate is one request per interval`() = runTest {
+        repeat(8) { limiter.acquire() }
+        slept = 0L
+
+        repeat(20) { limiter.acquire() }
+
+        // Twenty requests at one per 400 ms. This is a regression test with a story: the
+        // balance used to stop at zero rather than going negative, so the wait accrued a
+        // token that the next caller found and spent immediately. Requests left in pairs and
+        // the real pacing was 200 ms — half the figure this guard was documented, reviewed
+        // and trusted to enforce after two account blocks.
+        assertTrue(slept >= 7_600L, "20 requests were paced in only ${slept}ms")
+    }
+
+    @Test
     fun `waiting refills the budget`() = runTest {
         repeat(8) { limiter.acquire() }
         // A user reading one screen for four seconds has earned the burst back.

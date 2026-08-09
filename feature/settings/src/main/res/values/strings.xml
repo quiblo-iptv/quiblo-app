@@ -68,6 +68,19 @@
     <string name="settings_metadata_off">Off. No requests are made to The Movie Database.</string>
     <string name="settings_metadata_attribution">This product uses the TMDB API but is not endorsed or certified by TMDB.</string>
 
+    <string name="settings_metadata_scan_title">Fill in every film and series</string>
+    <string name="settings_metadata_scan_summary">Looks up your whole catalogue once, so genres and scores are there before you browse. On a large playlist this takes a while — you can leave this screen, and it picks up where it stopped.</string>
+    <string name="settings_metadata_scan_start">Start</string>
+    <string name="settings_metadata_scan_stop">Stop</string>
+    <string name="settings_metadata_scan_dismiss">Dismiss</string>
+    <string name="settings_metadata_scan_preparing">Working out what needs looking up…</string>
+    <string name="settings_metadata_scan_progress">%1$d of %2$d looked up · %3$d found</string>
+    <string name="settings_metadata_scan_finished">Done. %1$d titles described, %2$d not found.</string>
+    <string name="settings_metadata_scan_cancelled">Stopped. %1$d titles kept — starting again carries on from here.</string>
+    <string name="settings_metadata_scan_rate_limited">The Movie Database asked us to slow down, so the scan stopped. %1$d titles kept. Try again later.</string>
+    <string name="settings_metadata_scan_key_rejected">The Movie Database rejected the key. %1$d titles kept. Check the key above.</string>
+    <string name="settings_metadata_scan_unavailable">The Movie Database could not be reached. %1$d titles kept. Check your connection and try again.</string>
+
     <string name="settings_categories_title">Categories</string>
     <string name="settings_categories_summary">Turn categories off to hide them from browsing, or rename them. Both are local — nothing is sent to your provider, and hiding removes nothing.</string>
     <string name="settings_categories_live">Live TV</string>

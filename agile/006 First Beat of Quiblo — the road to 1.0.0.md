@@ -14,7 +14,7 @@ they were listed.
 | Gate | Item | State | What closes it |
 | :---- | :---- | :---- | :---- |
 | 0 | The local gate is red for a non-code reason | **Blocked** | An untracked daemon-JVM file pins Gradle to JDK 25; detekt dies on it |
-| 4 | Repo builds the release on protected main | **Broken** | The bump cannot read or write a pre-release version; a beta would publish under the wrong name |
+| 4 | Repo builds the release on protected main | **Fixed in code 2026-08-10; unproven** | All three faults closed. The lane has still never been driven on a pre-release, which is the exit criterion |
 | 5 | All pending work done | **Open** | Seventeen acceptance criteria written and unrun; one open suggestion from `005` |
 | 1 | Tests sweep on real devices, mobile and TV | **Open** | `ACCEPTANCE-SWEEP.md` §5 and §7 — the television has never been swept once |
 | 6 | QA analysis for deprecated, old and vulnerable technology | **Not started** | A quality gate CI has to pass, not a one-off report |
@@ -87,10 +87,17 @@ it. What does not exist is the pre-release lane this shipment plan depends on:
 that will bypass it at midnight. The exception that must be kept is the workflow's own bump
 commit, which is pushed with `GITHUB_TOKEN` and by design starts no further run.
 
-**Exit criterion.** A throwaway pre-release — `v0.2.1-alpha.1` or similar — merged through
-`main`, published as a pre-release, carrying both signed APKs and their checksums, with the
-build files showing the same string as the tag. Prove the lane on a version nobody minds
-before spending `1.0.0-beta.1` on it.
+**All three are fixed as of 2026-08-10**, and the arithmetic is verified against every shape
+the lane can meet — a bare version bumping by class, each stage advancing its own counter,
+`-beta.9` → `-beta.10`, and four malformed versions refused rather than truncated. The
+`versionName` round-trip that was the first fault — write a pre-release, read it back — was
+run against a real build file.
+
+**Exit criterion, and it is not met.** A throwaway pre-release merged through `main`, published
+as a pre-release, carrying both signed APKs and their checksums, with the build files showing
+the same string as the tag. **Verified arithmetic is not a driven lane**, and this project's own
+record on that is unambiguous: `detektAll` was broken for its entire existence because nothing
+ever ran it. Prove it on a version nobody minds before spending `1.0.0-beta.1`.
 
 ## Gate 5 — all pending work is done
 

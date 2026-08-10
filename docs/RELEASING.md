@@ -71,8 +71,17 @@ to `main` and does three things in order, each gated on the one before it:
 
 So the version to be released is decided by the workflow, not by you, and the numbers in the
 build files are the record of what has already shipped. To release something other than the
-next patch — a minor or a major — set the version you want in both build files in the pull
-request itself; the bump then moves on from there.
+next patch — a minor, a major, or a pre-release — set the version in both build files in the
+pull request itself and the bump moves on from there. **It publishes one step past what it
+finds**, so write the version *before* the one you want: `1.0.0-beta.0` to release
+`1.0.0-beta.1`.
+
+`versionName` accepts `X.Y.Z` and `X.Y.Z-<alpha|beta|rc>.N` and nothing else; anything else
+stops the lane with a message rather than being truncated to three numbers. A pre-release
+advances its own counter — `-beta.1` → `-beta.2` — whatever the commits contain, and is
+published with `prerelease: true` so it never stands on the releases page as the current
+version. Moving from beta to rc, or rc to final, is a deliberate edit in a pull request.
+[`RELEASE-MANAGEMENT.md`](RELEASE-MANAGEMENT.md) §3–§6 says what each stage claims.
 
 Nothing needs to be tagged by hand. Tagging `v*` still runs `release.yml` directly, and so
 does running it from the Actions tab with a tag as input — both remain for a release that has

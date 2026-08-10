@@ -217,31 +217,48 @@ can bypass the rule is the account that will bypass it at midnight.
 
 ### Naming a version other than the next patch
 
-The automatic bump moves the patch. To release a minor, a major, or any pre-release, **set
-the version you want in both `app/build.gradle.kts` and `app-tv/build.gradle.kts` in the pull
-request itself.** The workflow starts from what it finds, so what you merge is what is
-published. The two application ids are asserted equal before anything is written, because
-they are released together under one tag.
+The automatic bump moves the patch. To release a minor, a major, or any pre-release, **set the
+version in both `app/build.gradle.kts` and `app-tv/build.gradle.kts` in the pull request
+itself.** The workflow starts from what it finds and publishes **one step past it**, so what
+you write is the version *before* the one you want: `0.9.0` to release `0.10.0`, `1.0.0-beta.0`
+to release `1.0.0-beta.1`. The two application ids are asserted equal before anything is
+written, because they are released together under one tag.
 
-### The pre-release lane does not work yet
+### The pre-release lane
 
-Stated here because §3, §4 and §5 are unreachable until it does, and because a policy
-document that describes a lane nobody has driven is worth exactly nothing:
+Stated here because §3, §4 and §5 are unreachable without it. **It did not work until
+2026-08-10**, and the three faults are recorded rather than deleted, because each of them was
+the kind that publishes something wrong rather than failing loudly:
 
-1. **`release-on-main.yml` cannot read or write a pre-release version.** The version is read
-   with `[0-9]+\.[0-9]+\.[0-9]+` and rewritten by a `sed` anchored to the closing quote, so
-   `versionName = "1.0.0-beta.1"` is read as `1.0.0` and then not rewritten at all — while
-   the `versionCode` `sed` beside it still fires. The "changed no files" guard is satisfied
-   by the code alone, and `main` is tagged `v1.0.1` against build files that say
-   `1.0.0-beta.1`. **A pre-release merged today publishes under the wrong name.**
-2. **The bump must understand the suffix.** `-beta.1` → `-beta.2`; a bare `X.Y.Z` keeps
-   today's patch bump; and moving from `-beta.N` to `-rc.1`, or from `-rc.N` to the final, is
-   done by hand in the pull request as above.
-3. **`release.yml` publishes everything as a full release.** It sets `draft: false` and no
-   `prerelease`, so a beta would appear as the latest stable download. A tag carrying a
-   suffix must publish with `prerelease: true`.
+1. **The version was read as three numbers.** `versionName = "1.0.0-beta.1"` was read as
+   `1.0.0`; the `versionName` `sed` then matched nothing while the `versionCode` `sed` beside
+   it still fired, the "changed no files" guard was satisfied by the code alone, and `main`
+   would have been tagged `v1.0.1` against build files saying `1.0.0-beta.1`. **A pre-release
+   merged before that fix would have published under a name nobody chose.** The version is now
+   read as whatever is between the quotes and its shape validated immediately, so a version
+   the lane does not understand stops it with a message instead of being silently truncated.
 
-This is gate 4 of `agile/006`, and it is done before `1.0.0-beta.1` is cut rather than after.
+2. **The bump now understands the suffix.** A pre-release advances its own counter and nothing
+   else: `1.0.0-beta.1` → `1.0.0-beta.2`, whatever the commits since the last tag contain. The
+   `X.Y.Z` in front of it was chosen by hand in the pull request that opened the stage, and a
+   `feat:` landing during a beta is part of what that version will be rather than a reason to
+   renumber it. A bare `X.Y.Z` keeps the class-driven bump above.
+
+3. **`release.yml` published everything as a full release.** A tag carrying `-alpha`, `-beta`
+   or `-rc` now publishes with `prerelease: true`. Without it `1.0.0-beta.1` would have stood
+   on the releases page as the current version of Quiblo beside no stable release at all, and
+   a stranger arriving there would have installed a beta believing it finished. A tag matching
+   neither shape is **refused** rather than assumed stable, because the cost of guessing wrong
+   is exactly that front page.
+
+**Moving between stages is by hand**, in the pull request, as a minor or a major already is:
+beta to rc, and rc to the final. Those are claims about the software — §3 and §5 — and no
+commit prefix can make them.
+
+**How to open a stage.** The bump always publishes one step past what it finds, so the build
+files carry the version *before* the one being released: set `1.0.0-beta.0` to publish
+`1.0.0-beta.1`. That is the same rule as for a minor or a major and it is easy to get backwards,
+which is why it is written here rather than inferred.
 
 ### `versionCode`
 

@@ -66,6 +66,7 @@
     <!-- Row headings come from feature:browse now, so both apps say the same words. -->
     <string name="tv_search_genres_coverage">Genres describe %1$d%% of your catalogue so far — browsing fills in the rest.</string>
     <string name="tv_search_genres_empty">Browse some films or series and you will be able to filter by genre here.</string>
+    <string name="tv_search_genres_loading">Reading the genres in your catalogue…</string>
     <string name="tv_search_genres_disabled">Add a Movie Database key under Settings to filter by genre.</string>
 
     <!-- Settings -->

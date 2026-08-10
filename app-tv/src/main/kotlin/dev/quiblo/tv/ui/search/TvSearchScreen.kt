@@ -35,6 +35,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -251,6 +252,30 @@ internal fun ColumnScope.SearchHeader(
         }
     }
 
+    /*
+     * The wait, drawn (#018).
+     *
+     * Building the genre index reads the whole metadata cache, and on a scanned catalogue that
+     * is long enough to see. Until now nothing was shown while it happened: the filters opened
+     * onto an empty strip with no chips and no coverage figure, which is indistinguishable
+     * from a catalogue that has no genres in it.
+     *
+     * A thin bar directly under the field, exactly where the report asked for it, and gone the
+     * moment the chips arrive. It is deliberately not a spinner in the middle of the screen —
+     * the results below are still usable while this is happening, and a modal wait would take
+     * them away for no reason.
+     */
+    if (isAdvanced && state.areGenresLoading) {
+        LinearProgressIndicator(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 6.dp)
+                .height(2.dp),
+            color = Color.White.copy(alpha = 0.7f),
+            trackColor = Color.White.copy(alpha = 0.15f),
+        )
+    }
+
     LazyRow(
         horizontalArrangement = Arrangement.spacedBy(
             space = 10.dp,
@@ -307,6 +332,9 @@ internal fun ColumnScope.SearchHeader(
  */
 @Composable
 private fun genreHint(state: SearchUiState): String? = when {
+    // Said before "you have no genres", because they are different facts and only one of them
+    // is the viewer's problem. An empty list while still reading looks like an answer (#018).
+    state.areGenresLoading -> stringResource(R.string.tv_search_genres_loading)
     state.isMetadataDisabled -> stringResource(R.string.tv_search_genres_disabled)
     state.genres.isEmpty() -> stringResource(R.string.tv_search_genres_empty)
     else -> stringResource(R.string.tv_search_genres_coverage, state.coveragePercent)

@@ -240,6 +240,7 @@ fun PlayerScreen(
             viewModel = viewModel,
             videoAspectRatio = state.videoAspectRatio,
             mode = aspectRatioMode,
+            hasRenderedFirstFrame = state.hasRenderedFirstFrame,
             modifier = Modifier.fillMaxSize(),
         )
 
@@ -439,6 +440,8 @@ private fun VideoSurface(
     viewModel: PlayerViewModel,
     videoAspectRatio: Float?,
     mode: AspectRatioMode,
+    /** False until a frame of *this* stream has been drawn. See [PlaybackState]. */
+    hasRenderedFirstFrame: Boolean,
     modifier: Modifier = Modifier,
 ) {
     val controller = remember { viewModel.controllerHandle() }
@@ -465,6 +468,14 @@ private fun VideoSurface(
                 SurfaceView(context).also(controller::attachSurface)
             },
         )
+
+        // The shutter. Media3 leaves the last decoded frame on the surface until the next one
+        // arrives, so opening a second title showed the previous one's final picture while the
+        // new one loaded (#013). Reported on the television, and the engine is shared, so the
+        // phone had it too — the spinner drew over it rather than replacing it.
+        if (!hasRenderedFirstFrame) {
+            Box(modifier = Modifier.fillMaxSize().background(Color.Black))
+        }
     }
 
     DisposableEffect(Unit) {

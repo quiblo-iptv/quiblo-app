@@ -256,6 +256,7 @@ fun TvPlayerScreen(
             viewModel = viewModel,
             videoAspectRatio = state.videoAspectRatio,
             mode = aspectRatioMode,
+            hasRenderedFirstFrame = state.hasRenderedFirstFrame,
         )
 
         PlayerOverlays(
@@ -505,6 +506,8 @@ private fun VideoSurface(
     viewModel: PlayerViewModel,
     videoAspectRatio: Float?,
     mode: AspectRatioMode,
+    /** False until a frame of *this* stream has been drawn. See [PlaybackState]. */
+    hasRenderedFirstFrame: Boolean,
 ) {
     val controller = remember { viewModel.controllerHandle() }
 
@@ -526,6 +529,22 @@ private fun VideoSurface(
                 },
             factory = { context -> SurfaceView(context).also(controller::attachSurface) },
         )
+
+        /*
+         * The shutter (#013).
+         *
+         * Media3 leaves the last decoded frame on the surface until the next one arrives, so
+         * zapping showed the previous channel's final picture while the new one loaded — under
+         * the new one's audio, which is what made it read as a fault rather than as a wait.
+         * The buffering spinner never hid it, because a spinner draws over what is there
+         * instead of replacing it.
+         *
+         * Opaque, and over the surface rather than over the whole screen: everything else the
+         * player draws while waiting — the spinner, the channel name — belongs on top of this.
+         */
+        if (!hasRenderedFirstFrame) {
+            Box(modifier = Modifier.fillMaxSize().background(Color.Black))
+        }
     }
 
     DisposableEffect(Unit) {

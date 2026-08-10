@@ -24,10 +24,8 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -94,10 +92,10 @@ fun TvContinueWatchingRow(
             modifier = Modifier.padding(bottom = TITLE_GAP),
         )
 
-        LazyRow(
-            horizontalArrangement = Arrangement.spacedBy(14.dp),
-            contentPadding = PaddingValues(vertical = FOCUS_GROWTH),
-        ) {
+        // No content padding and no spacing beyond what the tiles carry themselves — exactly
+        // as the poster rows do it. See [ContinueTile] for why the room has to live inside
+        // the tile rather than around the row (#012).
+        LazyRow {
             items(items = entries, key = { it.stableKey }) { entry ->
                 ContinueTile(
                     entry = entry,
@@ -122,96 +120,115 @@ private fun ContinueTile(entry: HistoryEntry, artworkUrl: String?, onClick: () -
         label = "continueScale",
     )
 
-    // `clickable` outside `graphicsLayer`, so this tile's focusable does not sit inside the
-    // animating scale and report a size that grows every frame. The reasoning is `Poster`'s
-    // and is written out at length there; the same fault was in this tile, and a continue
-    // row that shook while the catalogue below it held still would be its own bug.
-    Column(
-        modifier = Modifier
-            .width(TILE_WIDTH)
-            .clickable(interactionSource = interactionSource, indication = null, onClick = onClick)
-            .graphicsLayer {
-                scaleX = scale
-                scaleY = scale
-            },
+    /*
+     * The room a focused tile grows into lives here, inside the tile, on both axes.
+     *
+     * It used to be `contentPadding` on the row, **vertically only** — so the first tile had
+     * no horizontal room at all, and a `LazyRow` clips to its own bounds, which cut its scaled
+     * left edge flat (#012). Round 2 fixed exactly this in `Poster` and wrote down why; the
+     * note lived next to the poster and the fix did not travel to this row.
+     *
+     * That is the lesson worth keeping over the fix: **a correction that lives in one row
+     * implementation is not applied to the other by being written down near it.** Both rows
+     * now carry their growth the same way, which is the only version of "shared" that holds.
+     */
+    Box(
+        modifier = Modifier.padding(
+            horizontal = FOCUS_GROWTH_HORIZONTAL,
+            vertical = FOCUS_GROWTH,
+        ),
     ) {
-        Box(
+        // `clickable` outside `graphicsLayer`, so this tile's focusable does not sit inside the
+        // animating scale and report a size that grows every frame. The reasoning is `Poster`'s
+        // and is written out at length there; the same fault was in this tile, and a continue
+        // row that shook while the catalogue below it held still would be its own bug.
+        Column(
             modifier = Modifier
-                .fillMaxWidth()
-                .aspectRatio(TILE_ASPECT_RATIO)
-                .clip(RoundedCornerShape(8.dp))
-                .border(
-                    width = if (isFocused) 3.dp else 0.dp,
-                    color = if (isFocused) Color.White else Color.Transparent,
-                    shape = RoundedCornerShape(8.dp),
-                ),
+                .width(TILE_WIDTH)
+                .clickable(interactionSource = interactionSource, indication = null, onClick = onClick)
+                .graphicsLayer {
+                    scaleX = scale
+                    scaleY = scale
+                },
         ) {
-            if (artworkUrl.isNullOrBlank()) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(Color.White.copy(alpha = 0.08f)),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Icon(
-                        imageVector = Icons.Filled.Movie,
-                        contentDescription = null,
-                        tint = Color.White.copy(alpha = 0.35f),
-                        modifier = Modifier.size(28.dp),
-                    )
-                }
-            } else {
-                SubcomposeAsyncImage(
-                    model = artworkUrl,
-                    contentDescription = null,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize(),
-                )
-            }
-
-            // How far in, along the bottom of the artwork. Drawn only when the length is
-            // known: a bar with no denominator would be a guess rendered as a fact.
-            if (entry.durationMillis > 0L) {
-                val progress = (entry.positionMillis.toFloat() / entry.durationMillis)
-                    .coerceIn(0f, 1f)
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.BottomStart)
-                        .fillMaxWidth()
-                        .height(4.dp)
-                        .background(Color.Black.copy(alpha = 0.55f)),
-                ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .aspectRatio(TILE_ASPECT_RATIO)
+                    .clip(RoundedCornerShape(8.dp))
+                    .border(
+                        width = if (isFocused) 3.dp else 0.dp,
+                        color = if (isFocused) Color.White else Color.Transparent,
+                        shape = RoundedCornerShape(8.dp),
+                    ),
+            ) {
+                if (artworkUrl.isNullOrBlank()) {
                     Box(
                         modifier = Modifier
-                            .fillMaxWidth(progress)
-                            .height(4.dp)
-                            .background(Color.White),
+                            .fillMaxSize()
+                            .background(Color.White.copy(alpha = 0.08f)),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.Movie,
+                            contentDescription = null,
+                            tint = Color.White.copy(alpha = 0.35f),
+                            modifier = Modifier.size(28.dp),
+                        )
+                    }
+                } else {
+                    SubcomposeAsyncImage(
+                        model = artworkUrl,
+                        contentDescription = null,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize(),
                     )
                 }
+
+                // How far in, along the bottom of the artwork. Drawn only when the length is
+                // known: a bar with no denominator would be a guess rendered as a fact.
+                if (entry.durationMillis > 0L) {
+                    val progress = (entry.positionMillis.toFloat() / entry.durationMillis)
+                        .coerceIn(0f, 1f)
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.BottomStart)
+                            .fillMaxWidth()
+                            .height(4.dp)
+                            .background(Color.Black.copy(alpha = 0.55f)),
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth(progress)
+                                .height(4.dp)
+                                .background(Color.White),
+                        )
+                    }
+                }
             }
-        }
 
-        Text(
-            text = entry.title,
-            color = Color.White.copy(alpha = if (isFocused) 1f else 0.75f),
-            fontSize = 14.sp,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.padding(top = 8.dp),
-        )
-
-        // The episode, when this is one. A series is listed by its own name, so without
-        // this a viewer cannot tell which episode "continue" would resume.
-        if (entry.seasonNumber != null && entry.episodeNumber != null) {
             Text(
-                text = stringResource(
-                    R.string.tv_series_episode_number,
-                    entry.seasonNumber!!,
-                    entry.episodeNumber!!,
-                ),
-                color = Color.White.copy(alpha = 0.55f),
-                fontSize = 12.sp,
+                text = entry.title,
+                color = Color.White.copy(alpha = if (isFocused) 1f else 0.75f),
+                fontSize = 14.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(top = 8.dp),
             )
+
+            // The episode, when this is one. A series is listed by its own name, so without
+            // this a viewer cannot tell which episode "continue" would resume.
+            if (entry.seasonNumber != null && entry.episodeNumber != null) {
+                Text(
+                    text = stringResource(
+                        R.string.tv_series_episode_number,
+                        entry.seasonNumber!!,
+                        entry.episodeNumber!!,
+                    ),
+                    color = Color.White.copy(alpha = 0.55f),
+                    fontSize = 12.sp,
+                )
+            }
         }
     }
 }
@@ -219,5 +236,21 @@ private fun ContinueTile(entry: HistoryEntry, artworkUrl: String?, onClick: () -
 private val TILE_WIDTH = 260.dp
 private const val TILE_ASPECT_RATIO = 16f / 9f
 private const val FOCUSED_SCALE = 1.08f
+
+/**
+ * How far a focused tile grows past its own top and bottom edge, rounded up.
+ *
+ * The tile is 260dp wide at 16:9 plus its label, near enough 200dp tall; [FOCUSED_SCALE]
+ * scales it about its centre, so it gains about 16dp of height and half of that goes upwards.
+ */
 private val FOCUS_GROWTH = 12.dp
+
+/**
+ * How far it grows past its left and right edges.
+ *
+ * Half of what it gains in width: 260dp scaled by 1.08 is 21dp wider, so 10.5dp each side.
+ * Rounded up. Without this the *first* tile is clipped flat by the row's own bounds — which is
+ * #012, and which the poster rows learned in round 2.
+ */
+private val FOCUS_GROWTH_HORIZONTAL = 11.dp
 private val TITLE_GAP = 16.dp

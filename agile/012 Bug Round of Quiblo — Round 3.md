@@ -298,6 +298,15 @@ AC-PLAY-04 is then run for the first time, on both apps.
 
 ## Wave 3 — clipping, stale frames, and waiting
 
+**Built 2026-08-10.** All twelve of the round are now written; none is closed.
+
+| # | In code | Owed on the Haier |
+| :---- | :---- | :---- |
+| #012 | The growth moved inside the tile, both axes, as `Poster` carries it | The first tile whole, focused and unfocused |
+| #013 | `hasRenderedFirstFrame` on the shared state; both players hold a shutter | No frame of the previous stream after a switch |
+| #018 | A bar under the field while the index is read, and a hint that says so | The wait explained, and then measured against a scanned catalogue |
+
+
 ### #012 — the first continue-watching tile is clipped
 
 **Mechanism, confirmed, and the fix is one line.** Round 2 fixed the identical fault in the
@@ -345,13 +354,13 @@ slow screen for a lying one.
 
 | # | Closed when |
 | :---- | :---- |
-| #012 | The first tile of the continue row is whole, focused and unfocused, on the panel |
-| #013 | No frame of the previous stream is visible after a switch |
+| #012 | The first tile of the continue row is whole, focused and unfocused, on the panel — **built; owed the panel** |
+| #013 | No frame of the previous stream is visible after a switch — **built on both apps; owed a zap on the panel** |
 | #014 | The favourites label fits at every supported title length, and history can be removed from the detail screen — **built; owed the panel** |
 | #015 | A detail screen opens showing its title and artwork, unscrolled — **built; owed the panel** |
 | #016 | AC-PROF-01 passes after a force-stop, on both apps, with a centred chooser and circular avatars — **built; owed a force-stop on hardware** |
 | #017 | No `kind.name` reaches a composable in either app — **built, and CI now fails on one** |
-| #018 | A progress indicator covers the wait, and the wait is measured before and after |
+| #018 | A progress indicator covers the wait, and the wait is measured before and after — **indicator built; the measurement needs a 67k catalogue and is deferred, in writing** |
 | #019 | Films are Movies, Series has its heading, and no title is cropped when focused — **built; measured on the JVM, owed the panel** |
 | #020 | The amendment is dated **and** back pops one step, with the episode cursor restored from history — **both built; owed the remote** |
 | #021 | The settings list measures zero movement for a second with the keyboard up, in the harness and on the device — **harness done; device owed** |
@@ -360,7 +369,12 @@ slow screen for a lying one.
 
 **Then, and only then, `013` starts.** The device sweep in `006` gate 1 runs after both.
 
-**Waves 1 and 2 are built as of 2026-08-10; wave 3 is not started.** Nothing in either wave is
-closed, because closing one means the Haier saying so — and the whole argument for doing this
-round before the sweep was that rediscovering known faults on three devices spends them for
-nothing.
+**All twelve are built as of 2026-08-10. None is closed.** Closing one means the Haier saying
+so, and the whole argument for doing this round before the sweep was that rediscovering known
+faults across three devices spends them for nothing. The tree is now the finished tree `006`
+gate 5 asks the sweep to run against.
+
+**One item is deliberately part-done and says so: #018.** The indicator the report asked for is
+built; making the read itself faster is not. That choice needs a 67k catalogue to measure
+against, because the coverage figure beside the chips comes from the same read and an
+optimisation that leaves it stale trades a slow screen for a lying one.

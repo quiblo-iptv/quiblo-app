@@ -50,6 +50,8 @@ data class SearchUiState(
     val genres: List<String> = emptyList(),
     /** How much of the catalogue has been described, for the hint under the filter. */
     val coveragePercent: Int = 0,
+    /** Whether the genre index is still being built. See `GenreState.isLoading` (#018). */
+    val areGenresLoading: Boolean = false,
     /** True when no metadata key is configured, which is why there are no genres. */
     val isMetadataDisabled: Boolean = false,
     val live: List<Channel> = emptyList(),
@@ -106,12 +108,18 @@ class SearchViewModel(
     init {
         viewModelScope.launch {
             metadataRepository.load()
-            val sourceId = activeSourceId.first { it != null } ?: return@launch
+            val sourceId = activeSourceId.first { it != null }
+            if (sourceId == null) {
+                // No source, so there is nothing to index and nothing to wait for.
+                genreIndex.value = GenreState(isLoading = false)
+                return@launch
+            }
             val index = searchRepository.genreIndex(sourceId)
             genreIndex.value = GenreState(
                 genres = index.genres,
                 coveragePercent = index.coveragePercent,
                 isDisabled = index.isMetadataDisabled,
+                isLoading = false,
             )
         }
     }
@@ -154,6 +162,7 @@ class SearchViewModel(
             genres = index.genres,
             coveragePercent = index.coveragePercent,
             isMetadataDisabled = index.isDisabled,
+            areGenresLoading = index.isLoading,
             live = found.live,
             movies = found.movies,
             series = found.series,
@@ -210,6 +219,15 @@ class SearchViewModel(
         val genres: List<String> = emptyList(),
         val coveragePercent: Int = 0,
         val isDisabled: Boolean = false,
+        /**
+         * True until the index has been built once.
+         *
+         * The default, because it is built in `init` and the screen can be drawn before it
+         * finishes. Without this the filters opened onto nothing at all for as long as the
+         * read took — no chips, no coverage figure, and nothing saying why (#018). An
+         * unexplained wait and a broken screen look identical.
+         */
+        val isLoading: Boolean = true,
     )
 
     /** Everything that is neither the question nor the answer, bundled to fit `combine`. */

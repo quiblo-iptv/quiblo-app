@@ -58,3 +58,14 @@ G ) Wiki Story
 2 - tell the story how this app build using Claude code
 
 
+H ) Increment Round — raised 2026-08-10, intake in `INC_AGILE.md`
+
+1 - twelve defects, executed before everything else on this section — `agile/012`
+2 - fourteen features and four enhancements — `agile/013`, after 1 closes
+3 - one entry per title, whatever its quality or language — `agile/014`, its own document
+
+Ordering against the rest of this page: H1 belongs to B5 ("all pending work are done") and is
+therefore inside the road to 1.0.0. H2 and H3 are 1.1.0 and later, and are deliberately not
+gating B.
+
+

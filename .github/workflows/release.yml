@@ -134,6 +134,32 @@ jobs:
             sha256sum "$NAME" > "${NAME}.sha256"
           done
 
+      # A tag carrying -alpha, -beta or -rc is a pre-release and has to be published as one.
+      #
+      # Without this every tag published as the latest stable download, so `1.0.0-beta.1` would
+      # have appeared as the current release of Quiblo beside no stable release at all — and
+      # anybody arriving at the releases page would have installed a beta believing it was
+      # finished. RELEASE-MANAGEMENT.md §6 sets out which suffixes mean what.
+      - name: Decide whether this tag is a pre-release
+        id: kind
+        env:
+          TAG: ${{ inputs.tag || github.ref_name }}
+        run: |
+          set -euo pipefail
+          if printf '%s' "$TAG" | grep -qE '^v[0-9]+\.[0-9]+\.[0-9]+-(alpha|beta|rc)\.[0-9]+$'; then
+            echo "prerelease=true" >> "$GITHUB_OUTPUT"
+            echo "$TAG is a pre-release."
+          elif printf '%s' "$TAG" | grep -qE '^v[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "prerelease=false" >> "$GITHUB_OUTPUT"
+            echo "$TAG is a full release."
+          else
+            # Refused rather than guessed. A tag this does not recognise is one nobody has
+            # decided the meaning of, and the failure mode of guessing "stable" is a beta on
+            # the front page.
+            echo "::error::'$TAG' is neither vX.Y.Z nor vX.Y.Z-<alpha|beta|rc>.N. See docs/RELEASE-MANAGEMENT.md §6."
+            exit 1
+          fi
+
       - name: Publish release
         uses: softprops/action-gh-release@v2
         with:
@@ -142,6 +168,7 @@ jobs:
           # passed the gate, and a draft nobody remembers to press Publish on is how the
           # releases page ends up describing a version no user can download.
           draft: false
+          prerelease: ${{ steps.kind.outputs.prerelease }}
           generate_release_notes: true
           files: |
             app/build/outputs/apk/release/quiblo-*.apk

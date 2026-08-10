@@ -155,7 +155,14 @@ jobs:
           # nothing fails the whole pipeline, which would abort the step before the checks
           # below could say what was actually wrong — a build file that had been reformatted
           # would fail with a bare exit code and no clue.
-          CURRENT_NAME=$(grep -oP 'versionName = "\K[0-9]+\.[0-9]+\.[0-9]+' app/build.gradle.kts | head -n 1 || true)
+          # Whatever is between the quotes, not "three numbers".
+          #
+          # It used to read `[0-9]+\.[0-9]+\.[0-9]+`, which is why a pre-release could not be
+          # published under its own name: `1.0.0-beta.1` was read as `1.0.0`, the versionName
+          # sed below then matched nothing while the versionCode sed beside it still fired, and
+          # `main` would have been tagged v1.0.1 against build files saying 1.0.0-beta.1. The
+          # shape is validated immediately below instead, where a wrong one can be reported.
+          CURRENT_NAME=$(grep -oP 'versionName = "\K[^"]+' app/build.gradle.kts | head -n 1 || true)
           CURRENT_CODE=$(grep -oP 'versionCode = \K[0-9]+' app/build.gradle.kts | head -n 1 || true)
 
           if [ -z "$CURRENT_NAME" ] || [ -z "$CURRENT_CODE" ]; then
@@ -163,24 +170,43 @@ jobs:
             exit 1
           fi
 
-          TV_NAME=$(grep -oP 'versionName = "\K[0-9]+\.[0-9]+\.[0-9]+' app-tv/build.gradle.kts | head -n 1 || true)
+          TV_NAME=$(grep -oP 'versionName = "\K[^"]+' app-tv/build.gradle.kts | head -n 1 || true)
           TV_CODE=$(grep -oP 'versionCode = \K[0-9]+' app-tv/build.gradle.kts | head -n 1 || true)
           if [ "$TV_NAME" != "$CURRENT_NAME" ] || [ "$TV_CODE" != "$CURRENT_CODE" ]; then
             echo "::error::app is $CURRENT_NAME/$CURRENT_CODE but app-tv is $TV_NAME/$TV_CODE. They are released together under one tag, so they must start from the same version."
             exit 1
           fi
 
-          # Which number moves is the class the step above worked out, not a fixed choice.
-          # A minor resets the patch: 0.2.2 with a feat: in it becomes 0.3.0, not 0.2.3.
-          IFS=. read -r MAJOR MINOR PATCH <<< "$CURRENT_NAME"
-          case "$CLASS" in
-            minor) NEXT_NAME="$MAJOR.$((MINOR + 1)).0" ;;
-            patch) NEXT_NAME="$MAJOR.$MINOR.$((PATCH + 1))" ;;
-            *)
-              echo "::error::Unknown release class '$CLASS'. This job should not have run."
-              exit 1
-              ;;
-          esac
+          # Two shapes are legal, and which one is in the build files decides how it moves.
+          if printf '%s' "$CURRENT_NAME" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+-(alpha|beta|rc)\.[0-9]+$'; then
+            # A pre-release advances its own counter and nothing else.
+            #
+            # X.Y.Z was chosen by hand in the pull request that opened the stage, and the
+            # stage's meaning is a claim about the software that no commit prefix can make —
+            # RELEASE-MANAGEMENT.md §3 and §5. So a feat: landing during 1.0.0-beta.1 gives
+            # 1.0.0-beta.2, not 1.1.0-beta.1: it is part of what 1.0.0 will be. Moving from
+            # beta to rc, or from rc to the final, stays a deliberate edit in a pull request.
+            BASE="${CURRENT_NAME%%-*}"
+            SUFFIX="${CURRENT_NAME#*-}"
+            STAGE="${SUFFIX%%.*}"
+            STAGE_NUMBER="${SUFFIX##*.}"
+            NEXT_NAME="$BASE-$STAGE.$((STAGE_NUMBER + 1))"
+          elif printf '%s' "$CURRENT_NAME" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+            # Which number moves is the class the step above worked out, not a fixed choice.
+            # A minor resets the patch: 0.2.2 with a feat: in it becomes 0.3.0, not 0.2.3.
+            IFS=. read -r MAJOR MINOR PATCH <<< "$CURRENT_NAME"
+            case "$CLASS" in
+              minor) NEXT_NAME="$MAJOR.$((MINOR + 1)).0" ;;
+              patch) NEXT_NAME="$MAJOR.$MINOR.$((PATCH + 1))" ;;
+              *)
+                echo "::error::Unknown release class '$CLASS'. This job should not have run."
+                exit 1
+                ;;
+            esac
+          else
+            echo "::error::versionName is '$CURRENT_NAME', which is neither X.Y.Z nor X.Y.Z-<alpha|beta|rc>.N. Nothing has been bumped or tagged. See docs/RELEASE-MANAGEMENT.md §6."
+            exit 1
+          fi
 
           # versionCode never expresses the class — Android only requires that it increases,
           # and the name carries the meaning. See docs/RELEASE-MANAGEMENT.md §6.
@@ -196,7 +222,7 @@ jobs:
 
           for FILE in app/build.gradle.kts app-tv/build.gradle.kts; do
             sed -i -E "s/versionCode = [0-9]+/versionCode = $NEXT_CODE/" "$FILE"
-            sed -i -E "s/versionName = \"[0-9]+\.[0-9]+\.[0-9]+\"/versionName = \"$NEXT_NAME\"/" "$FILE"
+            sed -i -E "s/versionName = \"[^\"]+\"/versionName = \"$NEXT_NAME\"/" "$FILE"
           done
 
           # A sed that matched nothing exits 0 and changes nothing, which would tag an

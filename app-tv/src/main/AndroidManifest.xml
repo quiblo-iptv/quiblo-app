@@ -31,13 +31,31 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.QuibloTv">
 
+        <!--
+          windowSoftInputMode was previously not declared at all, which left the choice to the
+          system — and a behaviour nobody chose is a behaviour that differs between devices.
+          It did: the settings screen shook on the Haier when the API-key field was opened and
+          did not on the emulator (#021).
+
+          adjustNothing keeps the window one size. `TvSettingsFieldStabilityTest` measures why
+          that matters: with a viewport that shrinks under a focused field, the list chases it
+          four items down before settling, because bringing the field into view is re-evaluated
+          against every new window height. With the viewport held still the same trace is flat
+          on every frame. This removes the mechanism rather than damping it.
+
+          A television is the right place for it: the leanback keyboard is a full-screen
+          overlay with its own view of what is being typed, so the app's window making room for
+          it buys nothing. AC-TV-10 is unaffected — leaving a field with the keyboard up is the
+          IME's action key, not the window's size.
+        -->
         <activity
             android:name=".TvMainActivity"
             android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|smallestScreenSize|uiMode"
             android:exported="true"
             android:label="@string/tv_app_name"
             android:screenOrientation="landscape"
-            android:theme="@style/Theme.QuibloTv">
+            android:theme="@style/Theme.QuibloTv"
+            android:windowSoftInputMode="adjustNothing">
             <!--
               LEANBACK_LAUNCHER, not LAUNCHER. This is the category the TV home screen
               reads; an app with only LAUNCHER installs on a television and then cannot be

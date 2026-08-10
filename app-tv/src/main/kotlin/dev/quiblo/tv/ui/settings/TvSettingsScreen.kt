@@ -304,7 +304,7 @@ fun TvSettingsScreen(
  * half-entered, and writing one would clear the cached metadata on every character.
  */
 @Composable
-private fun TmdbKeyRow(
+internal fun TmdbKeyRow(
     currentKey: String?,
     check: TmdbCheck,
     onSave: (String) -> Unit,

@@ -51,7 +51,7 @@ android {
         // with two databases, and a user may well have both — a phone and a television.
         applicationId = "dev.quiblo.tv"
         versionCode = 8
-        versionName = "0.2.99-alpha.1"
+        versionName = "0.2.5"
     }
 
     buildFeatures {

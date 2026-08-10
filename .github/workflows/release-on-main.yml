@@ -128,8 +128,19 @@ jobs:
             NAME_NOW=$(grep -oP 'versionName = "\K[^"]+' app/build.gradle.kts | head -n 1 || true)
             NAME_THEN=$(git show "$LAST_TAG:app/build.gradle.kts" 2>/dev/null | grep -oP 'versionName = "\K[^"]+' | head -n 1 || true)
             if [ -n "$NAME_NOW" ] && [ -n "$NAME_THEN" ] && [ "$NAME_NOW" != "$NAME_THEN" ]; then
-              HAND_SET=true
-              echo "::notice::versionName was set by hand ($NAME_THEN → $NAME_NOW), which is a release request."
+              # Forwards only. Lowering a version is a correction — coming off a throwaway
+              # pre-release, undoing a number set in error — and publishing a release for it
+              # would put out a version identical to the one before it, which is the exact
+              # thing the "no release for docs" rule above exists to prevent.
+              EARLIER=$(printf '%s
+%s
+' "$NAME_THEN" "$NAME_NOW" | sort -V | head -n 1)
+              if [ "$EARLIER" = "$NAME_THEN" ]; then
+                HAND_SET=true
+                echo "::notice::versionName was set by hand ($NAME_THEN → $NAME_NOW), which is a release request."
+              else
+                echo "::notice::versionName was lowered ($NAME_THEN → $NAME_NOW). Treated as a correction, not a release."
+              fi
             fi
           fi
 

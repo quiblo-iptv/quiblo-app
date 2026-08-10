@@ -14,7 +14,7 @@ they were listed.
 | Gate | Item | State | What closes it |
 | :---- | :---- | :---- | :---- |
 | 0 | The local gate is red for a non-code reason | **Blocked** | An untracked daemon-JVM file pins Gradle to JDK 25; detekt dies on it |
-| 4 | Repo builds the release on protected main | **Fixed in code 2026-08-10; unproven** | All three faults closed. The lane has still never been driven on a pre-release, which is the exit criterion |
+| 4 | Repo builds the release on protected main | **Closed 2026-08-10** | Four faults fixed and the lane driven: `v0.2.99-alpha.1` published as a pre-release, both signed APKs, build files matching the tag |
 | 5 | All pending work done | **Open** | Seventeen acceptance criteria written and unrun; one open suggestion from `005` |
 | 1 | Tests sweep on real devices, mobile and TV | **Open** | `ACCEPTANCE-SWEEP.md` §5 and §7 — the television has never been swept once |
 | 6 | QA analysis for deprecated, old and vulnerable technology | **Not started** | A quality gate CI has to pass, not a one-off report |
@@ -93,11 +93,20 @@ the lane can meet — a bare version bumping by class, each stage advancing its 
 `versionName` round-trip that was the first fault — write a pre-release, read it back — was
 run against a real build file.
 
-**Exit criterion, and it is not met.** A throwaway pre-release merged through `main`, published
-as a pre-release, carrying both signed APKs and their checksums, with the build files showing
-the same string as the tag. **Verified arithmetic is not a driven lane**, and this project's own
-record on that is unambiguous: `detektAll` was broken for its entire existence because nothing
-ever ran it. Prove it on a version nobody minds before spending `1.0.0-beta.1`.
+**Exit criterion, met 2026-08-10.** `v0.2.99-alpha.1` was merged through `main` and published:
+marked **Pre-release** with `v0.2.5` still holding Latest, carrying `quiblo-v0.2.99-alpha.1.apk`,
+`quiblo-tv-v0.2.99-alpha.1.apk` and a `.sha256` beside each, and with both build files reading
+`0.2.99-alpha.1` — **the same string as the tag**, which is exactly what the first fault broke.
+`main` was then reset off the throwaway version.
+
+**Driving it found a fourth fault that reading it did not**, and that is the part worth keeping.
+`RELEASE-MANAGEMENT.md` said to open a stage by setting the version in a pull request, and a
+pull request that only edits two version numbers carries no `feat:` and no `fix:` — so the class
+came out *none* and the publish was skipped. The instruction and the lane disagreed and the lane
+was going to win, silently, on the merge meant to cut `1.0.0-beta.1`. None of the three faults
+already fixed would have caught it: those are about how a version is read and written, and this
+one is about whether the job runs at all. **Verified arithmetic is not a driven lane** —
+`detektAll` was broken for its entire existence because nothing ever ran it.
 
 ## Gate 5 — all pending work is done
 

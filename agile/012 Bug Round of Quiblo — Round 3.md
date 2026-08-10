@@ -69,6 +69,18 @@ runs twice. These eleven are the newest entries on that gate's list.
 
 ## Wave 1 — the ones that lose the viewer
 
+**Built 2026-08-10.** All four are fixed in code and the local gate is green on them. What
+each still owes a device is stated under it, and none of them is closed until the television
+says so — a fix that has only ever run on the JVM is a fix with a good argument, which this
+project has learned is not the same thing.
+
+| # | In code | Owed on the Haier |
+| :---- | :---- | :---- |
+| #020 | Navigation is a stack; the cursor comes back with it | Back from an episode reaches the series with that episode focused; a second back reaches the catalogue |
+| #016 | Session cleared at startup on both apps; chooser centred, avatars circular | AC-PROF-01 after a force-stop, on a phone and on the television |
+| #015 | Focus no longer scrolls the screen on the way in | A film and a multi-season series both open showing title and artwork |
+| #021 | `adjustNothing`, measured into it rather than guessed | The field opened with the remote, and the list watched for a full second |
+
 ### #020 — back does not return to where the viewer was
 
 **Reported:** pressing back from a film or an episode lands on the Movies or Series home
@@ -81,13 +93,18 @@ frontend that had no detail screens — Amendment 4 added those the following da
 describes a back button that throws away a step every time it is pressed. Amendment 4 added
 AC-TV-11 and 12 without re-reading AC-TV-03 against them.
 
-**Recommendation, to be decided before the fix is written.** Restate AC-TV-03 as: *Back pops
-exactly one step of the journey the viewer took, and never strands them. From a top-level
-screen, back exits.* The property AC-TV-03 exists to protect — no screen that back cannot
-leave — is kept; the "returns to the category bar" clause was a description of a two-level
-app and is not worth preserving now that the app is three levels deep. Record it as a dated
-amendment in the same pass as Amendment 7 (`006` gate 2), because it changes what "done"
-means rather than how something is built.
+**Decided 2026-08-10, and dated first — `FREEZE.md` Amendment 7.** AC-TV-03 now reads: *Back
+pops exactly one step of the journey the viewer took, and never strands them. No step is
+discarded on the way. From a top-level screen, back exits.* The property AC-TV-03 exists to
+protect — no screen that back cannot leave — is kept; the "returns to the category bar" clause
+was a description of a two-level app and is not worth preserving now that the app is three
+levels deep.
+
+**What it made true in the code.** Navigation was one current screen that each new screen
+*replaced*, and that shape was the bug: a replace keeps no memory of what it replaced, so back
+could only ever reach the shell. It is a stack now. Sources also stops naming Settings as its
+own back destination — it had to, and that special case was the only reason any two-step
+journey worked anywhere in the app.
 
 **The episode cursor needs no new storage.** The last episode a viewer started for a given
 series is already recorded, per profile, in watch history — the same record that draws the
@@ -164,13 +181,33 @@ so the field is scrolled toward a target that moves as it is approached.
 
 **Do not argue this one — measure it.** `TvBrowseScrollStabilityTest` is the pattern:
 Robolectric, the panel's real geometry, the scroll position read frame by frame, and an
-assertion of the property (*opening the keyboard must not move the settings list after the
-field is on screen*). Four wrong answers were argued rather than measured last time this
+assertion of the property. Four wrong answers were argued rather than measured last time this
 species appeared, and the harness that ended it exists and can be pointed at another screen.
 
+**Measured, 2026-08-10** — `TvSettingsFieldStabilityTest`, and the result moved the diagnosis:
+
+- With the viewport held still, **focus arriving and characters being entered are both flat on
+  every frame.** There is no loop inside Compose. The suspected IME-versus-bring-into-view race
+  is not one, at least not on the Compose side of it.
+- With the viewport **shrinking** under the focused field — which is all an on-screen keyboard
+  amounts to as far as a layout is concerned — the list runs **four items** past where the
+  viewer left it, and takes about a dozen frames after the resize ends to stop. It converges,
+  so it is an excursion rather than an oscillation. On a panel watched from three metres, an
+  excursion of four items is what gets reported as a shake.
+- **The activity declared no `windowSoftInputMode` at all**, so the system chose one. That is
+  the finding worth keeping on its own terms: a behaviour nobody chose is a behaviour that
+  differs between devices, and this one did — the emulator was fine and the Haier was not.
+
+**Fixed by declaring it: `adjustNothing`.** The window then never resizes, so the excursion
+cannot start; the harness's flat traces are what the screen actually does. A leanback keyboard
+is a full-screen overlay with its own view of what is being typed, so the app window making
+room for it buys nothing. AC-TV-10 is untouched — leaving a field with the keyboard up goes
+through the IME's action key, not the window's size.
+
 **Exit criterion.** With the on-screen keyboard up, the settings list reports the same scroll
-offset on every frame for a full second, in the harness and on the Haier. AC-TV-10 is re-run
-after it, since the same field is what that criterion tests.
+offset on every frame for a full second, in the harness and on the Haier. **The harness half is
+done; the Haier half is owed.** AC-TV-10 is re-run after it, since the same field is what that
+criterion tests.
 
 ---
 
@@ -293,13 +330,13 @@ slow screen for a lying one.
 | #012 | The first tile of the continue row is whole, focused and unfocused, on the panel |
 | #013 | No frame of the previous stream is visible after a switch |
 | #014 | The favourites label fits at every supported title length, and history can be removed from the detail screen |
-| #015 | A detail screen opens showing its title and artwork, unscrolled |
-| #016 | AC-PROF-01 passes after a force-stop, on both apps, with a centred chooser and circular avatars |
+| #015 | A detail screen opens showing its title and artwork, unscrolled — **built; owed the panel** |
+| #016 | AC-PROF-01 passes after a force-stop, on both apps, with a centred chooser and circular avatars — **built; owed a force-stop on hardware** |
 | #017 | No `kind.name` reaches a composable in either app |
 | #018 | A progress indicator covers the wait, and the wait is measured before and after |
 | #019 | Films are Movies, Series has its heading, and no title is cropped when focused |
-| #020 | The amendment is dated **and** back pops one step, with the episode cursor restored from history |
-| #021 | The settings list measures zero movement for a second with the keyboard up, in the harness and on the device |
+| #020 | The amendment is dated **and** back pops one step, with the episode cursor restored from history — **both built; owed the remote** |
+| #021 | The settings list measures zero movement for a second with the keyboard up, in the harness and on the device — **harness done; device owed** |
 | #022 | The field is aligned with the column it is in |
 | #023 | Two audio tracks are listed and switchable in both players, and AC-PLAY-04 is run |
 

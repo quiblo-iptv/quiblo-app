@@ -78,8 +78,8 @@ project has learned is not the same thing.
 | :---- | :---- | :---- |
 | #020 | Navigation is a stack; the cursor comes back with it | Back from an episode reaches the series with that episode focused; a second back reaches the catalogue |
 | #016 | Session cleared at startup on both apps; chooser centred, avatars circular | AC-PROF-01 after a force-stop, on a phone and on the television |
-| #015 | Focus no longer scrolls the screen on the way in | A film and a multi-season series both open showing title and artwork |
-| #021 | `adjustNothing`, measured into it rather than guessed | The field opened with the remote, and the list watched for a full second |
+| #015 | Focus no longer scrolls the screen on the way in | A film and a multi-season series both open showing title and artwork — **swept 2026-08-11: REJECTED** |
+| #021 | `adjustNothing`, measured into it rather than guessed | The field opened with the remote, and the list watched for a full second — **swept 2026-08-11: REJECTED** |
 
 ### #020 — back does not return to where the viewer was
 
@@ -168,6 +168,22 @@ is judged at that geometry, not at the emulator's.
 **Exit criterion.** Opening any film or series shows its title and the top of its artwork with
 no input, with focus already on the first action, on the 960x540dp panel.
 
+**Swept on the Haier 2026-08-11 against v0.2.6 — REJECTED.** A series detail screen still
+loses a strip off the top of its poster. The exit criterion above is not met and #015 is open
+again.
+
+The fix that shipped removed the *scroll* that focus was causing. What is left is smaller and
+is not the same thing: the screen is no longer scrolled down, but the artwork is still clipped
+at its top edge. That points at the header's own layout rather than at the scroll position —
+a fixed height or an `aspectRatio` on the cover that resolves taller than the space it is
+given, so the crop happens inside the image rather than in the column. **Read the header
+composable's sizing before touching focus again**, and confirm which of the two is cropping by
+measuring the cover's drawn bounds against the 444dp of usable height, not by eye.
+
+Open question for whoever picks this up: **films were not re-checked in this sweep**, only a
+series. If the header is shared, both are affected; if only the series header sets a height,
+that narrows it immediately.
+
 ### #021 — the settings screen shakes when the API-key field is opened
 
 **Reported:** opening the API-key entry makes the screen shake continuously. The report names
@@ -208,6 +224,41 @@ through the IME's action key, not the window's size.
 offset on every frame for a full second, in the harness and on the Haier. **The harness half is
 done; the Haier half is owed.** AC-TV-10 is re-run after it, since the same field is what that
 criterion tests.
+
+**Swept on the Haier 2026-08-11 against v0.2.6 — REJECTED.** The text input still shakes. The
+exit criterion is not met and #021 is open again.
+
+**Do not re-try `adjustNothing`, and do not re-argue the window resize.** Two frames captured
+on the panel that day — the settings screen with the keyboard down, then the same screen with
+the keyboard up and the key typed — put every row above the keyboard at an identical vertical
+position: the artwork rows, the API-key box, the Save/Clear row, the categories heading and the
+first category all land on the same pixels in both. The window is no longer moving the list.
+That was the whole of the 2026-08-10 diagnosis, and it holds.
+
+**What those two frames cannot show is a transient.** The measured excursion converged in about
+a dozen frames; two still captures taken seconds apart would not catch it, and would not catch
+an oscillation that starts and stops with a keypress either. So the resize is excluded as a
+*steady-state* cause only. The shake that is left is either a transient the frames straddled, or
+a fifth member of the #008 family with a different source.
+
+**Where to look next, in order:**
+
+1. **Capture it as video, not as frames.** `screenrecord` on the panel while the field is
+   focused and typed into, then compare it frame by frame. An
+   oscillation and an excursion look identical in prose and completely different in a trace, and
+   this bug has already cost four argued answers.
+2. **Establish which field.** This sweep saw the settings API-key field. The first-run profile
+   name field is also a text input on this app and was on screen the same day. If both shake,
+   the cause is in the shared field composable and not in the settings list at all — which
+   would move this bug off `TvSettingsScreen` entirely.
+3. **Only then re-point the harness.** `TvSettingsFieldStabilityTest` asserts the property that
+   is now confirmed on the device. A harness that already passes is not going to find this; it
+   needs a new property to assert, and (1) is what tells us which one.
+
+**The lesson from the fourth appearance repeats itself at the fifth:** the measurement was right
+about the mechanism it measured and the screen still shakes, which means the measurement was
+aimed at one of several causes rather than at the cause. Measuring the wrong thing precisely is
+its own failure mode, and it is the one to watch for here.
 
 ---
 
@@ -357,13 +408,13 @@ slow screen for a lying one.
 | #012 | The first tile of the continue row is whole, focused and unfocused, on the panel — **built; owed the panel** |
 | #013 | No frame of the previous stream is visible after a switch — **built on both apps; owed a zap on the panel** |
 | #014 | The favourites label fits at every supported title length, and history can be removed from the detail screen — **built; owed the panel** |
-| #015 | A detail screen opens showing its title and artwork, unscrolled — **built; owed the panel** |
+| #015 | A detail screen opens showing its title and artwork, unscrolled — **swept 2026-08-11 and REJECTED; the poster is still clipped at its top edge** |
 | #016 | AC-PROF-01 passes after a force-stop, on both apps, with a centred chooser and circular avatars — **built; owed a force-stop on hardware** |
 | #017 | No `kind.name` reaches a composable in either app — **built, and CI now fails on one** |
 | #018 | A progress indicator covers the wait, and the wait is measured before and after — **indicator built; the measurement needs a 67k catalogue and is deferred, in writing** |
 | #019 | Films are Movies, Series has its heading, and no title is cropped when focused — **built; measured on the JVM, owed the panel** |
 | #020 | The amendment is dated **and** back pops one step, with the episode cursor restored from history — **both built; owed the remote** |
-| #021 | The settings list measures zero movement for a second with the keyboard up, in the harness and on the device — **harness done; device owed** |
+| #021 | The settings list measures zero movement for a second with the keyboard up, in the harness and on the device — **swept 2026-08-11 and REJECTED; the field still shakes on the panel** |
 | #022 | The field is aligned with the column it is in — **built; owed a look** |
 | #023 | Two audio tracks are listed and switchable in both players, and AC-PLAY-04 is run — **built; the criterion is still unrun** |
 
@@ -373,6 +424,26 @@ slow screen for a lying one.
 so, and the whole argument for doing this round before the sweep was that rediscovering known
 faults across three devices spends them for nothing. The tree is now the finished tree `006`
 gate 5 asks the sweep to run against.
+
+**2026-08-11 — the Haier answered on two of them, and said no to both.** The television took
+the real-key `v0.2.6` that day, and the first screens driven on it rejected **#015** and
+**#021**. Neither is closed and neither is still "owed a device": they have had their device and
+they failed it. They go back into the build queue, and the notes under each say what the next
+attempt should and should not do.
+
+**The other ten remain owed a device.** Nothing here says anything about them, and the two
+verdicts we do have argue for getting the rest swept before more code is written — a fix
+rejected on the panel is cheap to learn about now and expensive to learn about after `013` has
+been built on top of it, which is the same argument that put this round before `013` in the
+first place.
+
+**Both rejections have the same shape, and it is worth naming.** Each fix targeted a real
+mechanism, measured it, and corrected it — and the reported symptom survived. #015 removed the
+scroll and the clipping stayed; #021 stopped the window resizing and the shake stayed. In both
+cases the mechanism was one contributor to the symptom, and the work stopped when the mechanism
+was fixed rather than when the symptom was gone. **The exit criteria in this document are
+written against the symptom for exactly this reason**, and both were checked on the JVM and
+signed off before the panel had seen them.
 
 **One item is deliberately part-done and says so: #018.** The indicator the report asked for is
 built; making the read itself faster is not. That choice needs a 67k catalogue to measure

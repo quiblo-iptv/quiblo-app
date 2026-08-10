@@ -33,13 +33,14 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Person
@@ -52,6 +53,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
@@ -156,10 +158,18 @@ private fun Chooser(
 ) {
     val firstTile = remember { FocusRequester() }
 
+    // Width, not size.
+    //
+    // This row used to fill the remaining height, which quietly defeated the centring of the
+    // column above it: the heading was pushed to the top of the screen and the tiles sat in a
+    // tall box beneath, so the whole screen read as top-aligned however the column was told to
+    // arrange itself. Wrapping the height lets the heading, the caption and the tiles centre
+    // together as one block (#016).
     LazyRow(
         horizontalArrangement = Arrangement.spacedBy(24.dp, Alignment.CenterHorizontally),
+        verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
-            .fillMaxSize()
+            .fillMaxWidth()
             .focusGroup(),
     ) {
         items(items = profiles, key = { it.id }) { profile ->
@@ -282,17 +292,26 @@ private fun ProfileTile(
                 scaleY = scale
             },
     ) {
+        /*
+         * Circular, and it is the slot a picture goes in.
+         *
+         * Round because that is what a "who is watching" tile is everywhere a viewer has met
+         * one, and the square it used to be read as a card rather than as a person (#016).
+         *
+         * It is deliberately a fixed round frame with its content centred inside, rather than
+         * an icon that happens to be drawn on a round background: `013` INC-F0 fills this with
+         * a chosen avatar, and a slot that already clips to a circle takes an image without the
+         * screen being laid out a second time.
+         */
         Box(
             modifier = Modifier
                 .size(TILE_SIZE)
-                .background(
-                    color = Color.White.copy(alpha = if (isFocused) 0.22f else 0.10f),
-                    shape = RoundedCornerShape(12.dp),
-                )
+                .clip(CircleShape)
+                .background(color = Color.White.copy(alpha = if (isFocused) 0.22f else 0.10f))
                 .border(
                     width = if (isFocused) 3.dp else 0.dp,
                     color = if (isFocused) Color.White else Color.Transparent,
-                    shape = RoundedCornerShape(12.dp),
+                    shape = CircleShape,
                 ),
             contentAlignment = Alignment.Center,
         ) {

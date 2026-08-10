@@ -138,6 +138,25 @@ class ProfileRepositoryTest {
     }
 
     @Test
+    @DisplayName("every launch asks who is watching, even after a named profile")
+    fun `startup clears the chosen profile`() = runTest {
+        val repository = repository()
+        val profile = repository.addProfile("Mahmoud")!!
+        repository.select(profile)
+        repository.awaitWatching()
+
+        // #016: the chosen id used to survive process death, so the chooser appeared once per
+        // install and a household went back to sharing one continue-watching row — the state
+        // profiles exist to end. Who is watching is session state, not a stored preference.
+        repository.beginSession()
+        repository.awaitChooser()
+
+        assertNull(repository.activeProfile.value)
+        // The profile itself is untouched: this ends a session, it does not delete anybody.
+        assertEquals(listOf("Mahmoud"), rows.value.map { it.name })
+    }
+
+    @Test
     fun `leaving a named profile keeps it`() = runTest {
         val repository = repository()
         val profile = repository.addProfile("Mahmoud")!!

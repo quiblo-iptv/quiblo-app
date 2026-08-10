@@ -111,10 +111,36 @@ jobs:
             CLASS=none
           fi
 
-          if [ "$CLASS" = "none" ]; then
-            echo "::notice::Nothing here changes what a user runs — no feat: or fix: since ${LAST_TAG:-the beginning}. Main is updated and no release is published."
+          # A version somebody set by hand is a release request in its own right.
+          #
+          # Found by trying to prove this lane rather than by reading it: RELEASE-MANAGEMENT.md
+          # says the way to open a stage is to "set the version you want in the pull request",
+          # and that could not work — a pull request that only edits two version numbers
+          # carries no feat: and no fix:, so the class came out none and the publish was
+          # skipped. The instruction and the lane disagreed, and the lane was going to win.
+          #
+          # So: if versionName differs from what it was at the last tag, publish. The class
+          # then only decides how a *bare* version moves; a pre-release advances its own
+          # counter regardless, and a hand-set version with nothing releasable behind it takes
+          # the smallest step rather than none at all.
+          HAND_SET=false
+          if [ -n "$LAST_TAG" ]; then
+            NAME_NOW=$(grep -oP 'versionName = "\K[^"]+' app/build.gradle.kts | head -n 1 || true)
+            NAME_THEN=$(git show "$LAST_TAG:app/build.gradle.kts" 2>/dev/null | grep -oP 'versionName = "\K[^"]+' | head -n 1 || true)
+            if [ -n "$NAME_NOW" ] && [ -n "$NAME_THEN" ] && [ "$NAME_NOW" != "$NAME_THEN" ]; then
+              HAND_SET=true
+              echo "::notice::versionName was set by hand ($NAME_THEN → $NAME_NOW), which is a release request."
+            fi
+          fi
+
+          if [ "$CLASS" = "none" ] && [ "$HAND_SET" = "false" ]; then
+            echo "::notice::Nothing here changes what a user runs — no feat: or fix: since ${LAST_TAG:-the beginning}, and the version was not set by hand. Main is updated and no release is published."
             echo "release=false" >> "$GITHUB_OUTPUT"
             exit 0
+          fi
+
+          if [ "$CLASS" = "none" ]; then
+            CLASS=patch
           fi
 
           echo "release=true" >> "$GITHUB_OUTPUT"

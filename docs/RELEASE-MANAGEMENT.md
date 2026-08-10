@@ -260,6 +260,14 @@ files carry the version *before* the one being released: set `1.0.0-beta.0` to p
 `1.0.0-beta.1`. That is the same rule as for a minor or a major and it is easy to get backwards,
 which is why it is written here rather than inferred.
 
+**A version set by hand is a release request in its own right**, whatever the commits say. That
+was a fourth fault and it was found by trying to prove the lane rather than by reading it: this
+document said to open a stage by setting the version in a pull request, and a pull request that
+only edits two version numbers carries no `feat:` and no `fix:`, so the class came out *none*
+and the publish was skipped. **The instruction and the lane disagreed, and the lane was going to
+win.** A changed `versionName` now publishes; the class only decides how a *bare* version moves,
+since a pre-release advances its own counter regardless.
+
 ### `versionCode`
 
 Always monotonic, always +1, and **never expresses the stage.** Android compares it as an

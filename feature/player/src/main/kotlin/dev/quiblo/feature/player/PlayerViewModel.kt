@@ -185,6 +185,18 @@ class PlayerViewModel(
 
     fun selectAudioTrack(trackId: String?) = controller.selectAudioTrack(trackId)
 
+    /**
+     * Selects whichever kind the menu asked for.
+     *
+     * One entry point rather than a `when` at each call site: both apps draw the same menu and
+     * would otherwise each write the same two-branch mapping, which is how the two frontends
+     * come to disagree about a thing neither of them decided.
+     */
+    fun selectTrack(kind: TrackMenuKind, trackId: String?) = when (kind) {
+        TrackMenuKind.AUDIO -> selectAudioTrack(trackId)
+        TrackMenuKind.SUBTITLES -> selectTextTrack(trackId)
+    }
+
     fun selectTextTrack(trackId: String?) = controller.selectTextTrack(trackId)
 
     fun controllerHandle(): PlayerController = controller

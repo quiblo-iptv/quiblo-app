@@ -38,6 +38,7 @@ class TvPlayerKeyMapTest {
     private var playPauses = 0
     private var controlsShown = 0
     private var aspectCycles = 0
+    private var tracksOpened = 0
 
     private val actions = KeyActions(
         showControls = { controlsShown++ },
@@ -45,6 +46,7 @@ class TvPlayerKeyMapTest {
         skip = { skipped += it },
         zap = { zapped += it },
         cycleAspect = { aspectCycles++ },
+        openTracks = { tracksOpened++ },
     )
 
     @Test
@@ -134,12 +136,43 @@ class TvPlayerKeyMapTest {
         assertEquals(0, aspectCycles)
     }
 
-    private fun press(key: Key, isSeekable: Boolean, canZap: Boolean, hasFailed: Boolean = false) =
-        handleKey(
-            key = key,
+    private fun press(
+        key: Key,
+        isSeekable: Boolean,
+        canZap: Boolean,
+        hasFailed: Boolean = false,
+        areControlsVisible: Boolean = false,
+    ) = handleKey(
+        key = key,
+        context = KeyContext(
             isSeekable = isSeekable,
             canZap = canZap,
-            actions = actions,
             hasFailed = hasFailed,
+            areControlsVisible = areControlsVisible,
+        ),
+        actions = actions,
+    )
+
+    /** Down shows the controls; down again asks for audio and subtitles. */
+    @Test
+    fun `down opens the track menu once the controls are up`() {
+        assertTrue(press(Key.DirectionDown, isSeekable = true, canZap = false))
+        assertEquals(1, controlsShown)
+        assertEquals(0, tracksOpened)
+
+        assertTrue(
+            press(Key.DirectionDown, isSeekable = true, canZap = false, areControlsVisible = true),
         )
+        assertEquals(1, tracksOpened)
+
+        // Playback is untouched by either press. AC-TV-06 requires the controls to appear
+        // without pausing, and a menu over them is no different.
+        assertEquals(0, playPauses)
+    }
+
+    @Test
+    fun `a remote with a subtitle key reaches the menu in one press`() {
+        assertTrue(press(Key.Captions, isSeekable = true, canZap = false))
+        assertEquals(1, tracksOpened)
+    }
 }

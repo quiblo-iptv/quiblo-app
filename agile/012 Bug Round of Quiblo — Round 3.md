@@ -213,6 +213,24 @@ criterion tests.
 
 ## Wave 2 — the words on the screen
 
+**Built 2026-08-10**, after wave 1, with the local gate green. Same rule as wave 1: fixed in
+code is not closed, and what each still owes a device is below.
+
+| # | In code | Owed on the Haier |
+| :---- | :---- | :---- |
+| #017 | One vocabulary in `:feature:browse`, and CI greps the UI modules for an enum used as a label | Favourites headed Live / Movies / Series |
+| #019 | "Films" gone with the strings that held it; the results row measured back inside the panel | Advanced search: a heading on screen and a title whole while focused |
+| #014 | The action row wraps; remove-from-history added where the phone has always had it | The label whole at every title length, and a title leaving the continue row |
+| #022 | The key field carries the same column gap as every other row | The right-hand column read straight down with the remote |
+| #023 | A shared track model, a panel on the television and a sheet on the phone | **AC-PLAY-04, run for the first time**, on a file with two audio tracks |
+
+**Two of the five turned out to be the same shape as each other and as #023**: working code
+with no path to it. `removeFromHistory` exists on both detail ViewModels and on the repository,
+and the phone has offered it since its detail screens were built — only the television never
+did. That is three in one round, against nine of the opposite shape deleted in `001`. The test
+for a feature existing has to run in both directions.
+
+
 These are cheap, they are all visible within seconds of opening a screen, and they are the
 first thing a stranger installing the beta will judge. Grouped because they want one decision
 made once: **the app has one vocabulary — Live, Movies, Series — and every screen uses it.**
@@ -329,15 +347,20 @@ slow screen for a lying one.
 | :---- | :---- |
 | #012 | The first tile of the continue row is whole, focused and unfocused, on the panel |
 | #013 | No frame of the previous stream is visible after a switch |
-| #014 | The favourites label fits at every supported title length, and history can be removed from the detail screen |
+| #014 | The favourites label fits at every supported title length, and history can be removed from the detail screen — **built; owed the panel** |
 | #015 | A detail screen opens showing its title and artwork, unscrolled — **built; owed the panel** |
 | #016 | AC-PROF-01 passes after a force-stop, on both apps, with a centred chooser and circular avatars — **built; owed a force-stop on hardware** |
-| #017 | No `kind.name` reaches a composable in either app |
+| #017 | No `kind.name` reaches a composable in either app — **built, and CI now fails on one** |
 | #018 | A progress indicator covers the wait, and the wait is measured before and after |
-| #019 | Films are Movies, Series has its heading, and no title is cropped when focused |
+| #019 | Films are Movies, Series has its heading, and no title is cropped when focused — **built; measured on the JVM, owed the panel** |
 | #020 | The amendment is dated **and** back pops one step, with the episode cursor restored from history — **both built; owed the remote** |
 | #021 | The settings list measures zero movement for a second with the keyboard up, in the harness and on the device — **harness done; device owed** |
-| #022 | The field is aligned with the column it is in |
-| #023 | Two audio tracks are listed and switchable in both players, and AC-PLAY-04 is run |
+| #022 | The field is aligned with the column it is in — **built; owed a look** |
+| #023 | Two audio tracks are listed and switchable in both players, and AC-PLAY-04 is run — **built; the criterion is still unrun** |
 
 **Then, and only then, `013` starts.** The device sweep in `006` gate 1 runs after both.
+
+**Waves 1 and 2 are built as of 2026-08-10; wave 3 is not started.** Nothing in either wave is
+closed, because closing one means the Haier saying so — and the whole argument for doing this
+round before the sweep was that rediscovering known faults on three devices spends them for
+nothing.

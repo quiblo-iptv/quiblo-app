@@ -51,4 +51,9 @@
     <string name="source_error_expired">That subscription has expired. Contact whoever provides it.</string>
     <string name="source_error_disabled">That account is disabled or banned on the server.</string>
     <string name="source_error_provider_blocked">Your provider is temporarily refusing requests from this account. Wait a few minutes and try again, or contact your provider if it continues.</string>
+
+    <!-- What a source is, in words rather than as an enum constant. The television says the
+         same, in its own strings. -->
+    <string name="sources_kind_m3u">M3U playlist</string>
+    <string name="sources_kind_xtream">Xtream account</string>
 </resources>

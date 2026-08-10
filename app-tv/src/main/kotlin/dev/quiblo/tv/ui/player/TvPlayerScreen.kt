@@ -74,11 +74,16 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.quiblo.core.media.PlaybackError
+import dev.quiblo.core.media.PlaybackState
 import dev.quiblo.core.media.PlaybackStatus
 import dev.quiblo.core.model.AspectRatioMode
+import dev.quiblo.core.model.PlayerSettings
 import dev.quiblo.core.model.videoScale
 import dev.quiblo.feature.player.PlayerViewModel
+import dev.quiblo.feature.player.TrackMenu
+import dev.quiblo.feature.player.TrackMenuKind
 import dev.quiblo.feature.player.messageRes
+import dev.quiblo.feature.player.trackMenu
 import dev.quiblo.tv.R
 import dev.quiblo.tv.ui.detail.DetailButton
 import kotlinx.coroutines.delay
@@ -105,7 +110,15 @@ fun TvPlayerScreen(
     val aspectRatioMode by viewModel.aspectRatioMode.collectAsStateWithLifecycle()
 
     var controlsVisible by remember { mutableStateOf(false) }
+    var tracksVisible by remember { mutableStateOf(false) }
     var zapNotice: String? by remember { mutableStateOf(null) }
+
+    // What there is to choose between, if anything. AC-PLAY-04 has required this since the
+    // player was written and no screen has ever offered it (#023).
+    val offLabel = stringResource(R.string.tv_player_subtitles_off)
+    val trackMenu = remember(state.audioTracks, state.textTracks, offLabel) {
+        trackMenu(state, offLabel)
+    }
 
     val focusRequester = remember { FocusRequester() }
 
@@ -120,8 +133,13 @@ fun TvPlayerScreen(
         focusRequester.requestFocus()
     }
 
-    LaunchedEffect(controlsVisible, state.status) {
-        if (controlsVisible && state.status == PlaybackStatus.PLAYING) {
+    // The controls time out; the menu does not.
+    //
+    // A list a viewer is reading is not the same thing as a bar telling them what is playing,
+    // and having it vanish mid-choice would be its own defect. It closes on back or on a
+    // choice, and on nothing else.
+    LaunchedEffect(controlsVisible, tracksVisible, state.status) {
+        if (controlsVisible && !tracksVisible && state.status == PlaybackStatus.PLAYING) {
             delay(CONTROLS_TIMEOUT_MILLIS)
             controlsVisible = false
         }
@@ -158,7 +176,11 @@ fun TvPlayerScreen(
     // Back closes the controls first and leaves playback second, so a viewer who opened the
     // controls by accident does not lose the stream getting rid of them (AC-TV-03).
     BackHandler {
-        if (controlsVisible) controlsVisible = false else onBack()
+        when {
+            tracksVisible -> tracksVisible = false
+            controlsVisible -> controlsVisible = false
+            else -> onBack()
+        }
     }
 
     /*
@@ -198,16 +220,19 @@ fun TvPlayerScreen(
                 if (event.type != KeyEventType.KeyDown) return@onKeyEvent false
                 handleKey(
                     key = event.key,
-                    // Nothing is playing, so nothing the transport keys mean applies —
-                    // pausing a dead stream, seeking it, cycling its aspect ratio. Left
-                    // unhandled so the same presses reach the Try again and Back buttons
-                    // instead, which is the only thing a viewer can usefully do here.
-                    hasFailed = hasFailed,
-                    isSeekable = state.isSeekable,
-                    // Only a live channel has anything to zap to. On a film, up and
-                    // channel-up used to jump to whatever film happened to sit next in the
-                    // category — which is not what either key means to a viewer.
-                    canZap = request is TvPlaybackRequest.Live,
+                    context = KeyContext(
+                        // Nothing is playing, so nothing the transport keys mean applies —
+                        // pausing a dead stream, seeking it, cycling its aspect ratio. Left
+                        // unhandled so the same presses reach the Try again and Back buttons
+                        // instead, which is the only thing a viewer can usefully do here.
+                        hasFailed = hasFailed,
+                        areControlsVisible = controlsVisible,
+                        isSeekable = state.isSeekable,
+                        // Only a live channel has anything to zap to. On a film, up and
+                        // channel-up used to jump to whatever film happened to sit next in
+                        // the category — which is not what either key means to a viewer.
+                        canZap = request is TvPlaybackRequest.Live,
+                    ),
                     actions = KeyActions(
                         showControls = { controlsVisible = true },
                         playPause = {
@@ -220,6 +245,9 @@ fun TvPlayerScreen(
                             viewModel.cycleAspectRatio()
                             controlsVisible = true
                         },
+                        // Only when there is a choice. Opening an empty panel would be the
+                        // hollow-feature shape this project has deleted nine of.
+                        openTracks = { if (!trackMenu.isEmpty) tracksVisible = true },
                     ),
                 )
             },
@@ -230,37 +258,84 @@ fun TvPlayerScreen(
             mode = aspectRatioMode,
         )
 
-        if (state.status == PlaybackStatus.BUFFERING) {
-            Buffering(retryAttempt = state.retryAttempt)
-        }
+        PlayerOverlays(
+            state = state,
+            settings = settings,
+            aspectRatioMode = aspectRatioMode,
+            isLive = request is TvPlaybackRequest.Live,
+            hasFailed = hasFailed,
+            controlsVisible = controlsVisible,
+            tracksVisible = tracksVisible,
+            zapNotice = zapNotice,
+            trackMenu = trackMenu,
+            onRetry = viewModel::retry,
+            onBack = onBack,
+            onSelectTrack = { kind, trackId ->
+                viewModel.selectTrack(kind, trackId)
+                tracksVisible = false
+            },
+            onDismissTracks = { tracksVisible = false },
+        )
+    }
+}
 
-        if (hasFailed) {
-            PlaybackFailure(
-                error = state.error,
-                onRetry = viewModel::retry,
-                onBack = onBack,
-            )
-        }
+/**
+ * Everything drawn over the video.
+ *
+ * Separated from [TvPlayerScreen] because that function had become the state, the lifecycle,
+ * the key map *and* the layering, and only the last of those is about what is on screen. The
+ * ordering here is the part worth reading in one place: the error is drawn over the controls
+ * and the controls are not drawn over the error, because the controls describe keys that do
+ * nothing once playback has failed and would sit on top of the only two that still work.
+ */
+@Composable
+@Suppress("LongParameterList")
+private fun PlayerOverlays(
+    state: PlaybackState,
+    settings: PlayerSettings,
+    aspectRatioMode: AspectRatioMode,
+    isLive: Boolean,
+    hasFailed: Boolean,
+    controlsVisible: Boolean,
+    tracksVisible: Boolean,
+    zapNotice: String?,
+    trackMenu: TrackMenu,
+    onRetry: () -> Unit,
+    onBack: () -> Unit,
+    onSelectTrack: (TrackMenuKind, String?) -> Unit,
+    onDismissTracks: () -> Unit,
+) {
+    if (state.status == PlaybackStatus.BUFFERING) {
+        Buffering(retryAttempt = state.retryAttempt)
+    }
 
-        zapNotice?.let { ZapNotice(name = it) }
+    if (hasFailed) {
+        PlaybackFailure(error = state.error, onRetry = onRetry, onBack = onBack)
+    }
 
-        // Never over the error. The controls describe keys that do nothing once playback
-        // has failed, and they would sit on top of the only two that do.
-        if (controlsVisible && !hasFailed) {
-            Controls(
-                title = state.item?.title.orEmpty(),
-                isPlaying = state.isPlaying,
-                isSeekable = state.isSeekable,
-                // From the request, not from whether a duration has arrived yet. A film
-                // reports no duration for its first moments, and the old test announced it
-                // as live for exactly that long.
-                isLive = request is TvPlaybackRequest.Live,
-                positionMillis = state.positionMillis,
-                durationMillis = state.durationMillis,
-                skipSeconds = settings.seekInterval.seconds,
-                aspectRatioMode = aspectRatioMode,
-            )
-        }
+    zapNotice?.let { ZapNotice(name = it) }
+
+    if (controlsVisible && !hasFailed) {
+        Controls(
+            hasTrackChoice = !trackMenu.isEmpty,
+            title = state.item?.title.orEmpty(),
+            isPlaying = state.isPlaying,
+            isSeekable = state.isSeekable,
+            // From the request, not from whether a duration has arrived yet. A film reports
+            // no duration for its first moments, and the old test announced it as live for
+            // exactly that long.
+            isLive = isLive,
+            positionMillis = state.positionMillis,
+            durationMillis = state.durationMillis,
+            skipSeconds = settings.seekInterval.seconds,
+            aspectRatioMode = aspectRatioMode,
+        )
+    }
+
+    if (tracksVisible && !hasFailed) {
+        // Closed on a choice, and playback is never touched: AC-TV-06 says these controls
+        // must not pause, and switching a track does not restart a stream.
+        TvTrackMenu(menu = trackMenu, onSelect = onSelectTrack, onDismiss = onDismissTracks)
     }
 }
 
@@ -307,45 +382,62 @@ internal data class KeyActions(
     val skip: (Int) -> Unit,
     val zap: (Int) -> Unit,
     val cycleAspect: () -> Unit,
+    /**
+     * Opens the audio and subtitle list.
+     *
+     * The screen decides whether there is anything to open — a stream with one audio track
+     * and no subtitles has no menu, and a control that opens an empty panel is worse than no
+     * control. The key map only says which press means "show me the choices".
+     */
+    val openTracks: () -> Unit = {},
 )
 
-internal fun handleKey(
-    key: Key,
-    isSeekable: Boolean,
-    canZap: Boolean,
-    actions: KeyActions,
-    hasFailed: Boolean = false,
-): Boolean {
+/**
+ * What the player is doing, as far as the key map is concerned.
+ *
+ * Four facts rather than four parameters: the map has grown one fact per feature — seeking,
+ * zapping, the error screen, and now the track menu — and a list of booleans at a call site
+ * stops saying which is which long before it stops compiling.
+ */
+internal data class KeyContext(
+    val isSeekable: Boolean,
+    val canZap: Boolean,
+    val hasFailed: Boolean = false,
+    /** Down means two different things depending on this, so the map has to know it. */
+    val areControlsVisible: Boolean = false,
+)
+
+/**
+ * The whole remote-control vocabulary.
+ *
+ * Split in two below by what a key *is*: one group opens and closes things on top of the
+ * video, the other drives playback. They were one `when` until the track menu made it long
+ * enough that the two halves stopped being visible as halves.
+ */
+internal fun handleKey(key: Key, context: KeyContext, actions: KeyActions): Boolean {
     // A failed stream has no transport. Every key belongs to the error screen's buttons.
-    if (hasFailed) return false
+    if (context.hasFailed) return false
 
-    return when (key) {
+    return handleOverlayKey(key, context, actions) || handleTransportKey(key, context, actions)
+}
+
+/** Keys that show or hide something over the video, and change nothing about playback. */
+private fun handleOverlayKey(key: Key, context: KeyContext, actions: KeyActions): Boolean =
+    when (key) {
+        // Down once brings the controls up (AC-TV-06); down again asks for the choices
+        // behind them. Layering it on the same key rather than claiming a second one is what
+        // keeps this reachable on the Haier's remote, which has very few keys to spare — the
+        // same constraint that made Up double as the aspect key below.
         Key.DirectionDown -> {
-            actions.showControls()
+            if (context.areControlsVisible) actions.openTracks() else actions.showControls()
             true
         }
 
-        Key.DirectionCenter, Key.Enter, Key.MediaPlayPause -> {
-            actions.playPause()
-            true
-        }
-
-        // Seeking is meaningless on a live stream, so the keys are left unhandled there rather
-        // than silently doing nothing — the same rule the phone app applies to its skip buttons.
-        Key.DirectionLeft, Key.MediaRewind -> if (isSeekable) {
-            actions.skip(-1)
+        // Remotes that do have a subtitle key should use it. Nothing depends on this existing.
+        Key.Captions -> {
             actions.showControls()
+            actions.openTracks()
             true
-        } else {
-            false
-        }
-
-        Key.DirectionRight, Key.MediaFastForward -> if (isSeekable) {
-            actions.skip(1)
-            actions.showControls()
-            true
-        } else {
-            false
         }
 
         // Aspect ratio. The controls have always *announced* the current mode, and until now
@@ -359,9 +451,38 @@ internal fun handleKey(
             true
         }
 
+        else -> false
+    }
+
+/** Keys that drive playback itself. */
+private fun handleTransportKey(key: Key, context: KeyContext, actions: KeyActions): Boolean =
+    when (key) {
+        Key.DirectionCenter, Key.Enter, Key.MediaPlayPause -> {
+            actions.playPause()
+            true
+        }
+
+        // Seeking is meaningless on a live stream, so the keys are left unhandled there rather
+        // than silently doing nothing — the same rule the phone app applies to its skip buttons.
+        Key.DirectionLeft, Key.MediaRewind -> if (context.isSeekable) {
+            actions.skip(-1)
+            actions.showControls()
+            true
+        } else {
+            false
+        }
+
+        Key.DirectionRight, Key.MediaFastForward -> if (context.isSeekable) {
+            actions.skip(1)
+            actions.showControls()
+            true
+        } else {
+            false
+        }
+
         // Up and down the channel list, which is what a television remote's channel keys and
         // its D-pad up both mean to a viewer watching live.
-        Key.DirectionUp, Key.ChannelUp -> if (canZap) {
+        Key.DirectionUp, Key.ChannelUp -> if (context.canZap) {
             actions.zap(-1)
             true
         } else {
@@ -369,7 +490,7 @@ internal fun handleKey(
             true
         }
 
-        Key.ChannelDown -> if (canZap) {
+        Key.ChannelDown -> if (context.canZap) {
             actions.zap(1)
             true
         } else {
@@ -378,7 +499,6 @@ internal fun handleKey(
 
         else -> false
     }
-}
 
 @Composable
 private fun VideoSurface(
@@ -565,6 +685,7 @@ private fun ZapNotice(name: String) {
 @Composable
 @Suppress("LongParameterList")
 private fun Controls(
+    hasTrackChoice: Boolean,
     title: String,
     isPlaying: Boolean,
     isSeekable: Boolean,
@@ -627,6 +748,12 @@ private fun Controls(
                 Hint(stringResource(R.string.tv_player_hint_zap))
             }
             Hint(stringResource(R.string.tv_player_hint_aspect, aspectRatioMode.name))
+
+            // Only where the press does something. The aspect hint above was once a readout
+            // for a control that did not exist, and that is not repeated here.
+            if (hasTrackChoice) {
+                Hint(stringResource(R.string.tv_player_hint_tracks))
+            }
         }
     }
 }

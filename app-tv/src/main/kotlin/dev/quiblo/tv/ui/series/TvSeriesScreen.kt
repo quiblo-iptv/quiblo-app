@@ -29,6 +29,8 @@ import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -132,6 +134,7 @@ fun TvSeriesScreen(
                 state = current,
                 onPlayEpisode = onPlayEpisode,
                 onToggleFavorite = viewModel::toggleFavorite,
+                onRemoveFromHistory = viewModel::removeFromHistory,
                 focusEpisodeId = focusEpisodeId,
             )
         }
@@ -143,6 +146,7 @@ private fun Loaded(
     state: SeriesDetailUiState.Success,
     onPlayEpisode: (Episode, Long?) -> Unit,
     onToggleFavorite: () -> Unit,
+    onRemoveFromHistory: () -> Unit,
     focusEpisodeId: String?,
 ) {
     val seasons = state.details.seasons
@@ -224,6 +228,7 @@ private fun Loaded(
                 firstAction = firstAction,
                 onPlayEpisode = onPlayEpisode,
                 onToggleFavorite = onToggleFavorite,
+                onRemoveFromHistory = onRemoveFromHistory,
             )
         }
 
@@ -292,6 +297,7 @@ private fun SeriesHeader(
     firstAction: FocusRequester,
     onPlayEpisode: (Episode, Long?) -> Unit,
     onToggleFavorite: () -> Unit,
+    onRemoveFromHistory: () -> Unit,
 ) {
     Row(horizontalArrangement = Arrangement.spacedBy(DETAIL_COLUMN_GAP)) {
         DetailArtwork(
@@ -329,23 +335,34 @@ private fun SeriesHeader(
                 firstAction = firstAction,
                 onPlayEpisode = onPlayEpisode,
                 onToggleFavorite = onToggleFavorite,
+                onRemoveFromHistory = onRemoveFromHistory,
             )
         }
     }
 }
 
-/** Resume, play or start again, and favouriting — the row the remote lands on. */
+/** Resume, play or start again, favouriting and forgetting — the row the remote lands on. */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun SeriesActions(
     state: SeriesDetailUiState.Success,
     firstAction: FocusRequester,
     onPlayEpisode: (Episode, Long?) -> Unit,
     onToggleFavorite: () -> Unit,
+    onRemoveFromHistory: () -> Unit,
 ) {
     val hasResume = state.resumeEpisode != null
 
-    Row(
+    // Wraps rather than overflows.
+    //
+    // A `Row` cannot make room it does not have: with a resume button, a start-again button, a
+    // favourites button and now a history one, the last of them ran off the edge and was cut
+    // mid-word (#014). Shortening a label buys one release and loses the next one to a
+    // translation. Wrapping cannot be lost that way, and a second line of buttons is reachable
+    // by the D-pad for free because it is still one focus group.
+    FlowRow(
         horizontalArrangement = Arrangement.spacedBy(10.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
         modifier = Modifier
             .padding(top = 14.dp)
             .focusGroup(),
@@ -384,6 +401,20 @@ private fun SeriesActions(
             ),
             onClick = onToggleFavorite,
         )
+
+        // Only when there is something to remove. A control that would do nothing is the
+        // hollow-feature shape this project has deleted nine of — and here it is also the
+        // honest signal that this series is on the continue-watching row at all.
+        //
+        // The phone has offered this since its detail screens were built and the television
+        // never did, which is the parity gap `agile/004` generalised: the two frontends drift
+        // wherever nobody looked (#014).
+        if (hasResume) {
+            DetailButton(
+                label = stringResource(R.string.tv_detail_remove_history),
+                onClick = onRemoveFromHistory,
+            )
+        }
     }
 }
 

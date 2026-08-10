@@ -66,6 +66,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.quiblo.core.model.Source
+import dev.quiblo.core.model.SourceKind
 import org.koin.androidx.compose.koinViewModel
 
 /**
@@ -179,7 +180,15 @@ private fun SourceRow(
                 text = if (source.lastRefreshedEpochMillis == null) {
                     stringResource(R.string.sources_never_loaded)
                 } else {
-                    source.kind.name
+                    // The app's word for the protocol, not the enum constant — which printed
+                    // as "XTREAM" and could not be translated (#017's mechanism, on the
+                    // phone). The television has said it this way all along.
+                    stringResource(
+                        when (source.kind) {
+                            SourceKind.M3U -> R.string.sources_kind_m3u
+                            SourceKind.XTREAM -> R.string.sources_kind_xtream
+                        },
+                    )
                 },
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,

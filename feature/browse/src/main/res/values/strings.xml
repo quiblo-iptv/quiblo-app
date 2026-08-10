@@ -37,4 +37,12 @@
     <string name="title_facts_director">Director: %1$s</string>
     <string name="title_facts_creator">Created by: %1$s</string>
     <string name="title_facts_cast">Cast: %1$s</string>
+
+    <!--
+      The app's vocabulary for what a thing is, shared by the phone and the television so a
+      word cannot be corrected in one and left wrong in the other. See KindLabels.kt.
+    -->
+    <string name="media_kind_live">Live</string>
+    <string name="media_kind_movies">Movies</string>
+    <string name="media_kind_series">Series</string>
 </resources>

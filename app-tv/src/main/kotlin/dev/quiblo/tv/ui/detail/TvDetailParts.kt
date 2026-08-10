@@ -211,6 +211,11 @@ fun DetailButton(
             fontSize = 15.sp,
             fontWeight = if (isPrimary || isFocused) FontWeight.SemiBold else FontWeight.Normal,
             maxLines = 1,
+            // Clipped was the default and it is the worse of the two failures: "Add to
+            // favourites" was cut mid-word with nothing to say it had been (#014). The row
+            // these sit in wraps now, so this should not fire — it is here for the label that
+            // is longer in some other language than any of ours is in English.
+            overflow = TextOverflow.Ellipsis,
         )
     }
 }

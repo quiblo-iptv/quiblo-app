@@ -67,6 +67,7 @@ import dev.quiblo.core.model.MediaKind
 import dev.quiblo.feature.browse.BrowseViewModel
 import dev.quiblo.feature.browse.RatingBadge
 import dev.quiblo.feature.browse.di.browseParams
+import dev.quiblo.feature.browse.labelRes
 import dev.quiblo.tv.R
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -100,6 +101,7 @@ fun TvPosterRows(
     val viewModel: BrowseViewModel = koinViewModel(
         // Favourites is a different feed of the same kind, so it needs its own ViewModel
         // rather than sharing one and fighting over the filter.
+        // not display text: a Koin scope key, never rendered.
         key = if (favouritesOnly) "tv-favourites" else "tv-${kind.name}",
         parameters = { browseParams(kind, favoritesOnly = favouritesOnly) },
     )
@@ -117,14 +119,20 @@ fun TvPosterRows(
     // Favourites holds every kind at once, so it groups by kind instead — "Live TV" and
     // "Movies" are the distinction that matters there, and the provider's categories are
     // not even loaded for it.
+    // Resolved here and passed down, because grouping runs off the main thread and a string
+    // resource needs a composition to be read from. It is also the only reason the grouping
+    // function has to know anything about wording at all.
+    val kindLabels = MediaKind.entries.associateWith { stringResource(it.labelRes) }
+
     val rows by produceState(
         initialValue = emptyList<TvCategoryRow>(),
         state.items,
         state.categories,
         favouritesOnly,
+        kindLabels,
     ) {
         value = withContext(Dispatchers.Default) {
-            groupIntoRows(state.items, state.categories.map { it.title }, favouritesOnly)
+            groupIntoRows(state.items, state.categories.map { it.title }, favouritesOnly, kindLabels)
         }
     }
 
@@ -251,10 +259,17 @@ private fun groupIntoRows(
     items: List<Channel>,
     categoryOrder: List<String>,
     favouritesOnly: Boolean,
+    kindLabels: Map<MediaKind, String>,
 ): List<TvCategoryRow> {
     val grouped = LinkedHashMap<String, MutableList<TvRowItem>>()
     items.forEachIndexed { index, channel ->
-        val title = if (favouritesOnly) channel.kind.name else channel.groupTitle
+        // Favourites groups by kind, and the heading is the app's word for that kind — not the
+        // enum constant, which is how these rows came to be headed "VOD" and "SERIES" (#017).
+        val title = if (favouritesOnly) {
+            kindLabels.getValue(channel.kind)
+        } else {
+            channel.groupTitle
+        }
         grouped.getOrPut(title) { mutableListOf() }.add(TvRowItem(channel, index))
     }
 

@@ -127,6 +127,14 @@ fun PlayerScreen(
     val settings by viewModel.settings.collectAsStateWithLifecycle()
     val aspectRatioMode by viewModel.aspectRatioMode.collectAsStateWithLifecycle()
     var controlsVisible by remember { mutableStateOf(true) }
+    var tracksVisible by remember { mutableStateOf(false) }
+
+    // What there is to choose between, if anything. Shared with the television so the two
+    // apps cannot disagree about what a stream offers (#023).
+    val subtitlesOff = stringResource(R.string.player_subtitles_off)
+    val trackMenu = remember(state.audioTracks, state.textTracks, subtitlesOff) {
+        trackMenu(state, subtitlesOff)
+    }
 
     // Hoisted out of PlayerControls, which leaves composition every time the controls
     // auto-hide — taking a `remember` inside it with them. The lock forgot itself after
@@ -289,15 +297,44 @@ fun PlayerScreen(
                     viewModel.cycleAspectRatio()
                     controlsVisible = true
                 },
-                onCycleSubtitles = {
-                    val next = state.textTracks.firstOrNull { !it.isSelected }
-                    viewModel.selectTextTrack(next?.id)
+                hasTrackChoice = !trackMenu.isEmpty,
+                onOpenTracks = {
+                    tracksVisible = true
                     controlsVisible = true
                 },
             )
         }
 
-        gestureFeedback?.let { GestureIndicator(it) }
+        TransientOverlays(
+            gestureFeedback = gestureFeedback,
+            trackMenu = trackMenu.takeIf { tracksVisible },
+            onSelectTrack = viewModel::selectTrack,
+            onDismissTracks = { tracksVisible = false },
+        )
+    }
+}
+
+/**
+ * The things drawn over the video that are not the controls.
+ *
+ * Pulled out of [PlayerScreen] with the track menu, for the same reason the television's
+ * overlays were: that function already held the state, the gestures, the lifecycle and the
+ * layering, and only the last of those is about what is on screen.
+ *
+ * [trackMenu] is null when the menu is shut rather than being paired with a boolean — one
+ * argument that says both "there is a menu" and "show it" cannot be set to a contradiction.
+ */
+@Composable
+private fun TransientOverlays(
+    gestureFeedback: GestureFeedback?,
+    trackMenu: TrackMenu?,
+    onSelectTrack: (TrackMenuKind, String?) -> Unit,
+    onDismissTracks: () -> Unit,
+) {
+    gestureFeedback?.let { GestureIndicator(it) }
+
+    trackMenu?.let {
+        TrackMenuSheet(menu = it, onSelect = onSelectTrack, onDismiss = onDismissTracks)
     }
 }
 
@@ -513,7 +550,8 @@ private fun PlayerControls(
     onSeek: (Long) -> Unit,
     onSkip: (Int) -> Unit,
     onCycleAspectRatio: () -> Unit,
-    onCycleSubtitles: () -> Unit,
+    hasTrackChoice: Boolean,
+    onOpenTracks: () -> Unit,
 ) {
     Box(modifier = Modifier.fillMaxSize()) {
         LockButton(isLocked = false, isTopLeft = isLockTopLeft, onClick = onLock)
@@ -577,11 +615,18 @@ private fun PlayerControls(
                     )
                 }
 
-                if (state.textTracks.isNotEmpty()) {
-                    IconButton(onClick = onCycleSubtitles) {
+                // One button that opens the choices, rather than one that cycles subtitles.
+                //
+                // Cycling was the whole of what this app offered for tracks, and it offered
+                // nothing at all for audio — while the engine has been able to select either
+                // since it was written. AC-PLAY-04 requires switching between audio *or*
+                // subtitle tracks, so it did not pass (#023). A viewer also cannot tell what
+                // cycling landed on; a list can say.
+                if (hasTrackChoice) {
+                    IconButton(onClick = onOpenTracks) {
                         Icon(
                             imageVector = Icons.Filled.ClosedCaption,
-                            contentDescription = stringResource(R.string.player_subtitles),
+                            contentDescription = stringResource(R.string.player_tracks),
                             tint = Color.White,
                         )
                     }

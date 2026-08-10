@@ -312,21 +312,33 @@ internal fun TmdbKeyRow(
 ) {
     var draft by remember(currentKey) { mutableStateOf(currentKey.orEmpty()) }
 
-    Column(modifier = Modifier.padding(vertical = 6.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
+    /*
+     * Laid out as `OptionRow` lays out every other row on this screen, because #022 was that it
+     * was not: this row had no [COLUMN_GAP] between the names column and its control, so the
+     * field began 40dp to the left of every chip above and below it, and it centred itself
+     * against its label where the others align to the top. One row out of line down a column
+     * the remote walks in a straight line is the sort of thing that reads as unfinished long
+     * before anybody works out what is wrong with it.
+     */
+    Column(modifier = Modifier.padding(vertical = 10.dp)) {
+        Row(verticalAlignment = Alignment.Top) {
             Column(modifier = Modifier.width(LABEL_WIDTH)) {
                 Text(
                     text = stringResource(R.string.tv_settings_tmdb),
                     color = Color.White,
                     fontSize = 17.sp,
+                    lineHeight = 22.sp,
                 )
                 Text(
                     text = stringResource(R.string.tv_settings_tmdb_detail),
                     color = Color.White.copy(alpha = 0.55f),
                     fontSize = 13.sp,
-                    modifier = Modifier.padding(top = 2.dp),
+                    lineHeight = 18.sp,
+                    modifier = Modifier.padding(top = 3.dp),
                 )
             }
+
+            Spacer(modifier = Modifier.width(COLUMN_GAP))
 
             TvTextField(
                 value = draft,
@@ -338,7 +350,9 @@ internal fun TmdbKeyRow(
 
         Row(
             horizontalArrangement = Arrangement.spacedBy(10.dp),
-            modifier = Modifier.padding(start = LABEL_WIDTH, top = 8.dp),
+            // The same indent the field now has, so the buttons sit under it rather than under
+            // the gap beside it.
+            modifier = Modifier.padding(start = LABEL_WIDTH + COLUMN_GAP, top = 8.dp),
         ) {
             TvChip(
                 label = stringResource(R.string.tv_settings_save),

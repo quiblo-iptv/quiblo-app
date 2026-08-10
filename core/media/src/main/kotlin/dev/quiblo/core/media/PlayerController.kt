@@ -164,6 +164,19 @@ data class PlaybackState(
      */
     val videoWidth: Int = 0,
     val videoHeight: Int = 0,
+    /**
+     * Whether a frame of *this* item has been drawn yet.
+     *
+     * False from [PlayerController.prepare] until the engine reports its first rendered
+     * frame. It exists because Media3 keeps the last decoded frame on the surface until the
+     * next one arrives, so switching channels showed the **previous** stream's final picture
+     * over the new one's loading (`agile/012` #013). The buffering spinner did not hide it:
+     * a spinner draws *over* whatever is already there rather than replacing it.
+     *
+     * The UI uses it to hold an opaque shutter over the surface. Reported rather than handled
+     * here because the surface belongs to the UI — `:core:media` has no view to cover.
+     */
+    val hasRenderedFirstFrame: Boolean = false,
 ) {
     val isPlaying: Boolean get() = status == PlaybackStatus.PLAYING
     val hasTrackChoice: Boolean get() = audioTracks.size > 1 || textTracks.isNotEmpty()

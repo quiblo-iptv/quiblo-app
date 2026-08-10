@@ -446,6 +446,12 @@ class Media3PlayerController(
             )
         }
 
+        override fun onRenderedFirstFrame() {
+            // The moment the surface stops showing the previous stream. Until this fires the
+            // UI holds a shutter over it (#013).
+            _state.value = _state.value.copy(hasRenderedFirstFrame = true)
+        }
+
         override fun onVideoSizeChanged(videoSize: VideoSize) {
             // The bare SurfaceView the UI hands us has no aspect handling of its own, so
             // the frame size has to reach the UI for it to fit the video to the screen.

@@ -240,8 +240,15 @@ block becomes a lasting one.
 at all so a panel coming back out of a block recovers within the session. There is now no
 uncached per-open call to the user's panel.
 
-**AC-NFR-04 does not pass as written.** The criterion says "Permissions requested: INTERNET
-and network state only." The merged release manifest contains four:
+**~~AC-NFR-04 does not pass as written.~~ Closed by `FREEZE.md` Amendment 7 (2026-08-10),
+which took option 1 below.** The criterion now names the two contributed permissions
+explicitly, and a **CI step reads them off the merged manifests of both apps** and fails on a
+third — so the clause cannot quietly forgive a future arrival. Measured at the time of the
+amendment: exactly four entries per app, both apps, as listed here. The record of the problem
+follows, because the reasoning is what the amendment was decided on.
+
+The criterion said "Permissions requested: INTERNET and network state only." The merged
+release manifest contains four:
 
 ```
 android.permission.INTERNET
@@ -265,20 +272,21 @@ options:
    advisable for `WAKE_LOCK` — removing it risks the screen sleeping during playback, which
    trades a documentation problem for a real bug.
 
-Option 1 is the recommendation. Either way it is a scope decision, and `FREEZE.md` requires
-scope decisions to be dated amendments rather than quiet edits.
+Option 1 was taken, as Amendment 7, with the CI guard noted above making it a criterion rather
+than a clause.
 
-**AC-TV-03 and the back button now contradict each other.** The criterion reads *"Back from any
-screen returns to the category bar"*. It was written for a television frontend with two levels;
-Amendment 4 added detail screens the following day and did not re-read it. So the app obeying
-AC-TV-03 is the app throwing away a step of the viewer's journey every time back is pressed —
-reported as **#020** in [`agile/012`](../agile/012%20Bug%20Round%20of%20Quiblo%20—%20Round%203.md).
+**~~AC-TV-03 and the back button now contradict each other.~~ Closed by `FREEZE.md`
+Amendment 7 (2026-08-10).** The criterion read *"Back from any screen returns to the category
+bar"*. It was written for a television frontend with two levels; Amendment 4 added detail
+screens the following day and did not re-read it. So the app obeying AC-TV-03 was the app
+throwing away a step of the viewer's journey every time back was pressed — reported as **#020**
+in [`agile/012`](../agile/012%20Bug%20Round%20of%20Quiblo%20—%20Round%203.md).
 
-Restating it as *"Back pops exactly one step of the journey the viewer took, and never strands
-them; from a top-level screen, back exits"* keeps the property the criterion exists to protect
-and drops a clause that only described a two-level app. **Decide this before the fix is written**,
-because a fix in either direction falsifies one of the two, and date it in the same amendment
-pass as AC-NFR-04 above.
+It now reads *"Back pops exactly one step of the journey the viewer took, and never strands
+them. No step is discarded on the way. From a top-level screen, back exits"* — which keeps the
+property the criterion exists to protect and drops a clause that only described a two-level
+app. The fix follows the decision rather than the other way round, which is why the amendment
+is dated before the commit that changes the navigation.
 
 ---
 
@@ -299,7 +307,7 @@ enough, and a subsequent `adb connect <ip>:5555` is refused).
 |---|---|---|
 | AC-TV-01 | Not run | Every control on every screen — top bar, rows, detail screens, player, sources, settings — reached and operated with the D-pad |
 | AC-TV-02 | Not run | No screen and no transition leaves nothing focused, including after back, after a list empties, and after a source is deleted |
-| AC-TV-03 | **Open decision** — `agile/012` #020 | The criterion and the reported defect want opposite behaviour. §6 has the restatement; nothing is swept here until it is dated |
+| AC-TV-03 | **Decided, not yet swept** — Amendment 7 | Restated 2026-08-10, so the criterion and the fix now want the same thing. Sweep it as: back from a playing episode reaches that series' screen with the episode focused, a second back reaches the catalogue, and no screen needs two presses to leave |
 | AC-TV-04 | Not run | Installs, shows a banner, and appears in the Google TV launcher's app row |
 | AC-TV-05 | Not run | A held D-pad traversal of the 20k list issues guide requests only for rows focus settled on. Count them at the source, not by eye |
 | AC-TV-06 | Not run | D-pad down shows controls, back hides them, playback never pauses for either |

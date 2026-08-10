@@ -48,24 +48,26 @@ class QuibloTvApplication : Application() {
             modules(tvModules)
         }
 
-        endAnyGuestSession()
+        beginSession()
     }
 
     /**
-     * Deletes a guest left over from last time, before anything is drawn.
+     * Clears last time's session before anything is drawn: no leftover guest, and nobody
+     * chosen.
      *
      * A guest session is promised not to outlive itself, and the only moment that promise can
      * be kept for certain is startup: a process the system killed never got to tidy up, and a
      * television is switched off at the wall rather than exited. Deleting the row takes its
      * favourites and resume points with it by foreign key.
      *
-     * It also makes the chooser reappear, because the stored profile id now points at nothing
-     * — which is exactly what should happen after a guest.
+     * Clearing the chosen id is the other half, and it is #016: a television is the device a
+     * household shares, so it has to ask who is watching every time it opens rather than once
+     * when it was installed.
      */
-    private fun endAnyGuestSession() {
+    private fun beginSession() {
         val profiles: ProfileRepository = getKoin().get()
         CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
-            profiles.endGuestSessions()
+            profiles.beginSession()
         }
     }
 }

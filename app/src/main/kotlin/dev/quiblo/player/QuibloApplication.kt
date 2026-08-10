@@ -49,21 +49,21 @@ class QuibloApplication : Application() {
             modules(appModules)
         }
 
-        endAnyGuestSession()
+        beginSession()
     }
 
     /**
-     * Deletes a guest left over from last time, before anything is drawn.
+     * Clears last time's session before anything is drawn: no leftover guest, and nobody
+     * chosen.
      *
-     * The one moment the promise can be kept for certain: a process the system killed never
-     * got to tidy up after itself. Deleting the row takes its favourites and resume points
-     * with it by foreign key, and leaves the stored profile id pointing at nothing — which is
-     * what puts the chooser back.
+     * Deleting a guest is the one moment its promise can be kept for certain — a process the
+     * system killed never got to tidy up after itself — and clearing the chosen id is what
+     * makes the app ask who is watching at every launch rather than once per install (#016).
      */
-    private fun endAnyGuestSession() {
+    private fun beginSession() {
         val profiles: ProfileRepository = getKoin().get()
         CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
-            profiles.endGuestSessions()
+            profiles.beginSession()
         }
     }
 }

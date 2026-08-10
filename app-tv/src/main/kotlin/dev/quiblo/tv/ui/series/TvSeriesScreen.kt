@@ -39,6 +39,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -49,6 +50,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
@@ -96,6 +98,7 @@ fun TvSeriesScreen(
     onPlayEpisode: (Episode, Long?) -> Unit,
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
+    focusEpisodeId: String? = null,
 ) {
     val viewModel: SeriesDetailViewModel = koinViewModel(
         key = "tv-series-${channel.id}",
@@ -129,6 +132,7 @@ fun TvSeriesScreen(
                 state = current,
                 onPlayEpisode = onPlayEpisode,
                 onToggleFavorite = viewModel::toggleFavorite,
+                focusEpisodeId = focusEpisodeId,
             )
         }
     }
@@ -139,13 +143,60 @@ private fun Loaded(
     state: SeriesDetailUiState.Success,
     onPlayEpisode: (Episode, Long?) -> Unit,
     onToggleFavorite: () -> Unit,
+    focusEpisodeId: String?,
 ) {
-    var selectedSeason by remember(state.details.seriesId) { mutableIntStateOf(0) }
     val seasons = state.details.seasons
+
+    // Returning to an episode means returning to its season, not to the first one.
+    val returningSeason = remember(state.details.seriesId, focusEpisodeId) {
+        focusEpisodeId?.let { id ->
+            seasons.indexOfFirst { season -> season.episodes.any { it.id == id } }.takeIf { it >= 0 }
+        }
+    }
+    var selectedSeason by remember(state.details.seriesId) { mutableIntStateOf(returningSeason ?: 0) }
     val episodes = seasons.getOrNull(selectedSeason)?.episodes.orEmpty()
 
     val firstAction = remember { FocusRequester() }
-    LaunchedEffect(state.details.seriesId) { runCatching { firstAction.requestFocus() } }
+    val episodeCursor = remember { FocusRequester() }
+    val listState = rememberLazyListState()
+
+    /*
+     * Where the remote lands, and what the screen is showing when it does.
+     *
+     * Two cases, and they want opposite things:
+     *
+     * - **Opening a series.** Focus goes to the first action and the screen stays at its top.
+     *   Requesting focus is not only a focus event — a focus target inside a scrolling
+     *   container asks to be brought into view, and the container obliges by scrolling before
+     *   the viewer has pressed anything. On a 444dp panel the header is taller than the
+     *   viewport, so the artwork was cropped from the top and the title was off screen
+     *   entirely (#015). Focus position and scroll position are separate facts and only the
+     *   second one was wrong, so the scroll is put back rather than the focus moved.
+     *
+     * - **Returning from an episode.** Focus goes to that episode's row, and the list is
+     *   *supposed* to scroll to it — that is the cursor #020 asks for. Nothing is reset here.
+     */
+    // The header is one item, and the season strip is another when there is more than one
+    // season — so an episode's index in the list is its index in the season plus those.
+    val leadingItems = 1 + if (seasons.size > 1) 1 else 0
+
+    LaunchedEffect(state.details.seriesId, focusEpisodeId) {
+        val cursor = focusEpisodeId
+            ?.let { id -> episodes.indexOfFirst { it.id == id } }
+            ?.takeIf { it >= 0 }
+
+        if (cursor == null) {
+            runCatching { firstAction.requestFocus() }
+            listState.scrollToItem(0)
+        } else {
+            // Scroll first: an episode a hundred rows down does not exist as a composable
+            // until the list has been moved to it, and a FocusRequester attached to nothing
+            // focuses nothing. One frame between the two is what lets it be composed.
+            listState.scrollToItem(leadingItems + cursor)
+            withFrameNanos { }
+            runCatching { episodeCursor.requestFocus() }
+        }
+    }
 
     /*
      * The whole screen is one scrolling list, header included.
@@ -161,93 +212,19 @@ private fun Loaded(
      * is now just scrolling to it.
      */
     LazyColumn(
+        state = listState,
         modifier = Modifier.fillMaxSize(),
         verticalArrangement = Arrangement.spacedBy(10.dp),
         contentPadding = PaddingValues(bottom = 24.dp),
     ) {
         item(key = "header") {
-            Row(horizontalArrangement = Arrangement.spacedBy(DETAIL_COLUMN_GAP)) {
-                DetailArtwork(
-                    url = state.channel.logoUrl?.takeIf { it.isNotBlank() }
-                        ?: state.details.coverUrl
-                        ?: state.metadata?.posterUrl,
-                )
-
-                Column(modifier = Modifier.fillMaxWidth()) {
-                    DetailTitle(state.details.title)
-
-                    DetailFacts(
-                        rating = state.metadata?.rating,
-                        ageRating = state.metadata?.ageRating,
-                        genres = state.metadata.genresOrEmpty(),
-                        extra = pluralSeasons(seasons.size),
-                    )
-
-                    DetailOverview(
-                        overview = state.details.overview?.takeIf { it.isNotBlank() }
-                            ?: state.metadata?.overview,
-                        // False rather than a null check on metadata: the panel details are
-                        // already loaded, and the metadata service is only asked when a key
-                        // is configured, so "no metadata" is the permanent answer for most
-                        // users and a spinner against it would never resolve.
-                        isEnriching = false,
-                        author = state.metadata?.author,
-                        authorLabel = state.metadata?.authorLabel?.name
-                            ?.lowercase()?.replaceFirstChar(Char::uppercase),
-                        cast = state.metadata?.topCast.orEmpty(),
-                    )
-
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(10.dp),
-                        modifier = Modifier
-                            .padding(top = 14.dp)
-                            .focusGroup(),
-                    ) {
-                        state.resumeEpisode?.let { episode ->
-                            DetailButton(
-                                label = stringResource(
-                                    R.string.tv_series_resume,
-                                    episode.seasonNumber,
-                                    episode.episodeNumber,
-                                ),
-                                onClick = { onPlayEpisode(episode, state.resumePositionMillis) },
-                                isPrimary = true,
-                                modifier = Modifier.focusRequester(firstAction),
-                            )
-                        }
-
-                        state.firstEpisode?.let { first ->
-                            DetailButton(
-                                label = stringResource(
-                                    if (state.resumeEpisode == null) {
-                                        R.string.tv_detail_play
-                                    } else {
-                                        R.string.tv_detail_from_start
-                                    },
-                                ),
-                                onClick = { onPlayEpisode(first, null) },
-                                isPrimary = state.resumeEpisode == null,
-                                modifier = if (state.resumeEpisode == null) {
-                                    Modifier.focusRequester(firstAction)
-                                } else {
-                                    Modifier
-                                },
-                            )
-                        }
-
-                        DetailButton(
-                            label = stringResource(
-                                if (state.isFavorite) {
-                                    R.string.tv_detail_unfavourite
-                                } else {
-                                    R.string.tv_detail_favourite
-                                },
-                            ),
-                            onClick = onToggleFavorite,
-                        )
-                    }
-                }
-            }
+            SeriesHeader(
+                state = state,
+                seasonCount = seasons.size,
+                firstAction = firstAction,
+                onPlayEpisode = onPlayEpisode,
+                onToggleFavorite = onToggleFavorite,
+            )
         }
 
         if (seasons.isEmpty()) {
@@ -291,8 +268,122 @@ private fun Loaded(
                 onClick = {
                     onPlayEpisode(episode, state.resumePositionMillis.takeIf { isResume })
                 },
+                modifier = if (episode.id == focusEpisodeId) {
+                    Modifier.focusRequester(episodeCursor)
+                } else {
+                    Modifier
+                },
             )
         }
+    }
+}
+
+/**
+ * Artwork, facts, plot and the actions — everything above the season strip.
+ *
+ * Its own composable rather than an inline `item` because it is the half of this screen that
+ * has nothing to do with navigating episodes, and keeping the two apart is what lets the
+ * function that does the navigating stay readable.
+ */
+@Composable
+private fun SeriesHeader(
+    state: SeriesDetailUiState.Success,
+    seasonCount: Int,
+    firstAction: FocusRequester,
+    onPlayEpisode: (Episode, Long?) -> Unit,
+    onToggleFavorite: () -> Unit,
+) {
+    Row(horizontalArrangement = Arrangement.spacedBy(DETAIL_COLUMN_GAP)) {
+        DetailArtwork(
+            url = state.channel.logoUrl?.takeIf { it.isNotBlank() }
+                ?: state.details.coverUrl
+                ?: state.metadata?.posterUrl,
+        )
+
+        Column(modifier = Modifier.fillMaxWidth()) {
+            DetailTitle(state.details.title)
+
+            DetailFacts(
+                rating = state.metadata?.rating,
+                ageRating = state.metadata?.ageRating,
+                genres = state.metadata.genresOrEmpty(),
+                extra = pluralSeasons(seasonCount),
+            )
+
+            DetailOverview(
+                overview = state.details.overview?.takeIf { it.isNotBlank() }
+                    ?: state.metadata?.overview,
+                // False rather than a null check on metadata: the panel details are already
+                // loaded, and the metadata service is only asked when a key is configured, so
+                // "no metadata" is the permanent answer for most users and a spinner against
+                // it would never resolve.
+                isEnriching = false,
+                author = state.metadata?.author,
+                authorLabel = state.metadata?.authorLabel?.name
+                    ?.lowercase()?.replaceFirstChar(Char::uppercase),
+                cast = state.metadata?.topCast.orEmpty(),
+            )
+
+            SeriesActions(
+                state = state,
+                firstAction = firstAction,
+                onPlayEpisode = onPlayEpisode,
+                onToggleFavorite = onToggleFavorite,
+            )
+        }
+    }
+}
+
+/** Resume, play or start again, and favouriting — the row the remote lands on. */
+@Composable
+private fun SeriesActions(
+    state: SeriesDetailUiState.Success,
+    firstAction: FocusRequester,
+    onPlayEpisode: (Episode, Long?) -> Unit,
+    onToggleFavorite: () -> Unit,
+) {
+    val hasResume = state.resumeEpisode != null
+
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        modifier = Modifier
+            .padding(top = 14.dp)
+            .focusGroup(),
+    ) {
+        state.resumeEpisode?.let { episode ->
+            DetailButton(
+                label = stringResource(
+                    R.string.tv_series_resume,
+                    episode.seasonNumber,
+                    episode.episodeNumber,
+                ),
+                onClick = { onPlayEpisode(episode, state.resumePositionMillis) },
+                isPrimary = true,
+                modifier = Modifier.focusRequester(firstAction),
+            )
+        }
+
+        state.firstEpisode?.let { first ->
+            DetailButton(
+                label = stringResource(
+                    if (hasResume) R.string.tv_detail_from_start else R.string.tv_detail_play,
+                ),
+                onClick = { onPlayEpisode(first, null) },
+                isPrimary = !hasResume,
+                modifier = if (hasResume) Modifier else Modifier.focusRequester(firstAction),
+            )
+        }
+
+        DetailButton(
+            label = stringResource(
+                if (state.isFavorite) {
+                    R.string.tv_detail_unfavourite
+                } else {
+                    R.string.tv_detail_favourite
+                },
+            ),
+            onClick = onToggleFavorite,
+        )
     }
 }
 
@@ -322,7 +413,7 @@ private fun SeasonChip(label: String, isSelected: Boolean, onClick: () -> Unit) 
 }
 
 @Composable
-private fun EpisodeRow(episode: Episode, onClick: () -> Unit) {
+private fun EpisodeRow(episode: Episode, onClick: () -> Unit, modifier: Modifier = Modifier) {
     val interactionSource = remember { MutableInteractionSource() }
     val isFocused by interactionSource.collectIsFocusedAsState()
 
@@ -332,7 +423,7 @@ private fun EpisodeRow(episode: Episode, onClick: () -> Unit) {
     )
 
     Row(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .background(
                 color = if (isFocused) Color.White.copy(alpha = 0.14f) else Color.Transparent,

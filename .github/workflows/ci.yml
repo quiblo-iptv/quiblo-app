@@ -93,6 +93,44 @@ jobs:
       - name: Assemble
         run: ./gradlew assemble --stacktrace
 
+      # AC-NFR-04, as restated by FREEZE.md Amendment 7.
+      #
+      # An application does not choose what its dependencies merge into its manifest, so the
+      # criterion permits exactly two contributed permissions and names them. That is only a
+      # criterion if a third one fails something — otherwise it is a clause that forgives
+      # anything, which is the shape of guard this project has been caught by before.
+      #
+      # Read off the merged manifests rather than the sources: the sources are what we
+      # declare, and the whole point is what arrives without us declaring it.
+      - name: Permissions in the merged manifests (AC-NFR-04)
+        run: |
+          set -euo pipefail
+          ALLOWED='^(android\.permission\.(INTERNET|ACCESS_NETWORK_STATE|WAKE_LOCK)|dev\.quiblo\.(player|tv)(\.debug)?\.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION)$'
+          # Test variants are excluded deliberately, not for convenience: the unit-test
+          # manifest merges REORDER_TASKS from the test runner, and nothing in it is packaged
+          # into an APK a user installs. The criterion is about what ships.
+          MANIFESTS=$(find app/build app-tv/build -path '*merged_manifest*' -name AndroidManifest.xml 2>/dev/null \
+            | grep -viE 'unittest|androidtest' || true)
+          if [ -z "$MANIFESTS" ]; then
+            echo "::error::No merged manifest found — this step must run after Assemble."
+            exit 1
+          fi
+          UNEXPECTED=0
+          for m in $MANIFESTS; do
+            while IFS= read -r p; do
+              [ -z "$p" ] && continue
+              if ! printf '%s' "$p" | grep -qE "$ALLOWED"; then
+                echo "::error file=$m::Unexpected permission '$p'. AC-NFR-04 names the two permitted contributed permissions; a third needs examining and naming in FREEZE.md Amendment 7."
+                UNEXPECTED=$((UNEXPECTED + 1))
+              fi
+            done < <(grep -oE 'uses-permission android:name="[^"]*"' "$m" | sed 's/.*name="//; s/"$//' | sort -u)
+          done
+          if [ "$UNEXPECTED" -gt 0 ]; then
+            echo "::error::$UNEXPECTED unexpected permission(s) in the merged manifests."
+            exit 1
+          fi
+          echo "Merged manifests carry only the permissions AC-NFR-04 names."
+
       - name: Unit tests
         run: ./gradlew test --stacktrace
 

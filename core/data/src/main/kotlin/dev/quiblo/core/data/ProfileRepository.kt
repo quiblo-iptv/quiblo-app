@@ -85,6 +85,25 @@ class ProfileRepository(
         profileDao.deleteGuests()
     }
 
+    /**
+     * Starts a fresh session: no guest from last time, and nobody chosen yet.
+     *
+     * Called once at startup by both applications, before anything is drawn.
+     *
+     * **Who is watching is session state, not a stored preference**, and that is the whole of
+     * #016. The chosen id used to survive process death, so the chooser appeared exactly once
+     * per install and a household went back to sharing one continue-watching row — the state
+     * profiles were introduced to end. Clearing it here makes the question get asked every
+     * time the app opens, on both apps, from one place rather than from two that can drift.
+     *
+     * There is deliberately no "remember me". A switch that defaults to skipping the question
+     * reintroduces this bug for whoever leaves it on, and the question costs one press.
+     */
+    suspend fun beginSession() {
+        endGuestSessions()
+        profileStore.setActiveProfileId(null)
+    }
+
     suspend fun addProfile(name: String): Profile? {
         val cleaned = name.trim()
         if (cleaned.isBlank()) return null

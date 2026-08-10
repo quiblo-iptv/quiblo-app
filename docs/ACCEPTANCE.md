@@ -83,7 +83,7 @@ IDs are stable — reference them in commits and issues (`fix: AC-PL-04 crash on
 | AC-NFR-01 | Cold start to interactive: under 2s on a mid-range Android 11 device. |
 | AC-NFR-02 | Release APK under 25 MB. |
 | AC-NFR-03 | Zero network requests to any host the user did not configure. Verifiable by packet capture on a clean install. A metadata service the user has enabled by entering their own key counts as configured; with no key entered, a packet capture must show no contact with it at all. |
-| AC-NFR-04 | Permissions requested: INTERNET and network state only. No storage permission (SAF instead), no location, no contacts. |
+| AC-NFR-04 | This project declares `INTERNET` and `ACCESS_NETWORK_STATE` and nothing else. Each merged manifest additionally contains `WAKE_LOCK` (Media3) and `<applicationId>.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION` (androidx.core) — those two and no others. No storage permission (SAF instead), no location, no contacts, no camera, no microphone. A third permission from any source fails this criterion until it is examined and named in `FREEZE.md` Amendment 7. |
 | AC-NFR-05 | Passes `./gradlew lint detekt test` with zero errors in CI. |
 | AC-NFR-06 | `:core:*` modules have no dependency on Compose or any `:feature:*` module — enforced by a build-level dependency check, not convention. |
 | AC-NFR-07 | Parser modules (M3U, Xtream) have unit test coverage above 80%, including the malformed-input cases in AC-PL-04. |
@@ -100,7 +100,7 @@ except where a criterion names an input method the television does not have.
 |---|---|
 | AC-TV-01 | Every interactive element is reachable and operable with a D-pad alone. No control requires touch. |
 | AC-TV-02 | Focus is visible at all times. At no point is there no focused element on screen. |
-| AC-TV-03 | Back from any screen returns to the category bar; back from the bar exits the app. Back never strands the user. |
+| AC-TV-03 | Back pops exactly one step of the journey the viewer took, and never strands them. No step is discarded on the way. From a top-level screen, back exits. *(Restated by `FREEZE.md` Amendment 7; the original wording described a two-level frontend and was overtaken by Amendment 4's detail screens.)* |
 | AC-TV-04 | The app is installable from the TV launcher, carries a banner, and appears in the launcher's app row. |
 | AC-TV-05 | A held D-pad scroll through 20,000 live channels issues guide requests only for rows focus settles on. |
 | AC-TV-06 | Playback controls appear on D-pad down and hide on back, without pausing. |

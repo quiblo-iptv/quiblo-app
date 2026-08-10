@@ -132,9 +132,7 @@ jobs:
               # pre-release, undoing a number set in error — and publishing a release for it
               # would put out a version identical to the one before it, which is the exact
               # thing the "no release for docs" rule above exists to prevent.
-              EARLIER=$(printf '%s
-%s
-' "$NAME_THEN" "$NAME_NOW" | sort -V | head -n 1)
+              EARLIER=$( { echo "$NAME_THEN"; echo "$NAME_NOW"; } | sort -V | head -n 1 )
               if [ "$EARLIER" = "$NAME_THEN" ]; then
                 HAND_SET=true
                 echo "::notice::versionName was set by hand ($NAME_THEN → $NAME_NOW), which is a release request."

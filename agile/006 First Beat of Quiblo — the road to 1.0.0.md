@@ -97,7 +97,17 @@ run against a real build file.
 marked **Pre-release** with `v0.2.5` still holding Latest, carrying `quiblo-v0.2.99-alpha.1.apk`,
 `quiblo-tv-v0.2.99-alpha.1.apk` and a `.sha256` beside each, and with both build files reading
 `0.2.99-alpha.1` — **the same string as the tag**, which is exactly what the first fault broke.
-`main` was then reset off the throwaway version.
+`main` was then reset off the throwaway version — and **that merge broke the lane**, which is
+worth recording next to the success rather than tidied away. A shell line written with real
+newlines instead of `
+` broke the block scalar, so `release-on-main.yml` could not be parsed:
+the run failed with **zero jobs** and no log to read, and nothing published. It looked exactly
+like the forwards-only rule working, and it was the lane being dead.
+
+**A pull request runs `ci.yml` and nothing else**, so a YAML error in either release workflow is
+invisible to the gate and surfaces on the merge. The gate now parses every workflow file,
+including the ones it is not running, and the check was proved against the actually-broken file
+rather than a made-up one.
 
 **Driving it found a fourth fault that reading it did not**, and that is the part worth keeping.
 `RELEASE-MANAGEMENT.md` said to open a stage by setting the version in a pull request, and a

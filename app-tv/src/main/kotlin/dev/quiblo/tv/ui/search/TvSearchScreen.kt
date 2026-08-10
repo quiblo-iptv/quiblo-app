@@ -52,8 +52,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.quiblo.core.model.Channel
+import dev.quiblo.core.model.MediaKind
 import dev.quiblo.feature.browse.SearchUiState
 import dev.quiblo.feature.browse.SearchViewModel
+import dev.quiblo.feature.browse.labelRes
 import dev.quiblo.tv.R
 import dev.quiblo.tv.ui.browse.TvCategoryList
 import dev.quiblo.tv.ui.browse.TvCategoryRow
@@ -98,9 +100,12 @@ fun TvSearchScreen(
     // field rather than to an answer.
     val isResting = !state.isActive && !isAdvanced
 
-    val liveTitle = stringResource(R.string.tv_search_live)
-    val filmsTitle = stringResource(R.string.tv_search_movies)
-    val seriesTitle = stringResource(R.string.tv_search_series)
+    // The app's one vocabulary, from the module both apps share, rather than three strings
+    // this screen owns. It owned them, and it called films "Films" while every other screen
+    // called them "Movies" (#019) — which is the failure a shared list makes impossible.
+    val liveTitle = stringResource(MediaKind.LIVE.labelRes)
+    val filmsTitle = stringResource(MediaKind.VOD.labelRes)
+    val seriesTitle = stringResource(MediaKind.SERIES.labelRes)
 
     val found = remember(state.live, state.movies, state.series, liveTitle, filmsTitle, seriesTitle) {
         searchRows(state, liveTitle, filmsTitle, seriesTitle)
@@ -171,7 +176,7 @@ fun TvSearchScreen(
  * had to learn once and delete nine features over.
  */
 @Composable
-private fun ColumnScope.SearchHeader(
+internal fun ColumnScope.SearchHeader(
     state: SearchUiState,
     isResting: Boolean,
     isAdvanced: Boolean,
@@ -253,7 +258,7 @@ private fun ColumnScope.SearchHeader(
         ),
         modifier = Modifier
             .fillMaxWidth()
-            .padding(top = 8.dp, bottom = 10.dp)
+            .padding(vertical = CHIP_STRIP_PADDING)
             .focusGroup(),
     ) {
         // Always present, and the first thing under the field, so the way into the filters is
@@ -376,6 +381,20 @@ private val FIELD_WIDTH = 420.dp
 
 /** Air between the field and the sentence beside it, matching the settings screen. */
 private val COLUMN_GAP = 40.dp
+
+/**
+ * Air above and below the chip strip, and it is load-bearing rather than taste.
+ *
+ * This screen is the only one that puts anything above a poster row, and the panel does not
+ * have the height to spare: 420dp, less this header, has to hold a row heading and a poster
+ * that **grows when it is focused**. It was 8dp above and 10dp below, and at that size a
+ * focused result reached 852px on an 840px panel — the label went under the bottom edge, which
+ * is #019's "half cropped when focused". Measured, not guessed: `TvSearchResultsFitTest`.
+ *
+ * The chips also read better nearer the field they belong to, but that is a bonus and not the
+ * reason. If anything above the results grows again, that test is what will say so.
+ */
+private val CHIP_STRIP_PADDING = 4.dp
 
 /** Stable, so the chip row is not rebuilt when the genres behind it change. */
 private const val CLEAR_KEY = "__clear__"

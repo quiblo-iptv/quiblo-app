@@ -90,6 +90,39 @@ jobs:
           fi
           echo "All tracked Kotlin files carry the GPLv3 header."
 
+      # AC-NFR-08 forbids user-facing strings outside strings.xml, and a domain enum's name is
+      # one with extra steps. `MediaKind.VOD` reached the favourites rows as "VOD" and
+      # `SourceKind.XTREAM` reached the sources list as "XTREAM" (agile/012 #017) — both
+      # untranslatable, and neither caught by anything.
+      #
+      # Scoped to the modules that can draw something. `:core:*` and `:source:*` are forbidden
+      # from importing Compose by AC-NFR-06 and enforced at build time, so an enum name there
+      # is a database or cache key and cannot reach a screen even in principle — twenty of
+      # them are, and making people annotate those would train the annotation to be reflexive.
+      #
+      # Within the UI modules a grep still cannot tell display text from a cache key, so the
+      # few legitimate uses say so on the line above. That is deliberately a small annoyance:
+      # it is the one place where writing `kind.name` is a decision rather than a reflex.
+      - name: No domain enum names used as display text (AC-NFR-08)
+        run: |
+          set -euo pipefail
+          BAD=0
+          while IFS= read -r hit; do
+            file="${hit%%:*}"
+            rest="${hit#*:}"
+            line="${rest%%:*}"
+            previous=$((line - 1))
+            if [ "$previous" -lt 1 ] || ! sed -n "${previous}p" "$file" | grep -q 'not display text'; then
+              echo "::error file=$file,line=$line::A domain enum's name is not display text. Use a string resource, or mark the line above with 'not display text' if it never reaches a screen."
+              BAD=$((BAD + 1))
+            fi
+          done < <(git ls-files '*.kt' | grep -vE '^(core|source)/' | xargs grep -nE '\bkind\.name\b' || true)
+          if [ "$BAD" -gt 0 ]; then
+            echo "::error::$BAD use(s) of an enum name that may reach a screen."
+            exit 1
+          fi
+          echo "No unmarked enum names in the UI modules."
+
       - name: Assemble
         run: ./gradlew assemble --stacktrace
 

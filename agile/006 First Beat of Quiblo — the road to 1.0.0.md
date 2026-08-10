@@ -96,9 +96,19 @@ before spending `1.0.0-beta.1` on it.
 
 `MASTER_PATH` §B5. Third, because the sweep must run on the finished tree.
 
-Everything below is written and none of it has been run. The list is from `005` and from
-`ACCEPTANCE-SWEEP.md`:
+Everything below is written and none of it has been run. The list is from `005`, from
+`ACCEPTANCE-SWEEP.md`, and — since 2026-08-10 — from
+[`012`](012%20Bug%20Round%20of%20Quiblo%20—%20Round%203.md):
 
+- **The twelve defects in `012` close before the sweep, not after it.** Five of them are
+  failures of criteria this table records as never run (AC-TV-03, 10, 11, 12, 14) and one is a
+  failure of AC-PLAY-04 on both apps, so a sweep run today would spend three devices'
+  worth of effort rediscovering them. **#020 is blocked on a decision rather than on work** —
+  it describes behaviour AC-TV-03 currently demands — and that decision belongs in gate 2's
+  amendment pass, which makes it the one item here that must be started early rather than
+  worked in order.
+- **Nothing from `013` or `014` is in this gate.** The increment is 1.1.0 and later. It is
+  listed here only so that "all pending work" cannot be read as including it.
 - **`AC-PROF-05` first, before anything else on this page.** The 10 → 11 migration adopts
   existing favourites and resume points into a profile named "Default". It can only be judged
   on a device that already carries favourites, and a fault there presents as an empty

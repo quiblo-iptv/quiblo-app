@@ -13,7 +13,14 @@ Xtream source configured, on a fresh install and on an upgrade.
 This file records what has been verified so far, how, and what is left. It is the gate on
 tagging v1.0.0 — do not tag while anything in §5, §6 or §7 is unchecked.
 
-**Last updated:** 2026-08-04, after the `agile/001` bug fixes.
+**Last updated:** 2026-08-10, after the round-3 faults in
+[`agile/012`](../agile/012%20Bug%20Round%20of%20Quiblo%20—%20Round%203.md).
+
+> **The sweep has begun informally, and it is failing.** Twelve defects reported on 2026-08-10
+> from ordinary use of the two builds land on seven criteria this file records as never run —
+> AC-TV-03, 10, 11, 12, 14, AC-PROF-01 and AC-PLAY-04. Their rows below now say so. **None of
+> them is swept until `agile/012` closes**, because a sweep is expensive in devices and
+> attention and rediscovering known faults spends both for nothing.
 
 > **Since `ebfa928` the data layer and the whole television frontend have changed
 > materially**, and two recorded results are now stale in a way that matters:
@@ -171,7 +178,10 @@ source and an Xtream source configured, on a fresh install and again over an upg
 - **Playlists** — AC-PL-02, AC-PL-03, AC-PL-06, AC-PL-07 (01/04/05 covered in §2 on Android 15)
 - **Xtream** — AC-XT-01 … AC-XT-06
 - **Guide** — AC-EPG-01 … AC-EPG-05
-- **Playback** — AC-PLAY-01 … AC-PLAY-10
+- **Playback** — AC-PLAY-01 … AC-PLAY-10. **AC-PLAY-04 fails today on both apps without a
+  device being needed to know it** (`agile/012` #023): `Media3PlayerController` exposes audio
+  and text tracks and can select either, the phone offers a button that cycles subtitles only,
+  and the television offers neither. The capability exists and has no way in
 - **Favourites** — AC-FAV-01 … AC-FAV-05 (survival across refresh covered in §2)
 - **Export / import** — AC-DATA-01 … AC-DATA-05 covered on Android 11 in §3; needs a
   confirming pass on hardware, and one round-trip carrying an Xtream source
@@ -258,6 +268,18 @@ options:
 Option 1 is the recommendation. Either way it is a scope decision, and `FREEZE.md` requires
 scope decisions to be dated amendments rather than quiet edits.
 
+**AC-TV-03 and the back button now contradict each other.** The criterion reads *"Back from any
+screen returns to the category bar"*. It was written for a television frontend with two levels;
+Amendment 4 added detail screens the following day and did not re-read it. So the app obeying
+AC-TV-03 is the app throwing away a step of the viewer's journey every time back is pressed —
+reported as **#020** in [`agile/012`](../agile/012%20Bug%20Round%20of%20Quiblo%20—%20Round%203.md).
+
+Restating it as *"Back pops exactly one step of the journey the viewer took, and never strands
+them; from a top-level screen, back exits"* keeps the property the criterion exists to protect
+and drops a clause that only described a two-level app. **Decide this before the fix is written**,
+because a fix in either direction falsifies one of the two, and date it in the same amendment
+pass as AC-NFR-04 above.
+
 ---
 
 ## 7. Television — not yet swept
@@ -277,21 +299,21 @@ enough, and a subsequent `adb connect <ip>:5555` is refused).
 |---|---|---|
 | AC-TV-01 | Not run | Every control on every screen — top bar, rows, detail screens, player, sources, settings — reached and operated with the D-pad |
 | AC-TV-02 | Not run | No screen and no transition leaves nothing focused, including after back, after a list empties, and after a source is deleted |
-| AC-TV-03 | Not run | Back from each screen lands on the category bar; back from the bar exits |
+| AC-TV-03 | **Open decision** — `agile/012` #020 | The criterion and the reported defect want opposite behaviour. §6 has the restatement; nothing is swept here until it is dated |
 | AC-TV-04 | Not run | Installs, shows a banner, and appears in the Google TV launcher's app row |
 | AC-TV-05 | Not run | A held D-pad traversal of the 20k list issues guide requests only for rows focus settled on. Count them at the source, not by eye |
 | AC-TV-06 | Not run | D-pad down shows controls, back hides them, playback never pauses for either |
 | AC-TV-07 | Not run | A source restored from a backup file with no typing beyond a password |
 | AC-TV-08 | Not run | Cold start to interactive under 3s, measured the same way as AC-NFR-01 — six runs after `force-stop`, median reported |
 | AC-TV-09 | Not run on hardware | Every phone setting present and effective. Rendering and a DataStore read-back were confirmed on the emulator; the criterion asks for the television |
-| AC-TV-10 | Not run on hardware | Confirmed on the emulator — two values landed in two fields with the keyboard up, and the action key showed next-field. The Haier's IME is not the emulator's, so this is exactly the criterion most likely to behave differently |
-| AC-TV-11 | Not run on hardware | Film detail with Resume separate from Start from the beginning. Rendering confirmed on the emulator; **resume has never been exercised with a real stored position** |
-| AC-TV-12 | Not run on hardware | Series detail with seasons, episodes and the same information a film shows |
+| AC-TV-10 | **Fails on hardware** — `agile/012` #021, #022 | Confirmed on the emulator; on the television, opening the API-key field shakes the screen and the field is out of line with its column. The Haier's IME is not the emulator's, which is exactly why this criterion was flagged as the one most likely to behave differently — it did |
+| AC-TV-11 | **Fails on hardware** — `agile/012` #015, #014 | Film detail with Resume separate from Start from the beginning. The screen opens already scrolled, so the artwork is cropped and the title is off screen, and the favourites label does not fit its button. **Resume has never been exercised with a real stored position** |
+| AC-TV-12 | **Fails on hardware** — `agile/012` #015 | Series detail with seasons, episodes and the same information a film shows. Same crop as AC-TV-11, and worse, because a series has more above the fold to lose |
 | AC-TV-13 | Not run on hardware | Category filtering in Live. Confirmed on the emulator against 11,923 channels; count the requests at the source, not by eye |
-| AC-TV-14 | Not run | Search from the bar's first tab: a title found whichever kind it was filed under, results opened with the D-pad, and the query count watched while a term is typed. Do it against the 67k account, not a small one — the cap is the point |
+| AC-TV-14 | **Fails on hardware** — `agile/012` #019, #018 | Series results carry no heading and their titles crop when focused, films are labelled "Films" against "Movies" everywhere else, and the genre chips arrive after a visible unexplained pause. Search from the bar's first tab: a title found whichever kind it was filed under, results opened with the D-pad, and the query count watched while a term is typed. Do it against the 67k account, not a small one — the cap is the point |
 | AC-TV-15 | Not run | Playlists reached from Settings and left again by back, with no Sources tab anywhere in the bar |
 | AC-META-01…06 | Not run | The catalogue scan: no requests without a key, one per distinct title, the sustained rate held for the whole run, a refusal never cached, resume after stopping, progress surviving a screen change. Count requests at the source |
-| AC-PROF-01…06 | Not run | Profiles: nothing shown before choosing, two profiles that cannot see each other's favourites, settings unchanged by switching, a guest gone after a force-stop, **an upgrade that keeps every existing favourite**, and deleting one profile leaving the others intact |
+| AC-PROF-01…06 | **AC-PROF-01 fails** — `agile/012` #016 | The chooser appears once per install rather than at every launch, because the stored active profile survives process death. Profiles: nothing shown before choosing, two profiles that cannot see each other's favourites, settings unchanged by switching, a guest gone after a force-stop, **an upgrade that keeps every existing favourite**, and deleting one profile leaving the others intact |
 
 **What has been seen on an emulator, and what that is worth.** The television emulator
 (`Television_4K`, overridden to 1920x1080 @320dpi — the target device's geometry) was driven

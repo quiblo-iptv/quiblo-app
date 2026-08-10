@@ -242,3 +242,90 @@ than dropping it. Nobody upgrading loses a favourite. Backup keeps its existing 
 file holds one person's favourites — whoever was watching when it was written, and whoever is
 watching when it is read — because a format that carried profiles would have to answer what
 happens when it lands on a device where those people do not exist.
+
+### Amendment 7 — two criteria that describe an app we no longer have (2026-08-10)
+
+**Ships in.** `1.0.0-beta.1`
+**Release class.** Minor — nothing stored changes, no capability is withdrawn, and both halves
+correct criteria rather than extend scope (§1).
+
+**Decision.** Two acceptance criteria are restated. Neither changes what Quiblo is; both were
+written accurately for a smaller version of it and have since been overtaken by work this
+document already admitted.
+
+#### AC-TV-03 — back walks a stack, and nothing on it is erased
+
+The criterion read: *"Back from any screen returns to the category bar; back from the bar
+exits the app."* It is now:
+
+> **AC-TV-03** — Back pops exactly one step of the journey the viewer took, and never strands
+> them. No step is discarded on the way. From a top-level screen, back exits.
+
+**Rationale.** The old wording was written on 2026-08-03 for a frontend with two levels.
+Amendment 4 added film and series detail screens the following day and did not re-read it, so
+for a week the criterion has *demanded* the defect reported as `agile/012` #020: back from a
+playing episode lands on the Series catalogue rather than on the series the viewer was
+reading, and the episode they were on is gone. An app obeying AC-TV-03 was an app throwing
+away a step every time back was pressed.
+
+The property the criterion exists to protect — no screen that back cannot leave — is kept
+word for word. What is dropped is "returns to the category bar", which was a description of a
+two-level app rather than a promise to anybody.
+
+**What this makes true in the code.** Navigation on the television stops being one current
+screen that each new screen replaces, and becomes a stack that back pops. That is the
+difference between the two readings, and it is why the fix cannot be a special case in the
+player: a replace has no memory of what it replaced, so every screen would need to name its
+own predecessor and they would disagree.
+
+**What does not change.** Back from a top-level catalogue still walks to the first tab and
+then leaves the app. A viewer can still never reach a screen that back will not leave, which
+is the whole of what was ever being promised.
+
+#### AC-NFR-04 — permissions a dependency contributes, named rather than denied
+
+The criterion read: *"Permissions requested: INTERNET and network state only. No storage
+permission (SAF instead), no location, no contacts."* It is now:
+
+> **AC-NFR-04** — This project declares `INTERNET` and `ACCESS_NETWORK_STATE` and nothing
+> else. The merged manifest of each application additionally contains `WAKE_LOCK`, contributed
+> by Media3, and `<applicationId>.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION`, contributed by
+> androidx.core — **those two and no others.** No storage permission (SAF instead), no
+> location, no contacts, no camera, no microphone. A third permission arriving from any source
+> fails this criterion until it is examined and named here.
+
+**Rationale.** The criterion as written has never passed and never could: an application does
+not choose what its dependencies merge into its manifest. Measured on both merged release
+manifests on 2026-08-10, each contains exactly four entries — the two we declare, plus:
+
+- **`android.permission.WAKE_LOCK`**, from Media3. It is what stops the device sleeping during
+  playback. Removing it trades a documentation problem for a real defect, and on a television
+  in particular, where nobody touches the remote for two hours.
+- **`dev.quiblo.player.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION`** (and `dev.quiblo.tv.…` for
+  the television), from androidx.core. A signature-level permission scoped to our own
+  application id, used to stop other apps delivering broadcasts to receivers we register at
+  runtime. It is not user-visible and grants nothing to anybody else.
+
+**Checked against our own principles, because permitting something is not the same as
+excusing it.** Neither addition touches a §4 invariant: neither opens a network path, so §4.5
+("the app never phones home") is untouched — `WAKE_LOCK` keeps a screen awake and grants no
+access to anything; neither reads or writes user data, so §4.6 (credentials never leave the
+device) is untouched; and neither is a permission a reasonable person would be surprised by in
+a media player. The spirit the criterion was written to defend — no storage, no location, no
+contacts, nothing that reaches the user's life outside this app — holds exactly as before.
+
+**Checked against the licence, for the same reason.** Both come from Apache-2.0 libraries,
+which §3 records as compatible with GPLv3 and is the stated reason for choosing GPLv3 over
+GPLv2. A merged manifest entry is not a licensing event at all — it is build output from
+dependencies we already link — so nothing here changes the attribution position, and both
+libraries are already carried in the third-party licence list `AC-LEGAL-03` covers.
+
+**Why name them rather than simply permit them.** An open permission clause is not a
+criterion. Naming these two makes a third arrival fail the build's own check instead of
+passing unnoticed under a rule that forgives anything a dependency does — which is the failure
+mode this project has met before under a different name: a guard that is technically satisfied
+while the thing it guards against is happening.
+
+**What does not change.** Every non-goal in §2 stands. No storage permission is added, SAF
+remains how files are read and written, and nothing here permits a permission this project
+declares itself.

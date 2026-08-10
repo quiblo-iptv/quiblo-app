@@ -268,6 +268,10 @@ and the publish was skipped. **The instruction and the lane disagreed, and the l
 win.** A changed `versionName` now publishes; the class only decides how a *bare* version moves,
 since a pre-release advances its own counter regardless.
 
+**Forwards only.** Lowering a version is a correction — coming off a throwaway pre-release,
+undoing a number set in error — and publishing for it would put out a release identical to the
+one before it, which is the very thing the "no release for a README" rule exists to prevent.
+
 ### `versionCode`
 
 Always monotonic, always +1, and **never expresses the stage.** Android compares it as an

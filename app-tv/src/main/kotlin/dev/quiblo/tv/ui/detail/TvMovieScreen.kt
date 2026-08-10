@@ -22,6 +22,8 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -94,16 +96,19 @@ fun TvMovieScreen(
             state = current,
             onPlay = onPlay,
             onToggleFavorite = viewModel::toggleFavorite,
+            onRemoveFromHistory = viewModel::removeFromHistory,
             modifier = modifier,
         )
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun Loaded(
     state: MovieDetailUiState.Ready,
     onPlay: (Long?) -> Unit,
     onToggleFavorite: () -> Unit,
+    onRemoveFromHistory: () -> Unit,
     modifier: Modifier,
 ) {
     val firstAction = remember { FocusRequester() }
@@ -169,8 +174,12 @@ private fun Loaded(
                     cast = state.metadata?.topCast.orEmpty(),
                 )
 
-                Row(
+                // Wraps rather than overflows — see the note on the series screen. With four
+                // controls the last one ran off the edge and was cut mid-word (#014), and a
+                // shorter label only postpones that until somebody translates it.
+                FlowRow(
                     horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
                     modifier = Modifier
                         .padding(top = 14.dp)
                         .focusGroup(),
@@ -208,6 +217,16 @@ private fun Loaded(
                         ),
                         onClick = onToggleFavorite,
                     )
+
+                    // Only when there is a position to forget. The phone has offered this
+                    // since its detail screens were built and the television never did — the
+                    // parity gap `agile/004` generalised, found again (#014).
+                    if (state.canResume) {
+                        DetailButton(
+                            label = stringResource(R.string.tv_detail_remove_history),
+                            onClick = onRemoveFromHistory,
+                        )
+                    }
                 }
             }
         }

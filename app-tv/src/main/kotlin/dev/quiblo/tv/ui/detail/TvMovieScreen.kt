@@ -107,7 +107,26 @@ private fun Loaded(
     modifier: Modifier,
 ) {
     val firstAction = remember { FocusRequester() }
-    LaunchedEffect(state.channel.id) { runCatching { firstAction.requestFocus() } }
+    val scrollState = rememberScrollState()
+
+    /*
+     * Focus the first action, and leave the screen at its top while doing it.
+     *
+     * The second half is #015. Requesting focus is not only a focus event: a focus target
+     * inside a scrolling container asks to be brought into view, and the container obliges by
+     * scrolling — before the viewer has pressed anything. The actions sit under a 390dp cover
+     * on a panel with 444dp of usable height, so the screen opened with its artwork cropped
+     * from the top and its title off screen altogether.
+     *
+     * Focus position and scroll position are separate facts and only the second one was
+     * wrong, so the scroll is put back rather than the focus moved elsewhere. `scrollTo` and
+     * the bring-into-view are both scroll operations on the same state at the same priority,
+     * so the later one wins — which is why this runs after the request rather than before it.
+     */
+    LaunchedEffect(state.channel.id) {
+        runCatching { firstAction.requestFocus() }
+        scrollState.scrollTo(0)
+    }
 
     // Scrolls, for the same reason the series screen does: 444dp of usable height is not
     // enough to guarantee a cover, a plot and a row of actions all fit. A film has no
@@ -116,7 +135,7 @@ private fun Loaded(
     Column(
         modifier = modifier
             .fillMaxSize()
-            .verticalScroll(rememberScrollState()),
+            .verticalScroll(scrollState),
     ) {
         Row(horizontalArrangement = Arrangement.spacedBy(DETAIL_COLUMN_GAP)) {
             // The provider own artwork first, and the metadata service only where there is

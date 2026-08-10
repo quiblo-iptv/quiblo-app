@@ -100,6 +100,15 @@ sealed interface TvPlaybackRequest {
      */
     data class Episode(
         override val channel: Channel,
+        /**
+         * The episode's own id.
+         *
+         * Carried so that backing out of the player can put focus back on the row this came
+         * from (AC-TV-03, `agile/012` #020). The season and episode numbers would nearly
+         * identify it and a panel that repeats a number across a season would make "nearly"
+         * into a cursor that lands on the wrong row.
+         */
+        val episodeId: String,
         val streamUrl: String,
         val episodeTitle: String,
         val seasonNumber: Int,

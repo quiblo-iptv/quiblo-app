@@ -46,10 +46,12 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
@@ -113,34 +115,56 @@ fun TvApp() {
     // something.
     var selectedTab by remember { mutableIntStateOf(TvTab.SEARCH.ordinal) }
 
-    // What is on top of the shell, if anything.
+    // What is on top of the shell — as a stack, because back has to pop one step of it.
     //
-    // One piece of state rather than three booleans, because the states are exclusive: a
-    // viewer is watching, or reading a series, or in settings, or in the shell. Three flags
-    // can express "playing and in settings", which is not a thing, and the code would have
-    // to keep proving it never happens.
-    var overlay: TvOverlay? by remember { mutableStateOf(null) }
+    // This was a single nullable overlay that every new screen replaced, and that shape *was*
+    // #020: a replace keeps no memory of what it replaced, so backing out of an episode could
+    // only land on the shell, and the series the viewer had been reading was gone along with
+    // which episode they were on. AC-TV-03 asked for exactly that until Amendment 7, which is
+    // why the criterion was restated before this line was written.
+    //
+    // Empty means the shell. The entries stay exclusive — the top one is the only thing
+    // composed — so "playing and in settings" is still not expressible.
+    val backStack = remember { mutableStateListOf<TvOverlay>() }
 
     // Playing replaces the whole shell rather than sitting inside it: a television plays
     // full screen, and leaving the bar drawn over video would be the same mistake the phone
     // app made for a fortnight.
-    val current = overlay
+    val current = backStack.lastOrNull()
     if (current == null) {
         TvShell(
             selectedTab = selectedTab,
             onSelectTab = { selectedTab = it },
-            onOpenSettings = { overlay = TvOverlay.Settings },
-            onOpen = { items, index -> overlay = overlayFor(items, index) ?: overlay },
-            onOpenChannel = { channel -> overlay = detailFor(channel) },
+            onOpenSettings = { backStack.add(TvOverlay.Settings) },
+            onOpen = { items, index -> overlayFor(items, index)?.let(backStack::add) },
+            onOpenChannel = { channel -> backStack.add(detailFor(channel)) },
         )
     } else {
         TvOverlayScreen(
             overlay = current,
-            onOverlay = { overlay = it },
+            onPush = backStack::add,
+            onPop = { backStack.popRestoringCursor() },
+            onReplaceTop = { backStack[backStack.lastIndex] = it },
             activeProfileName = activeProfile?.name,
             onSwitchProfile = { profileSwitch() },
         )
     }
+}
+
+/**
+ * Pops one step, and hands the screen underneath the cursor it earned.
+ *
+ * Backing out of an episode should not merely reach the series again — it should reach the
+ * episode the viewer was on, which is the second half of #020. That is recorded here rather
+ * than stored anywhere: the fact is "which step of this journey was taken", it is true only
+ * while the journey exists, and a table holding it would be a second source of truth for
+ * something watch history already knows and would drift from the continue-watching row.
+ */
+private fun SnapshotStateList<TvOverlay>.popRestoringCursor() {
+    val leaving = removeLastOrNull() ?: return
+    val episode = (leaving as? TvOverlay.Playing)?.request as? TvPlaybackRequest.Episode ?: return
+    val beneath = lastOrNull() as? TvOverlay.Series ?: return
+    this[lastIndex] = beneath.copy(focusEpisodeId = episode.episodeId)
 }
 
 /**
@@ -154,29 +178,35 @@ fun TvApp() {
 @Composable
 private fun TvOverlayScreen(
     overlay: TvOverlay,
-    onOverlay: (TvOverlay?) -> Unit,
+    onPush: (TvOverlay) -> Unit,
+    onPop: () -> Unit,
+    onReplaceTop: (TvOverlay) -> Unit,
     activeProfileName: String?,
     onSwitchProfile: () -> Unit,
 ) {
     when (overlay) {
         is TvOverlay.Playing -> TvPlayerScreen(
             request = overlay.request,
-            onBack = { onOverlay(null) },
-            // Only live has a queue to move through, and the key map means only live gets
-            // here at all.
+            onBack = onPop,
+            // Zapping replaces this step rather than adding one. Twenty channels in, back
+            // should be one press back to where the viewer started watching, not twenty.
             onZap = { direction ->
                 val live = overlay.request as? TvPlaybackRequest.Live
-                if (live != null) onOverlay(TvOverlay.Playing(live.zappedBy(direction)))
+                if (live != null) onReplaceTop(TvOverlay.Playing(live.zappedBy(direction)))
             },
         )
 
         is TvOverlay.Series -> TvSeriesScreen(
             channel = overlay.channel,
+            // Set when the viewer backs out of an episode, so the list reopens on the row
+            // they were watching rather than at the top of the season (#020).
+            focusEpisodeId = overlay.focusEpisodeId,
             onPlayEpisode = { episode, resumeFrom ->
-                onOverlay(
+                onPush(
                     TvOverlay.Playing(
                         TvPlaybackRequest.Episode(
                             channel = overlay.channel,
+                            episodeId = episode.id,
                             streamUrl = episode.streamUrl,
                             episodeTitle = episode.title,
                             seasonNumber = episode.seasonNumber,
@@ -186,9 +216,7 @@ private fun TvOverlayScreen(
                     ),
                 )
             },
-            // Back from an episode list lands on the catalogue it came from, not on the
-            // player it might have opened (AC-TV-03).
-            onBack = { onOverlay(null) },
+            onBack = onPop,
             modifier = Modifier.padding(SCREEN_PADDING),
         )
 
@@ -197,15 +225,15 @@ private fun TvOverlayScreen(
             // A null position means "whatever was stored", which is what the player does
             // with a film by default; zero means the viewer chose to start again.
             onPlay = { startAt ->
-                onOverlay(TvOverlay.Playing(TvPlaybackRequest.Film(overlay.channel, startPositionMillis = startAt)))
+                onPush(TvOverlay.Playing(TvPlaybackRequest.Film(overlay.channel, startPositionMillis = startAt)))
             },
-            onBack = { onOverlay(null) },
+            onBack = onPop,
             modifier = Modifier.padding(SCREEN_PADDING),
         )
 
         TvOverlay.Settings -> TvSettingsScreen(
-            onBack = { onOverlay(null) },
-            onOpenSources = { onOverlay(TvOverlay.Sources) },
+            onBack = onPop,
+            onOpenSources = { onPush(TvOverlay.Sources) },
             activeProfileName = activeProfileName,
             // Straight back to the chooser: there is nothing to confirm, and whatever was on
             // screen belonged to the profile being left.
@@ -213,10 +241,12 @@ private fun TvOverlayScreen(
             modifier = Modifier.padding(SCREEN_PADDING),
         )
 
-        // Reached from Settings, and back returns there rather than to the catalogue: a
-        // viewer who went two steps in expects two steps out (AC-TV-03).
+        // Reached from Settings, and back returns there rather than to the catalogue — which
+        // is now what popping one step does, rather than a destination this screen has to
+        // name for itself. It used to name it, and that was the only reason the two-step
+        // journey worked anywhere in this app.
         TvOverlay.Sources -> TvSourcesScreen(
-            onBack = { onOverlay(TvOverlay.Settings) },
+            onBack = onPop,
             modifier = Modifier.padding(SCREEN_PADDING),
         )
     }
@@ -258,7 +288,17 @@ private fun detailFor(channel: Channel): TvOverlay = when (channel.kind) {
  */
 private sealed interface TvOverlay {
     data class Playing(val request: TvPlaybackRequest) : TvOverlay
-    data class Series(val channel: Channel) : TvOverlay
+
+    /**
+     * A series' episode list.
+     *
+     * [focusEpisodeId] is null on the way in and set on the way back out of an episode, which
+     * is the difference between opening a series and returning to one. Both matter and they
+     * want opposite things: opening shows the title and artwork with nothing scrolled (#015),
+     * returning puts the remote back where it was (#020).
+     */
+    data class Series(val channel: Channel, val focusEpisodeId: String? = null) : TvOverlay
+
     data class Movie(val channel: Channel) : TvOverlay
     data object Settings : TvOverlay
     data object Sources : TvOverlay

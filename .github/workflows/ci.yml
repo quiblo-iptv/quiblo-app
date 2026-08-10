@@ -123,6 +123,41 @@ jobs:
           fi
           echo "No unmarked enum names in the UI modules."
 
+      # Every workflow parses — including the ones this run is not.
+      #
+      # A pull request runs `ci.yml` and nothing else, so a YAML error in `release-on-main.yml`
+      # or `release.yml` is invisible to the gate and surfaces on the merge, as a run with
+      # **zero jobs** and no log to read. That happened on 2026-08-10: a shell line written
+      # with real newlines instead of `\n` broke the block scalar, the release lane could not
+      # be parsed at all, and the merge published nothing — which looked like the rule working
+      # and was the lane being dead.
+      #
+      # The gate must check the files it is not running. This is the same lesson as `detektAll`
+      # and as the first CI runs: code that has never been exercised is not code that works.
+      # PyYAML is installed rather than assumed. The runner image happens to carry it today,
+      # and a guard that silently stops running when an image changes is the failure it exists
+      # to prevent.
+      - name: Every workflow file parses
+        run: |
+          set -euo pipefail
+          python3 -m pip install --quiet --disable-pip-version-check pyyaml
+          python3 - <<'PY'
+          import pathlib
+          import sys
+
+          import yaml
+
+          bad = 0
+          for path in sorted(pathlib.Path(".github/workflows").glob("*.yml")):
+              try:
+                  yaml.safe_load(path.read_text(encoding="utf-8"))
+                  print(f"ok   {path}")
+              except yaml.YAMLError as error:
+                  print(f"::error file={path}::Not valid YAML: {error}")
+                  bad += 1
+          sys.exit(1 if bad else 0)
+          PY
+
       - name: Assemble
         run: ./gradlew assemble --stacktrace
 

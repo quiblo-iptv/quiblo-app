@@ -257,6 +257,41 @@ and the Media3 version, both of which age quietly.
 **Exit criterion.** A quality gate that runs in CI and can fail a pull request, with its
 accepted-issue list written down and dated. Not a report someone read once.
 
+### Half of it is built, 2026-08-11 — the half that needs nobody's account
+
+The supply-chain side is in and runs on every pull request. Sonar is the part that needs an
+account, and it is in [`docs/STOPPERS.md`](../docs/STOPPERS.md) §S7 rather than here.
+
+| Piece | Where | What it does |
+| :---- | :---- | :---- |
+| Dependency review | `ci.yml`, pull requests only | Fails a pull request that **adds** a dependency with a known vulnerability at moderate or above, or one under a licence GPLv3 cannot ship |
+| Dependency graph | `dependency-graph.yml`, on merge | Resolves the real graph — several hundred artifacts, not the forty in the catalogue — and submits it, which is what the review compares against and what alerts read |
+| Dependabot | `.github/dependabot.yml` | Weekly, grouped by release train, for Gradle **and for the workflows**, which are a supply chain people forget |
+
+**Three decisions inside that, made rather than defaulted:**
+
+- **The review reads the change, not the codebase.** A first scan of a tree this size reports a
+  backlog no single pull request can clear, and a gate that cannot be satisfied is one people
+  learn to bypass — the "gate, not a wall" decision this section already asks for, applied
+  before Sonar rather than after it. The standing backlog is Dependabot's, one grouped pull
+  request at a time.
+- **Moderate, not high.** This app connects to servers a viewer names, parses what they return
+  and holds their panel credentials. A moderate finding in a parsing or networking library is
+  not a footnote here.
+- **Dependabot commits as `chore:`/`ci:`, which publish nothing.** The release lane reads
+  commit types, so a bot that could write `fix:` would be a bot that can cut a release. When a
+  bump genuinely changes what a viewer runs, a person merges it behind a `fix:` they wrote.
+
+**What this half still does not cover, stated so it is not mistaken for done:** our own code.
+detekt and Android Lint read it today, and neither is a deprecation gate — `allWarningsAsErrors`
+is the obvious lever and it is not pulled here, because the tree has warnings today (the Compose
+test rule's v2 migration among them) and turning it on in the same change that adds scanning
+would bury one in the other. That is gate 6's remaining code-side item, and it belongs with the
+Sonar decision rather than before it.
+
+**Also still owed:** the `minSdk` 30 floor and the Media3 version, both of which age quietly and
+neither of which a scanner will ever raise, because being old is not the same as being reported.
+
 ## Gate 2 — all docs are updated
 
 `MASTER_PATH` §B2. Late, because it records what the gates above decided.

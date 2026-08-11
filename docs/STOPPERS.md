@@ -124,9 +124,23 @@ app against the organisation and adding a `SONAR_TOKEN` secret, neither of which
 **The action:** authorise SonarQube Cloud for `quiblo-iptv`, or say no and the self-hosted
 Community fallback becomes the plan.
 
-**Carrying on regardless — and this is most of the gate.** Dependency and deprecation scanning
-need no account at all, and they are where "vulnerable" usually lives. They run in CI now; see
-`agile/006` gate 6 for what is covered and what is still owed to Sonar.
+**Two switches beside it, both free on a public repository and neither ours to throw.** They are
+repository settings rather than files, so they are listed here with the exact command:
+
+```bash
+# Secret scanning, and refusing a push that carries a secret. The keystore passwords and four
+# release secrets make this worth more here than on an average repository.
+gh api -X PATCH repos/quiblo-iptv/quiblo-app \
+  -f 'security_and_analysis[secret_scanning][status]=enabled' \
+  -f 'security_and_analysis[secret_scanning_push_protection][status]=enabled'
+
+# Dependabot opening a pull request when an alert fires, rather than only filing the alert.
+gh api -X PUT repos/quiblo-iptv/quiblo-app/automated-security-fixes
+```
+
+**Carrying on regardless — and this is most of the gate.** Dependency scanning needs no account
+at all, and it is where "vulnerable" usually lives. It runs on every pull request as of
+2026-08-11; see `agile/006` gate 6 for what is covered and what is still owed.
 
 ## S8 — The paper items are decisions, not documents
 

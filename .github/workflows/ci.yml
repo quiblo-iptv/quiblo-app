@@ -39,6 +39,40 @@ jobs:
       - name: Check out
         uses: actions/checkout@v4
 
+      # A pull request may not introduce a dependency with a known vulnerability, or one whose
+      # licence this project cannot ship. `agile/006` gate 6.
+      #
+      # **This reads the change, not the codebase.** It compares the dependency graph of the
+      # base against the head, so it fails on what a pull request *adds* and stays silent about
+      # what is already there. That is the difference between a gate and a wall: a first scan
+      # of a tree this size reports a backlog nobody can clear in one pull request, and a gate
+      # that cannot be satisfied is a gate people learn to bypass. The existing backlog is
+      # Dependabot's to raise, one grouped pull request at a time.
+      #
+      # The comparison needs a submitted graph on the base branch, which `dependency-graph.yml`
+      # produces on every merge to main.
+      #
+      # Skipped when the gate is called by the release lane: there is no pull request to read on
+      # a push, the action's only useful input is a base-to-head comparison, and a step that
+      # cannot do its job must say so by not running rather than by passing.
+      - name: Dependency review
+        if: github.event_name == 'pull_request'
+        uses: actions/dependency-review-action@v4
+        with:
+          # Moderate rather than high. This is a media player that connects to servers a viewer
+          # names, parses what they return, and holds their panel credentials — the parsing and
+          # networking libraries are the attack surface, and "moderate" on one of those is not
+          # a footnote.
+          fail-on-severity: moderate
+          # GPLv3 is the outbound licence, so anything that cannot be combined with it cannot
+          # enter the build. These are the three that matter in practice and every one of them
+          # is a licensing decision rather than a security one — they are refused here so that
+          # the refusal happens before the dependency is written into a module.
+          deny-licenses: >-
+            AGPL-3.0-only,
+            AGPL-3.0-or-later,
+            SSPL-1.0
+
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:

@@ -1,0 +1,95 @@
+# Quiblo — a free, open source IPTV player.
+# Copyright (C) 2026 The Quiblo Authors
+# Licensed under the GNU General Public License v3.0 or later. See LICENSE.
+
+# What we depend on, watched. `agile/006` gate 6.
+#
+# The gate asks for two things and one tool does not do both: our own code — deprecated APIs,
+# dead code, bug patterns — and everything we pull in. detekt and Android Lint already read
+# what we wrote. This file is the other half, and it is the half where "vulnerable" usually
+# lives, because a supply chain ages whether or not anybody touches it.
+#
+# **Grouped on purpose.** Ungrouped, a version catalogue this size produces a pull request per
+# artifact every week — Compose alone is a dozen — and a review queue nobody reads is the same
+# as no scanning at all. Each group below is a set of libraries that are released together and
+# are only ever correct together.
+version: 2
+
+updates:
+  # Gradle reads `gradle/libs.versions.toml`: Dependabot understands version catalogues, so
+  # the pull requests it opens edit the catalogue rather than scattering versions into modules.
+  - package-ecosystem: gradle
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    commit-message:
+      # Conventional Commits, because the release lane reads them. `chore:` is deliberate:
+      # a dependency bump publishes nothing on its own, and a bot must not be able to cut a
+      # release. When one of these genuinely changes what a user runs, it is merged behind a
+      # `fix:` or `feat:` written by a person who can say what changed.
+      prefix: chore
+      include: scope
+    groups:
+      androidx-compose:
+        patterns:
+          - androidx.compose*
+          - androidx.activity*
+          - androidx.navigation*
+          - androidx.lifecycle*
+      androidx-tv:
+        patterns:
+          - androidx.tv*
+      media3:
+        patterns:
+          - androidx.media3*
+      room-and-storage:
+        patterns:
+          - androidx.room*
+          - androidx.datastore*
+          - androidx.security*
+      kotlin-and-ksp:
+        patterns:
+          - org.jetbrains.kotlin*
+          - com.google.devtools.ksp*
+          - org.jetbrains.kotlinx*
+      networking:
+        patterns:
+          - io.ktor*
+          - com.squareup.okhttp3*
+          - io.coil-kt*
+      di:
+        patterns:
+          - io.insert-koin*
+      quality-and-test:
+        patterns:
+          - io.gitlab.arturbosch.detekt*
+          - org.jetbrains.kotlinx.kover*
+          - org.junit*
+          - io.mockk*
+          - org.robolectric*
+          - app.cash.turbine*
+          - androidx.test*
+    ignore:
+      # The Android Gradle Plugin moves in step with Android Studio and the SDK on the build
+      # machine, so a bot bumping it produces a build that only works where the bot ran. It is
+      # raised by hand, deliberately, with the toolchain around it.
+      - dependency-name: com.android.tools.build:gradle
+
+  # The workflows are a supply chain too, and it is the one people forget: a third-party action
+  # runs with whatever the workflow's token can do, and this repository's release lane holds the
+  # signing secrets. Pinned by major tag today; this keeps the majors honest.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 3
+    commit-message:
+      prefix: ci
+      include: scope
+    groups:
+      actions:
+        patterns:
+          - "*"

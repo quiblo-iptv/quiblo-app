@@ -142,10 +142,10 @@ dependency-review workflow — and that pull request's own CI run is red. `agile
 "held", which is the accurate word. See it for what the scans will cover and what is still owed
 to Sonar.
 
-## S9 — `AC-PROF-05`'s build to upgrade from is built, and unsigned
+## S9 — `AC-PROF-05` has its build to upgrade from — **cleared 2026-08-11**
 
-**Blocks:** the highest-consequence unrun criterion in the project.
-**Owner:** whoever holds the keystore passwords. **The building half is done — 2026-08-11.**
+**Blocked:** the highest-consequence unrun criterion in the project.
+**Owner:** nobody now. Both APKs are built, signed with the release key, and staged.
 
 `AC-PROF-05` is *"upgrading from a build without profiles keeps every favourite and resume
 point"*. **No published release qualifies.** Profiles landed on 2026-08-09 and `v0.2.1` — the
@@ -154,18 +154,20 @@ upgraded over by a signed release either, so there was no artefact anywhere that
 test.
 
 **Both APKs now exist**, built from `572d849` — the last merge before profiles landed — and
-confirmed `versionName 0.2.0`, `versionCode 2`. They sit outside this repository, beside a script
-that signs them:
+signed with the release key. `versionName 0.2.0` and `versionCode 2` are confirmed from the
+artefacts themselves, and both carry certificate `9f4f77c4…0c74ec`, the same one on
+`quiblo-v0.4.0.apk`. That last check is the one worth doing rather than assuming: an APK signed
+with any other key installs perfectly and then refuses the upgrade, on the sweep day, in front of
+the tester.
+
+They sit outside this repository, with a checksum beside each:
 
 ```
 ~/Dev/mywrok/quiblo/sweep-artefacts/
 ```
 
-**The action, and it is the last of it:** run `sign-0.2.0-apks.sh` there. It asks for the two
-keystore passwords, keeps them out of every file and out of the process list, and **refuses to
-produce an APK whose signer is not the certificate on the published release**. That check is the
-point of the script: an APK signed with the wrong key installs perfectly, and then fails the one
-thing this test exists to prove — on the sweep day, in front of the tester.
+**What is left is the sweep itself.** The tester installs `0.2.0`, adds favourites and leaves
+something part-watched, then installs the current release over the top. Nothing may be lost.
 
 **Why it matters more than its position suggests:** a fault here presents as an **empty
 catalogue** rather than as a cosmetic bug, and it lands on people who already had the app.

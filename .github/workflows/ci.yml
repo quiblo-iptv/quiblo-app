@@ -75,7 +75,13 @@ jobs:
             exit 0
           fi
 
-          CHANGED=$(git diff --name-only "origin/$BASE_REF...HEAD")
+          # core.quotepath=false is not a nicety. Git quotes any path containing a byte
+          # outside ASCII -- the whole path, quotation marks and octal escapes -- and a quoted
+          # path matches no pattern below, so every document in this repository whose name
+          # carries an em dash read as code. Found by the change that renamed those files: the
+          # build ran on a pull request made entirely of prose. It failed *safe*, which is the
+          # allowlist working as designed, and it was still wrong.
+          CHANGED=$(git -c core.quotepath=false diff --name-only "origin/$BASE_REF...HEAD")
           echo "Changed files:"
           echo "$CHANGED" | sed 's/^/  /'
 

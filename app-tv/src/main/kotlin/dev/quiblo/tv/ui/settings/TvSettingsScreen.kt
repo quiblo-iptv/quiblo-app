@@ -252,6 +252,21 @@ fun TvSettingsScreen(
             )
         }
 
+        /*
+         * Attribution for the two services, which is a condition of using them rather than a
+         * courtesy — TMDB's terms require this sentence, close to verbatim, wherever their data
+         * appears.
+         *
+         * The phone has carried both since these features were built and the television carried
+         * neither, which is the same fault as the missing licences screen and was found the same
+         * way: by asking what the *other* app shows.
+         *
+         * Shown beside the control that turns each one on, rather than collected somewhere
+         * tidier. A viewer deciding whether to enable a service is the one moment the sentence
+         * is worth reading.
+         */
+        item { Attribution(stringResource(R.string.tv_settings_channel_logos_attribution)) }
+
         item {
             TmdbKeyRow(
                 currentKey = tmdbApiKey,
@@ -260,6 +275,8 @@ fun TvSettingsScreen(
                 onClear = viewModel::clearTmdbKey,
             )
         }
+
+        item { Attribution(stringResource(R.string.tv_settings_tmdb_attribution)) }
 
         // Only with a key, because without one there is nothing to ask and the control would
         // be the sort of button that does nothing this project has already deleted nine of.
@@ -970,6 +987,26 @@ private fun ActionRow(label: String, description: String, action: String, onClic
 
         TvChip(label = action, isSelected = false, onClick = onClick)
     }
+}
+
+/**
+ * A required sentence about a service, under the control that switches it on.
+ *
+ * Dimmer than a description and not focusable: it is a condition of use rather than something
+ * to act on, and a focus stop on unactionable text costs a press every time somebody walks past
+ * it. That is the opposite call from the licence rows, and for the opposite reason — those are
+ * below the fold and unreachable without focus, and this is a single line that is already on
+ * screen next to what it describes.
+ */
+@Composable
+private fun Attribution(text: String) {
+    Text(
+        text = text,
+        color = Color.White.copy(alpha = 0.45f),
+        fontSize = 12.sp,
+        lineHeight = 17.sp,
+        modifier = Modifier.width(LABEL_WIDTH).padding(bottom = 6.dp),
+    )
 }
 
 /** The names column. Wide enough for a two-line description without crowding it. */

@@ -124,6 +124,10 @@
     <string name="tv_settings_backup_rejected">That backup was written by a newer version of Quiblo (format %1$d, this build reads %2$d). Update the app and try again.</string>
     <string name="tv_settings_backup_failed">That file could not be read.</string>
 
+    <!-- Service attribution. TMDB's terms require this sentence wherever their data appears. -->
+    <string name="tv_settings_tmdb_attribution">This product uses the TMDB API but is not endorsed or certified by TMDB.</string>
+    <string name="tv_settings_channel_logos_attribution">Channel data from the iptv-org project.</string>
+
     <!-- About and licences (AC-LEGAL-03) -->
     <string name="tv_settings_about">About</string>
     <string name="tv_settings_version_label">Quiblo for television</string>

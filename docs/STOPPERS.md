@@ -143,6 +143,24 @@ Community fallback becomes the plan.
 need no account at all, and they are where "vulnerable" usually lives. They run in CI now; see
 `agile/006` gate 6 for what is covered and what is still owed to Sonar.
 
+## S9 — `AC-PROF-05` has no build to upgrade from
+
+**Blocks:** the highest-consequence unrun criterion in the project.
+**Owner:** a developer, before a sweep day — it is twenty minutes of work and it cannot be done
+on the day.
+
+`AC-PROF-05` is *"upgrading from a build without profiles keeps every favourite and resume
+point"*. **No published release qualifies.** Profiles landed on 2026-08-09 and `v0.2.1` — the
+earliest release that exists — already contains them. A debug-signed older build cannot be
+upgraded over by a signed release either, so there is no artefact anywhere that can start this
+test.
+
+**The action:** build an APK from a commit before 2026-08-09, sign it with the release key, and
+hand it to whoever is sweeping. They install it, add favourites, and only then upgrade.
+
+**Why it matters more than its position suggests:** a fault here presents as an **empty
+catalogue** rather than as a cosmetic bug, and it lands on people who already had the app.
+
 ## S8 — The paper items are decisions, not documents
 
 **Blocks:** `agile/009` closing.

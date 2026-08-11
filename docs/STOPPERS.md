@@ -37,6 +37,10 @@ device at all.**
    See `docs/` on video method in the project's debugging notes: a fixed camera, and something
    in frame that is known to be still.
 4. Sweep the remaining ten against the table in `agile/012`.
+5. **New since the last sweep, and both are first-launch:** `AC-LEGAL-06`…`09` (the terms
+   screens, driven by the remote alone) and the About section under TV Settings — the version,
+   the licences, and the two service sentences. A fresh install is the only way to see the first
+   of those, so it goes first or not at all in that sitting.
 
 **Carrying on regardless:** everything on this page below S3, plus any `012` item whose fix is
 still being written.

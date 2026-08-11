@@ -69,6 +69,28 @@ authoritative.
 **Why this is first.** Everything else in this track, and a good deal of `006`, is cheaper
 once an agent starting cold knows about the JDK trap, the Koin trap and the protected branch.
 
+### What compacting them taught, 2026-08-11
+
+Measured before touching anything: **22,082 tokens across 28 files**, of which the index — loaded
+on every session whatever the task — was **1,084**.
+
+Three habits caused it, and each is the obvious thing to do:
+
+1. **Status written into notes.** Which gate is open, what shipped last week: true, stale within
+   days, and already in this repository. A note should point at the file rather than copy it.
+2. **Appending instead of splitting.** One file reached seven facts because every new lesson was
+   added to the end of the nearest one. **Recall loads the whole file**, so asking about one trap
+   paid for all seven.
+3. **An index written as prose.** Its only job is to help decide whether to open a file.
+
+Compacting on those three rules cut the two worst files by ~70% and the always-loaded index by a
+third — **without deleting a lesson.** Everything removed was status, or a copy of something
+already in `docs/` or `agile/`.
+
+**The rule this gives F1:** a note earns its place by being what the repository does *not* say.
+That is also the answer to "can memory live in the repo?" — the parts worth keeping are the parts
+that are not already there.
+
 ## F2 — Skills worth having for this project
 
 None of the skills currently available know anything about Quiblo. They are generic, and the

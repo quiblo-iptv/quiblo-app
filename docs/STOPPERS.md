@@ -90,6 +90,17 @@ have.
 **The action:** `gh auth refresh -h github.com -s admin:org`, then the rule and its bypass go on
 in one change.
 
+**Add `workflow` to the same refresh.** A pull request that edits anything under
+`.github/workflows/` cannot be merged through the API without it — the merge is refused with
+*"refusing to allow an OAuth App to create or update workflow … without `workflow` scope"*, even
+though pushing the branch over SSH works fine. Met on 2026-08-11 merging the fast CI lane; the
+way round it is to merge locally and push, which works but leaves the pull request looking
+merged by nobody:
+
+```bash
+gh auth refresh -h github.com -s admin:org,workflow
+```
+
 **Until then the control is a convention:** everything lands by pull request because that is how
 this project works, not because the repository refuses anything else.
 

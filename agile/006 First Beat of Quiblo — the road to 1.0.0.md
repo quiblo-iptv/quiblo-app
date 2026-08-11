@@ -263,26 +263,32 @@ accepted-issue list written down and dated. Not a report someone read once.
 
 Known faults and required updates:
 
-- **`FREEZE.md` §Repo/org says `quiblo-tv`.** It is `quiblo-iptv/quiblo-app`. That document
-  is the first thing handed to every new contributor and every agent asked to work on this
-  codebase, and it currently points them at a repository that is not this one.
-- **`AC-NFR-04` reads as failing and is a scope decision, not a defect.** The merged release
-  manifest carries `WAKE_LOCK` (from Media3) and a self-scoped androidx receiver permission,
-  neither declared by this project. `ACCEPTANCE-SWEEP.md` §6 sets out the two options and
-  recommends amending the criterion to permit permissions contributed by dependencies, naming
-  these two explicitly so a third cannot arrive unnoticed. **That becomes Amendment 7**, dated,
-  because `FREEZE.md` requires scope decisions to be amendments rather than quiet edits.
-- **`RELEASING.md`** gains the pre-release lane once gate 4 lands, and a cross-link to
-  `RELEASE-MANAGEMENT.md`.
+- ~~**`FREEZE.md` §Repo/org says `quiblo-tv`.**~~ **Corrected 2026-08-11 as Amendment 8**, with
+  `PLAN.md`'s first task in the same change — it now records *why* the org is `quiblo-iptv`
+  rather than `quiblo`, so the next reader who notices the mismatch finds the answer rather
+  than the discrepancy.
+- ~~**`AC-NFR-04` reads as failing and is a scope decision, not a defect.**~~ **Closed as
+  Amendment 7** on 2026-08-10, and it is a criterion rather than a clause that forgives
+  anything: the merged manifests are read in CI and a third contributed permission fails the
+  build.
+- ~~**`RELEASING.md`** gains the pre-release lane and a cross-link to
+  `RELEASE-MANAGEMENT.md`.~~ **Done** — both landed with gate 4.
+- ~~**`README.md`** gains the release badge and the install instructions the first published
+  APK makes true.~~ **Done** — the download badge, both APKs named, and the `sha256sum -c`
+  line. That is also `013`'s INC-F5, which is therefore already shipped.
 - **`ACCEPTANCE-SWEEP.md`** gets its results from gate 1, and its two "these results are
-  stale" preambles removed once they are no longer true.
+  stale" preambles removed once they are no longer true. **Blocked on the sweep** —
+  [`docs/STOPPERS.md`](../docs/STOPPERS.md) §S1–S3.
 - **`PLAN.md` §6** lists profiles as Phase 2 with a strike-through and a note. Fine now;
   re-read it after the sweep, because it also lists the desktop and web frontends that
   `007` plans.
-- **`README.md`** gains the release badge and the install instructions the first published
-  APK makes true.
 - **Amendment 7 onward carries `Ships in` and `Release class`**, per
-  `RELEASE-MANAGEMENT.md` §7.
+  `RELEASE-MANAGEMENT.md` §7. Amendment 8 does, including a release class of **none** — a
+  correction that changes nothing a viewer runs is a legitimate class, and saying so is what
+  stops the next amendment from inventing a version for a typo.
+
+**What is left in this gate is the sweep's output and nothing else.** Every fault listed when it
+was written is closed; the remaining two items cannot be written until gate 1 has run.
 
 **Exit criterion.** No document in `docs/` describes a state that stopped being true; every
 open decision in `ACCEPTANCE-SWEEP.md` §6 is closed by a dated amendment.

@@ -146,7 +146,7 @@ Listed only so the architecture stays ready for it, in rough priority order:
 
 ## First three tasks
 
-0. Claim the name before writing anything: GitHub org `quiblo-tv`, and check `quiblo.dev` / `quiblo.tv`. Confirm `dev.quiblo.player` is unused on Play and in F-Droid's package list — cheap now, painful to change after release.
+0. Claim the name before writing anything: a GitHub org — this is `quiblo-iptv`, because `quiblo` itself was taken — and check `quiblo.dev` / `quiblo.tv`. Confirm `dev.quiblo.player` is unused on Play and in F-Droid's package list — cheap now, painful to change after release.
 1. `git init`, drop in the GPLv3 `LICENSE`, push the empty module skeleton with CI green.
 2. Build the malformed-M3U fixture corpus — before writing a single line of parser code.
 3. Write the M3U parser against it as a plain JVM module with no Android dependency at all.

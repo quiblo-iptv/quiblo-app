@@ -144,7 +144,7 @@ one is about whether the job runs at all. **Verified arithmetic is not a driven 
 
 Everything below is written and none of it has been run. The list is from `005`, from
 `ACCEPTANCE-SWEEP.md`, and — since 2026-08-10 — from
-[`012`](012%20Bug%20Round%20of%20Quiblo%20—%20Round%203.md):
+[`012`](012_Bug_Round_of_Quiblo_—_Round_3.md):
 
 - **The twelve defects in `012` close before the sweep, not after it.** Five of them are
   failures of criteria this table records as never run (AC-TV-03, 10, 11, 12, 14) and one is a

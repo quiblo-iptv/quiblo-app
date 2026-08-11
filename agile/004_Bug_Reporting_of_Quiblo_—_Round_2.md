@@ -1,6 +1,6 @@
 **Bug Reporting of Quiblo — Round 2**
 
-Found during the 0.2.0 audit pass ([`003`](003%20Playback%20and%20Audit%20Phase%20of%20Quiblo.md)),
+Found during the 0.2.0 audit pass ([`003`](003_Playback_and_Audit_Phase_of_Quiblo.md)),
 recorded rather than fixed in it.
 
 **Created:** 2026-08-05, against commit `0eba343`.
@@ -63,7 +63,7 @@ never consumed any of it.
 
 ### Why it was missed
 
-The same reason as most of [`001`](001%20Bug%20Reporting%20of%20Quiblo.md): parity between
+The same reason as most of [`001`](001_Bug_Reporting_of_Quiblo.md): parity between
 the two frontends was assumed rather than checked. `FREEZE.md` Amendment 1 admitted the
 television into v1.0 on the argument that it is "the same player with a different frontend,
 not a different product" — and for a second time, that claim does not hold where nobody

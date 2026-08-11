@@ -14,7 +14,7 @@ This file records what has been verified so far, how, and what is left. It is th
 tagging v1.0.0 — do not tag while anything in §5, §6 or §7 is unchecked.
 
 **Last updated:** 2026-08-10, after the round-3 faults in
-[`agile/012`](../agile/012%20Bug%20Round%20of%20Quiblo%20—%20Round%203.md).
+[`agile/012`](../agile/012_Bug_Round_of_Quiblo_—_Round_3.md).
 
 > **The sweep has begun informally, and it is failing.** Twelve defects reported on 2026-08-10
 > from ordinary use of the two builds land on seven criteria this file records as never run —
@@ -280,7 +280,7 @@ Amendment 7 (2026-08-10).** The criterion read *"Back from any screen returns to
 bar"*. It was written for a television frontend with two levels; Amendment 4 added detail
 screens the following day and did not re-read it. So the app obeying AC-TV-03 was the app
 throwing away a step of the viewer's journey every time back was pressed — reported as **#020**
-in [`agile/012`](../agile/012%20Bug%20Round%20of%20Quiblo%20—%20Round%203.md).
+in [`agile/012`](../agile/012_Bug_Round_of_Quiblo_—_Round_3.md).
 
 It now reads *"Back pops exactly one step of the journey the viewer took, and never strands
 them. No step is discarded on the way. From a top-level screen, back exits"* — which keeps the

@@ -1,7 +1,7 @@
 # Freeze Prompt — Quiblo
 
 **Tagline:** a vibe-coded IPTV player. Free, open source, GPLv3. Bring your own playlist.
-**Repo / org:** `quiblo-tv`
+**Repo / org:** `quiblo-iptv/quiblo-app` *(corrected 2026-08-11, see Amendment 8)*
 **Application ID:** `dev.quiblo.player`
 **Status:** FROZEN for v1.0
 **Date:** 2026-08-03
@@ -329,3 +329,31 @@ while the thing it guards against is happening.
 **What does not change.** Every non-goal in §2 stands. No storage permission is added, SAF
 remains how files are read and written, and nothing here permits a permission this project
 declares itself.
+
+### Amendment 8 — this document points at the repository it lives in (2026-08-11)
+
+**Ships in.** `1.0.0-beta.1`
+**Release class.** None — nothing a viewer runs changes. This corrects a pointer, and it is
+written as an amendment rather than edited quietly because the header of a frozen document is
+the last place a silent change should be possible.
+
+**Decision.** The **Repo / org** line read `quiblo-tv`. It is `quiblo-iptv/quiblo-app`.
+
+**Rationale.** `quiblo-tv` was the org named in `PLAN.md`'s first task, before anything existed
+to put in it. Two things then happened and neither came back to this line: the plain `quiblo`
+org was unavailable, so the organisation is `quiblo-iptv`; and Amendment 3 renamed the project
+without re-reading the header it was renaming.
+
+That would be a footnote in any other file. **This document is the first thing handed to every
+new contributor and every agent asked to work on this codebase** — §Purpose says so — and it has
+been sending all of them to a repository that is not this one. A canonical description that is
+wrong about where the code lives is wrong about the first thing a reader needs.
+
+**What this makes true elsewhere.** `PLAN.md`'s first task is corrected in the same change, and
+it now says *why* the org is not simply `quiblo`, so the next person to notice the mismatch
+finds the answer instead of the discrepancy.
+
+**What does not change.** The application IDs — `dev.quiblo.player` and `dev.quiblo.tv` — are
+untouched, and they are the identifiers that actually bind: an application ID cannot be changed
+after release without every install being replaced by hand. §1's naming note stands in full; the
+distance from the reseller namespace was never about the org's name.

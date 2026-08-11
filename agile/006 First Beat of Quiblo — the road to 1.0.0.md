@@ -169,11 +169,12 @@ Everything below is written and none of it has been run. The list is from `005`,
 - **The scan's pacing has never met the real service.** Eight requests a second and the
   handling of `Retry-After` are asserted on a fake clock against mocked responses. A stop
   reporting that the service asked us to slow down is a result, not a bug.
-- **Open suggestion from `005`, to be decided rather than left open:** a rate limit currently
-  ends a scan. Backing off for the interval the service names and carrying on would let the
-  scan find its own safe speed. **Recommendation: not in 1.0.0.** Stopping is the
-  conservative behaviour, this project has had a user's account blocked twice, and a beta is
-  the wrong place to start pushing through a refusal. It is a good 1.1 item.
+- ~~**Open suggestion from `005`, to be decided rather than left open**~~ — **decided
+  2026-08-11: not in `1.0.0`.** A rate limit goes on ending the scan. The recommendation is
+  taken as written, with the reasoning recorded in `005`: stopping is conservative, the scan
+  keeps what it found so the cost is one press, this project has had an account blocked twice,
+  and the pacing has never met the real service — so the first thing to learn is what the
+  service actually says. A scan that stops and reports is the instrument for learning it.
 
 **Exit criterion.** No acceptance criterion exists that has never been run; every item above
 is either swept in gate 1 or explicitly deferred with a reason, in writing.

@@ -357,3 +357,50 @@ finds the answer instead of the discrepancy.
 untouched, and they are the identifiers that actually bind: an application ID cannot be changed
 after release without every install being replaced by hand. §1's naming note stands in full; the
 distance from the reseller namespace was never about the org's name.
+
+### Amendment 9 — the app says what it is before it says anything else (2026-08-11)
+
+**Ships in.** `1.0.0-beta.1`
+**Release class.** Minor — a screen is added, nothing stored changes, and no capability is
+withdrawn.
+
+**Decision.** On a fresh install, before the profile chooser, Quiblo shows **two screens**: what
+this app is and is not, then what the person installing it is agreeing to. The second carries a
+link to the full terms on the wiki and a button that starts the app. Acceptance is recorded per
+install, with the version of the terms it was given for.
+
+**Rationale.** The project's position on content is already written and already good — the
+README says Quiblo supplies no playlists and no way to find any, and that the person configuring
+a source is responsible for it. **A README is read by contributors and by nobody who downloads
+an APK.** So the protection this project relies on has been living in a document its users never
+see, which is the same shape as every other fault this codebase keeps finding: the thing exists,
+and nobody can reach it.
+
+`1.0.0-beta.1` is the first artefact a stranger installs. That is the moment the gap starts
+costing something, and it is why this is scope rather than polish.
+
+**What is on the screen, and what is behind the link.** The essential text is on the screen. The
+wiki page is the full version. That order is not a style choice — a television has no browser
+worth using, and a link that is the *only* way to read the terms is a term nobody on a
+television can read. `006` gate 3 built the page first for the same reason.
+
+**Five constraints, all of them decisions:**
+
+1. **There is no decline path that closes the app.** If somebody will not accept the terms of a
+   player they downloaded, they can read and leave. An app that force-quits on decline is
+   theatre, and it teaches people to press the button without reading.
+2. **Per install, not per profile.** Amendment 6 gives profiles favourites and resume positions
+   and nothing else. Consent is not a viewing preference, and the Guest profile is not asked
+   again.
+3. **Fresh install only.** An upgrade must not show it. There is nothing to upgrade from today,
+   which makes `1.0.0-beta.1` → `-beta.2` the first real test of that and an argument for
+   building this early in the beta rather than at the end.
+4. **The acceptance carries a version.** A materially changed policy can ask again; a corrected
+   sentence cannot. Without the version the only options are asking nobody or asking everybody.
+5. **It is driven by a remote as well as a finger.** Two screens with a link and a button is
+   exactly the shape that becomes unreachable by D-pad, and this project has deleted nine
+   features for that. It is tested by key events on the television, not by clicking a node.
+
+**What does not change.** Every non-goal in §2 stands, no permission is added, nothing is sent
+anywhere, and the app still works with no account of any kind. This screen states a position the
+project already held; it does not create one.

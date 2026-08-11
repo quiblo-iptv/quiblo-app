@@ -32,6 +32,7 @@ import dev.quiblo.core.data.TitleMetadataRepository
 import dev.quiblo.core.data.TitleMetadataScanner
 import dev.quiblo.core.data.WatchHistoryRepository
 import dev.quiblo.core.data.backup.BackupRepository
+import dev.quiblo.core.datastore.ConsentStore
 import org.junit.After
 import org.junit.Assert.fail
 import org.junit.Test
@@ -131,6 +132,9 @@ class TvModuleWiringTest {
             PlayerSettingsRepository::class,
             TitleMetadataRepository::class,
             ChannelLogoRepository::class,
+            // Not a repository, and here anyway: `TvApp` resolves it before it draws anything,
+            // so a missing definition is not a broken screen — it is an app that cannot start.
+            ConsentStore::class,
         )
     }
 }

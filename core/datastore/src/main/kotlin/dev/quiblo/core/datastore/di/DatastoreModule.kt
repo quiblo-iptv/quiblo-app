@@ -20,6 +20,7 @@ package dev.quiblo.core.datastore.di
 
 import android.content.Context
 import dev.quiblo.core.datastore.ChannelLogoStore
+import dev.quiblo.core.datastore.ConsentStore
 import dev.quiblo.core.datastore.DataStorePanelBlockStore
 import dev.quiblo.core.datastore.EncryptedCredentialStore
 import dev.quiblo.core.datastore.PlayerSettingsStore
@@ -38,4 +39,5 @@ val datastoreModule: Module = module {
     single { TmdbKeyStore(get<Context>()) }
     single { ChannelLogoStore(get<Context>()) }
     single { ProfileStore(get<Context>()) }
+    single { ConsentStore(get<Context>()) }
 }

@@ -76,30 +76,26 @@ player criteria are unrun rather than passing.
 against. It does not need to be large; it needs to be the same one every time, or a regression
 cannot be told from a dead stream.
 
-## S4 — Branch protection cannot require a pull request yet
+## S4 — Branch protection does not require a pull request yet
 
 **Blocks:** the last part of `agile/006` gate 4's control story.
-**Owner:** the project owner, at a terminal.
+**Owner:** a developer. **The scope this needed is granted — 2026-08-11.**
 
 The `main` ruleset is active and blocks **deletion** and **non-fast-forward** pushes. What is
 missing is *pull request required*, and it is missing for a reason rather than an oversight: the
 release lane pushes its own bump commit to `main` with `GITHUB_TOKEN`, so the rule needs a
-bypass actor for that app — and configuring a bypass actor needs a scope this token does not
-have.
+bypass actor for that app.
 
-**The action:** `gh auth refresh -h github.com -s admin:org`, then the rule and its bypass go on
-in one change.
-
-**Add `workflow` to the same refresh.** A pull request that edits anything under
-`.github/workflows/` cannot be merged through the API without it — the merge is refused with
+**The scope is no longer the obstacle.** `gh auth refresh -h github.com -s admin:org,workflow`
+was run on 2026-08-11; the token now carries both. The same refresh unblocked merging anything
+under `.github/workflows/` through the API — without `workflow` the merge is refused with
 *"refusing to allow an OAuth App to create or update workflow … without `workflow` scope"*, even
-though pushing the branch over SSH works fine. Met on 2026-08-11 merging the fast CI lane; the
-way round it is to merge locally and push, which works but leaves the pull request looking
-merged by nobody:
+though pushing the branch over SSH works fine.
 
-```bash
-gh auth refresh -h github.com -s admin:org,workflow
-```
+**What is left is one change, and it is one decision wide:** turn *pull request required* on and
+name the release app as a bypass actor in the same edit. Turning the rule on without the bypass
+stops the release lane from pushing its own bump commit, which is a broken release rather than a
+tighter control.
 
 **Until then the control is a convention:** everything lands by pull request because that is how
 this project works, not because the repository refuses anything else.
@@ -140,8 +136,11 @@ app against the organisation and adding a `SONAR_TOKEN` secret, neither of which
 Community fallback becomes the plan.
 
 **Carrying on regardless — and this is most of the gate.** Dependency and deprecation scanning
-need no account at all, and they are where "vulnerable" usually lives. They run in CI now; see
-`agile/006` gate 6 for what is covered and what is still owed to Sonar.
+need no account at all, and they are where "vulnerable" usually lives. **They do not run yet.**
+They are written and unmerged in draft pull request #15 — `main` has no `dependabot.yml` and no
+dependency-review workflow — and that pull request's own CI run is red. `agile/006` gate 6 says
+"held", which is the accurate word. See it for what the scans will cover and what is still owed
+to Sonar.
 
 ## S9 — `AC-PROF-05` has no build to upgrade from
 

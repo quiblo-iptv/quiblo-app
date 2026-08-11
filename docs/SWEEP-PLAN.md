@@ -51,15 +51,19 @@ passed everywhere except the device.
 Take them from **[GitHub Releases](https://github.com/quiblo-iptv/quiblo-app/releases)**, not from
 a local build — the criteria are about the artefact people install.
 
+**This plan is written against `v0.4.0`**, the release current on 2026-08-11. If the releases page
+shows a newer one, take the newer one and read every `0.4.0` below as that version — a sweep is
+worth most against what people can actually download today.
+
 | File | Goes on |
 | :---- | :---- |
-| `quiblo-v0.3.0.apk` | Rows A and B (phone / tablet) |
-| `quiblo-tv-v0.3.0.apk` | Row C (television) |
+| `quiblo-v0.4.0.apk` | Rows A and B (phone / tablet) |
+| `quiblo-tv-v0.4.0.apk` | Row C (television) |
 
 **Check the download before installing it.** Each APK ships a `.sha256` beside it:
 
 ```sh
-sha256sum -c quiblo-v0.3.0.apk.sha256
+sha256sum -c quiblo-v0.4.0.apk.sha256
 ```
 
 **Record the version you actually tested, in every result.** "It worked" against an unknown build
@@ -82,7 +86,7 @@ which is exactly the defect `AC-TV-01` exists to catch. Installing over `adb` is
 
 ```sh
 adb pair <ip>:<port> <code>      # from the TV's Wireless debugging screen
-adb install -r quiblo-tv-v0.3.0.apk
+adb install -r quiblo-tv-v0.4.0.apk
 ```
 
 ### 5. What must be prepared before the day — check these off first
@@ -133,7 +137,7 @@ preference:
 
 ## Session 1 — Television, fresh install
 
-**Device:** C. **Build:** `quiblo-tv-v0.3.0.apk`. **Precondition: the app has never run on this
+**Device:** C. **Build:** `quiblo-tv-v0.4.0.apk`. **Precondition: the app has never run on this
 device.** If it has, uninstall it, or clear its data from Android settings.
 
 | # | Criterion | Screen | What to do | Passes when |
@@ -147,7 +151,7 @@ device.** If it has, uninstall it, or clear its data from Android settings.
 | 1.7 | `AC-LEGAL-08` | — | Choose a named profile, force-stop, reopen | Terms still absent. Consent is per install, not per profile |
 | 1.8 | `AC-TV-08` | Cold start | `adb shell am force-stop dev.quiblo.tv`, then launch, six times. Record `TotalTime` from `am start -W` | Median under **3000 ms** |
 | 1.9 | `AC-LEGAL-03` | Settings → About | Walk to the bottom of Settings. Open Open source licences. **Walk to the last entry with the D-pad** | Every entry can be reached. Not just the first two |
-| 1.10 | — | Settings → About | Read the version | It says `0.3.0`, matching what you installed |
+| 1.10 | — | Settings → About | Read the version | It says `0.4.0`, matching what you installed |
 | 1.11 | `AC-LEGAL-03` | Settings → Artwork | Look under the channel-logos and metadata controls | Both service sentences are present: the TMDB one and the iptv-org one |
 
 **After session 1, add a source** — the 20k M3U for the sessions that need volume, and the Xtream
@@ -155,7 +159,7 @@ account if you have one. Sessions 2 and 3 need a populated catalogue.
 
 ## Session 2 — Television, the twelve round-3 defects
 
-**Device:** C. **Build:** `v0.3.0`. These are reported faults that have been fixed in code. **Two
+**Device:** C. **Build:** `v0.4.0`. These are reported faults that have been fixed in code. **Two
 of them were fixed once, rejected on this television, and rebuilt** — those two are marked.
 
 | # | Defect | Criterion | Screen | What to do | Passes when |
@@ -176,7 +180,7 @@ of them were fixed once, rejected on this television, and rebuilt** — those tw
 
 ## Session 3 — Television, `AC-TV-01…15`
 
-**Device:** C. **Build:** `v0.3.0`. **Remote only.**
+**Device:** C. **Build:** `v0.4.0`. **Remote only.**
 
 | # | Criterion | Screen | What to do | Passes when |
 | :---- | :---- | :---- | :---- | :---- |
@@ -196,7 +200,7 @@ of them were fixed once, rejected on this television, and rebuilt** — those tw
 
 ## Session 4 — Phone, Android 11 (row A)
 
-**Device:** A. **Build:** `quiblo-v0.3.0.apk`. Fresh install, then repeat the marked rows over an
+**Device:** A. **Build:** `quiblo-v0.4.0.apk`. Fresh install, then repeat the marked rows over an
 upgrade.
 
 | # | Criterion | Screen | What to do | Passes when |
@@ -214,11 +218,11 @@ upgrade.
 | 4.11 | `AC-NFR-01` | Cold start | Six launches after force-stop, populated database | Median under **2000 ms** |
 | 4.12 | `AC-NFR-03` | — | Packet capture on a clean install, no key configured | **Zero** requests to any host you did not configure |
 | 4.13 | `AC-NFR-08` | Every screen | Read every screen for hardcoded strings; switch the device to Arabic | No untranslated string; the UI mirrors right-to-left |
-| 4.14 | `AC-LEGAL-09` | Upgrade | Install `v0.3.0` over an earlier release that has already accepted the terms | The terms do **not** appear again |
+| 4.14 | `AC-LEGAL-09` | Upgrade | Install `v0.4.0` over an earlier release that has already accepted the terms | The terms do **not** appear again |
 
 ## Session 5 — Phone, Android 14 (row B)
 
-**Device:** B. **Build:** `quiblo-v0.3.0.apk`. **Repeat every row of session 4.** This row has
+**Device:** B. **Build:** `quiblo-v0.4.0.apk`. **Repeat every row of session 4.** This row has
 never been tested on any build, so treat nothing as covered by session 4 — that is the whole
 point of a second OS row.
 

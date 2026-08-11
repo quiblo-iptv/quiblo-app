@@ -19,6 +19,7 @@
 import com.android.build.api.dsl.LibraryExtension
 import dev.quiblo.buildlogic.catalogInt
 import dev.quiblo.buildlogic.configureTests
+import dev.quiblo.buildlogic.failOnWarnings
 import dev.quiblo.buildlogic.libs
 
 plugins {
@@ -59,3 +60,5 @@ dependencies {
 }
 
 configureTests()
+
+failOnWarnings()

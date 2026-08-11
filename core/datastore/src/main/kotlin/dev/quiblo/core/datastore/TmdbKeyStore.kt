@@ -16,6 +16,10 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+// The suppression is file-level because the deprecation is reported on the imports as
+// well as the uses. See the note above the class for why this library is still here.
+@file:Suppress("DEPRECATION")
+
 package dev.quiblo.core.datastore
 
 import android.content.Context
@@ -42,6 +46,7 @@ import kotlinx.coroutines.withContext
  * Exposed as a [StateFlow] so enabling the feature updates every screen at once, and read
  * eagerly on construction because the value is a single short string.
  */
+/* See [EncryptedCredentialStore] for why a deprecated library is still in use here. */
 class TmdbKeyStore(
     context: Context,
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,

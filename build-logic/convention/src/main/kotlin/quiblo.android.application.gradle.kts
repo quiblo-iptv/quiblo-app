@@ -19,6 +19,7 @@
 import com.android.build.api.dsl.ApplicationExtension
 import dev.quiblo.buildlogic.catalogInt
 import dev.quiblo.buildlogic.configureTests
+import dev.quiblo.buildlogic.failOnWarnings
 import dev.quiblo.buildlogic.libs
 
 plugins {
@@ -106,3 +107,5 @@ tasks.register("licenceModules") {
         }
     }
 }
+
+failOnWarnings()

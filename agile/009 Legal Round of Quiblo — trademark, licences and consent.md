@@ -107,6 +107,26 @@ accurate. It has no mechanical relationship to the dependency graph, so the fail
 silent and permanent: a dependency added in a pull request that nobody remembers to list is
 attribution missing from every subsequent release, and no test fails.
 
+**Closed 2026-08-11, and it was not accurate.** `./gradlew licenceCheck` resolves the release
+runtime classpath of *both* applications — they ship different graphs — and fails when a module
+that ships is claimed by no entry in `THIRD_PARTY_LICENSES`. It also regenerates
+[`docs/LICENSES.md`](../docs/LICENSES.md) and fails when that has drifted. It runs in CI.
+
+**The first run found 118 shipped modules attributed by nothing.** Not obscure ones: Okio, Tink
+— which is the cryptography holding the viewer's password — Guava, Gson, Accompanist, Stately,
+the whole Compose Multiplatform runtime, and `androidx.tv`, which is the television's entire
+interface toolkit and was a *direct* dependency nobody had listed.
+
+**One of them is not Apache 2.0.** SLF4J is MIT, in a file whose own comment said everything in
+it was Apache 2.0. Both licences are compatible with GPLv3, so nothing was wrong with shipping
+it — what was wrong is that the sentence asserting the compatibility question had been answered
+was not true of the graph it was describing. That is the whole argument for this check in one
+line: a hand-kept list does not fail loudly, it just stops being true.
+
+The annotation stayed hand-written, as the action asks. Families are listed as families —
+"the rest of AndroidX" is sixty libraries no part of Quiblo calls directly, and naming each on a
+settings screen would bury the twelve that mean something.
+
 **Action:**
 
 1. **Give the television a licences screen** — the same `THIRD_PARTY_LICENSES` data behind a

@@ -208,6 +208,17 @@ jobs:
       - name: Parser coverage (AC-NFR-07)
         run: ./gradlew coverageAll --stacktrace
 
+      # AC-LEGAL-03, against the dependency graph rather than against somebody's memory.
+      #
+      # The in-app licence list is hand-written and was accurate only because people kept it so.
+      # It had no mechanical relationship to what ships, which made its failure mode silent and
+      # permanent: a dependency added in a pull request that nobody remembers to list is
+      # attribution missing from every release after it, and nothing fails. The first run of
+      # this check found 118 shipped modules listed nowhere — including one that is MIT, in a
+      # file whose own comment said everything in it was Apache-2.0.
+      - name: Licence attribution (AC-LEGAL-03)
+        run: ./gradlew licenceCheck --stacktrace
+
       - name: Android Lint
         run: ./gradlew lint --stacktrace
 

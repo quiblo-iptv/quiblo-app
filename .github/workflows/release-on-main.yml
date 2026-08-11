@@ -15,9 +15,20 @@ on:
     branches: [ main ]
   workflow_dispatch:
 
-# Serialised, never cancelled. Two merges landing a minute apart must not both bump from the
-# same version, and a release cancelled halfway leaves a tag with no build behind it — the
-# one state on the releases page that cannot be fixed by running something again.
+# Serialised. Two merges landing a minute apart must not both bump from the same version, and a
+# release cancelled halfway leaves a tag with no build behind it — the one state on the releases
+# page that cannot be fixed by running something again.
+#
+# **`cancel-in-progress: false` does not mean nothing is ever cancelled**, and this comment used
+# to say it did. A concurrency group holds one running job and *one* pending job: when a third
+# merge arrives, the one waiting is cancelled to make room. Three merges landed within seconds on
+# 2026-08-11 and published as one release rather than three.
+#
+# That is correct behaviour here, and worth understanding rather than fixing. The surviving run
+# reads every commit since the last tag, so nothing is dropped — the `feat:` among those three
+# still set the class, and `v0.3.0` carried all of them. What must never be cancelled is a run
+# that has started, because that is the one that can leave a tag without a build, and that is
+# what this line protects.
 concurrency:
   group: release-on-main
   cancel-in-progress: false

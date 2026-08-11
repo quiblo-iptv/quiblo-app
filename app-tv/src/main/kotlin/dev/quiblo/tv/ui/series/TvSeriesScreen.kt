@@ -52,7 +52,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
@@ -78,6 +77,7 @@ import dev.quiblo.tv.ui.detail.DetailFacts
 import dev.quiblo.tv.ui.detail.DetailOverview
 import dev.quiblo.tv.ui.detail.DetailTitle
 import dev.quiblo.tv.ui.detail.genresOrEmpty
+import dev.quiblo.tv.ui.detail.openDetailScreen
 import org.koin.androidx.compose.koinViewModel
 import org.koin.core.parameter.parametersOf
 
@@ -167,18 +167,10 @@ private fun Loaded(
     /*
      * Where the remote lands, and what the screen is showing when it does.
      *
-     * Two cases, and they want opposite things:
-     *
-     * - **Opening a series.** Focus goes to the first action and the screen stays at its top.
-     *   Requesting focus is not only a focus event — a focus target inside a scrolling
-     *   container asks to be brought into view, and the container obliges by scrolling before
-     *   the viewer has pressed anything. On a 444dp panel the header is taller than the
-     *   viewport, so the artwork was cropped from the top and the title was off screen
-     *   entirely (#015). Focus position and scroll position are separate facts and only the
-     *   second one was wrong, so the scroll is put back rather than the focus moved.
-     *
-     * - **Returning from an episode.** Focus goes to that episode's row, and the list is
-     *   *supposed* to scroll to it — that is the cursor #020 asks for. Nothing is reset here.
+     * Both cases live in `openDetailScreen`, shared with the film screen. They had a copy each
+     * and the copies disagreed, which is how #015 came back on this screen after being fixed on
+     * that one — see that function for what the panel measured and why a lazy list needs more
+     * than a single reset.
      */
     // The header is one item, and the season strip is another when there is more than one
     // season — so an episode's index in the list is its index in the season plus those.
@@ -189,17 +181,12 @@ private fun Loaded(
             ?.let { id -> episodes.indexOfFirst { it.id == id } }
             ?.takeIf { it >= 0 }
 
-        if (cursor == null) {
-            runCatching { firstAction.requestFocus() }
-            listState.scrollToItem(0)
-        } else {
-            // Scroll first: an episode a hundred rows down does not exist as a composable
-            // until the list has been moved to it, and a FocusRequester attached to nothing
-            // focuses nothing. One frame between the two is what lets it be composed.
-            listState.scrollToItem(leadingItems + cursor)
-            withFrameNanos { }
-            runCatching { episodeCursor.requestFocus() }
-        }
+        openDetailScreen(
+            listState = listState,
+            firstAction = firstAction,
+            episodeCursor = episodeCursor.takeIf { cursor != null },
+            episodeIndex = cursor?.let { leadingItems + it },
+        )
     }
 
     /*

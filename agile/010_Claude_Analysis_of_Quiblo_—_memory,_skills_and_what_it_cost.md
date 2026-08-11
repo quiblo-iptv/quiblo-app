@@ -119,6 +119,18 @@ the cache-read counts. So per-session totals, cache hit rates and a model breakd
 arithmetic rather than estimation, and the pre-rename directory means the record starts at the
 beginning rather than at the rename.
 
+**Built 2026-08-11.** `tools/usage_aggregates.py` reads the three directories and writes
+`docs/usage-aggregates.json`; `/wiki/what-it-cost` renders it. Nineteen sessions, 2–11 August,
+9,176 assistant messages, **8,085,931 output tokens** — and the figure the item was worth doing
+for: **38,307 fresh input tokens against 2,711,252,834 cache reads**, which is 99.999%. An agent
+does not cost what it writes, it costs what it re-reads, at roughly 335 to 1.
+
+**The constraint below is met structurally rather than carefully.** The script never reads a text
+field at all — only `timestamp`, `message.model` and `message.usage` — so there is no filter that
+could be written too loosely, because no content is ever loaded to be filtered. It then refuses
+to write its own output if any string in it is not a date, a session id or a model name; that
+guard was tested against a hostname and a prompt before it was trusted, and it rejects both.
+
 **What to build:**
 
 1. **A script that reads the transcripts and emits aggregates only** — a small JSON file,

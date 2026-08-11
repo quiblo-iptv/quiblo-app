@@ -1,0 +1,273 @@
+{
+  "schema_version": 1,
+  "sessions": 19,
+  "first_day": "2026-08-02",
+  "last_day": "2026-08-11",
+  "totals": {
+    "messages": 9176,
+    "input_tokens": 38307,
+    "output_tokens": 8085931,
+    "cache_read_tokens": 2711252834,
+    "cache_creation_tokens": 26221472
+  },
+  "cache_read_share_percent": 99.999,
+  "output_tokens_by_first_day": {
+    "2026-08-02": 1269581,
+    "2026-08-03": 1629558,
+    "2026-08-04": 1445645,
+    "2026-08-05": 831988,
+    "2026-08-06": 75654,
+    "2026-08-09": 1136027,
+    "2026-08-10": 994119,
+    "2026-08-11": 703359
+  },
+  "by_session": [
+    {
+      "session": "82878945",
+      "first_day": "2026-08-02",
+      "last_day": "2026-08-03",
+      "models": [
+        "claude-opus-5"
+      ],
+      "messages": 929,
+      "input_tokens": 2157,
+      "output_tokens": 1269581,
+      "cache_read_tokens": 347895731,
+      "cache_creation_tokens": 1744460
+    },
+    {
+      "session": "0895271e",
+      "first_day": "2026-08-03",
+      "last_day": "2026-08-03",
+      "models": [
+        "claude-opus-5"
+      ],
+      "messages": 1221,
+      "input_tokens": 2267,
+      "output_tokens": 1044982,
+      "cache_read_tokens": 553742323,
+      "cache_creation_tokens": 3423637
+    },
+    {
+      "session": "0bc1df65",
+      "first_day": "2026-08-03",
+      "last_day": "2026-08-04",
+      "models": [
+        "claude-opus-5"
+      ],
+      "messages": 451,
+      "input_tokens": 1360,
+      "output_tokens": 277052,
+      "cache_read_tokens": 90873011,
+      "cache_creation_tokens": 2077765
+    },
+    {
+      "session": "c970e9aa",
+      "first_day": "2026-08-03",
+      "last_day": "2026-08-03",
+      "models": [
+        "claude-opus-5"
+      ],
+      "messages": 575,
+      "input_tokens": 7917,
+      "output_tokens": 307524,
+      "cache_read_tokens": 116848300,
+      "cache_creation_tokens": 786146
+    },
+    {
+      "session": "81b917ec",
+      "first_day": "2026-08-04",
+      "last_day": "2026-08-04",
+      "models": [
+        "claude-opus-5"
+      ],
+      "messages": 402,
+      "input_tokens": 950,
+      "output_tokens": 292020,
+      "cache_read_tokens": 101027370,
+      "cache_creation_tokens": 1689892
+    },
+    {
+      "session": "ff9de012",
+      "first_day": "2026-08-04",
+      "last_day": "2026-08-05",
+      "models": [
+        "claude-opus-5"
+      ],
+      "messages": 981,
+      "input_tokens": 1931,
+      "output_tokens": 1153625,
+      "cache_read_tokens": 495713140,
+      "cache_creation_tokens": 3816230
+    },
+    {
+      "session": "12a08111",
+      "first_day": "2026-08-05",
+      "last_day": "2026-08-05",
+      "models": [
+        "claude-opus-5"
+      ],
+      "messages": 239,
+      "input_tokens": 444,
+      "output_tokens": 363855,
+      "cache_read_tokens": 41806086,
+      "cache_creation_tokens": 785771
+    },
+    {
+      "session": "ae9b8c0e",
+      "first_day": "2026-08-05",
+      "last_day": "2026-08-05",
+      "models": [
+        "claude-opus-5"
+      ],
+      "messages": 372,
+      "input_tokens": 1638,
+      "output_tokens": 303280,
+      "cache_read_tokens": 50540697,
+      "cache_creation_tokens": 660647
+    },
+    {
+      "session": "e3a9d4f7",
+      "first_day": "2026-08-05",
+      "last_day": "2026-08-05",
+      "models": [
+        "claude-opus-5"
+      ],
+      "messages": 219,
+      "input_tokens": 406,
+      "output_tokens": 164853,
+      "cache_read_tokens": 23364276,
+      "cache_creation_tokens": 884314
+    },
+    {
+      "session": "f49e2861",
+      "first_day": "2026-08-06",
+      "last_day": "2026-08-06",
+      "models": [
+        "claude-opus-5"
+      ],
+      "messages": 87,
+      "input_tokens": 164,
+      "output_tokens": 75654,
+      "cache_read_tokens": 9810933,
+      "cache_creation_tokens": 536075
+    },
+    {
+      "session": "ae011bd9",
+      "first_day": "2026-08-09",
+      "last_day": "2026-08-09",
+      "models": [
+        "claude-opus-5"
+      ],
+      "messages": 422,
+      "input_tokens": 841,
+      "output_tokens": 365159,
+      "cache_read_tokens": 75981338,
+      "cache_creation_tokens": 618090
+    },
+    {
+      "session": "be624b05",
+      "first_day": "2026-08-09",
+      "last_day": "2026-08-09",
+      "models": [
+        "claude-opus-5"
+      ],
+      "messages": 559,
+      "input_tokens": 1227,
+      "output_tokens": 589502,
+      "cache_read_tokens": 158452940,
+      "cache_creation_tokens": 3226998
+    },
+    {
+      "session": "cc8e94a7",
+      "first_day": "2026-08-09",
+      "last_day": "2026-08-09",
+      "models": [
+        "claude-opus-5"
+      ],
+      "messages": 256,
+      "input_tokens": 472,
+      "output_tokens": 181366,
+      "cache_read_tokens": 37915329,
+      "cache_creation_tokens": 515958
+    },
+    {
+      "session": "d5d0fc54",
+      "first_day": "2026-08-10",
+      "last_day": "2026-08-10",
+      "models": [
+        "claude-opus-5"
+      ],
+      "messages": 278,
+      "input_tokens": 523,
+      "output_tokens": 239780,
+      "cache_read_tokens": 31404027,
+      "cache_creation_tokens": 545901
+    },
+    {
+      "session": "dd09f12a",
+      "first_day": "2026-08-10",
+      "last_day": "2026-08-10",
+      "models": [
+        "claude-opus-5"
+      ],
+      "messages": 96,
+      "input_tokens": 182,
+      "output_tokens": 103905,
+      "cache_read_tokens": 8193451,
+      "cache_creation_tokens": 756699
+    },
+    {
+      "session": "eda42477",
+      "first_day": "2026-08-10",
+      "last_day": "2026-08-10",
+      "models": [
+        "claude-opus-5"
+      ],
+      "messages": 291,
+      "input_tokens": 4057,
+      "output_tokens": 150454,
+      "cache_read_tokens": 39478492,
+      "cache_creation_tokens": 502840
+    },
+    {
+      "session": "f273f997",
+      "first_day": "2026-08-10",
+      "last_day": "2026-08-10",
+      "models": [
+        "claude-opus-5"
+      ],
+      "messages": 643,
+      "input_tokens": 1188,
+      "output_tokens": 499980,
+      "cache_read_tokens": 234286248,
+      "cache_creation_tokens": 1478359
+    },
+    {
+      "session": "5913f48a",
+      "first_day": "2026-08-11",
+      "last_day": "2026-08-11",
+      "models": [
+        "claude-opus-5"
+      ],
+      "messages": 495,
+      "input_tokens": 5136,
+      "output_tokens": 290983,
+      "cache_read_tokens": 108762218,
+      "cache_creation_tokens": 801189
+    },
+    {
+      "session": "5a26b3ae",
+      "first_day": "2026-08-11",
+      "last_day": "2026-08-11",
+      "models": [
+        "claude-opus-5"
+      ],
+      "messages": 660,
+      "input_tokens": 5447,
+      "output_tokens": 412376,
+      "cache_read_tokens": 185156924,
+      "cache_creation_tokens": 1370501
+    }
+  ]
+}

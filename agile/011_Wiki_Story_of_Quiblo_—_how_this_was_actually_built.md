@@ -12,9 +12,14 @@ produces its numbers, and it should not wait for `010` to be finished.
 | :---- | :---- | :---- |
 | A wiki part on using Claude Code, and how agents make things possible with real skills | **Written 2026-08-11** | `/wiki/working-with-agents` |
 | Tell the story of how this app was built with Claude Code | **Written 2026-08-11** | `/wiki/how-this-was-built` |
-| What it cost | **Waiting on `010` §F3** | The same part, when there are numbers with a source |
+| What it cost | **Written 2026-08-11** | `/wiki/what-it-cost`, from generated aggregates |
 
-**Two of the three pages are live**, as the fifth part of the wiki and placed last, so a reader
+**All three pages are live.** The third stopped waiting the moment `010` §F3 was built, which is
+the whole reason it was left out rather than estimated: an hour's work produced numbers, and the
+numbers were better than the guess would have been — the day that cost the least is the day the
+hardest bug was solved, because the answer came from a person watching a television.
+
+**Three of the three pages are live**, as the fifth part of the wiki and placed last, so a reader
 arriving to find out what Quiblo is meets the app before they meet a page about how it was made.
 
 **The third is deliberately absent rather than estimated.** This document's own rule is that no

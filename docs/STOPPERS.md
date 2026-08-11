@@ -124,8 +124,22 @@ app against the organisation and adding a `SONAR_TOKEN` secret, neither of which
 **The action:** authorise SonarQube Cloud for `quiblo-iptv`, or say no and the self-hosted
 Community fallback becomes the plan.
 
-**Two switches beside it, both free on a public repository and neither ours to throw.** They are
-repository settings rather than files, so they are listed here with the exact command:
+**One switch blocks the half that is already written.** The dependency review and the graph
+submission are built and cannot run: the repository's **dependency graph is disabled**, and the
+action stops with *"Dependency review is not supported on this repository"* rather than passing
+quietly, which is the right behaviour and also a red gate. The work is on a held pull request
+until this is thrown, because merging a check that fails for a reason unrelated to the code
+would teach everyone to ignore the gate — the same fault `agile/006` gate 0 was about.
+
+```bash
+# The one that unblocks the scanning already written.
+gh api -X PATCH repos/quiblo-iptv/quiblo-app \
+  -f 'security_and_analysis[dependency_graph][status]=enabled'
+```
+
+Or in the browser: **Settings → Advanced Security → Dependency graph → Enable**.
+
+**Two more switches beside it, both free on a public repository and neither ours to throw:**
 
 ```bash
 # Secret scanning, and refusing a push that carries a secret. The keystore passwords and four

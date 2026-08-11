@@ -257,7 +257,15 @@ and the Media3 version, both of which age quietly.
 **Exit criterion.** A quality gate that runs in CI and can fail a pull request, with its
 accepted-issue list written down and dated. Not a report someone read once.
 
-### Half of it is built, 2026-08-11 — the half that needs nobody's account
+### Half of it is built, 2026-08-11 — and held on one repository switch
+
+**Built, not merged.** The first run proved the thing it was built to prove, about itself: the
+repository's dependency graph is **disabled**, so the review stops with *"Dependency review is
+not supported on this repository"*. It fails rather than passing quietly, which is the correct
+behaviour — and it means merging it today would put a permanently red check on every pull
+request for a reason that has nothing to do with the code being checked. That is gate 0's fault
+wearing different clothes, so the work waits on the switch instead. See
+[`docs/STOPPERS.md`](../docs/STOPPERS.md) §S7 for the one command.
 
 The supply-chain side is in and runs on every pull request. Sonar is the part that needs an
 account, and it is in [`docs/STOPPERS.md`](../docs/STOPPERS.md) §S7 rather than here.

@@ -142,20 +142,30 @@ dependency-review workflow — and that pull request's own CI run is red. `agile
 "held", which is the accurate word. See it for what the scans will cover and what is still owed
 to Sonar.
 
-## S9 — `AC-PROF-05` has no build to upgrade from
+## S9 — `AC-PROF-05`'s build to upgrade from is built, and unsigned
 
 **Blocks:** the highest-consequence unrun criterion in the project.
-**Owner:** a developer, before a sweep day — it is twenty minutes of work and it cannot be done
-on the day.
+**Owner:** whoever holds the keystore passwords. **The building half is done — 2026-08-11.**
 
 `AC-PROF-05` is *"upgrading from a build without profiles keeps every favourite and resume
 point"*. **No published release qualifies.** Profiles landed on 2026-08-09 and `v0.2.1` — the
 earliest release that exists — already contains them. A debug-signed older build cannot be
-upgraded over by a signed release either, so there is no artefact anywhere that can start this
+upgraded over by a signed release either, so there was no artefact anywhere that could start this
 test.
 
-**The action:** build an APK from a commit before 2026-08-09, sign it with the release key, and
-hand it to whoever is sweeping. They install it, add favourites, and only then upgrade.
+**Both APKs now exist**, built from `572d849` — the last merge before profiles landed — and
+confirmed `versionName 0.2.0`, `versionCode 2`. They sit outside this repository, beside a script
+that signs them:
+
+```
+~/Dev/mywrok/quiblo/sweep-artefacts/
+```
+
+**The action, and it is the last of it:** run `sign-0.2.0-apks.sh` there. It asks for the two
+keystore passwords, keeps them out of every file and out of the process list, and **refuses to
+produce an APK whose signer is not the certificate on the published release**. That check is the
+point of the script: an APK signed with the wrong key installs perfectly, and then fails the one
+thing this test exists to prove — on the sweep day, in front of the tester.
 
 **Why it matters more than its position suggests:** a fault here presents as an **empty
 catalogue** rather than as a cosmetic bug, and it lands on people who already had the app.

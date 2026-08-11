@@ -15,11 +15,11 @@ they were listed.
 | :---- | :---- | :---- | :---- |
 | 0 | The local gate is red for a non-code reason | **Closed 2026-08-11** | The pin is gone, the file is ignored so it cannot come back tracked, and `build detekt lint` is green locally |
 | 4 | Repo builds the release on protected main | **Closed 2026-08-10** | Four faults fixed and the lane driven: `v0.2.99-alpha.1` published as a pre-release, both signed APKs, build files matching the tag |
-| 5 | All pending work done | **Open** | Seventeen acceptance criteria written and unrun; one open suggestion from `005` |
+| 5 | All pending work done | **Open — and now only the sweep** | Every criterion here is written; none has been run. The `005` suggestion is decided, the version is bumping, and `012` needs the panel |
 | 1 | Tests sweep on real devices, mobile and TV | **Open** | `ACCEPTANCE-SWEEP.md` §5 and §7 — the television has never been swept once |
-| 6 | QA analysis for deprecated, old and vulnerable technology | **Not started** | A quality gate CI has to pass, not a one-off report |
-| 2 | All docs updated | **Open** | `FREEZE.md` names the wrong repository; `AC-NFR-04` is an unresolved scope decision |
-| 3 | Wiki updated | **Open** | No release page, and no destination for the consent link `009` needs |
+| 6 | QA analysis for deprecated, old and vulnerable technology | **Half closed 2026-08-11** | Our code: a compiler warning now fails the build. Our dependencies: written, held on one repository switch. Sonar: needs an account |
+| 2 | All docs updated | **Open — waiting on results, not on writing** | Every fault listed when this was written is closed. What is left is the sweep's own output |
+| 3 | Wiki updated | **Open — both blockers cleared** | The downloads page and `/wiki/terms` exist, and the app links to the second. What is left is re-reading the rest against what shipped |
 
 **What on this page is not ours to finish** is listed in
 [`docs/STOPPERS.md`](../docs/STOPPERS.md), with an owner and an action against each — the device
@@ -330,6 +330,20 @@ was written is closed; the remaining two items cannot be written until gate 1 ha
 open decision in `ACCEPTANCE-SWEEP.md` §6 is closed by a dated amendment.
 
 ## Gate 3 — the wiki is updated
+
+**Two of the three are done, 2026-08-11.** There is a
+[downloads page](https://quiblo-iptv.github.io/quiblo-wiki/wiki/downloads) — which APK is which,
+why the phone one installs on a television and never appears in its launcher, how to check a
+checksum, what the pre-release marker claims, and the one upgrade that needs an uninstall first.
+And there is `/wiki/terms`, which is what `009` §E4's first-launch screen links to; it had to
+exist before that screen could be built, which is why this gate was a dependency of legal rather
+than a follow-up to it. The wiki also now describes the first launch as it actually happens, and
+carries a section on what we owe the code and services we use.
+
+**What is left is the third item:** re-reading the stated capabilities against what shipped. A
+spot check on 2026-08-11 found the numbers accurate where they are checkable — the fifteen-minute
+backoff, the burst of eight refilling one per 400 ms, `minSdk` 30 — but a spot check is not the
+re-read, and the re-read is worth doing when the sweep has said what the app actually does.
 
 `MASTER_PATH` §B3. Last, because it is the public face of everything above.
 

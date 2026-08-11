@@ -85,6 +85,23 @@ there. `AC-LEGAL-03` therefore **passes on one of the two apps this release ship
 not what the row says. This is the highest-priority item in the whole legal track, because it
 is an obligation rather than a preference and it is unmet in shipping code.
 
+**Built 2026-08-11.** TV Settings ends with an **About** section: the version, and the same
+`THIRD_PARTY_LICENSES` data behind a Show control, expanded into the settings list itself
+rather than onto a second scrolling surface — a scrollable inside a scrollable has to hand
+focus back at its edges or the remote is trapped in it.
+
+**Writing it changed one decision, and the test is what changed it.** The entries were not
+focusable at first: there is nothing to press on a licence, so a focus stop looked like pure
+cost. A test walking the list with a D-pad could not reach the twelfth entry. **On a
+television, moving focus is how a list scrolls** — a row that never takes focus is a row the
+remote cannot bring on screen, so twelve entries would have shipped as the two that fit and a
+promise about the rest. Attribution nobody can read is not attribution, and that is the
+unreachable-feature shape this project has deleted nine of.
+
+`TvLicencesReachableTest` therefore drives the remote rather than clicking a node: down onto
+the control, centre to open it, and one press per entry to the last one. **Owed the panel**
+like everything else built on the JVM.
+
 **Gap two: the list is written by hand.** It is accurate today because somebody kept it
 accurate. It has no mechanical relationship to the dependency graph, so the failure mode is
 silent and permanent: a dependency added in a pull request that nobody remembers to list is
@@ -113,6 +130,17 @@ attribution missing from every subsequent release, and no test fails.
    better found by a report than by a complaint.
 
 ## E3 — The policy that the user consents to using their own playlist
+
+**Written 2026-08-11, as a wiki page rather than `docs/TERMS.md`.** The action below offered
+either and noted that E4 needs a URL; one text serving both beats two that drift. It is
+`/wiki/terms`, and it says what the app supplies (nothing), what the reader is responsible for,
+where the data goes, what GPLv3 does not warrant, and why there is no age gate — that last one
+stated deliberately rather than omitted, on the same reasoning that keeps the parental PIN
+parked: a control that appears to restrict while verifying nothing is worse than none.
+
+**That makes `006` gate 3's prerequisite for E4 met.** The first-launch screen now has a stable
+URL to point at, and it remains true that the link cannot be the only way to read the terms —
+the essential text goes on the screen, because a television has no browser worth using.
 
 `MASTER_PATH` §E3. **The words exist; the agreement does not.**
 

@@ -26,6 +26,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusGroup
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.Arrangement
@@ -40,6 +41,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -74,7 +76,10 @@ import dev.quiblo.core.model.MediaKind
 import dev.quiblo.core.model.SeekInterval
 import dev.quiblo.feature.settings.BackupUiState
 import dev.quiblo.feature.settings.SettingsViewModel
+import dev.quiblo.feature.settings.THIRD_PARTY_LICENSES
+import dev.quiblo.feature.settings.ThirdPartyLicense
 import dev.quiblo.feature.settings.TmdbCheck
+import dev.quiblo.tv.BuildConfig
 import dev.quiblo.tv.R
 import dev.quiblo.tv.ui.common.TvChip
 import dev.quiblo.tv.ui.common.TvTextField
@@ -120,6 +125,10 @@ fun TvSettingsScreen(
     val categories by viewModel.categories.collectAsStateWithLifecycle()
     val backupState by viewModel.backupState.collectAsStateWithLifecycle()
     val scanState by viewModel.metadataScan.collectAsStateWithLifecycle()
+
+    // Collapsed by default: twelve components are an obligation to make available, not
+    // twelve rows to walk past on the way to anything else.
+    var licensesShown by remember { mutableStateOf(false) }
 
     BackHandler(onBack = onBack)
 
@@ -294,6 +303,135 @@ fun TvSettingsScreen(
                 onImport = { importLauncher.launch(arrayOf(BACKUP_MIME_TYPE, ANY_MIME_TYPE)) },
             )
         }
+
+        aboutSection(
+            licensesShown = licensesShown,
+            onToggleLicenses = { licensesShown = !licensesShown },
+        )
+    }
+}
+
+/**
+ * Attribution, which is an obligation rather than a nicety — and which build this is.
+ *
+ * Every third-party component here is Apache-2.0, and that licence requires its notices to
+ * travel with the binary. The phone has shown them since it had a settings screen; the
+ * television links the same libraries and showed nothing, so `AC-LEGAL-03` was passing on one
+ * of the two apps this project ships.
+ *
+ * Last on the screen, because nobody comes to settings for this. The version is here for the
+ * opposite reason: it is the first question anybody is asked about a fault, and a television
+ * has no app-info screen worth reaching with a remote.
+ *
+ * A function on the list rather than inline, so the test drives the same rows a viewer does.
+ */
+internal fun LazyListScope.aboutSection(licensesShown: Boolean, onToggleLicenses: () -> Unit) {
+    item { SectionHeading(stringResource(R.string.tv_settings_about)) }
+
+    item { VersionRow() }
+
+    item {
+        ActionRow(
+            label = stringResource(R.string.tv_settings_licenses_label),
+            description = stringResource(R.string.tv_settings_licenses_detail),
+            action = stringResource(
+                if (licensesShown) {
+                    R.string.tv_settings_licenses_hide
+                } else {
+                    R.string.tv_settings_licenses_show
+                },
+            ),
+            onClick = onToggleLicenses,
+        )
+    }
+
+    /*
+     * Expanded into this list rather than pushed onto a screen of its own.
+     *
+     * A second scrolling surface is the shape that traps a remote — a scrollable inside a
+     * scrollable has to hand focus back at its edges, or the viewer cannot get out of it. These
+     * are items of the list that is already here, so the D-pad walks through them and off the
+     * end exactly as it does everything above.
+     *
+     * Keyed by coordinates: without a key, twelve items appearing and disappearing at a fixed
+     * index let the list reuse composables across different entries.
+     */
+    if (licensesShown) {
+        items(THIRD_PARTY_LICENSES, key = { it.coordinates }) { entry ->
+            LicenseRow(entry)
+        }
+    }
+}
+
+/**
+ * Which build this is, in the one place a viewer can reach it with a remote.
+ *
+ * Read from `BuildConfig` rather than from the package manager: it is the same string the
+ * release lane writes into the tag, so an answer to "which version are you on" matches a
+ * release page without anybody translating between the two.
+ */
+@Composable
+private fun VersionRow() {
+    Column(modifier = Modifier.padding(vertical = 10.dp)) {
+        Text(
+            text = stringResource(R.string.tv_settings_version_label),
+            color = Color.White,
+            fontSize = 17.sp,
+            lineHeight = 22.sp,
+        )
+        Text(
+            text = stringResource(R.string.tv_settings_version_detail, BuildConfig.VERSION_NAME),
+            color = Color.White.copy(alpha = 0.55f),
+            fontSize = 13.sp,
+            lineHeight = 18.sp,
+            modifier = Modifier.padding(top = 3.dp),
+        )
+    }
+}
+
+/**
+ * One component's attribution: what it is, what it does here, and where it came from.
+ *
+ * **Focusable, though there is nothing to press.** The first version of this was not, on the
+ * reasoning that a URL cannot be followed on a television so a focus stop buys nothing — and a
+ * test walking the list with a D-pad could not reach the twelfth entry. On a television,
+ * **moving focus is how a list scrolls**: a row that never takes focus is a row the remote
+ * cannot bring on screen, so twelve entries would have been eleven entries and a promise.
+ *
+ * Focus is drawn as a wash rather than the chips' border, because these are text being read
+ * rather than controls being chosen, and a control-shaped highlight on something that does
+ * nothing when pressed is its own small lie.
+ */
+@Composable
+private fun LicenseRow(entry: ThirdPartyLicense) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isFocused by interactionSource.collectIsFocusedAsState()
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(
+                color = if (isFocused) Color.White.copy(alpha = 0.10f) else Color.Transparent,
+                shape = RoundedCornerShape(8.dp),
+            )
+            .focusable(interactionSource = interactionSource)
+            .padding(horizontal = 12.dp, vertical = 8.dp),
+    ) {
+        Text(text = entry.name, color = Color.White, fontSize = 16.sp, lineHeight = 21.sp)
+        Text(
+            text = entry.notes,
+            color = Color.White.copy(alpha = 0.55f),
+            fontSize = 13.sp,
+            lineHeight = 18.sp,
+            modifier = Modifier.padding(top = 2.dp),
+        )
+        Text(
+            text = "${entry.coordinates}\n${entry.license}\n${entry.url}",
+            color = Color.White.copy(alpha = 0.45f),
+            fontSize = 12.sp,
+            lineHeight = 17.sp,
+            modifier = Modifier.padding(top = 4.dp),
+        )
     }
 }
 

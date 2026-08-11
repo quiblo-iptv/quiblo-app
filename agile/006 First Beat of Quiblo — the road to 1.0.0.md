@@ -13,13 +13,18 @@ they were listed.
 
 | Gate | Item | State | What closes it |
 | :---- | :---- | :---- | :---- |
-| 0 | The local gate is red for a non-code reason | **Blocked** | An untracked daemon-JVM file pins Gradle to JDK 25; detekt dies on it |
+| 0 | The local gate is red for a non-code reason | **Closed 2026-08-11** | The pin is gone, the file is ignored so it cannot come back tracked, and `build detekt lint` is green locally |
 | 4 | Repo builds the release on protected main | **Closed 2026-08-10** | Four faults fixed and the lane driven: `v0.2.99-alpha.1` published as a pre-release, both signed APKs, build files matching the tag |
 | 5 | All pending work done | **Open** | Seventeen acceptance criteria written and unrun; one open suggestion from `005` |
 | 1 | Tests sweep on real devices, mobile and TV | **Open** | `ACCEPTANCE-SWEEP.md` §5 and §7 — the television has never been swept once |
 | 6 | QA analysis for deprecated, old and vulnerable technology | **Not started** | A quality gate CI has to pass, not a one-off report |
 | 2 | All docs updated | **Open** | `FREEZE.md` names the wrong repository; `AC-NFR-04` is an unresolved scope decision |
 | 3 | Wiki updated | **Open** | No release page, and no destination for the consent link `009` needs |
+
+**What on this page is not ours to finish** is listed in
+[`docs/STOPPERS.md`](../docs/STOPPERS.md), with an owner and an action against each — the device
+sweep, the blocked Xtream account, the branch-protection scope, the quality-gate account. Gates
+here say what closes them; that page says who can.
 
 ## Why this order
 
@@ -56,6 +61,21 @@ branch unexplained.
 
 **Exit criterion.** `./gradlew build detekt lint` is green locally on the same tree CI is
 green on, from a clean checkout, with no untracked file required to make it work.
+
+**Met 2026-08-11.** `./gradlew build detekt lint` exits 0 on a working tree with nothing
+untracked, and `settings.gradle.kts` is accounted for — the modification was carried into a
+merged pull request rather than left in the tree.
+
+**The decision the action asked for: the file is not tracked, and is now ignored.** Pinning it
+in the repository would export one machine's installed JDKs to every clone, and the toolchain
+declarations in the build files are already where the version that matters is stated. Ignoring
+it means the tool that writes it can go on writing it without the result reaching anybody else.
+
+**It will be written again** — `updateDaemonJvm` and some IDE actions produce it — so the
+symptom is recorded where it will be met: `.gitignore` carries the reason, and it names detekt
+failing locally while CI is green as the sign to look there first. That is the whole of the
+fault: **a gate that disagrees with CI teaches people to ignore the gate**, and the cheapest
+version of this bug is the one where the next person recognises it in a minute.
 
 ## Gate 4 — the repo builds the release once pushed on a protected main branch
 

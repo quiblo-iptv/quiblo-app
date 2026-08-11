@@ -5,6 +5,17 @@ build/
 !gradle/wrapper/gradle-wrapper.jar
 local.properties
 
+# The daemon's JVM is a property of the machine, not of the project.
+#
+# `./gradlew updateDaemonJvm` and some IDE actions write this file, and it pins the daemon to
+# whatever JDK happened to be newest at the time. That is how the local gate came to fail on
+# detekt against a tree CI was green on — a gate that disagrees with CI teaches people to
+# ignore the gate. Ignored rather than tracked: pinning it in the repository would export one
+# machine's installed JDKs to everybody, and the toolchains in the build files are already
+# where the version that matters is declared. If detekt dies locally and passes in CI, look
+# here first.
+gradle/gradle-daemon-jvm.properties
+
 # Android
 *.apk
 *.aab

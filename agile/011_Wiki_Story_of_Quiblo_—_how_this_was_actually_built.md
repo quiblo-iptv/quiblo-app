@@ -10,8 +10,22 @@ produces its numbers, and it should not wait for `010` to be finished.
 
 | Item | State | Where it lands |
 | :---- | :---- | :---- |
-| A wiki part on using Claude Code, and how agents make things possible with real skills | **Not started** | A fifth `WikiPart` in `quiblo-wiki` |
-| Tell the story of how this app was built with Claude Code | **Not started** | The same part — one narrative, not two |
+| A wiki part on using Claude Code, and how agents make things possible with real skills | **Written 2026-08-11** | `/wiki/working-with-agents` |
+| Tell the story of how this app was built with Claude Code | **Written 2026-08-11** | `/wiki/how-this-was-built` |
+| What it cost | **Waiting on `010` §F3** | The same part, when there are numbers with a source |
+
+**Two of the three pages are live**, as the fifth part of the wiki and placed last, so a reader
+arriving to find out what Quiblo is meets the app before they meet a page about how it was made.
+
+**The third is deliberately absent rather than estimated.** This document's own rule is that no
+figure appears without a source a reader can check, and `010` §F3's aggregate script does not
+exist yet — so there is no honest version of "what it cost" to write. Writing one from memory is
+exactly the failure the page warns about.
+
+**The failure list came out longer than planned, and that is the useful part.** Six rather than
+five: the sixth is the hand-kept attribution list that turned out to be 118 components short,
+found the same week the page was written. Two of the six are from this month, which is what
+stops the page reading as a retrospective — the practice is current, not concluded.
 
 ## The thing this must not become
 

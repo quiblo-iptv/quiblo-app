@@ -8,8 +8,8 @@ entry per film, with its qualities and languages chosen inside the player.
 increment that needs a `FREEZE.md` amendment when it lands** — see "Why this needs an
 amendment" below.
 
-**Depends on** [`012`](012%20Bug%20Round%20of%20Quiblo%20—%20Round%203.md) closing and on
-[`013`](013%20Increment%20Round%20of%20Quiblo%20—%20the%20catalogue%20a%20viewer%20actually%20uses.md)
+**Depends on** [`012`](012_Bug_Round_of_Quiblo_—_Round_3.md) closing and on
+[`013`](013_Increment_Round_of_Quiblo_—_the_catalogue_a_viewer_actually_uses.md)
 pass 3, whose language detector this shares.
 
 ---

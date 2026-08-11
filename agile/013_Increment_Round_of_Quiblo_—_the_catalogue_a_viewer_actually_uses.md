@@ -3,14 +3,14 @@
 Fourteen features and four enhancements from `docs/INC_AGILE.md`, planned but not started.
 The fifteenth feature — one entry per title, whatever its quality or language — is large
 enough to have its own document and lives in
-[`014`](014%20One%20Entry%20Per%20Title%20of%20Quiblo%20—%20duplicates,%20qualities%20and%20languages.md).
+[`014`](014_One_Entry_Per_Title_of_Quiblo_—_duplicates,_qualities_and_languages.md).
 
 **Created:** 2026-08-10, against commit `b7bcba4` on `main`.
 **Ships as:** `1.1.0` and later. **Nothing here enters `1.0.0`**, which is why no `FREEZE.md`
 amendment accompanies this document — the freeze governs `1.0.0`, and each item that is
 later pulled into a release needs its own dated amendment at that point.
 
-**Starts after [`012`](012%20Bug%20Round%20of%20Quiblo%20—%20Round%203.md) closes, in full.**
+**Starts after [`012`](012_Bug_Round_of_Quiblo_—_Round_3.md) closes, in full.**
 Every item below lands on a screen that round is repairing.
 
 ---

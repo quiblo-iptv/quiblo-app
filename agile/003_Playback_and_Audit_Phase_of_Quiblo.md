@@ -31,7 +31,7 @@ deliberately ignored. Three reasons, recorded so the decision is not relitigated
 
 2. **It scores the presence of code, not the experience of a user.** Every criterion is
    satisfiable by a call site nobody reaches — which is exactly the failure
-   [`001`](001%20Bug%20Reporting%20of%20Quiblo.md) already recorded, where nine features
+   [`001`](001_Bug_Reporting_of_Quiblo.md) already recorded, where nine features
    existed and none could be opened. This document would have scored all nine as passes.
    Only one line in its table is written as an observation rather than an implementation:
    "Wireshark inspection shows 0 background tracking pings." All fifteen should read that
@@ -144,7 +144,7 @@ dead stream shows a black screen with no message and no retry, while the phone b
 `PlaybackErrorMessage` with both. This is the same shape as the bugs in `001` — parity
 assumed, not verified — and it belongs on its own sheet rather than smuggled into this phase.
 
-Written up as **#011** in [`004`](004%20Bug%20Reporting%20of%20Quiblo%20—%20Round%202.md).
+Written up as **#011** in [`004`](004_Bug_Reporting_of_Quiblo_—_Round_2.md).
 It is a release blocker: the television frontend does not meet AC-PLAY-05.
 
 ## What is still open

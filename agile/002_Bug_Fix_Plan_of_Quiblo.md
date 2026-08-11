@@ -1,6 +1,6 @@
 **Bug Fix Plan of Quiblo**
 
-Plan for the ten bugs raised in [`001 Bug Reporting of Quiblo.md`](001%20Bug%20Reporting%20of%20Quiblo.md).
+Plan for the ten bugs raised in [`001_Bug_Reporting_of_Quiblo.md`](001_Bug_Reporting_of_Quiblo.md).
 
 **Created:** 2026-08-04, against commit `681f91c`.
 

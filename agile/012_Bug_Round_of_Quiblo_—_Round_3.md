@@ -8,8 +8,8 @@ triaging them, which the intake had filed as a feature.
 **Ships as:** part of `1.0.0-beta.1`. This is defect work, not scope — no `FREEZE.md`
 amendment is required for any of it, with the single exception called out under **#020**.
 
-**Executed before [`013`](013%20Increment%20Round%20of%20Quiblo%20—%20the%20catalogue%20a%20viewer%20actually%20uses.md)
-and [`014`](014%20One%20Entry%20Per%20Title%20of%20Quiblo%20—%20duplicates,%20qualities%20and%20languages.md),
+**Executed before [`013`](013_Increment_Round_of_Quiblo_—_the_catalogue_a_viewer_actually_uses.md)
+and [`014`](014_One_Entry_Per_Title_of_Quiblo_—_duplicates,_qualities_and_languages.md),
 in full.** The reason is in "Why this comes first" below.
 
 ---

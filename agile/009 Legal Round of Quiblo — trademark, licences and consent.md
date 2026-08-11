@@ -194,6 +194,33 @@ serve both — covering:
 
 ## E4 — The first-launch dialog
 
+**Built 2026-08-11, on both apps.** Two screens before anything else on a fresh install: what
+Quiblo is, then what is being agreed to. `FREEZE.md` **Amendment 9** was written first, as
+`RELEASE-MANAGEMENT.md` §0 requires — a first-launch screen is user-facing scope the freeze did
+not previously grant.
+
+Every constraint below survived contact with the code, and two of them shaped it:
+
+- **The consent gate stands in front of the profile gate**, not behind it. "Who is watching" is a
+  question about a household, and it should not be the first thing an app says to somebody who
+  has not been told what the app is.
+- **Acceptance carries a version, not a boolean.** With a boolean, a materially changed policy
+  leaves two options — ask nobody, so people are held to terms they never saw, or ask everybody,
+  which trains them to dismiss the screen. The rule is "accepted something older", so a
+  *downgrade* is left alone; the naive spelling gets that case wrong and it has its own test.
+- **Nothing is drawn while the store is still answering.** Flashing the terms at somebody who
+  accepted them a year ago is worse than a blank frame.
+
+`TvConsentReachableTest` drives it with key events only, because the fault this project keeps
+finding — a control that exists and cannot be reached — would not be a bug in a feature here. It
+would be a television that cannot be used at all. What that harness cannot see is written into
+it: Robolectric will not let the screen's own focus request land, so the tests prove everything
+after the remote has arrived, and the screen is built not to depend on that request either way.
+
+**`AC-LEGAL-06` to `AC-LEGAL-09` are written** and are unrun, like everything else awaiting the
+sweep. `AC-LEGAL-09` — an upgrade must not ask again — cannot be run until there are two releases
+carrying this screen, which makes it the first real test of the upgrade half of the DoD.
+
 `MASTER_PATH` §E4, and the only item in this track that is code.
 
 A next-next flow at first launch: agree to the terms, be advised to use legal sources, with a

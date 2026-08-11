@@ -67,10 +67,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.quiblo.core.data.ProfileRepository
+import dev.quiblo.core.datastore.ConsentStore
 import dev.quiblo.core.model.Channel
 import dev.quiblo.core.model.MediaKind
 import dev.quiblo.tv.R
 import dev.quiblo.tv.ui.browse.TvPosterRows
+import dev.quiblo.tv.ui.consent.TvConsentScreen
 import dev.quiblo.tv.ui.detail.TvMovieScreen
 import dev.quiblo.tv.ui.live.TvLiveScreen
 import dev.quiblo.tv.ui.player.TvPlaybackRequest
@@ -93,6 +95,37 @@ import org.koin.compose.koinInject
  */
 @Composable
 fun TvApp() {
+    TvConsentGate { TvAppBehindConsent() }
+}
+
+/**
+ * What the app is, before it asks who is watching (`FREEZE.md` Amendment 9).
+ *
+ * In front of the profile gate, and in that order deliberately: "who is watching" is a question
+ * about this household, and it should not be the first thing an app says to somebody who has not
+ * yet been told what the app is.
+ *
+ * A wrapper rather than a branch inside [TvApp], which is what the phone does with the same two
+ * gates — one shape for one decision, in both apps.
+ */
+@Composable
+private fun TvConsentGate(content: @Composable () -> Unit) {
+    val consent: ConsentStore = koinInject()
+
+    // `null` is "the store has not answered yet", a frame or two. Nothing is drawn then, because
+    // flashing the terms at somebody who accepted them a year ago is worse than a blank frame.
+    val needsConsent by consent.needsConsent.collectAsStateWithLifecycle(initialValue = null)
+    val scope = rememberCoroutineScope()
+
+    when (needsConsent) {
+        null -> Unit
+        true -> TvConsentScreen(onAccept = { scope.launch { consent.accept() } })
+        else -> content()
+    }
+}
+
+@Composable
+private fun TvAppBehindConsent() {
     // Nobody watches anything until the app knows whose favourites it would be reading. The
     // gate is here rather than inside the shell so that no screen below it ever has to cope
     // with there being no profile — they simply are not composed yet.

@@ -124,6 +124,15 @@
     <string name="tv_settings_backup_rejected">That backup was written by a newer version of Quiblo (format %1$d, this build reads %2$d). Update the app and try again.</string>
     <string name="tv_settings_backup_failed">That file could not be read.</string>
 
+    <!-- About and licences (AC-LEGAL-03) -->
+    <string name="tv_settings_about">About</string>
+    <string name="tv_settings_version_label">Quiblo for television</string>
+    <string name="tv_settings_version_detail">Version %1$s</string>
+    <string name="tv_settings_licenses_label">Open source licences</string>
+    <string name="tv_settings_licenses_detail">Quiblo is free software under the GNU General Public License v3.0 or later. It ships the following third-party components.</string>
+    <string name="tv_settings_licenses_show">Show</string>
+    <string name="tv_settings_licenses_hide">Hide</string>
+
     <!-- Categories -->
     <string name="tv_category_all">All channels</string>
     <string name="tv_category_ungrouped">Ungrouped</string>

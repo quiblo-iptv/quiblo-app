@@ -16,6 +16,10 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+// The suppression is file-level because the deprecation is reported on the imports as
+// well as the uses. See the note above the class for why this library is still here.
+@file:Suppress("DEPRECATION")
+
 package dev.quiblo.core.datastore
 
 import android.content.Context
@@ -38,6 +42,24 @@ import kotlinx.coroutines.withContext
  * Credentials live here and nowhere else. They are never written to the Room database,
  * so a database dump cannot leak them, and the export format in M5 must continue to omit
  * or separately encrypt them (AC-DATA-03).
+ */
+/*
+ * **`androidx.security-crypto` is deprecated, and this is a decision to keep it for now.**
+ *
+ * Jetpack Security is no longer maintained: `EncryptedSharedPreferences` and `MasterKey` are
+ * deprecated with no drop-in replacement, and Google's guidance is to use the Android Keystore
+ * directly. `agile/006` gate 6 found this the moment a compiler warning stopped being something
+ * one could scroll past, and it is the most consequential thing that gate has turned up.
+ *
+ * It is suppressed rather than migrated **here**, because this is the file holding a viewer's
+ * panel password. Changing how it is encrypted means re-encrypting what is already on people's
+ * devices, and a migration that goes wrong does not fail loudly — it silently loses the
+ * credential and looks like a provider refusing the account. That is its own piece of work with
+ * its own test, and it is written down in gate 6 rather than done in passing.
+ *
+ * What is *not* wrong today: the library still works, the ciphertext is still hardware-backed,
+ * and nothing about the current storage is known to be insecure. Deprecated is not broken; it
+ * means no fixes are coming, which is why this has a deadline in the plan rather than a shrug.
  */
 class EncryptedCredentialStore(
     context: Context,

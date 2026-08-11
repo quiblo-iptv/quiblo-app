@@ -258,6 +258,41 @@ and the Media3 version, both of which age quietly.
 **Exit criterion.** A quality gate that runs in CI and can fail a pull request, with its
 accepted-issue list written down and dated. Not a report someone read once.
 
+### The code side, closed 2026-08-11 — and it found something
+
+`allWarningsAsErrors` is on for every module, so **a compiler warning now fails the build**. That
+makes the compiler the deprecation gate this section asked for: it already knows which APIs have
+been deprecated under us, and it already says so, into a log nobody opens.
+
+**The census was wrong the first time, and that is the part worth keeping.** A build with the
+Gradle cache on reported six warnings; the same build with `--no-build-cache` reported
+**twenty-four**. Cached task outputs are replayed without their warnings, so a warning count from
+an incremental build is a count of whatever happened to recompile. Any measurement of this kind
+has to defeat the cache or it is measuring the cache.
+
+The twenty-four came from three files and three causes. Two were migrations and are done: Ktor's
+deprecated `IOException` typealias, and `LocalLifecycleOwner` moving to
+`androidx.lifecycle.compose`.
+
+**The third is a finding rather than a chore.** `androidx.security-crypto` is deprecated —
+`EncryptedSharedPreferences` and `MasterKey` both — and it is what encrypts **the viewer's panel
+password** and their metadata key. Jetpack Security is unmaintained, with no drop-in replacement;
+the guidance is to use the Android Keystore directly.
+
+- **Nothing is broken today.** The library works, the key is still hardware-backed, and no part
+  of the current storage is known to be insecure. Deprecated means no fixes are coming — which is
+  why this gets a place in the plan rather than a shrug.
+- **It is suppressed at file level with the reasoning in the file**, not silenced. Migrating means
+  re-encrypting what is already on people's devices, and a migration that goes wrong does not fail
+  loudly: it loses the credential and looks exactly like a provider refusing the account.
+- **Recommendation: not in `1.0.0`, and never without its own test.** It wants a fresh install and
+  an upgrade-carrying-credentials on real hardware — which is gate 1, which has not run. Doing it
+  before the sweep means sweeping it twice; doing it during means changing the tree the sweep is
+  running against.
+
+**When this fails on a dependency bump**, the answer is to migrate, or to suppress that one usage
+with a comment saying why. Both are decisions. Lowering the gate is not.
+
 ## Gate 2 — all docs are updated
 
 `MASTER_PATH` §B2. Late, because it records what the gates above decided.

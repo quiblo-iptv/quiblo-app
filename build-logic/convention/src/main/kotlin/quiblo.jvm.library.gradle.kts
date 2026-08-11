@@ -18,6 +18,7 @@
 
 import dev.quiblo.buildlogic.JVM_TARGET
 import dev.quiblo.buildlogic.configureTests
+import dev.quiblo.buildlogic.failOnWarnings
 import dev.quiblo.buildlogic.enforceNoCompose
 import dev.quiblo.buildlogic.libs
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
@@ -54,3 +55,5 @@ configureTests()
 // :core:model and :source:* are plain JVM modules precisely so that Compose and the
 // Android framework cannot reach them. Assert it rather than assume it (AC-NFR-06).
 enforceNoCompose()
+
+failOnWarnings()

@@ -78,7 +78,7 @@ project has learned is not the same thing.
 | :---- | :---- | :---- |
 | #020 | Navigation is a stack; the cursor comes back with it | Back from an episode reaches the series with that episode focused; a second back reaches the catalogue |
 | #016 | Session cleared at startup on both apps; chooser centred, avatars circular | AC-PROF-01 after a force-stop, on a phone and on the television |
-| #015 | Focus no longer scrolls the screen on the way in | A film and a multi-season series both open showing title and artwork — **swept 2026-08-11: REJECTED** |
+| #015 | Rebuilt 2026-08-11: one open sequence for both screens, and the lazy one holds its top | A film and a multi-season series both open showing title and artwork — **swept 2026-08-11: REJECTED; rebuilt and owed the panel again** |
 | #021 | `adjustNothing`, measured into it rather than guessed | The field opened with the remote, and the list watched for a full second — **swept 2026-08-11: REJECTED** |
 
 ### #020 — back does not return to where the viewer was
@@ -183,6 +183,46 @@ measuring the cover's drawn bounds against the 444dp of usable height, not by ey
 Open question for whoever picks this up: **films were not re-checked in this sweep**, only a
 series. If the header is shared, both are affected; if only the series header sets a height,
 that narrows it immediately.
+
+**Second attempt, 2026-08-11 — the open question answered it.** Films were re-checked on the
+panel, and they are not affected. The two screens share a header, so the paragraph above is
+wrong about where to look: the header cannot be cropping one screen and not the other. What
+the panel reports is
+
+| Screen | Artwork bounds | Viewport starts at |
+| :---- | :---- | :---- |
+| Film | `[96,96][416,576]` | 96 — a whole 240dp poster, flush |
+| Series | `[96,74][416,554]` | 96 — 22px above it, and clipped |
+
+Same size, same header, twenty-two pixels of difference in position. The crop is the viewport
+cutting the artwork, not the image being drawn short, and the only thing that differs between
+the two screens is the **container**: the film scrolls a `ScrollState` and the series a
+`LazyListState`.
+
+**That is the mechanism.** A `ScrollState` can answer a bring-into-view inside the frame the
+focus request is made, so a `scrollTo(0)` placed after it is the last word — which is why the
+film screen has been correct all along. A lazy list has to compose and measure items before it
+knows where the focused one is, so its bring-into-view lands a frame or more later and
+overwrites the reset. The first fix ordered the two calls on the assumption that the later one
+wins. They are not both calls, and no ordering of them can work.
+
+**Fix, built.** Both screens now open through one `openDetailScreen` in
+`app-tv/.../ui/detail/TvDetailOpen.kt`, because two copies of this logic in two files is how
+the same fault came back on one screen after being fixed on the other. The lazy overload
+re-asserts the top until the list has been still for four frames, with a ceiling of thirty so
+this can never become a screen that refuses to scroll. The cost is stated rather than hidden: a
+viewer pressing down within those few frames is pulled back to the top once.
+
+**#020 is protected by name.** Returning from an episode still scrolls to that episode — the
+cursor path is taken before any of the above, and it has its own test.
+
+**What the harness proves, and what it does not.** `TvDetailOpensAtTopTest` runs the series
+shape at the panel's real 864x444dp and watches the scroll position for sixty frames. It
+passes — but it also passes against the shipped code the panel rejected, so it is a guard on
+the property, not a reproduction of the fault. The likely reason is recorded in the test:
+asking a node for focus skips the focus *search*, and inside a lazy list that search is itself
+the scroll. **What establishes this fix is the panel**, and #015 stays open until a series and
+a film both open whole on it.
 
 ### #021 — the settings screen shakes when the API-key field is opened
 
@@ -408,7 +448,7 @@ slow screen for a lying one.
 | #012 | The first tile of the continue row is whole, focused and unfocused, on the panel — **built; owed the panel** |
 | #013 | No frame of the previous stream is visible after a switch — **built on both apps; owed a zap on the panel** |
 | #014 | The favourites label fits at every supported title length, and history can be removed from the detail screen — **built; owed the panel** |
-| #015 | A detail screen opens showing its title and artwork, unscrolled — **swept 2026-08-11 and REJECTED; the poster is still clipped at its top edge** |
+| #015 | A detail screen opens showing its title and artwork, unscrolled — **rejected on the panel 2026-08-11; the container was the difference, rebuilt the same day, owed the panel again** |
 | #016 | AC-PROF-01 passes after a force-stop, on both apps, with a centred chooser and circular avatars — **built; owed a force-stop on hardware** |
 | #017 | No `kind.name` reaches a composable in either app — **built, and CI now fails on one** |
 | #018 | A progress indicator covers the wait, and the wait is measured before and after — **indicator built; the measurement needs a 67k catalogue and is deferred, in writing** |

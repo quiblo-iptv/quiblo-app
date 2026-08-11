@@ -129,8 +129,7 @@ private fun Loaded(
      * so the later one wins — which is why this runs after the request rather than before it.
      */
     LaunchedEffect(state.channel.id) {
-        runCatching { firstAction.requestFocus() }
-        scrollState.scrollTo(0)
+        openDetailScreen(scrollState = scrollState, firstAction = firstAction)
     }
 
     // Scrolls, for the same reason the series screen does: 444dp of usable height is not

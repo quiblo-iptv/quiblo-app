@@ -122,6 +122,16 @@ now await the value, which is both correct and what a caller does.
 - **The scan's pacing has never met the real service.** Eight requests a second and the
   handling of `Retry-After` are asserted on a fake clock against mocked responses. A stop
   saying the service asked us to slow down is a result worth reporting, not a bug.
-- **Open suggestion:** a rate limit currently ends the scan. Backing off for the interval the
-  service names and carrying on would let it find its own safe speed, and would make raising
-  the ceiling a reasonable thing to try.
+- ~~**Open suggestion:**~~ **Decided 2026-08-11 — not in `1.0.0`.** A rate limit ends the scan,
+  and it goes on ending it. Backing off for the interval the service names and carrying on would
+  let the scan find its own safe speed, and that is a real improvement — for `1.1`.
+
+  Three reasons for stopping instead, in the order that matters. **Stopping is the conservative
+  behaviour**, and the scan already keeps what it found, so the cost of stopping is one press to
+  start again rather than any lost work. **This project has had a user's account blocked twice**,
+  and both times the app was not the cause — which is exactly why it must not become one.
+  **A beta is the wrong place to start pushing through a refusal:** the pacing has never met the
+  real service at all, so the first thing to learn is what the service actually says, and a scan
+  that stops and reports is the instrument for learning it.
+
+  `006` gate 5 asked for this to be decided rather than left open. It is decided.

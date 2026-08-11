@@ -57,17 +57,28 @@ key cannot be upgraded over a real install, and the failure would only surface f
 ## Releasing through CI
 
 **A merge to main is a release.** `.github/workflows/release-on-main.yml` runs on every push
-to `main` and does three things in order, each gated on the one before it:
+to `main` and does four things in order, each gated on the one before it:
 
-1. **Gate.** The same job a pull request has to pass, reused from `ci.yml` rather than
-   copied: assemble, unit tests, detekt, parser coverage and Android Lint.
-2. **Version.** Reads `versionName`/`versionCode` from `app/build.gradle.kts`, bumps the
+1. **Plan.** Reads every commit since the last tag and decides whether this merge releases at
+   all, and as what — `feat:` is a minor, `fix:` is a patch, anything else releases nothing, and
+   a `versionName` set by hand is a release request in its own right. Seconds, and it runs first
+   **so that nothing expensive happens for a merge that will publish nothing.**
+2. **Gate.** The same job a pull request has to pass, reused from `ci.yml` rather than
+   copied: assemble, unit tests, detekt, parser coverage, the licence check and Android Lint.
+
+   **It is skipped only when nothing will be published *and* the merge changed nothing but
+   prose.** Those are two conditions and both are load-bearing. A merge that will publish always
+   runs the gate, even if that merge was itself a typo fix — because the release class is read
+   from every commit since the last tag, so a `feat:` whose own run was cancelled can be
+   published by the next merge along. Skipping on "this push was prose" alone would put an APK
+   out that no gate had ever seen.
+3. **Version.** Reads `versionName`/`versionCode` from `app/build.gradle.kts`, bumps the
    patch and the code, writes both into **both** build files, commits that to `main` as
    `chore(release): <version> [skip ci]` and tags it `v<version>`. It refuses to go on if
    the two application ids disagree about where they are starting from, or if the tag
    already exists. The push is made with `GITHUB_TOKEN`, which by design starts no further
    workflow run, so this cannot loop.
-3. **Publish.** Calls `release.yml` with the new tag.
+4. **Publish.** Calls `release.yml` with the new tag.
 
 So the version to be released is decided by the workflow, not by you, and the numbers in the
 build files are the record of what has already shipped. To release something other than the
@@ -112,6 +123,36 @@ Required repository secrets:
 
 The decoded keystore is written to the runner's temp directory, outside the workspace, and
 deleted in an `always()` step so it is removed even when a build fails.
+
+## What a pull request actually runs
+
+`ci.yml` reports the same checks on every pull request, and how long they take depends on what
+was touched:
+
+| Job | When | Roughly |
+| :---- | :---- | :---- |
+| **What changed** | Always | Seconds. Reads the diff against the base branch and decides whether this is prose |
+| **Guards** | Always | Under a minute. The leaked-playlist and forbidden-brand greps, the GPLv3 headers, the enum-name rule, and a parse of every workflow file. No JDK, no Android SDK — every one of them is a grep |
+| **Build, test and analyse** | Only when something other than prose changed | Ten to eighteen minutes |
+| **Gate** | Always | The one to require in a branch rule |
+
+**Prose means `*.md` at the root, `docs/*.md`, `agile/*.md` and `LICENSE`.** Two exceptions are
+deliberate and worth knowing:
+
+- **`docs/LICENSES.md` is not prose.** It is generated from the release runtime classpath and
+  `licenceCheck` compares the two, so editing it by hand is precisely the change that needs the
+  build that would catch it.
+- **`.github/**` is not prose.** A workflow change is the one kind of change whose entire risk is
+  that it does not work, and this repository has already published nothing while looking green
+  because a workflow could not be parsed.
+
+**Anything not named is code.** A new directory nobody thought about gets the full build, and the
+cost of a wrong guess is a slow pull request rather than an unbuilt one.
+
+**Require `Gate` in a branch rule, never `Build, test and analyse`.** A required check that does
+not run is not a pass — it is a pull request that can never be merged, and `Build` is skipped by
+design on a prose change. `Gate` always reports: it fails if a needed job failed, and passes if a
+needed job was skipped.
 
 ## Checklist before merging to main
 

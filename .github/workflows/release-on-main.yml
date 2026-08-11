@@ -26,30 +26,59 @@ permissions:
   contents: write
 
 jobs:
-  # Exactly what a pull request has to pass. Assemble, unit tests, detekt, parser coverage
-  # and Android Lint.
-  gate:
-    name: Gate
-    uses: ./.github/workflows/ci.yml
-
-  version:
-    name: Bump the version and tag it
-    needs: gate
+  # What this merge is, decided before anything expensive runs.
+  #
+  # This used to live inside the version job, which meant the gate — ten to eighteen minutes of
+  # Android build — ran before anybody had asked whether there was going to be a release. Moved
+  # rather than copied: two copies of the release class in two jobs is exactly the shape that
+  # made one bug have to be found twice on the detail screens.
+  plan:
+    name: What this merge is
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     outputs:
-      tag: ${{ steps.bump.outputs.tag }}
       release: ${{ steps.class.outputs.release }}
+      class: ${{ steps.class.outputs.class }}
+      docs_only: ${{ steps.scope.outputs.docs_only }}
 
     steps:
       - name: Check out main
         uses: actions/checkout@v4
         with:
-          # The branch, not the commit that triggered this. A detached HEAD has nothing to
-          # push the bump back onto.
           ref: ${{ github.ref_name }}
           # Tags are needed to tell an already-released version from a new one, and to find
           # where the last release ended so the step below knows what to read.
           fetch-depth: 0
+
+      # Did this merge change anything a build could disagree about?
+      #
+      # The same allowlist as `ci.yml`, and the same direction: anything not named is code.
+      - name: Classify the merge
+        id: scope
+        run: |
+          set -euo pipefail
+          BEFORE="${{ github.event.before }}"
+
+          # A first push, a force-push, or a manual run has nothing to compare against. Assume
+          # code — the whole point of the allowlist is that not knowing means building.
+          if [ -z "$BEFORE" ] || [ "$BEFORE" = "0000000000000000000000000000000000000000" ]             || ! git cat-file -e "$BEFORE^{commit}" 2>/dev/null; then
+            echo "No usable previous commit. Treating this as code."
+            echo "docs_only=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          CHANGED=$(git diff --name-only "$BEFORE..HEAD")
+          echo "Changed files:"
+          echo "$CHANGED" | sed 's/^/  /'
+
+          ALLOWED='^(docs/(?!LICENSES\.md)[^/]*\.md|agile/.*\.md|[^/]*\.md|LICENSE)$'
+          OUTSIDE=$(echo "$CHANGED" | grep -vP "$ALLOWED" || true)
+
+          if [ -z "$OUTSIDE" ]; then
+            echo "docs_only=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "docs_only=false" >> "$GITHUB_OUTPUT"
+          fi
 
       # Whether this merge releases at all, and as what.
       #
@@ -163,8 +192,43 @@ jobs:
       # leave the repository claiming to have released a version that has no release — and
       # the guard below, which refuses to reuse a tag, would then block the retry. Failing
       # here costs a red run and changes nothing.
+  # Exactly what a pull request has to pass. Assemble, unit tests, detekt, parser coverage
+  # and Android Lint.
+  #
+  # **Skipped only when nothing will be published.** A prose merge that publishes nothing does
+  # not need an Android build to prove it. A merge that *will* publish always runs this, even if
+  # the merge itself was prose — because the release class is read from every commit since the
+  # last tag, so a `feat:` whose own run was cancelled can be published by the next merge along.
+  # Skipping on "this push was prose" alone would put an APK out that no gate had ever seen.
+  gate:
+    name: Gate
+    needs: plan
+    if: needs.plan.outputs.release == 'true' || needs.plan.outputs.docs_only != 'true'
+    uses: ./.github/workflows/ci.yml
+
+  version:
+    name: Bump the version and tag it
+    needs: [plan, gate]
+    if: needs.plan.outputs.release == 'true'
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.bump.outputs.tag }}
+      release: ${{ needs.plan.outputs.release }}
+
+    steps:
+      - name: Check out main
+        uses: actions/checkout@v4
+        with:
+          # The branch, not the commit that triggered this. A detached HEAD has nothing to
+          # push the bump back onto.
+          ref: ${{ github.ref_name }}
+          # Tags are needed to tell an already-released version from a new one, and to find
+          # where the last release ended so the step below knows what to read.
+          fetch-depth: 0
+
+
       - name: Check the release can be signed
-        if: steps.class.outputs.release == 'true'
+        if: needs.plan.outputs.release == 'true'
         env:
           KEYSTORE_BASE64: ${{ secrets.QUIBLO_KEYSTORE_BASE64 }}
         run: |
@@ -176,9 +240,9 @@ jobs:
 
       - name: Work out the next version
         id: bump
-        if: steps.class.outputs.release == 'true'
+        if: needs.plan.outputs.release == 'true'
         env:
-          CLASS: ${{ steps.class.outputs.class }}
+          CLASS: ${{ needs.plan.outputs.class }}
         run: |
           set -euo pipefail
 
@@ -271,7 +335,7 @@ jobs:
           echo "Releasing $CURRENT_NAME (code $CURRENT_CODE) → $NEXT_NAME (code $NEXT_CODE), a $CLASS."
 
       - name: Commit and tag
-        if: steps.class.outputs.release == 'true'
+        if: needs.plan.outputs.release == 'true'
         env:
           TAG: ${{ steps.bump.outputs.tag }}
         run: |

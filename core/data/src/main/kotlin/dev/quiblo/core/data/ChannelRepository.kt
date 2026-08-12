@@ -22,6 +22,7 @@ import dev.quiblo.core.common.TitleScript
 import dev.quiblo.core.database.dao.ChannelDao
 import dev.quiblo.core.database.dao.FavoriteDao
 import dev.quiblo.core.database.dao.SourceDao
+import dev.quiblo.core.database.dao.escapeForLike
 import dev.quiblo.core.database.entity.FavoriteEntity
 import dev.quiblo.core.model.Channel
 import dev.quiblo.core.model.MediaKind
@@ -122,7 +123,9 @@ class ChannelRepository(
                 sourceId = sourceId,
                 kind = kind.name,
                 groupTitle = groupTitle,
-                query = query.trim(),
+                // Escaped so a viewer typing % or _ searches for those characters rather than
+                // handing SQL a wildcard. See escapeForLike.
+                query = escapeForLike(query.trim()),
                 favoritesOnly = if (favoritesOnly) 1 else 0,
             )
         }.map { rows -> rows.map { it.channel.toDomain(isFavorite = it.isFavorite) } }
@@ -133,7 +136,7 @@ class ChannelRepository(
     /** Favourites across every content type (AC-FAV-01). */
     fun observeFavorites(sourceId: Long, query: String = ""): Flow<List<Channel>> =
         profiles.activeProfile.flatMapLatest { profile ->
-            channelDao.observeFavorites(profile?.id ?: Profile.NONE_ID, sourceId, query.trim())
+            channelDao.observeFavorites(profile?.id ?: Profile.NONE_ID, sourceId, escapeForLike(query.trim()))
         }.map { rows -> rows.map { it.channel.toDomain(isFavorite = true) } }
             .flowOn(browseDispatcher)
 
@@ -193,7 +196,7 @@ class ChannelRepository(
     }
 
     suspend fun getSeriesDetails(channel: Channel): SeriesDetailsResult =
-        seriesCache[channel.id]?.let { SeriesDetailsResult.Success(it) } ?: fetchSeriesDetails(channel)
+        seriesCache[channel.stableKey]?.let { SeriesDetailsResult.Success(it) } ?: fetchSeriesDetails(channel)
 
     private suspend fun fetchSeriesDetails(channel: Channel): SeriesDetailsResult {
         val seriesId = channel.providerStreamId ?: return SeriesDetailsResult.Failure(SourceError.NotFound)
@@ -206,7 +209,7 @@ class ChannelRepository(
         return seriesSource.seriesDetails(
             request = SourceRequest(channel.sourceId, source.url),
             seriesId = seriesId,
-        ).also { if (it is SeriesDetailsResult.Success) seriesCache[channel.id] = it.details }
+        ).also { if (it is SeriesDetailsResult.Success) seriesCache[channel.stableKey] = it.details }
     }
 
     /**
@@ -216,11 +219,12 @@ class ChannelRepository(
      * an M3U playlist carries no plot, so there is nothing to fetch rather than something
      * that went wrong. Callers show the artwork and title they already have.
      */
-    suspend fun getVodDetails(channelId: Long): VodDetailsResult =
-        vodCache[channelId]?.let { VodDetailsResult.Success(it) } ?: fetchVodDetails(channelId)
-
-    private suspend fun fetchVodDetails(channelId: Long): VodDetailsResult {
+    suspend fun getVodDetails(channelId: Long): VodDetailsResult {
         val channel = findById(channelId) ?: return VodDetailsResult.Failure(SourceError.NotFound)
+        return vodCache[channel.stableKey]?.let { VodDetailsResult.Success(it) } ?: fetchVodDetails(channel)
+    }
+
+    private suspend fun fetchVodDetails(channel: Channel): VodDetailsResult {
         val vodId = channel.providerStreamId ?: return VodDetailsResult.Failure(SourceError.NotFound)
         val sourceDao = sourceDao ?: return VodDetailsResult.Failure(SourceError.NotFound)
         val source = sourceDao.findById(channel.sourceId)?.toDomain()
@@ -231,7 +235,7 @@ class ChannelRepository(
         return vodSource.vodDetails(
             request = SourceRequest(channel.sourceId, source.url),
             vodId = vodId,
-        ).also { if (it is VodDetailsResult.Success) vodCache[channelId] = it.details }
+        ).also { if (it is VodDetailsResult.Success) vodCache[channel.stableKey] = it.details }
     }
 
     /**
@@ -245,7 +249,12 @@ class ChannelRepository(
      *
      * Failures are deliberately not cached. A blocked panel recovers, and remembering a
      * refusal would keep a working account looking broken until the app was restarted.
+     *
+     * **Keyed by the provider's stable identity, not by row id**, on exactly the rule
+     * [findByStableKey] exists to serve: a refresh reinserts every row with a new id. Keyed by id,
+     * the whole cache went stale the moment anything was refreshed and then sat there for the rest
+     * of the session — every entry unreachable, and none of them freed.
      */
-    private val seriesCache = ConcurrentHashMap<Long, SeriesDetails>()
-    private val vodCache = ConcurrentHashMap<Long, VodDetails>()
+    private val seriesCache = ConcurrentHashMap<String, SeriesDetails>()
+    private val vodCache = ConcurrentHashMap<String, VodDetails>()
 }

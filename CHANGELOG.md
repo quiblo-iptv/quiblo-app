@@ -15,6 +15,8 @@ Formatted after [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and ve
 
 ## Unreleased
 
+## 0.11.0
+
 ### Added
 
 - **Subtitle files, from a panel or from the device.** A film whose panel supplies subtitle files

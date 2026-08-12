@@ -12,7 +12,14 @@ same rule as `013`, which this document is a pass of rather than a successor to.
 **Built 2026-08-12 — steps 0 to 4, and the chooser half of step 6.** The reasoning for holding it did not
 survive being written down: it says the sweep runs against a *published artefact*, and it does —
 `STOPPERS.md` S1 step 1 sends the tester to `v0.2.7`. A moving `main` does not sweep the tree
-twice; **publishing a release mid-sweep would**, and nothing here does that. What is left unbuilt
+twice, because the sweep is pinned to a version rather than to a branch.
+
+**One thing this got wrong and it is worth keeping.** The first version of this paragraph added
+that publishing a release mid-sweep *would* sweep the tree twice, and that nothing here did
+that. The release lane publishes on every merge to `main`, so this work published `0.5.0` —
+as did the four merges before it, `0.2.8` through `0.4.0`, every one of them after `v0.2.7` and
+during this sweep. The lane is working as designed. What protects the sweep is S1 naming the
+version to install; the risk is a tester reaching for the latest release instead. What is left unbuilt
 is `STOPPERS.md` **S10**, **S11** and **S12**, and none of them is held back by the sweep — all
 three are held back by needing a panel to judge them on.
 

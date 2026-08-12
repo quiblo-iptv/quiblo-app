@@ -291,7 +291,18 @@ more press away than on the phone. `browse_history_remove` is the string both wo
 - **The `013` and `014` increments.** ~~Not blocked — deliberately *not started*.~~ **Started
   2026-08-12.** `015`'s pass 1 is built apart from S10 and S11, and `016`'s #024 went with it
   because it is a `1.0.0` defect showing viewers the wrong film. The argument for holding them
-  was that the sweep must run on a tree that is not moving underneath it — and it does: **the
-  sweep runs against the published `v0.2.7` artefacts** (S1 step 1), not against `main`. What
-  that argument really forbids is *publishing* a release mid-sweep, and nothing here does.
+  was that the sweep must run on a tree that is not moving underneath it — and the sweep runs
+  against a **named published artefact**, `v0.2.7` (S1 step 1), not against `main`.
+
+  **Correction, same day: the second half of that argument was wrong as written.** It said
+  publishing a release mid-sweep is the thing to avoid and that this work did not do it. The
+  release lane publishes on **every** merge to `main`, so this work published `0.5.0`, exactly
+  as the four merges before it published `0.2.8` through `0.4.0` — all of them after `v0.2.7`
+  and all of them during this sweep. Publishing on merge is the lane working as designed
+  (`docs/RELEASING.md`); what protects the sweep is that S1 names the version to install, not
+  that the release list holds still.
+
+  **The real thing to be careful of** is therefore not merging — it is a tester picking up
+  "the latest release" instead of the one S1 names. S1 step 1 says `v0.2.7` and means it.
+
   `014`'s grouping itself is still not started, and is still `1.1.0`.

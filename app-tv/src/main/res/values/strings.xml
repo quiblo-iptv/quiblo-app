@@ -71,6 +71,7 @@
     <string name="tv_search_field">Search</string>
     <string name="tv_search_prompt">Search live channels, films and series at once.</string>
     <string name="tv_search_empty">Nothing matched that.</string>
+    <string name="tv_search_suggestions">Did you mean</string>
     <string name="tv_search_clear">Clear</string>
     <string name="tv_search_advanced">Advanced</string>
     <!-- Row headings come from feature:browse now, so both apps say the same words. -->

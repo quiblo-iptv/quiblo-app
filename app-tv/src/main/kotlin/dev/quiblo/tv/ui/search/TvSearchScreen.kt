@@ -308,6 +308,21 @@ internal fun ColumnScope.SearchHeader(
             }
         }
 
+        // Suggestions before the genres, because they answer the question being typed rather
+        // than narrowing one already asked. They cost no query: they are the distinct titles
+        // among results already fetched, which is how AC-TV-14's no-query-per-keystroke rule is
+        // obeyed by construction rather than by care (INC-F1).
+        items(items = state.suggestions, key = { "suggest-$it" }) { suggestion ->
+            TvChip(
+                label = suggestion,
+                isSelected = false,
+                // Completes the field rather than opening the title. A remote user who walked
+                // here wants the shorter term, and opening a title from a strip that also holds
+                // filters would make the strip mean two things.
+                onClick = { onQueryChange(suggestion) },
+            )
+        }
+
         if (isAdvanced) {
             items(items = state.genres, key = { it }) { genre ->
                 TvChip(

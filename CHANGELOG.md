@@ -17,6 +17,13 @@ Formatted after [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and ve
 
 ### Added
 
+- **Subtitles are drawn.** They were not before: the player selected a text track and showed
+  nothing, because nothing on screen was drawing the cues. Every subtitle track the app has ever
+  offered was invisible.
+- **Subtitle size, colour and background, set from inside the player.** In Audio and subtitles,
+  while a subtitle is showing, so the effect is visible as it is chosen rather than guessed at
+  from a settings screen. Starts from the caption style set in Android's own accessibility
+  settings, and "Match system" goes back to it.
 - **A channel's whole programme guide, on a timeline.** Long-press a channel — with a finger on
   the phone, by holding the centre button on the television — and the listing is laid out against
   the clock: an hour behind, half a day ahead, each programme as wide as it is long. What is on
@@ -42,13 +49,6 @@ Formatted after [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and ve
   readable.
 - A picked file is copied into the app rather than referenced, so it survives the picker's
   permission expiring and the file being moved or renamed later.
-- **Subtitles are drawn.** They were not before: the player selected a text track and showed
-  nothing, because nothing on screen was drawing the cues. Every subtitle track the app has ever
-  offered was invisible.
-- **Subtitle size, colour and background, set from inside the player.** In Audio and subtitles,
-  while a subtitle is showing, so the effect is visible as it is chosen rather than guessed at
-  from a settings screen. Starts from the caption style set in Android's own accessibility
-  settings, and "Match system" goes back to it.
 
 ## 0.10.0
 

@@ -15,6 +15,8 @@ Formatted after [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and ve
 
 ## Unreleased
 
+## 0.12.0
+
 ### Added
 
 - **Subtitles are drawn.** They were not before: the player selected a text track and showed

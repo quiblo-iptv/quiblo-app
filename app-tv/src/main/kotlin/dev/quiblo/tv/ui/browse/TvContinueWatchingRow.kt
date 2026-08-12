@@ -21,7 +21,7 @@ package dev.quiblo.tv.ui.browse
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.Box
@@ -41,8 +41,11 @@ import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -79,6 +82,7 @@ fun TvContinueWatchingRow(
     entries: List<HistoryEntry>,
     posters: Map<String, String>,
     onClick: (HistoryEntry) -> Unit,
+    onRemove: (HistoryEntry) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     if (entries.isEmpty()) return
@@ -104,6 +108,7 @@ fun TvContinueWatchingRow(
                     artworkUrl = entry.artworkUrl?.takeIf { it.isNotBlank() }
                         ?: posters[entry.titleKey],
                     onClick = { onClick(entry) },
+                    onRemove = { onRemove(entry) },
                 )
             }
         }
@@ -111,9 +116,35 @@ fun TvContinueWatchingRow(
 }
 
 @Composable
-private fun ContinueTile(entry: HistoryEntry, artworkUrl: String?, onClick: () -> Unit) {
+private fun ContinueTile(
+    entry: HistoryEntry,
+    artworkUrl: String?,
+    onClick: () -> Unit,
+    onRemove: () -> Unit,
+) {
+    /*
+     * Long-press arms the tile; a second press removes it. `INC-F3`, television half.
+     *
+     * **Not a dialog, and not a dropdown menu.** This app contains no modal at all — the
+     * category rename in `TvSettingsScreen` is a pencil that reveals a field, and that is the
+     * house style. A `DropdownMenu` is a phone control, and a first `AlertDialog` here would set
+     * the pattern for every one after it by accident, on the one row whose click handling is
+     * load-bearing (see the `clickable`/`graphicsLayer` note below).
+     *
+     * So the confirm is the tile itself: its label becomes the question, and the ordinary
+     * centre press answers it. A remote can always do that, and there is nothing to get stuck
+     * inside.
+     *
+     * **Disarming on focus loss is the safety.** Walking away is how a viewer says no, and it
+     * costs no extra control — which matters because there is no Cancel to put anywhere.
+     */
+    var isArmed by remember(entry.stableKey) { mutableStateOf(false) }
     val interactionSource = remember { MutableInteractionSource() }
     val isFocused by interactionSource.collectIsFocusedAsState()
+
+    // Walking away is how a viewer says no. Without this the tile would stay armed and the next
+    // ordinary press on it — possibly minutes later — would delete instead of play.
+    LaunchedEffect(isFocused) { if (!isFocused) isArmed = false }
 
     val scale by animateFloatAsState(
         targetValue = if (isFocused) FOCUSED_SCALE else 1f,
@@ -145,7 +176,21 @@ private fun ContinueTile(entry: HistoryEntry, artworkUrl: String?, onClick: () -
         Column(
             modifier = Modifier
                 .width(TILE_WIDTH)
-                .clickable(interactionSource = interactionSource, indication = null, onClick = onClick)
+                // `combinedClickable` in exactly the position `clickable` held, outside the
+                // `graphicsLayer` — the note above is why, and moving it is how #008 comes back.
+                .combinedClickable(
+                    interactionSource = interactionSource,
+                    indication = null,
+                    onClick = {
+                        if (isArmed) {
+                            isArmed = false
+                            onRemove()
+                        } else {
+                            onClick()
+                        }
+                    },
+                    onLongClick = { isArmed = true },
+                )
                 .graphicsLayer {
                     scaleX = scale
                     scaleY = scale
@@ -208,8 +253,16 @@ private fun ContinueTile(entry: HistoryEntry, artworkUrl: String?, onClick: () -
             }
 
             Text(
-                text = entry.title,
-                color = Color.White.copy(alpha = if (isFocused) 1f else 0.75f),
+                text = if (isArmed) {
+                    stringResource(R.string.tv_continue_remove_confirm)
+                } else {
+                    entry.title
+                },
+                color = if (isArmed) {
+                    Color(0xFFFF8A80)
+                } else {
+                    Color.White.copy(alpha = if (isFocused) 1f else 0.75f)
+                },
                 fontSize = 14.sp,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,

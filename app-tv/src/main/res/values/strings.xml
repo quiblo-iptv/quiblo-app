@@ -163,6 +163,7 @@
     <string name="tv_detail_favourite">Add to favourites</string>
     <string name="tv_detail_unfavourite">Remove from favourites</string>
     <string name="tv_detail_remove_history">Remove from history</string>
+    <string name="tv_continue_remove_confirm">Remove? Press again</string>
     <string name="tv_detail_refresh">Refresh information</string>
     <string name="tv_detail_refresh_working">Asking…</string>
     <string name="tv_detail_refresh_updated">Information updated.</string>

@@ -91,7 +91,13 @@ class SubtitleRepository(
     suspend fun attach(stableKey: String, pickedUri: String): AttachResult =
         withContext(ioDispatcher) {
             val name = files.nameOf(pickedUri).orEmpty()
-            val bytes = files.bytesOf(pickedUri) ?: return@withContext AttachResult.Unreadable
+
+            // One byte past the cap, so "too long" is answered by the read itself rather than
+            // after it. Asking for the whole file and measuring it afterwards is not a guard at
+            // all — the file is already on the heap by the time the size is known, and a viewer
+            // who mis-taps a film in the picker gets an OutOfMemoryError instead of a message.
+            val bytes = files.bytesOf(pickedUri, MAX_SUBTITLE_BYTES + 1)
+                ?: return@withContext AttachResult.Unreadable
             if (bytes.size > MAX_SUBTITLE_BYTES) return@withContext AttachResult.TooLarge
 
             val text = decodeSubtitle(bytes)

@@ -22,7 +22,7 @@ Every item below lands on a screen that round is repairing.
 | INC-F2 | Both | L | The scan | Suggestions from what has been watched |
 | INC-F3 | Both | S | #014 | Long-press a history entry to remove it |
 | INC-F4 | Both | M | — | Long-press a channel for its full guide, on a timeline |
-| INC-F5 | — | S | A release | "Get it on GitHub" in the README |
+| INC-F5 | — | S | A release | ~~"Get it on GitHub" in the README~~ — **done**, `README.md` §Install. See [`015`](015_Pass_One_of_Quiblo_—_the_screens_012_leaves_open.md) |
 | INC-F6 | Both | M | #015 | Merge seasons into one list, and reverse the order — remembered per profile |
 | INC-F7 | Both | S | A key | Refresh this title's information from the metadata service |
 | INC-F8 | Both | S | — | Category editing scrolls inside Settings |
@@ -328,7 +328,7 @@ leaves the app releasable:
 
 | Pass | Items | Why together |
 | :---- | :---- | :---- |
-| 1 | INC-F0, INC-F3, INC-F8, INC-F5, INC-E1…E4 | Small, visible, and they finish screens `012` has just opened. E1–E4 and F0 are the whole of what a viewer sees changed |
+| 1 | INC-F0, INC-F3, INC-F8, INC-F5, INC-E1…E4 | Small, visible, and they finish screens `012` has just opened. E1–E4 and F0 are the whole of what a viewer sees changed. **Written out in [`015`](015_Pass_One_of_Quiblo_—_the_screens_012_leaves_open.md)**, which finds four of the eight are not the work this table assumes |
 | 2 | INC-F6, INC-F7, INC-F1 | The detail screens and search, each one repository call deep |
 | 3 | INC-F9, INC-F14, INC-F10, INC-F11 | Text and language, in that order: F9's detector is F14's, and F10 has to exist before F11 can style it |
 | 4 | INC-F4, INC-F2 | The two that need a new composable and a new subsystem. Last because they are the two most likely to be cut |

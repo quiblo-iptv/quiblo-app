@@ -8,7 +8,11 @@ the code it would be built on, the same way
 **Ships as:** `1.1.0`, unchanged — **except for one defect this found, which is `1.0.0` work
 and is specified below as #024.**
 
-**Written while the acceptance sweep is open, and not built.** Same rule as `015`.
+~~**Written while the acceptance sweep is open, and not built.**~~ **#024 built and merged
+2026-08-12** — steps 1 and 2 of the order of execution below. Steps 3 to 6 are grouping itself
+and are still `1.1.0` and still not started.
+
+What #024 owes a device is in [`TESTING-REQUIRED.md`](../docs/TESTING-REQUIRED.md) §A1.
 
 ---
 
@@ -88,6 +92,37 @@ first build step below is the test, not the fix.
 **Recommendation: #024 joins `012` and ships in `1.0.0-beta.1`.** Not added to `012`'s table
 here — the remote is being spent on that round's ten unswept defects, and growing the list under
 a sweep in progress is Mahmoud's call, not a documentation edit.
+
+**Built 2026-08-12.** It is `1.0.0` work by this document's own argument — `AC-META` is a shipped
+feature returning wrong data — and it is one of the few defects here whose symptom a viewer is
+looking at right now rather than one that waits for a screen to be opened. It is still not in
+`012`'s table, for the reason above: what the remote is spent on is a scheduling decision.
+
+### What building it found that this document did not
+
+**The test was written first, as step 1 says, and it earned that ordering immediately.** Two
+findings, and the first is half the defect:
+
+1. **A bracketed year is stripped by the cleaner and a bare one is not.** So `Interstellar (2014)`
+   and `Interstellar 2014` had *different* identities — one film, two rows, decided by a
+   provider's punctuation. This document predicted the false merge and gave the false split its
+   own row in the danger table (`Dune 1984`), but the fix it specifies — add the year to the key —
+   does not address it. The year has to **leave the string** on both paths as well as be carried
+   beside it. Unless leaving takes the whole title: `2012` and `1917` are films, and an identity
+   of `""` would mark them not worth looking up and they would never be enriched again.
+
+2. **Three places built that key, not one.** The repository that writes the row, the scanner that
+   subtracts what is cached from its work list, and the search screen's genre index. `SearchRepository`
+   carried a comment saying they *must agree exactly and were therefore written out separately*,
+   which is backwards, and changing the key proved it: two of the three would have gone on building
+   the old key and the genre filter would have quietly returned nothing. They take one
+   `CacheIdentity` now. This is the same lesson as "one cleaner, one place" under **What survives
+   untouched** below — which this document got right, one seam too early.
+
+**One behaviour change worth naming:** a dated title and an undated one are now two lookups where
+they were one. The scan cannot know that an undated `The Matrix` is the 1999 one, and the
+alternative to asking twice is filing both under whichever answer arrived first. `TESTING-REQUIRED.md`
+§A1 asks for that cost to be measured on a real catalogue rather than accepted on this argument.
 
 ---
 
@@ -175,8 +210,8 @@ Most of `014`, and the parts that matter most:
 
 | Step | Work | When |
 | :---- | :---- | :---- |
-| 1 | The `TitleCleanup` identity test — assert separation, watch it fail | With `012`, if #024 is accepted into `1.0.0` |
-| 2 | #024 — year and `tmdbId` in the cache key and the table | Same |
+| 1 | The `TitleCleanup` identity test — assert separation, watch it fail | **Done 2026-08-12.** It failed on three assertions, two of which this document had not predicted |
+| 2 | #024 — year and `tmdbId` in the cache key and the table | **Done 2026-08-12**, schema 12 |
 | 3 | `groupKey` in `Mappers.kt`, column and index on `channels` | `1.1.0`, after `012` and `013` pass 3 |
 | 4 | Group resolution for favourites and resume, at read | Same |
 | 5 | Catalogue card, Versions list, player switcher, the setting off by default | Same |
@@ -187,7 +222,10 @@ looking at wrong data today.
 
 ## What this document does not decide
 
-- **Whether #024 enters `012`.** Recommended, not done. It grows a sweep that is running.
+- **Whether #024 enters `012`.** Recommended, and still not done — the code is merged, the row in
+  `012`'s table is not. That is deliberate: what a sitting with the remote is spent on is
+  Mahmoud's call. #024 is in [`TESTING-REQUIRED.md`](../docs/TESTING-REQUIRED.md) §A1 instead,
+  where it is on a list somebody reads without being on a list somebody has committed to.
 - **Whether grouping ships at all.** `014`'s exit criteria are unchanged and still have to be met.
 - **The token strip list.** `014` owns it, `cleanedForSearch`'s `QUALITY_MARKERS`
   (`TitleCleanup.kt:64`) is already most of it, and merging the two lists is step 3's work.

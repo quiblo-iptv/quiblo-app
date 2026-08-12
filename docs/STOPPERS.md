@@ -13,7 +13,11 @@ Two rules for this page:
 - **Nothing waits on it that does not have to.** Each entry ends with what is being built around
   it, because the point of writing a blocker down is to stop it blocking anything else.
 
-Last reviewed: **2026-08-11**.
+Last reviewed: **2026-08-12**.
+
+**New on 2026-08-12: S10, S11 and S12.** All three came out of building `015`'s pass 1, and all
+three are the same shape — work that can be written but cannot be *judged* without the panel in
+front of somebody. What was built instead is in [`TESTING-REQUIRED.md`](TESTING-REQUIRED.md).
 
 ---
 
@@ -187,11 +191,107 @@ The drafting is ours; two questions inside it are not:
 
 **The action:** answer those two, and `TRADEMARK.md` can be finished around them.
 
+## S10 — The search screen's three enhancements cannot be judged off the panel
+
+**Blocks:** `013` INC-E1, INC-E2 and INC-E3 — `015`'s pass 1 steps 5 and 8.
+**Owner:** whoever has the remote. **This is a look, not a test.**
+
+These three are the only items in pass 1 that were not built, and the reason is the same for all
+three: **each is a question about how a television screen reads from three metres, and the answer
+is not in the code.** Building them first and asking afterwards would mean writing three layouts
+to keep one.
+
+- **INC-E2 — the logo above the search field.** `TvSearchScreen.kt:102` already has the
+  `isResting` state this needs and the header already animates upward when a question is asked,
+  so the logo is one more element in a transition that exists. **Build this one first.** It is
+  the cheapest and it changes what the resting screen looks like.
+- **INC-E1 — Advanced beside the field.** `015` recommends re-asking this *after* E2, because
+  half of what E1 wants is that the field not fill the panel. As asked it is probably no: a text
+  field keeps left and right for the cursor, so a control beside it cannot be reached by a remote
+  moving horizontally. One shape qualifies — down from the field, then left — and if it costs
+  more than one focus rule to explain it is not worth the row it saves.
+- **INC-E3 — the travelling glow.** Cheap to write and impossible to judge anywhere but the
+  panel: a moving highlight beside the focus indicator competes with the single moving thing on
+  screen a viewer must never lose track of (`AC-TV-02`). **Build it behind a constant, look at
+  it, and keep it or delete it that evening.** Not a setting — a viewer should not be asked to
+  fix a decision we did not make.
+
+**The action:** one sitting with the remote, in that order, after `012`'s ten unswept defects
+have been looked at. E2 first, then decide E1, then E3 last because it is the one most likely to
+be deleted.
+
+**Carrying on regardless:** everything else in pass 1 is built and merged — see
+[`TESTING-REQUIRED.md`](TESTING-REQUIRED.md) §A.
+
+## S11 — The avatar's television-side entry points need the focus order settled on a panel
+
+**Blocks:** the last part of `013` INC-F0 — `015`'s pass 1 step 6.
+**Owner:** whoever has the remote.
+
+The avatars themselves are built and both choosers draw them. Two things are not:
+
+- **A way to pick a face on the television.** The phone has a row of them above the name field;
+  a remote needs a different arrangement and the right one is not obvious from a desk.
+- **The control beside the gear.** `TvApp.kt:447` explains why the gear is a *position along the
+  tab bar* rather than a focusable of its own, and an avatar in the corner would reintroduce
+  exactly the unreachable control that comment records. The plan is `lastIndex + 2`, after the
+  gear — but **this project has a standing record of getting television focus order wrong by
+  reasoning about it**, including one bug in the family that is still open (#021), so this
+  change gets driven with a remote before it is called done rather than after.
+
+**The action:** with the remote, confirm that a fourth position on the tab bar is reachable from
+every screen the bar is on and that nothing above it becomes unreachable. Then the picker.
+
+**Carrying on regardless:** a profile created on the phone with a face shows that face on the
+television already, and a profile created on the television gets the initial-on-a-colour
+fallback, which is a picture rather than an empty circle. Nothing is broken while this waits.
+
+## S12 — The television has no way to ask a one-question question
+
+**Blocks:** `013` INC-F3's television half — `015`'s pass 1 step 7. Anything else that needs a
+viewer to confirm one thing with a remote.
+**Owner:** whoever has the remote. **This needs a decision, then a panel, in that order.**
+
+The phone half of INC-F3 shipped: long-press a continue-watching tile, a one-action menu opens,
+take **Remove from watch history**. The television half is one modifier and a menu, and the
+modifier is the easy part — `combinedClickable` goes exactly where `clickable` is now, outside
+the `graphicsLayer`, for the reason written above that line.
+
+**The menu is the problem, and it is bigger than this feature.** `grep -rn "AlertDialog\|Dialog("
+app-tv/src` returns **nothing**. This app has never put a modal over a television screen, and
+that is a style rather than an oversight — `TvSettingsScreen`'s category rename is an inline
+control that a pencil reveals, and the comment above it explains the reasoning. A `DropdownMenu`
+is a phone control; a Material `AlertDialog` would be the first modal in the app and would set
+the pattern for every one after it by accident.
+
+**Why this is not being guessed at.** The two fixes this project has had rejected on the panel
+(#015 and #021) were both correct about a mechanism and wrong about the screen, and #021 is
+still open in the focus family this tile sits in. A first modal designed at a desk, on the one
+row whose click handling is load-bearing, is the same bet placed a third time.
+
+**The action, in order:**
+
+1. **Decide what a one-question question looks like on this app.** Inline reveal on the tile, in
+   the house style, or the first dialog. It is a five-minute decision in front of the panel and
+   an unanswerable one away from it.
+2. Build it, with `combinedClickable` in the position `clickable` occupies today.
+3. Confirm focus returns to the row when it closes, and that the row does not shake — same tile,
+   same family as #012 and #021.
+
+**Carrying on regardless:** the television detail screen already offers remove-from-history
+(`012` #014, built and owed the panel), so nothing is unreachable on the television — it is one
+more press away than on the phone. `browse_history_remove` is the string both would share.
+
 ---
 
 ## Not stoppers, recorded so they stop being re-asked
 
 - **The 1200x630 social preview image.** Ship without one; it is a preview card, not a gate.
 - **A custom domain and a Search Console token.** Optional, and the Pages URL is stable.
-- **The `013` and `014` increments.** Not blocked — deliberately *not started*, because they are
-  `1.1.0` and the tree they land on is the tree gate 1 sweeps.
+- **The `013` and `014` increments.** ~~Not blocked — deliberately *not started*.~~ **Started
+  2026-08-12.** `015`'s pass 1 is built apart from S10 and S11, and `016`'s #024 went with it
+  because it is a `1.0.0` defect showing viewers the wrong film. The argument for holding them
+  was that the sweep must run on a tree that is not moving underneath it — and it does: **the
+  sweep runs against the published `v0.2.7` artefacts** (S1 step 1), not against `main`. What
+  that argument really forbids is *publishing* a release mid-sweep, and nothing here does.
+  `014`'s grouping itself is still not started, and is still `1.1.0`.

@@ -63,6 +63,21 @@ that exists. The wiki page links here rather than restating it.
 
 ## INC-F8 — category editing scrolls inside Settings
 
+> **Rejected on the panel, 2026-08-12, and it is a reversal rather than a fault.** The request is
+> the opposite of what is argued below: *"it should be fixed length and the items inside is
+> scrollable, same on tv."* A fixed-height container with the list scrolling inside it — which is
+> the shape this section describes and removes.
+>
+> **What has to be answered rather than repeated.** The argument below is that a bounded scroller
+> inside a scroller swallows drags ambiguously, and that argument is not wrong — but it was made
+> against a **320dp** box showing four categories out of several hundred, and the complaint it was
+> answering may have been the height rather than the nesting. A taller fixed box with a clear edge
+> is a third option neither version considered, and the television needs the same treatment now
+> either way.
+>
+> Build it as asked. Keep the Robolectric test and invert what it asserts.
+
+
 **The phone already does exactly what the intake asked for, and it is the wrong shape.**
 
 `CategorySettingsCard.kt:114` puts a `LazyColumn` capped at `heightIn(max = 320.dp)`

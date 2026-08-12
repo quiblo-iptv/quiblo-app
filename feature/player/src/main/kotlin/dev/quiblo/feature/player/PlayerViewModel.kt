@@ -34,6 +34,7 @@ import dev.quiblo.core.model.MediaKind
 import dev.quiblo.core.model.PlayerSettings
 import dev.quiblo.core.model.SubtitleFile
 import dev.quiblo.core.model.SubtitleOrigin
+import dev.quiblo.core.model.SubtitleStyle
 import dev.quiblo.source.api.VodDetailsResult
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -57,7 +58,7 @@ class PlayerViewModel(
     private val channelRepository: ChannelRepository,
     private val historyRepository: WatchHistoryRepository,
     private val subtitleRepository: SubtitleRepository,
-    settingsRepository: PlayerSettingsRepository,
+    private val settingsRepository: PlayerSettingsRepository,
 ) : ViewModel() {
 
     val state: StateFlow<PlaybackState> = controller.state
@@ -277,6 +278,16 @@ class PlayerViewModel(
         _subtitleNotice.value = notice
     }
 
+    /**
+     * How subtitles are drawn, pushed at the renderer as it changes (INC-F11).
+     *
+     * Eager, and separate from [settings], because this one has to reach the view the moment it
+     * is edited — the viewer is looking at the effect while they choose it.
+     */
+    val subtitleStyle: StateFlow<SubtitleStyle> = settingsRepository.subtitleStyle
+        .onEach(controller::applySubtitleStyle)
+        .stateIn(viewModelScope, SharingStarted.Eagerly, SubtitleStyle())
+
     private fun prepare(item: PlayableItem) {
         prepared = item
         controller.prepare(item)
@@ -298,9 +309,26 @@ class PlayerViewModel(
      * come to disagree about a thing neither of them decided. It is also the only entry point —
      * the per-kind methods this replaced had no caller outside it.
      */
-    fun selectTrack(kind: TrackMenuKind, trackId: String?) = when (kind) {
-        TrackMenuKind.AUDIO -> controller.selectAudioTrack(trackId)
-        TrackMenuKind.SUBTITLES -> controller.selectTextTrack(trackId)
+    fun selectTrack(kind: TrackMenuKind, trackId: String?) {
+        when (kind) {
+            TrackMenuKind.AUDIO -> controller.selectAudioTrack(trackId)
+            TrackMenuKind.SUBTITLES -> controller.selectTextTrack(trackId)
+            TrackMenuKind.SUBTITLE_SIZE,
+            TrackMenuKind.SUBTITLE_TEXT_COLOUR,
+            TrackMenuKind.SUBTITLE_BACKGROUND,
+            -> changeSubtitleStyle(kind, trackId)
+        }
+    }
+
+    /**
+     * Applies one appearance choice (INC-F11).
+     *
+     * The mapping itself is [withChoice] — a plain function, tested as one, because which row
+     * changes what is the whole of this feature's behaviour and none of it needs a player.
+     */
+    private fun changeSubtitleStyle(kind: TrackMenuKind, id: String?) {
+        val next = subtitleStyle.value.withChoice(kind, id) ?: return
+        viewModelScope.launch { settingsRepository.setSubtitleStyle(next) }
     }
 
     fun controllerHandle(): PlayerController = controller

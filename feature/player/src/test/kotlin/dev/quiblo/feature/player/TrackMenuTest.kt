@@ -139,6 +139,26 @@ class TrackMenuTest {
         assertTrue(menu.sections.none { it.kind == TrackMenuKind.AUDIO })
     }
 
+    @Test
+    @DisplayName("appearance is offered only while a subtitle is actually showing (INC-F11)")
+    fun `appearance sections follow the selection`() {
+        val appearance = listOf(TrackMenuSection(TrackMenuKind.SUBTITLE_SIZE, emptyList()))
+
+        val off = trackMenu(state(text = listOf(track("s1", "English"))), OFF, emptyList(), appearance)
+        assertTrue(
+            off.sections.none { it.kind == TrackMenuKind.SUBTITLE_SIZE },
+            "a size chosen with nothing on screen is a size chosen blind",
+        )
+
+        val on = trackMenu(
+            state(text = listOf(track("s1", "English", selected = true))),
+            OFF,
+            emptyList(),
+            appearance,
+        )
+        assertTrue(on.sections.any { it.kind == TrackMenuKind.SUBTITLE_SIZE })
+    }
+
     private fun state(
         audio: List<TrackOption> = emptyList(),
         text: List<TrackOption> = emptyList(),

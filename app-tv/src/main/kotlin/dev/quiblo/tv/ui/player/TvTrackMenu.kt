@@ -53,6 +53,7 @@ import dev.quiblo.feature.player.TrackMenuActionKind
 import dev.quiblo.feature.player.TrackMenuEntry
 import dev.quiblo.feature.player.TrackMenuKind
 import dev.quiblo.tv.R
+import dev.quiblo.feature.player.R as PlayerR
 
 /**
  * Audio and subtitles, chosen with the remote.
@@ -104,12 +105,7 @@ internal fun TvTrackMenu(
             menu.sections.forEachIndexed { sectionIndex, section ->
                 item(key = "heading-${section.kind}") {
                     Text(
-                        text = stringResource(
-                            when (section.kind) {
-                                TrackMenuKind.AUDIO -> R.string.tv_player_audio
-                                TrackMenuKind.SUBTITLES -> R.string.tv_player_subtitles
-                            },
-                        ),
+                        text = stringResource(section.kind.headingRes()),
                         color = Color.White.copy(alpha = 0.55f),
                         fontSize = 13.sp,
                         fontWeight = FontWeight.SemiBold,
@@ -226,3 +222,18 @@ private fun TrackRow(
 private val PANEL_WIDTH = 300.dp
 private val PANEL_MARGIN = 32.dp
 private const val SELECTED_MARK = "✓"
+
+/**
+ * One heading per section.
+ *
+ * Audio and Subtitles keep this app's own strings; the three appearance headings borrow the
+ * player feature's. Duplicating "Subtitle size" into a second `strings.xml` would create two
+ * places for one word to be translated, and the television has no reason to say it differently.
+ */
+private fun TrackMenuKind.headingRes(): Int = when (this) {
+    TrackMenuKind.AUDIO -> R.string.tv_player_audio
+    TrackMenuKind.SUBTITLES -> R.string.tv_player_subtitles
+    TrackMenuKind.SUBTITLE_SIZE -> PlayerR.string.player_subtitles_size
+    TrackMenuKind.SUBTITLE_TEXT_COLOUR -> PlayerR.string.player_subtitles_text_colour
+    TrackMenuKind.SUBTITLE_BACKGROUND -> PlayerR.string.player_subtitles_background
+}

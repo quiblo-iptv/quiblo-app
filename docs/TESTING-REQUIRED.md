@@ -186,6 +186,33 @@ fact about the device rather than a fault in the app.
 files, so what a populated `subtitles` field does has only been proven against synthetic payloads
 in the shapes panels are known to send.
 
+### INC-F11 — subtitle appearance, and the fact that subtitles now appear at all
+
+Merged 2026-08-12. **Nothing here has been seen on a device**, and one part of it has never
+worked on any device: until this merge nothing in either app drew subtitle cues, so every
+subtitle track the app has offered since the player was written was invisible. `AC-PLAY-04`'s
+subtitle half and `012` #023 both need re-running because of it.
+
+| | |
+| :---- | :---- |
+| **What to look at** | Play something with a subtitle track and turn it on |
+| **Passes if** | Lines appear over the picture, and Audio and subtitles then grows Subtitle size, Subtitle colour and Subtitle background |
+| **Fails if** | Turning a subtitle on still changes nothing, or the appearance rows are offered with nothing showing |
+
+| | |
+| :---- | :---- |
+| **What to look at** | With a subtitle showing, change size, then colour, then background |
+| **Passes if** | Each takes effect on the line currently on screen, and all three survive leaving the player and coming back |
+| **Fails if** | A change needs a restart to appear, or is forgotten between films |
+
+**Check "Match system" against a device that has a system caption style set.** Android settings →
+Accessibility → Caption preferences. Enlarge captions there, then open the player with Match
+system selected: the size should follow. This is the half that cannot be checked on a device
+nobody has configured, and it is the half that matters to somebody who needs large captions.
+
+**One thing that is the design.** Match system forgets the explicit choices rather than hiding
+them behind a flag, so turning it off returns the defaults and not what was set before.
+
 ---
 
 ## B — Owed from `012`, still owed

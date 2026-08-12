@@ -32,6 +32,10 @@ import dev.quiblo.core.model.BufferMode
 import dev.quiblo.core.model.MaxBitrateCap
 import dev.quiblo.core.model.PlayerSettings
 import dev.quiblo.core.model.SeekInterval
+import dev.quiblo.core.model.SubtitleColor
+import dev.quiblo.core.model.SubtitleOpacity
+import dev.quiblo.core.model.SubtitleStyle
+import dev.quiblo.core.model.SubtitleTextSize
 import dev.quiblo.core.model.ThemeMode
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -112,6 +116,47 @@ class PlayerSettingsStore(context: Context) {
         }
     }
 
+    /**
+     * How subtitles are drawn (INC-F11).
+     *
+     * Separate from [settings] rather than folded into it. `PlayerSettings` is engine tuning that
+     * the controller is handed on every change, and a caption colour is not tuning — pushing one
+     * through that path would rebuild nothing and mean nothing. They persist in the same file
+     * because they are the same kind of preference; they travel separately because they are read
+     * by different code.
+     */
+    val subtitleStyle: Flow<SubtitleStyle> = dataStore.data.map { preferences ->
+        val defaults = SubtitleStyle()
+        SubtitleStyle(
+            matchSystem = preferences[SUBTITLE_MATCH_SYSTEM] ?: defaults.matchSystem,
+            textSize = preferences.readEnum(SUBTITLE_SIZE, SubtitleTextSize.entries, defaults.textSize),
+            textColor = preferences.readEnum(SUBTITLE_TEXT_COLOR, SubtitleColor.entries, defaults.textColor),
+            background = preferences.readEnum(SUBTITLE_BACKGROUND, SubtitleColor.entries, defaults.background),
+            backgroundOpacity = preferences.readEnum(
+                SUBTITLE_OPACITY,
+                SubtitleOpacity.entries,
+                defaults.backgroundOpacity,
+            ),
+        )
+    }
+
+    /**
+     * Writes the whole style in one edit.
+     *
+     * One write rather than a setter per property, because every change also clears
+     * [SubtitleStyle.matchSystem], and two edits would leave a moment where the stored style says
+     * it is following the system and carries an explicit size.
+     */
+    suspend fun setSubtitleStyle(value: SubtitleStyle) {
+        dataStore.edit { preferences ->
+            preferences[SUBTITLE_MATCH_SYSTEM] = value.matchSystem
+            preferences[SUBTITLE_SIZE] = value.textSize.name
+            preferences[SUBTITLE_TEXT_COLOR] = value.textColor.name
+            preferences[SUBTITLE_BACKGROUND] = value.background.name
+            preferences[SUBTITLE_OPACITY] = value.backgroundOpacity.name
+        }
+    }
+
     private suspend fun put(key: Preferences.Key<String>, value: String) {
         dataStore.edit { it[key] = value }
     }
@@ -132,5 +177,10 @@ class PlayerSettingsStore(context: Context) {
         val THEME_MODE = stringPreferencesKey("theme_mode")
         val DYNAMIC_COLOR = booleanPreferencesKey("dynamic_color")
         val HIDDEN_SCRIPTS = stringSetPreferencesKey("hidden_scripts")
+        val SUBTITLE_MATCH_SYSTEM = booleanPreferencesKey("subtitle_match_system")
+        val SUBTITLE_SIZE = stringPreferencesKey("subtitle_size")
+        val SUBTITLE_TEXT_COLOR = stringPreferencesKey("subtitle_text_color")
+        val SUBTITLE_BACKGROUND = stringPreferencesKey("subtitle_background")
+        val SUBTITLE_OPACITY = stringPreferencesKey("subtitle_opacity")
     }
 }

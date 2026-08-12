@@ -86,6 +86,7 @@ import dev.quiblo.feature.player.TrackMenuActionKind
 import dev.quiblo.feature.player.TrackMenuKind
 import dev.quiblo.feature.player.messageRes
 import dev.quiblo.feature.player.rememberSubtitleActions
+import dev.quiblo.feature.player.rememberSubtitleAppearance
 import dev.quiblo.feature.player.rememberSubtitleFilePicker
 import dev.quiblo.feature.player.subtitleActionHandler
 import dev.quiblo.feature.player.subtitleNoticeText
@@ -123,8 +124,10 @@ fun TvPlayerScreen(
     // player was written and no screen has ever offered it (#023).
     val offLabel = stringResource(R.string.tv_player_subtitles_off)
     val subtitleActions = rememberSubtitleActions(state)
-    val trackMenu = remember(state.audioTracks, state.textTracks, offLabel, subtitleActions) {
-        trackMenu(state, offLabel, subtitleActions)
+    val subtitleStyle by viewModel.subtitleStyle.collectAsStateWithLifecycle()
+    val appearance = rememberSubtitleAppearance(subtitleStyle)
+    val trackMenu = remember(state.audioTracks, state.textTracks, offLabel, subtitleActions, appearance) {
+        trackMenu(state, offLabel, subtitleActions, appearance)
     }
 
     // INC-F10. Many televisions ship without a document picker at all, so launching is
@@ -272,6 +275,14 @@ fun TvPlayerScreen(
             videoAspectRatio = state.videoAspectRatio,
             mode = aspectRatioMode,
             hasRenderedFirstFrame = state.hasRenderedFirstFrame,
+        )
+
+        // Where cues land. Without it a selected subtitle track changes nothing on screen —
+        // see the same composable's note on the phone.
+        val subtitleController = remember { viewModel.controllerHandle() }
+        AndroidView(
+            factory = { context -> subtitleController.subtitleOutput(context) },
+            modifier = Modifier.fillMaxSize(),
         )
 
         PlayerOverlays(

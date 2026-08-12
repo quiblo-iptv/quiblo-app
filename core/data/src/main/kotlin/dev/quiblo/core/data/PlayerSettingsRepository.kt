@@ -24,6 +24,7 @@ import dev.quiblo.core.model.BufferMode
 import dev.quiblo.core.model.MaxBitrateCap
 import dev.quiblo.core.model.PlayerSettings
 import dev.quiblo.core.model.SeekInterval
+import dev.quiblo.core.model.SubtitleStyle
 import dev.quiblo.core.model.ThemeMode
 import kotlinx.coroutines.flow.Flow
 
@@ -50,4 +51,15 @@ class PlayerSettingsRepository(private val store: PlayerSettingsStore) {
     suspend fun setThemeMode(value: ThemeMode) = store.setThemeMode(value)
 
     suspend fun setDynamicColor(enabled: Boolean) = store.setDynamicColor(enabled)
+
+    /**
+     * How subtitles are drawn (INC-F11).
+     *
+     * Read by the player and written from inside it, where the effect is visible. There is no
+     * copy of this on the settings screen: a caption colour chosen against a grey card is a
+     * guess, and the same choice made over the film it will sit on is not.
+     */
+    val subtitleStyle: Flow<SubtitleStyle> = store.subtitleStyle
+
+    suspend fun setSubtitleStyle(value: SubtitleStyle) = store.setSubtitleStyle(value)
 }

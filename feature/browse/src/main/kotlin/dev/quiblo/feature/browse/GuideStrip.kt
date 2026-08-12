@@ -74,9 +74,11 @@ internal fun GuideStrip(
     val hours = ((timeline.endEpochMillis - timeline.startEpochMillis).toFloat() / MILLIS_PER_HOUR)
     val totalWidth = HOUR_WIDTH * hours
 
-    // Now, a third of the way in rather than hard against the left edge: a viewer wants to see
-    // what is coming, and a marker pinned to the edge shows only what is on.
-    LaunchedEffect(timeline.nowFraction, totalWidth) {
+    // Once, when the strip appears, and never again: a listing arriving from the panel while
+    // somebody is already dragging must not pull the strip back out from under them. Now sits a
+    // little in from the left edge rather than against it, because a viewer opening a guide is
+    // looking for what is coming.
+    LaunchedEffect(Unit) {
         val nowFraction = timeline.nowFraction ?: return@LaunchedEffect
         val target = with(density) { (totalWidth * nowFraction).toPx() - LEAD_IN.toPx() }
         scrollState.scrollTo(target.toInt().coerceAtLeast(0))

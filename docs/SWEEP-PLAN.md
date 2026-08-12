@@ -17,6 +17,7 @@ worth doing once, properly, rather than twice.
 - **The criteria themselves:** [`ACCEPTANCE.md`](ACCEPTANCE.md) — every ID, in full.
 - **Where results go:** [`ACCEPTANCE-SWEEP.md`](ACCEPTANCE-SWEEP.md) §5, §6, §7.
 - **What is blocked and on whom:** [`STOPPERS.md`](STOPPERS.md).
+- **Code merged but never watched behave:** [`TESTING-REQUIRED.md`](TESTING-REQUIRED.md) — session 7 below is that page as a session.
 
 ## The one rule
 
@@ -51,19 +52,23 @@ passed everywhere except the device.
 Take them from **[GitHub Releases](https://github.com/quiblo-iptv/quiblo-app/releases)**, not from
 a local build — the criteria are about the artefact people install.
 
-**This plan is written against `v0.4.0`**, the release current on 2026-08-11. If the releases page
-shows a newer one, take the newer one and read every `0.4.0` below as that version — a sweep is
+**This plan is written against `v0.5.0`**, the release current on 2026-08-12. If the releases page
+shows a newer one, take the newer one and read every `0.5.0` below as that version — a sweep is
 worth most against what people can actually download today.
+
+**`v0.5.0` carries work that no device has seen**, merged on 2026-08-12: a `1.0.0` metadata defect
+(#024) and four `1.1.0` items. **Session 7** covers them. If you are short of time, session 7's
+rows fold into sessions 4 and 6 by device.
 
 | File | Goes on |
 | :---- | :---- |
-| `quiblo-v0.4.0.apk` | Rows A and B (phone / tablet) |
-| `quiblo-tv-v0.4.0.apk` | Row C (television) |
+| `quiblo-v0.5.0.apk` | Rows A and B (phone / tablet) |
+| `quiblo-tv-v0.5.0.apk` | Row C (television) |
 
 **Check the download before installing it.** Each APK ships a `.sha256` beside it:
 
 ```sh
-sha256sum -c quiblo-v0.4.0.apk.sha256
+sha256sum -c quiblo-v0.5.0.apk.sha256
 ```
 
 **Record the version you actually tested, in every result.** "It worked" against an unknown build
@@ -86,7 +91,7 @@ which is exactly the defect `AC-TV-01` exists to catch. Installing over `adb` is
 
 ```sh
 adb pair <ip>:<port> <code>      # from the TV's Wireless debugging screen
-adb install -r quiblo-tv-v0.4.0.apk
+adb install -r quiblo-tv-v0.5.0.apk
 ```
 
 ### 5. What must be prepared before the day — check these off first
@@ -99,17 +104,24 @@ Three of these are **blocking**, and every one of them has stalled a sweep day b
 | **A playlist of real, legal streams** | The synthetic playlist points every entry at `.invalid`, so it cannot exercise the player at all. Every `AC-PLAY-*` needs real ones | **Blocking — §S3** |
 | **A 20,000-entry M3U** | For `AC-PL-05`, `AC-TV-05`, `AC-NFR-01`. Generate it: `python tools/gen_playlist.py 20000 big.m3u` | Ready — no account needed |
 | **A file with two audio tracks** | `AC-PLAY-04` has never been run on either app | Needed |
-| **A release-key build from before profiles** | For `AC-PROF-05` — see the box below | **Blocking, and it needs a developer** |
+| **A release-key build from before profiles** | For `AC-PROF-05` — see the box below | **Ready — built and staged 2026-08-11** |
+| **A device already carrying a metadata cache** | For #024's upgrade half — session 7.1 | Any device that has run an earlier build with a TMDB key |
 
-> **`AC-PROF-05` cannot be run against any published release, and the plans assumed it could.**
-> The criterion is *"upgrading from a build without profiles keeps every favourite and resume
-> point"*. Profiles landed on **2026-08-09**, and `v0.2.1` — the earliest release ever
-> published — already contains them. A debug-signed old build cannot be upgraded over by a
-> signed release either, so the only way to run this criterion is for a developer to **build an
-> APK from a commit before 2026-08-09 and sign it with the release key**. Ask for that before the
-> day, install it, add favourites to it, and only then upgrade. It is the highest-consequence
-> unrun criterion in the project: a fault there presents as an empty catalogue, not a cosmetic
-> bug.
+> **`AC-PROF-05` has its build now — it did not when this plan was first written.** The criterion
+> is *"upgrading from a build without profiles keeps every favourite and resume point"*. Profiles
+> landed on **2026-08-09** and `v0.2.1`, the earliest release ever published, already contains
+> them — so no published release could start this test, and a debug-signed old build cannot be
+> upgraded over by a signed release either.
+>
+> **Two `0.2.0` APKs were built from `572d849` and signed with the release key on 2026-08-11.**
+> They sit outside the repository at `~/Dev/mywrok/quiblo/sweep-artefacts/`, with a checksum
+> beside each, and both carry certificate `9f4f77c4…0c74ec` — the same one on `v0.5.0`. That last
+> check is the one worth repeating rather than assuming: an APK signed with any other key installs
+> perfectly and then refuses the upgrade, on the day, in front of you.
+>
+> Install `0.2.0`, add favourites, leave something part-watched, **then** install `v0.5.0` over it.
+> It is the highest-consequence unrun criterion in the project: a fault there presents as an empty
+> catalogue, not a cosmetic bug. See [`STOPPERS.md`](STOPPERS.md) §S9.
 
 ---
 
@@ -132,12 +144,13 @@ preference:
 | 4 | A — Android 11 | 2 h | Playlists, playback, favourites, backup |
 | 5 | B — Android 14 | 2 h | The same, on the second DoD row |
 | 6 | A or B — phone | 1 h | Profiles and the catalogue scan |
+| 7 | A or B, then C | 1 h | **New in `v0.5.0`** — never seen on any device |
 
 ---
 
 ## Session 1 — Television, fresh install
 
-**Device:** C. **Build:** `quiblo-tv-v0.4.0.apk`. **Precondition: the app has never run on this
+**Device:** C. **Build:** `quiblo-tv-v0.5.0.apk`. **Precondition: the app has never run on this
 device.** If it has, uninstall it, or clear its data from Android settings.
 
 | # | Criterion | Screen | What to do | Passes when |
@@ -151,7 +164,7 @@ device.** If it has, uninstall it, or clear its data from Android settings.
 | 1.7 | `AC-LEGAL-08` | — | Choose a named profile, force-stop, reopen | Terms still absent. Consent is per install, not per profile |
 | 1.8 | `AC-TV-08` | Cold start | `adb shell am force-stop dev.quiblo.tv`, then launch, six times. Record `TotalTime` from `am start -W` | Median under **3000 ms** |
 | 1.9 | `AC-LEGAL-03` | Settings → About | Walk to the bottom of Settings. Open Open source licences. **Walk to the last entry with the D-pad** | Every entry can be reached. Not just the first two |
-| 1.10 | — | Settings → About | Read the version | It says `0.4.0`, matching what you installed |
+| 1.10 | — | Settings → About | Read the version | It says `0.5.0`, matching what you installed |
 | 1.11 | `AC-LEGAL-03` | Settings → Artwork | Look under the channel-logos and metadata controls | Both service sentences are present: the TMDB one and the iptv-org one |
 
 **After session 1, add a source** — the 20k M3U for the sessions that need volume, and the Xtream
@@ -159,7 +172,7 @@ account if you have one. Sessions 2 and 3 need a populated catalogue.
 
 ## Session 2 — Television, the twelve round-3 defects
 
-**Device:** C. **Build:** `v0.4.0`. These are reported faults that have been fixed in code. **Two
+**Device:** C. **Build:** `v0.5.0`. These are reported faults that have been fixed in code. **Two
 of them were fixed once, rejected on this television, and rebuilt** — those two are marked.
 
 | # | Defect | Criterion | Screen | What to do | Passes when |
@@ -180,7 +193,7 @@ of them were fixed once, rejected on this television, and rebuilt** — those tw
 
 ## Session 3 — Television, `AC-TV-01…15`
 
-**Device:** C. **Build:** `v0.4.0`. **Remote only.**
+**Device:** C. **Build:** `v0.5.0`. **Remote only.**
 
 | # | Criterion | Screen | What to do | Passes when |
 | :---- | :---- | :---- | :---- | :---- |
@@ -200,7 +213,7 @@ of them were fixed once, rejected on this television, and rebuilt** — those tw
 
 ## Session 4 — Phone, Android 11 (row A)
 
-**Device:** A. **Build:** `quiblo-v0.4.0.apk`. Fresh install, then repeat the marked rows over an
+**Device:** A. **Build:** `quiblo-v0.5.0.apk`. Fresh install, then repeat the marked rows over an
 upgrade.
 
 | # | Criterion | Screen | What to do | Passes when |
@@ -218,11 +231,11 @@ upgrade.
 | 4.11 | `AC-NFR-01` | Cold start | Six launches after force-stop, populated database | Median under **2000 ms** |
 | 4.12 | `AC-NFR-03` | — | Packet capture on a clean install, no key configured | **Zero** requests to any host you did not configure |
 | 4.13 | `AC-NFR-08` | Every screen | Read every screen for hardcoded strings; switch the device to Arabic | No untranslated string; the UI mirrors right-to-left |
-| 4.14 | `AC-LEGAL-09` | Upgrade | Install `v0.4.0` over an earlier release that has already accepted the terms | The terms do **not** appear again |
+| 4.14 | `AC-LEGAL-09` | Upgrade | Install `v0.5.0` over an earlier release that has already accepted the terms | The terms do **not** appear again |
 
 ## Session 5 — Phone, Android 14 (row B)
 
-**Device:** B. **Build:** `quiblo-v0.4.0.apk`. **Repeat every row of session 4.** This row has
+**Device:** B. **Build:** `quiblo-v0.5.0.apk`. **Repeat every row of session 4.** This row has
 never been tested on any build, so treat nothing as covered by session 4 — that is the whole
 point of a second OS row.
 
@@ -243,6 +256,27 @@ point of a second OS row.
 | 6.9 | `AC-META-04` | Settings → scan | Provoke a refusal — a wrong key, or a rate limit | The scan stops, and **nothing is cached as an answer** for the titles in flight |
 | 6.10 | `AC-META-05` | Settings → scan | Cancel mid-scan, restart. Then re-run a completed scan | Resumes where it stopped; a completed scan re-run issues no requests |
 | 6.11 | `AC-META-06` | Settings → scan | Leave the screen mid-scan and come back | Progress is visible and survives leaving |
+
+## Session 7 — What `v0.5.0` added, and no device has seen
+
+**Device:** A or B for 7.1 to 7.4, C for 7.5. Merged 2026-08-12.
+
+**One of these is a `1.0.0` defect and the rest are `1.1.0`.** 7.1 is the `1.0.0` one, and it is
+the only row here whose failure a viewer is looking at today rather than one that waits for a
+screen to be opened.
+
+| # | Item | Screen | What to do | Passes when |
+| :---- | :---- | :---- | :---- | :---- |
+| 7.1 | **#024** — the metadata cache key | Movies | With a metadata key set, find two films sharing a name and differing in year — *Dune*, *The Thing*, *Suspiria*. Open **both** detail screens | Each shows its **own** plot, poster, rating and cast. If they show the same ones, the defect is unfixed |
+| 7.2 | #024, the upgrade half | Browse, Search | Install `v0.5.0` over a build that already held a metadata cache | The first browse is **as slow as a first install** and coverage reads **0%** until you scan again. Both are intended. Report only if they do not recover |
+| 7.3 | **INC-F0** — profile avatars | Who is watching | Create a profile on the **phone**, pick a face from the row above the name field. Force-stop, reopen | The face chosen is the face shown. A profile that existed **before** this build shows its **initial on a colour**, not a face nobody picked |
+| 7.4 | **INC-F8** — settings scrolls once | Settings | On an account with **hundreds** of categories, drag anywhere on the screen | One drag reaches the last category **and** one drag reaches the cards above them. There is one scrolling surface, not two |
+| 7.5 | **INC-F3** — forget one thing | Home → continue row | **Phone only.** Long-press a tile, take *Remove from watch history* | The tile goes and stays gone after a force-stop. A **series** tile must vanish entirely, not be replaced by its previous episode |
+| 7.6 | **INC-E4** — corner radius | Both apps, every screen | Look at cards, dialogs, chips, fields, player controls | Rounder, intentional at three metres and at arm's length, nothing clipped by its own radius. **If it is simply not liked, say so** — the whole scale is three numbers |
+| 7.7 | #024, the cost | Settings → scan | Run a scan on a large account and note how long it takes | An undated title is now its own cache row, so there are slightly **more** lookups than before. If the scan is noticeably longer, say so with a number |
+
+**7.3's upgrade half is `AC-PROF-05` in miniature** and uses the same prepared device — run them
+together.
 
 ---
 
@@ -272,6 +306,16 @@ thing being reported.
 - **A provider that stops answering while streams keep playing is the provider**, not the app.
   The app backs off for fifteen minutes and says so.
 - **The phone build will not appear in a television launcher.** By design; install the `-tv` one.
+- **The television has no long-press on the continue row.** The phone half shipped; the television
+  half is `STOPPERS.md` **S12** — that app contains no dialog anywhere, and the pattern for a
+  one-question question on a remote has not been decided. Remove-from-history **is** on the
+  television's detail screen (session 2.8).
+- **The television search screen is unchanged.** Its logo, its Advanced placement and the
+  travelling glow are `STOPPERS.md` **S10**, deliberately not built — each is a question about how
+  a screen reads from three metres, and building all three to keep one is the expensive order.
+- **There is no avatar picker on the television, and no avatar control beside the gear.**
+  `STOPPERS.md` **S11**. A profile made on the phone shows its face on the television already; one
+  made on the television gets the initial-on-a-colour, which is a picture rather than a gap.
 
 ## Where results go
 

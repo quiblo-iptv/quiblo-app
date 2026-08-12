@@ -102,6 +102,10 @@ dependencies {
     implementation(projects.core.model)
     implementation(projects.core.media)
 
+    // The one feature module whose composables this app does use: the shape scale both
+    // themes read, so a phone and a television cannot round their corners differently.
+    implementation(projects.feature.designsystem)
+
     // For their ViewModels and Koin wiring only. None of their composables are referenced,
     // and R8 strips what is unreachable — worth checking on the first release build rather
     // than assumed, because one stray reference drags the whole phone UI in.

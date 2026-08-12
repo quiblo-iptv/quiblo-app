@@ -29,6 +29,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.platform.LocalContext
 import dev.quiblo.core.model.Appearance
 import dev.quiblo.core.model.ThemeMode
+import dev.quiblo.designsystem.QuibloShapes
 
 private val LightColors = lightColorScheme(
     primary = QuibloPrimaryLight,
@@ -102,6 +103,7 @@ fun QuibloTheme(
     MaterialTheme(
         colorScheme = colorScheme,
         typography = QuibloTypography,
+        shapes = QuibloShapes,
         content = content,
     )
 }

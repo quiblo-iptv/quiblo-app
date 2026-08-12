@@ -18,7 +18,11 @@
 
 package dev.quiblo.player.ui
 
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -26,6 +30,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -40,11 +46,15 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.quiblo.core.data.ProfileRepository
+import dev.quiblo.designsystem.AvatarFaces
+import dev.quiblo.designsystem.ProfileAvatar
 import dev.quiblo.feature.settings.ProfilesViewModel
 import dev.quiblo.player.R
 import org.koin.androidx.compose.koinViewModel
@@ -69,6 +79,7 @@ fun ProfileGate(content: @Composable () -> Unit) {
 private fun ProfileChooser(viewModel: ProfilesViewModel = koinViewModel()) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     var name by remember { mutableStateOf("") }
+    var avatar: String? by remember { mutableStateOf(null) }
     val guestName = stringResource(R.string.profile_guest)
 
     LazyColumn(
@@ -99,6 +110,13 @@ private fun ProfileChooser(viewModel: ProfilesViewModel = koinViewModel()) {
                 modifier = Modifier.fillMaxWidth(),
             ) {
                 ListItem(
+                    leadingContent = {
+                        ProfileAvatar(
+                            name = profile.name,
+                            avatar = profile.avatar,
+                            size = LIST_AVATAR_SIZE,
+                        )
+                    },
                     headlineContent = { Text(profile.name) },
                     supportingContent = if (profile.isGuest) {
                         { Text(stringResource(R.string.profile_guest_detail)) }
@@ -115,6 +133,12 @@ private fun ProfileChooser(viewModel: ProfilesViewModel = koinViewModel()) {
                 modifier = Modifier.fillMaxWidth(),
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
+                    AvatarPicker(
+                        selected = avatar,
+                        onSelect = { avatar = if (avatar == it) null else it },
+                        modifier = Modifier.padding(bottom = 12.dp),
+                    )
+
                     OutlinedTextField(
                         value = name,
                         onValueChange = { name = it },
@@ -129,8 +153,9 @@ private fun ProfileChooser(viewModel: ProfilesViewModel = koinViewModel()) {
                     ) {
                         Button(
                             onClick = {
-                                viewModel.addAndSelect(name)
+                                viewModel.addAndSelect(name, avatar)
                                 name = ""
+                                avatar = null
                             },
                             enabled = name.isNotBlank(),
                         ) {
@@ -149,3 +174,53 @@ private fun ProfileChooser(viewModel: ProfilesViewModel = koinViewModel()) {
         }
     }
 }
+
+/**
+ * Pick a face, or none.
+ *
+ * A row of the whole set rather than a dialog behind a button: there are eight of them, they
+ * are the size of a thumb, and a picker that has to be opened is a picker most people creating
+ * a profile will never see. Selecting the chosen one again clears it, which is the only way
+ * back to the initial-on-a-colour fallback once a face has been tapped.
+ *
+ * No "none" tile. An empty circle offered beside eight pictures reads as a broken one, and the
+ * fallback is not an absence — it is what the circle draws when nobody has chosen.
+ */
+@Composable
+private fun AvatarPicker(
+    selected: String?,
+    onSelect: (String) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        modifier = modifier.horizontalScroll(rememberScrollState()),
+    ) {
+        AvatarFaces.forEach { face ->
+            val isSelected = face.key == selected
+            Box(
+                modifier = Modifier
+                    .clip(CircleShape)
+                    .border(
+                        width = if (isSelected) 3.dp else 0.dp,
+                        color = if (isSelected) {
+                            MaterialTheme.colorScheme.primary
+                        } else {
+                            Color.Transparent
+                        },
+                        shape = CircleShape,
+                    )
+                    .clickable { onSelect(face.key) }
+                    .padding(3.dp),
+            ) {
+                ProfileAvatar(name = face.key, avatar = face.key, size = PICKER_AVATAR_SIZE)
+            }
+        }
+    }
+}
+
+/** Big enough to recognise beside a name, small enough not to become the row. */
+private val LIST_AVATAR_SIZE = 40.dp
+
+/** A thumb's width, so the whole set fits without the row becoming a screen of its own. */
+private val PICKER_AVATAR_SIZE = 44.dp

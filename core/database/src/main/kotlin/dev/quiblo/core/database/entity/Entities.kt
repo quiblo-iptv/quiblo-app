@@ -115,6 +115,19 @@ data class ProfileEntity(
     val createdAtEpochMillis: Long,
     /** True for the one throwaway profile. At most one exists at a time. */
     val isGuest: Boolean = false,
+    /**
+     * Which of the illustrated faces this profile chose, or null for none.
+     *
+     * A key into a fixed set the app ships, never a path and never image data. Nothing of a
+     * viewer's ends up in this column, so nothing of a viewer's ends up inside an export file
+     * either — `AC-DATA` promises a backup is portable, and a backup carrying somebody's
+     * photograph is a different promise than the one this project made.
+     *
+     * Nullable rather than defaulted, because null means "this profile predates avatars" and
+     * the initial-on-a-colour fallback draws it. A default value would claim that every
+     * profile already on a device had chosen the first face.
+     */
+    val avatar: String? = null,
 )
 
 /**

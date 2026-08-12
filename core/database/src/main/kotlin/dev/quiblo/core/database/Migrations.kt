@@ -406,3 +406,22 @@ val MIGRATION_11_12 = object : Migration(11, 12) {
         )
     }
 }
+
+/**
+ * Profiles gain an avatar.
+ *
+ * One nullable column, and nothing is rebuilt: `avatar` is not part of any key, so SQLite can
+ * add it in place. That makes this the cheapest migration in the file and the one least likely
+ * to lose anything — which matters more than usual here, because `AC-PROF-05` is the criterion
+ * that upgrades a build with profiles in it and it has never been run on a device.
+ *
+ * Null is the value every existing profile gets, and it means "chose no face" rather than
+ * "chose the first one". The chooser draws the viewer's initial on a colour derived from their
+ * name for those, so a profile that predates this column still has a picture — it simply has
+ * one nobody picked.
+ */
+val MIGRATION_12_13 = object : Migration(12, 13) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE `profiles` ADD COLUMN `avatar` TEXT")
+    }
+}

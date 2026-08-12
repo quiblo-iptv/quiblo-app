@@ -116,6 +116,29 @@ class MigrationTest {
     }
 
     @Test
+    fun `12 to 13 gives every existing profile an avatar of null`() {
+        helper.createDatabase(DB_NAME, 12).use { old ->
+            old.execSQL(
+                "INSERT INTO `profiles` (`id`, `name`, `createdAtEpochMillis`, `isGuest`) " +
+                    "VALUES (1, 'Mahmoud', 0, 0)",
+            )
+        }
+
+        val db = helper.runMigrationsAndValidate(DB_NAME, 13, true, MIGRATION_12_13)
+
+        // Null rather than the first face. Null means "chose no picture" and the chooser draws
+        // the initial for it; a default would claim this profile had picked face one, which
+        // nobody did. AC-PROF-05 is the criterion watching this, and it has never been run on
+        // a device — see docs/STOPPERS.md.
+        db.query("SELECT `name`, `avatar` FROM `profiles`").use { cursor ->
+            assertTrue("the profile did not survive the upgrade", cursor.moveToFirst())
+            assertEquals("Mahmoud", cursor.getString(0))
+            assertTrue("an avatar was invented for an existing profile", cursor.isNull(1))
+            assertFalse("an extra profile appeared", cursor.moveToNext())
+        }
+    }
+
+    @Test
     fun `10 to 11 adopts existing favourites rather than dropping them`() {
         // The opposite promise to the one above, and the one that matters more: this is the
         // viewer's own data and nobody can hand it back. AC-DATA-04.

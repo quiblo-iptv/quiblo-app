@@ -28,6 +28,8 @@ in full.** The reason is in "Why this comes first" below.
 | #021 | TV | AC-TV-10 | 1 | Opening the API-key field makes the settings screen shake |
 | #022 | TV | AC-TV-09 | 2 | The API-key field is not aligned with the controls above and below it |
 | #023 | Both | AC-PLAY-04 | 2 | Audio tracks cannot be selected from either player, though the engine exposes them |
+| **#025** | Both | AC-PROF-01 | — | **Found on the panel 2026-08-12.** The chooser is skipped when the app resumes; it only asks after a force-stop |
+| **#026** | TV | AC-TV-01 | — | **Found on the panel 2026-08-12.** The settings button is hard to focus with the remote |
 
 ## Why this document exists
 
@@ -484,6 +486,72 @@ cases the mechanism was one contributor to the symptom, and the work stopped whe
 was fixed rather than when the symptom was gone. **The exit criteria in this document are
 written against the symptom for exactly this reason**, and both were checked on the JVM and
 signed off before the panel had seen them.
+
+## 2026-08-12 — the panel answered nine more, and found two new ones
+
+The first sweep run in one sitting. Full record in
+[`docs/SWEEP-RESULTS-2026-08-12.md`](../docs/SWEEP-RESULTS-2026-08-12.md); what it means for this
+round is here.
+
+**Closed — the panel said yes:** #012, #013, #014, #017, #020, #022. Six of the ten that had never
+been seen on a device. Each was watched on the Haier against `v0.5.0`.
+
+**Rejected again:**
+
+| # | What the panel said | What changes |
+| :---- | :---- | :---- |
+| **#015** | Opens correctly, then **clips when focus moves to Play/Resume** | **A third mechanism, not a third attempt at the second one.** The open sequence is fixed and this is a *later* focus move dragging the container. `TvDetailOpensAtTopTest` watches the opening frames and would not see this — the harness needs the focus move in it |
+| **#019** | Series titles still cropped, about half a line | Measured on the JVM and passed there. That measurement was of the wrong thing |
+| **#016** | The chooser only appears after a force-stop | Not closed. See **#025** — it is the same criterion and a different mechanism |
+
+**#018 passes and is worse than it looks.** The indicator does its job, and the wait it explains
+is **8 to 10 seconds**. That is the number this round deferred the SQL fix waiting for, and it now
+exists — so the deferral has run out rather than being extended.
+
+**#021 remains unfixed and unfilmed.** The tester cannot film it; a wireless debugging session is
+being opened instead so it can be captured over `adb`.
+
+**#023 is still unrun** — it needs a file with two audio tracks and there is not one.
+
+### #025 — the chooser is skipped when the app resumes
+
+**Reported:** *"sometimes it appears and some other times the app is not closed so it opens my
+profile directly then i have to force close it to get who's watching screen again."*
+
+**Mechanism, confirmed by reading, not guessed.** `beginSession()` is called from
+`QuibloApplication.onCreate` and `QuibloTvApplication.onCreate` — **process start, not app
+launch.** Android keeps the process alive when a viewer leaves with Back or Home, so returning to
+the app re-enters a process that already has an active profile, and nothing asks again.
+
+`012` decided *"the app asks at every launch"* and built *"clear the stored id at startup"*. Those
+are the same sentence only when startup and launch are the same event, and on Android they are
+not. **This is the decision being right and the implementation answering a different question.**
+
+**Fix.** Clear the active profile when the app comes to the foreground after having left it, not
+when the process is created — a `ProcessLifecycleOwner` observer on `ON_START`, with the first one
+after process creation not double-clearing. **The trap to avoid: `ON_START` also fires when a
+viewer returns from the player**, which must not throw them back to the chooser mid-film. The
+event wanted is the app becoming visible again after being *fully* backgrounded.
+
+**Exit criterion.** Leave the app with Back or Home, return to it from the launcher, and the
+chooser appears. Return from the player to the catalogue and it does **not**.
+
+### #026 — the settings button is hard to focus
+
+**Reported:** *"all work but with focus issue on settings button it's hard to select."* `AC-TV-01`
+fails on it: every control must be reachable and operable with the D-pad.
+
+`TvApp.kt:447` records why the gear is a position along the tab bar rather than a focusable of its
+own, and that comment is about this exact class of fault. Something about reaching that position
+is still wrong. **Measure it before changing it** — this is the fifth screen in this app where
+focus behaviour was argued rather than measured, and four of the previous four arguments were
+wrong.
+
+**This is also what `STOPPERS.md` S11 was waiting to hear.** S11 plans to add the avatar at
+`lastIndex + 2`, *after* the gear. Adding a position beyond a position that is already hard to
+reach would build on a broken edge, so **#026 closes before S11 starts.**
+
+---
 
 **One item is deliberately part-done and says so: #018.** The indicator the report asked for is
 built; making the read itself faster is not. That choice needs a 67k catalogue to measure

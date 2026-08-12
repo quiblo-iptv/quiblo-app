@@ -13,7 +13,7 @@ Two rules for this page:
 - **Nothing waits on it that does not have to.** Each entry ends with what is being built around
   it, because the point of writing a blocker down is to stop it blocking anything else.
 
-Last reviewed: **2026-08-12**.
+Last reviewed: **2026-08-12**, after the first device sweep — see [`SWEEP-RESULTS-2026-08-12.md`](SWEEP-RESULTS-2026-08-12.md).
 
 **New on 2026-08-12: S10, S11 and S12.** All three came out of building `015`'s pass 1, and all
 three are the same shape — work that can be written but cannot be *judged* without the panel in
@@ -48,6 +48,23 @@ device at all.**
 
 **Carrying on regardless:** everything on this page below S3, plus any `012` item whose fix is
 still being written.
+
+## S13 — There is no second phone, so device row B cannot be tested
+
+**Blocks:** `SWEEP-PLAN.md` session 5 entirely — fourteen rows.
+**Owner:** the project owner. **This is procurement, not engineering.**
+
+The Definition of Done names two phone rows: **A**, a physical Android 11 device, and **B**, a
+physical Android 14 one. The sweep of 2026-08-12 ran on a Haier television and a Lenovo Tab One.
+**There is no second device**, so all fourteen of session 5's rows came back Blocked, and they
+will come back Blocked at every sweep until one exists.
+
+Row B was added because it had *never been tested on any build*, and that is still true.
+
+**The action:** borrow or buy one Android 14 device, or **strike row B from the Definition of
+Done in writing** and say that `1.0.0` ships tested on one OS version. Either is a real answer.
+Leaving it on the list and blocked at every sweep is the one that is not — it makes the sweep look
+half-run when it was fully run against the devices that exist.
 
 ## S2 — The Xtream test account is API-blocked
 
@@ -246,7 +263,16 @@ every screen the bar is on and that nothing above it becomes unreachable. Then t
 television already, and a profile created on the television gets the initial-on-a-colour
 fallback, which is a picture rather than an empty circle. Nothing is broken while this waits.
 
-## S12 — The television has no way to ask a one-question question
+## S12 — ~~The television has no way to ask a one-question question~~ — **decided 2026-08-12**
+
+**Closed as a stopper.** It asked for a decision about what a one-question question looks like on
+this app, and the sweep answered it: *"works on mobile but not on tv it should be on tv also"*
+(7.5). Build it. The reasoning below stands as the record of why it waited, and whoever builds it
+still has to answer the focus question rather than reach for a `DropdownMenu`.
+
+<details><summary>The original entry</summary>
+
+### S12 — The television has no way to ask a one-question question
 
 **Blocks:** `013` INC-F3's television half — `015`'s pass 1 step 7. Anything else that needs a
 viewer to confirm one thing with a remote.
@@ -281,6 +307,8 @@ row whose click handling is load-bearing, is the same bet placed a third time.
 **Carrying on regardless:** the television detail screen already offers remove-from-history
 (`012` #014, built and owed the panel), so nothing is unreachable on the television — it is one
 more press away than on the phone. `browse_history_remove` is the string both would share.
+
+</details>
 
 ---
 

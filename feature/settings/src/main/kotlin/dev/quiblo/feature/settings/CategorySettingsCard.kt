@@ -22,9 +22,8 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Edit
@@ -61,81 +60,70 @@ import dev.quiblo.core.model.MediaKind
  * turning it back on costs no refresh. Renaming stores a second name alongside the
  * provider's, which stays the key — a refresh reassigns everything else, and an edit keyed
  * to anything but the original title would come unstuck the first time a playlist reloaded.
+ *
+ * The rows are items of the settings list itself rather than children of a nested scroller.
+ * A bounded inner LazyColumn capped at 320dp showed about four categories and swallowed
+ * drags that should have moved the outer screen; emitting each row as its own item gives one
+ * scroll surface, one drag direction, and lets a list of several hundred categories scroll
+ * the same way every other card on the screen does.
  */
-@Composable
-internal fun CategorySettingsCard(
+internal fun LazyListScope.categorySettingsItems(
     selectedKind: MediaKind,
     categories: List<Category>,
     onSelectKind: (MediaKind) -> Unit,
     onSetHidden: (Category, Boolean) -> Unit,
-    onRename: (Category, String?) -> Unit,
+    onRenameRequest: (Category) -> Unit,
 ) {
-    var renaming: Category? by remember { mutableStateOf(null) }
-
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-    ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Text(
-                text = stringResource(R.string.settings_categories_title),
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold,
-            )
-            Text(
-                text = stringResource(R.string.settings_categories_summary),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = 4.dp, bottom = 12.dp),
-            )
-
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                MediaKind.entries.forEach { kind ->
-                    FilterChip(
-                        selected = kind == selectedKind,
-                        onClick = { onSelectKind(kind) },
-                        label = { Text(stringResource(kind.labelRes())) },
-                    )
-                }
-            }
-
-            if (categories.isEmpty()) {
+    item {
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surfaceVariant,
+            ),
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
                 Text(
-                    text = stringResource(R.string.settings_categories_empty),
+                    text = stringResource(R.string.settings_categories_title),
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                Text(
+                    text = stringResource(R.string.settings_categories_summary),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = 16.dp),
+                    modifier = Modifier.padding(top = 4.dp, bottom = 12.dp),
                 )
-                return@Column
-            }
 
-            // Bounded and scrollable: an Xtream account can carry hundreds of categories,
-            // and an unbounded list would make the rest of Settings unreachable.
-            LazyColumn(
-                modifier = Modifier
-                    .padding(top = 8.dp)
-                    .heightIn(max = LIST_MAX_HEIGHT),
-            ) {
-                items(items = categories, key = { it.title }) { category ->
-                    CategoryRow(
-                        category = category,
-                        onToggle = { onSetHidden(category, !category.isHidden) },
-                        onRename = { renaming = category },
-                    )
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    MediaKind.entries.forEach { kind ->
+                        FilterChip(
+                            selected = kind == selectedKind,
+                            onClick = { onSelectKind(kind) },
+                            label = { Text(stringResource(kind.labelRes())) },
+                        )
+                    }
                 }
             }
         }
     }
 
-    renaming?.let { category ->
-        RenameDialog(
-            category = category,
-            onConfirm = {
-                onRename(category, it)
-                renaming = null
-            },
-            onDismiss = { renaming = null },
-        )
+    if (categories.isEmpty()) {
+        item {
+            Text(
+                text = stringResource(R.string.settings_categories_empty),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 16.dp),
+            )
+        }
+    } else {
+        items(items = categories, key = { it.title }) { category ->
+            CategoryRow(
+                category = category,
+                onToggle = { onSetHidden(category, !category.isHidden) },
+                onRename = { onRenameRequest(category) },
+            )
+        }
     }
 }
 
@@ -182,7 +170,7 @@ private fun CategoryRow(category: Category, onToggle: () -> Unit, onRename: () -
 }
 
 @Composable
-private fun RenameDialog(category: Category, onConfirm: (String?) -> Unit, onDismiss: () -> Unit) {
+internal fun RenameDialog(category: Category, onConfirm: (String?) -> Unit, onDismiss: () -> Unit) {
     var text by remember { mutableStateOf(category.customName ?: category.title) }
 
     AlertDialog(
@@ -228,5 +216,3 @@ private fun MediaKind.labelRes(): Int = when (this) {
     MediaKind.VOD -> R.string.settings_categories_movies
     MediaKind.SERIES -> R.string.settings_categories_series
 }
-
-private val LIST_MAX_HEIGHT = 320.dp

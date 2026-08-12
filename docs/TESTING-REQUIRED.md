@@ -127,6 +127,38 @@ several hundred and that is the case this changes.
 card of their own — the heading keeps its card and the rows are plain, matching the television.
 Say whether the section still reads as a section.
 
+### INC-F9 — a section reads in the direction its text is written
+
+Merged 2026-08-12. The rule has ten unit tests and the control was watched on a tablet, but a
+detector being right is not the same as a screen looking right.
+
+| | |
+| :---- | :---- |
+| **What to look at** | A film or series whose plot is in Arabic, on both apps. The title too, if the provider names it in Arabic |
+| **Passes if** | The plot aligns right and reads right-to-left, while the rest of the screen — buttons, back arrow, episode list — stays exactly where it was |
+| **Fails if** | The whole screen mirrors, or an English title inside an Arabic app aligns wrongly, or a title that is only a number and a season code moves anything |
+
+**The one to watch for:** a title like `Dune 2 مترجم` must stay left-to-right. It is the case a
+contains-check gets wrong and the reason the rule reads only the first strong character.
+
+### INC-F14 — hiding a script the viewer does not read
+
+Merged 2026-08-12. **The setting was watched working on a tablet; the filtering was not.** The
+emulator has no playlist, so what is proven is that the card renders, both apps store the choice,
+and "2 hidden / Show everything again" appears. What a hidden script does to 67,000 rows has only
+been proven in unit tests.
+
+| | |
+| :---- | :---- |
+| **What to look at** | Settings → Writing systems on an account with Arabic and Latin content. Hide Arabic, then browse and search |
+| **Passes if** | Arabic-titled rows disappear from browse and from search, favourites keep every one of them, and "Show everything again" brings them all back |
+| **Fails if** | A catalogue screen goes blank, the list takes visibly longer to draw than before, or a favourite disappears |
+
+**Two limits that are the design, not defects.** A category named `4K | مسلسلات` reads as Latin,
+because `K` is a Latin letter — hiding Latin loses it. And an Arabic film released under a
+transliterated Latin title is not hidden at all, because nothing in a playlist says it is Arabic.
+Report these as observations, not as failures.
+
 ---
 
 ## B — Owed from `012`, still owed

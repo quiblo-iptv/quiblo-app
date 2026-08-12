@@ -19,6 +19,7 @@
 package dev.quiblo.core.data.di
 
 import android.content.Context
+import dev.quiblo.core.data.AndroidPickedSubtitleFiles
 import dev.quiblo.core.data.CategoryRepository
 import dev.quiblo.core.data.ChannelLogoRepository
 import dev.quiblo.core.data.ChannelRepository
@@ -30,6 +31,7 @@ import dev.quiblo.core.data.ScriptFilterRepository
 import dev.quiblo.core.data.SearchRepository
 import dev.quiblo.core.data.SeriesPreferenceRepository
 import dev.quiblo.core.data.SourceRepository
+import dev.quiblo.core.data.SubtitleRepository
 import dev.quiblo.core.data.TitleMetadataRepository
 import dev.quiblo.core.data.TitleMetadataScanner
 import dev.quiblo.core.data.WatchHistoryRepository
@@ -111,6 +113,7 @@ val dataModule: Module = module {
     single { GuideRepository(get(), get(), get()) }
     single { BackupRepository(get(), get(), get()) }
     single { PlayerSettingsRepository(get()) }
+    single { SubtitleRepository(dao = get(), files = AndroidPickedSubtitleFiles(get<Context>())) }
     single { TmdbClient(get<HttpClient>()) }
     single { TitleMetadataRepository(get(), get(), get()) }
     single { IptvOrgClient(get<HttpClient>()) }

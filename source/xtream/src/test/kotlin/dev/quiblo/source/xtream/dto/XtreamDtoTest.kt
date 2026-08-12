@@ -434,4 +434,68 @@ class XtreamDtoTest {
 
         private fun seriesFrom(raw: String) = json.decodeFromString<SeriesDto>(raw)
     }
+
+    @Nested
+    @DisplayName("vod subtitles")
+    inner class Subtitles {
+
+        private fun parse(field: String): List<XtreamSubtitle> =
+            json.decodeFromString<VodInfoResponse>("""{"info":{"subtitles":$field}}""")
+                .info
+                ?.subtitles
+                .orEmpty()
+
+        @Test
+        fun `absent, null and empty all mean no subtitles`() {
+            assertTrue(json.decodeFromString<VodInfoResponse>("""{"info":{}}""").info?.subtitles.orEmpty().isEmpty())
+            assertTrue(parse("null").isEmpty())
+            assertTrue(parse("[]").isEmpty())
+        }
+
+        @Test
+        fun `an array of bare urls is read`() {
+            val parsed = parse("""["http://panel.invalid/sub/1.srt", "  ", ""]""")
+
+            assertEquals(1, parsed.size)
+            assertEquals("http://panel.invalid/sub/1.srt", parsed.first().url)
+            assertNull(parsed.first().language)
+        }
+
+        @Test
+        fun `the url key differs between panels and all of them are read`() {
+            val parsed = parse(
+                """
+                [
+                  {"url": "a.srt"},
+                  {"link": "b.srt"},
+                  {"file": "c.srt"},
+                  {"src": "d.srt"}
+                ]
+                """.trimIndent(),
+            )
+
+            assertEquals(listOf("a.srt", "b.srt", "c.srt", "d.srt"), parsed.map { it.url })
+        }
+
+        @Test
+        fun `language and label are taken where the panel supplies them`() {
+            val parsed = parse("""[{"url": "a.srt", "lang": "Arabic", "title": "Arabic (full)"}]""")
+
+            assertEquals("Arabic", parsed.first().language)
+            assertEquals("Arabic (full)", parsed.first().label)
+        }
+
+        @Test
+        fun `an entry with no url costs that entry and nothing else`() {
+            // The rule the whole DTO layer follows: one odd field never loses the response.
+            val parsed = parse("""[{"lang": "Arabic"}, {"url": "b.srt"}, 42]""")
+
+            assertEquals(listOf("b.srt"), parsed.map { it.url })
+        }
+
+        @Test
+        fun `an object where an array belongs is treated as no subtitles`() {
+            assertTrue(parse("""{"0": {"url": "a.srt"}}""").isEmpty())
+        }
+    }
 }

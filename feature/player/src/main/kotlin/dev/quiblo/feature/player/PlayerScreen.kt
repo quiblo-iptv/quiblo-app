@@ -85,6 +85,7 @@ import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
@@ -102,6 +103,10 @@ import kotlinx.coroutines.delay
 import org.koin.androidx.compose.koinViewModel
 
 private const val CONTROLS_TIMEOUT_MILLIS = 3_000L
+
+/** Long enough to read a sentence, short enough not to sit over the film. */
+private const val SUBTITLE_NOTICE_MILLIS = 4_000L
+private val SUBTITLE_NOTICE_BOTTOM_PADDING = 96.dp
 
 /**
  * Full-screen playback.
@@ -132,9 +137,18 @@ fun PlayerScreen(
     // What there is to choose between, if anything. Shared with the television so the two
     // apps cannot disagree about what a stream offers (#023).
     val subtitlesOff = stringResource(R.string.player_subtitles_off)
-    val trackMenu = remember(state.audioTracks, state.textTracks, subtitlesOff) {
-        trackMenu(state, subtitlesOff)
+    val subtitleActions = rememberSubtitleActions(state)
+    val trackMenu = remember(state.audioTracks, state.textTracks, subtitlesOff, subtitleActions) {
+        trackMenu(state, subtitlesOff, subtitleActions)
     }
+
+    // INC-F10. The picker is remembered here rather than inside the menu, which leaves
+    // composition the moment a choice is made — taking the launcher with it.
+    val subtitleNotice by viewModel.subtitleNotice.collectAsStateWithLifecycle()
+    val pickSubtitleFile = rememberSubtitleFilePicker(
+        onPicked = viewModel::attachSubtitleFile,
+        onNoPicker = { viewModel.showSubtitleNotice(SubtitleNotice.NO_PICKER) },
+    )
 
     // Hoisted out of PlayerControls, which leaves composition every time the controls
     // auto-hide — taking a `remember` inside it with them. The lock forgot itself after
@@ -310,8 +324,22 @@ fun PlayerScreen(
             gestureFeedback = gestureFeedback,
             trackMenu = trackMenu.takeIf { tracksVisible },
             onSelectTrack = viewModel::selectTrack,
+            onSubtitleAction = subtitleActionHandler(
+                onPick = pickSubtitleFile,
+                onRemove = viewModel::detachSubtitleFile,
+            ),
             onDismissTracks = { tracksVisible = false },
+            subtitleNotice = subtitleNotice,
         )
+
+        // The notice clears itself. It is an acknowledgement, not a dialog, and a viewer who
+        // has gone back to watching should not have to dismiss anything.
+        LaunchedEffect(subtitleNotice) {
+            if (subtitleNotice != null) {
+                delay(SUBTITLE_NOTICE_MILLIS)
+                viewModel.showSubtitleNotice(null)
+            }
+        }
     }
 }
 
@@ -330,12 +358,48 @@ private fun TransientOverlays(
     gestureFeedback: GestureFeedback?,
     trackMenu: TrackMenu?,
     onSelectTrack: (TrackMenuKind, String?) -> Unit,
+    onSubtitleAction: (TrackMenuActionKind) -> Unit,
     onDismissTracks: () -> Unit,
+    subtitleNotice: SubtitleNotice?,
 ) {
     gestureFeedback?.let { GestureIndicator(it) }
 
     trackMenu?.let {
-        TrackMenuSheet(menu = it, onSelect = onSelectTrack, onDismiss = onDismissTracks)
+        TrackMenuSheet(
+            menu = it,
+            onSelect = onSelectTrack,
+            onAction = onSubtitleAction,
+            onDismiss = onDismissTracks,
+        )
+    }
+
+    subtitleNotice?.let { SubtitleNoticeBanner(it) }
+}
+
+/**
+ * What happened to the subtitle file the viewer picked (INC-F10).
+ *
+ * Above the controls rather than where a snackbar would sit, because the controls are what a
+ * viewer is looking at when they get here and this is the answer to what they just did.
+ */
+@Composable
+private fun SubtitleNoticeBanner(notice: SubtitleNotice) {
+    // Its own full-size box so that the alignment travels with the banner rather than with
+    // whoever draws it. The overlays are already stacked; one more layer costs nothing.
+    Box(
+        modifier = Modifier.fillMaxSize(),
+        contentAlignment = Alignment.BottomCenter,
+    ) {
+        Text(
+            text = subtitleNoticeText(notice),
+            color = Color.White,
+            fontSize = 14.sp,
+            textAlign = TextAlign.Center,
+            modifier = Modifier
+                .padding(bottom = SUBTITLE_NOTICE_BOTTOM_PADDING)
+                .background(Color.Black.copy(alpha = 0.75f), RoundedCornerShape(8.dp))
+                .padding(horizontal = 16.dp, vertical = 10.dp),
+        )
     }
 }
 

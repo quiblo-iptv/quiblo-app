@@ -26,7 +26,7 @@ Every item below lands on a screen that round is repairing.
 | INC-F7 | Both | S | A key | Refresh this title's information from the metadata service |
 | INC-F8 | Both | S | — | ~~Category editing scrolls inside Settings~~ — **built 2026-08-12**, and it was a removal rather than an addition |
 | INC-F9 | Both | M | — | ~~A section whose text is right-to-left is laid out right-to-left~~ — **built 2026-08-12**. First-strong detector in `:core:common`, `AutoDirection` in `:feature:designsystem`, applied to the title and plot on all four detail screens |
-| INC-F10 | Both | L | — | Subtitle files: the provider's, or one the viewer picks |
+| INC-F10 | Both | L | — | ~~Subtitle files: the provider's, or one the viewer picks~~ — **built 2026-08-12**. Format sniffed from the file rather than its name, encoding detected rather than assumed, the picked file copied into the app and remembered against the title. Schema 15. Nothing seen on a device yet |
 | INC-F11 | Both | M | INC-F10 | Subtitle appearance, set from the player |
 | INC-F12 | Both | S | — | **Audio track selection. Not new scope — see below** |
 | INC-F14 | Both | M | INC-F9 | ~~Filter the catalogue to one language~~ — **built 2026-08-12** as a subtraction, not a selection: hide titles written in scripts the viewer does not read. App-wide, never applied to favourites |

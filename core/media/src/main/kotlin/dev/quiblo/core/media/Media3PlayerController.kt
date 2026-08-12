@@ -19,6 +19,7 @@
 package dev.quiblo.core.media
 
 import android.content.Context
+import android.net.Uri
 import android.os.SystemClock
 import android.view.SurfaceView
 import androidx.media3.common.AudioAttributes
@@ -43,6 +44,7 @@ import androidx.media3.exoplayer.upstream.LoadErrorHandlingPolicy
 import dev.quiblo.core.model.BufferMode
 import dev.quiblo.core.model.MaxBitrateCap
 import dev.quiblo.core.model.PlayerSettings
+import dev.quiblo.core.model.SubtitleFile
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -226,7 +228,7 @@ class Media3PlayerController(
         _state.value = PlaybackState(status = PlaybackStatus.BUFFERING, item = item)
         startWatchdog()
 
-        player.setMediaItem(MediaItem.fromUri(item.url))
+        player.setMediaItem(item.toMediaItem())
         if (!item.isLive && item.startPositionMillis > 0L) {
             player.seekTo(item.startPositionMillis)
         }
@@ -302,6 +304,26 @@ class Media3PlayerController(
         }
         player.trackSelectionParameters = parameters.build()
     }
+
+    /**
+     * The stream, plus any sidecar subtitles (INC-F10).
+     *
+     * `DefaultMediaSourceFactory` merges each configuration in as its own text track, so
+     * everything downstream — [selectTextTrack], the track list, the menu — is the code that
+     * already existed. Nothing is flagged default or forced: a file the viewer attached is one
+     * they still have to switch on, which is the same rule the container's own tracks follow.
+     */
+    private fun PlayableItem.toMediaItem(): MediaItem = MediaItem.Builder()
+        .setUri(url)
+        .setSubtitleConfigurations(subtitles.map { it.toSubtitleConfiguration() })
+        .build()
+
+    private fun SubtitleFile.toSubtitleConfiguration(): MediaItem.SubtitleConfiguration =
+        MediaItem.SubtitleConfiguration.Builder(Uri.parse(uri))
+            .setMimeType(mimeType)
+            .setLanguage(language)
+            .setLabel(label)
+            .build()
 
     private fun groupId(group: Tracks.Group): String =
         "${group.type}:${group.mediaTrackGroup.id}:${group.getTrackFormat(0).language ?: "und"}"

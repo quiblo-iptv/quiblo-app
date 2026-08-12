@@ -49,6 +49,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.quiblo.feature.player.TrackMenu
+import dev.quiblo.feature.player.TrackMenuActionKind
 import dev.quiblo.feature.player.TrackMenuEntry
 import dev.quiblo.feature.player.TrackMenuKind
 import dev.quiblo.tv.R
@@ -73,6 +74,7 @@ import dev.quiblo.tv.R
 internal fun TvTrackMenu(
     menu: TrackMenu,
     onSelect: (TrackMenuKind, String?) -> Unit,
+    onAction: (TrackMenuActionKind) -> Unit,
     onDismiss: () -> Unit,
 ) {
     val firstEntry = remember { FocusRequester() }
@@ -122,7 +124,8 @@ internal fun TvTrackMenu(
 
                 itemsIndexedEntries(section.entries) { entryIndex, entry ->
                     TrackRow(
-                        entry = entry,
+                        label = entry.label,
+                        isSelected = entry.isSelected,
                         onClick = { onSelect(section.kind, entry.trackId) },
                         modifier = if (sectionIndex == 0 && entryIndex == 0) {
                             Modifier.focusRequester(firstEntry)
@@ -130,6 +133,27 @@ internal fun TvTrackMenu(
                             Modifier
                         },
                     )
+                }
+
+                // Under the choices, and never ticked. A section can be all actions and no
+                // entries — a film with no subtitle track at all is exactly when a viewer
+                // wants to point the player at a file — so the first row of the whole panel
+                // may be one of these, and it has to be able to take the opening focus.
+                section.actions.forEachIndexed { actionIndex, action ->
+                    item(key = "action-${action.kind}") {
+                        TrackRow(
+                            label = action.label,
+                            isSelected = false,
+                            onClick = { onAction(action.kind) },
+                            modifier = if (
+                                sectionIndex == 0 && actionIndex == 0 && section.entries.isEmpty()
+                            ) {
+                                Modifier.focusRequester(firstEntry)
+                            } else {
+                                Modifier
+                            },
+                        )
+                    }
                 }
             }
         }
@@ -152,7 +176,12 @@ private fun androidx.compose.foundation.lazy.LazyListScope.itemsIndexedEntries(
 }
 
 @Composable
-private fun TrackRow(entry: TrackMenuEntry, onClick: () -> Unit, modifier: Modifier = Modifier) {
+private fun TrackRow(
+    label: String,
+    isSelected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
     val interactionSource = remember { MutableInteractionSource() }
     val isFocused by interactionSource.collectIsFocusedAsState()
 
@@ -177,16 +206,16 @@ private fun TrackRow(entry: TrackMenuEntry, onClick: () -> Unit, modifier: Modif
         // A tick rather than a highlight, because the focused row is already highlighted and
         // "where the remote is" and "what is playing" are two facts a viewer needs at once.
         Text(
-            text = if (entry.isSelected) SELECTED_MARK else " ",
+            text = if (isSelected) SELECTED_MARK else " ",
             color = if (isFocused) Color.Black else Color.White,
             fontSize = 15.sp,
         )
 
         Text(
-            text = entry.label,
+            text = label,
             color = if (isFocused) Color.Black else Color.White.copy(alpha = 0.85f),
             fontSize = 15.sp,
-            fontWeight = if (entry.isSelected) FontWeight.SemiBold else FontWeight.Normal,
+            fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )

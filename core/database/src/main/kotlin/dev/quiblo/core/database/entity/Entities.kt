@@ -393,3 +393,33 @@ data class SeriesPreferenceEntity(
     /** True when the newest episode is first. */
     val isDescending: Boolean = false,
 )
+
+/**
+ * A subtitle file the viewer picked for one title (INC-F10).
+ *
+ * **The cached copy, not the file they chose.** The picker hands back a `content://` URI whose
+ * read permission belongs to this process and dies with it, so a row holding one would be a row
+ * that works this evening and fails tomorrow. The file is copied into the app's cache — decoded
+ * out of whatever it was written in and rewritten as UTF-8 on the way — and it is that copy this
+ * row points at.
+ *
+ * Keyed by the title's `stableKey`, for the reason that key exists: a refresh reassigns every row
+ * id, and a pick keyed to one would be lost the next time a playlist reloaded. An episode's key
+ * is its stream URL, so a subtitle picked for one episode stays with that episode rather than
+ * following the series.
+ *
+ * One row per title. Picking a second file for the same title replaces the first, because two
+ * files a viewer cannot tell apart in a menu is not a feature.
+ */
+@Entity(tableName = "picked_subtitles")
+data class PickedSubtitleEntity(
+    @PrimaryKey val stableKey: String,
+    /** An absolute path inside this app's own storage. */
+    val storedPath: String,
+    /** What the menu calls it — the picked file's own name. */
+    val label: String,
+    val mimeType: String,
+    /** An ISO 639 code where the filename declared one the platform recognises. */
+    val language: String? = null,
+    val pickedAt: Long,
+)

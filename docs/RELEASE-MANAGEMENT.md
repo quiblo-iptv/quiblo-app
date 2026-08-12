@@ -175,6 +175,20 @@ named, and the number says so.
 The suffix is `-<stage>.<number>`, always with the number, always from 1. `-beta` on its own
 sorts unpredictably against `-beta.2` and reads as though there will only ever be one.
 
+### Release notes come from CHANGELOG.md
+
+Every release publishes the `CHANGELOG.md` section for its version as its notes, and **a merge
+with an empty `## Unreleased` section does not release at all** — the lane stops and says so.
+
+This is a deliberate reversal. The lane used to publish GitHub's generated notes, which are a
+list of commit subjects and a link to a compare view: an accurate description of the diff, and an
+answer to a question nobody on the releases page is asking. What they want to know is what they
+get by installing this version, and only the person who built it can say.
+
+So the entry is written with the work, under `## Unreleased`. The lane renames that heading to
+the version it is about to cut and opens a fresh empty one. Nothing has to be remembered at
+release time, because by then it is too late to write it.
+
 ### A merge to main is a release — when something released changed
 
 `.github/workflows/release-on-main.yml` gates, versions, tags and publishes, in that order,

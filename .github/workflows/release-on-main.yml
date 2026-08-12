@@ -348,6 +348,21 @@ jobs:
             exit 1
           fi
 
+          # The changelog entry has to exist *before* the version heading is written, because
+          # nothing after this point can write it. A release whose notes say only "see the diff"
+          # is a release nobody reads, and that is the state this check exists to prevent.
+          if ! grep -q '^## Unreleased$' CHANGELOG.md; then
+            echo "::error::CHANGELOG.md has no '## Unreleased' heading. Nothing can be released without one."
+            exit 1
+          fi
+          if [ -z "$(awk '/^## Unreleased$/{f=1;next} f&&/^## /{exit} f' CHANGELOG.md | tr -d '[:space:]')" ]; then
+            echo "::error::CHANGELOG.md's Unreleased section is empty. Describe what this release gives a viewer, then merge again."
+            exit 1
+          fi
+
+          # Unreleased becomes this version, and a fresh empty Unreleased takes its place.
+          sed -i "0,/^## Unreleased$/s//## Unreleased\n\n## $NEXT_NAME/" CHANGELOG.md
+
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
           echo "Releasing $CURRENT_NAME (code $CURRENT_CODE) → $NEXT_NAME (code $NEXT_CODE), a $CLASS."
 
@@ -362,7 +377,7 @@ jobs:
 
           # [skip ci] is belt and braces: a push made with GITHUB_TOKEN does not start
           # another workflow run, so this cannot loop even without it.
-          git add app/build.gradle.kts app-tv/build.gradle.kts
+          git add app/build.gradle.kts app-tv/build.gradle.kts CHANGELOG.md
           git commit -m "chore(release): ${TAG#v} [skip ci]"
           git tag -a "$TAG" -m "Quiblo ${TAG#v}"
 

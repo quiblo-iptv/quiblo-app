@@ -447,3 +447,25 @@ val MIGRATION_13_14 = object : Migration(13, 14) {
         )
     }
 }
+
+/**
+ * Where a picked subtitle file lives, and which title it belongs to.
+ *
+ * A new table and nothing else, the same safe shape as `MIGRATION_13_14`. Nobody has picked a
+ * subtitle before this version, so the table starts empty on every device and the upgrade
+ * changes nothing anyone sees.
+ */
+val MIGRATION_14_15 = object : Migration(14, 15) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            "CREATE TABLE IF NOT EXISTS `picked_subtitles` (" +
+                "`stableKey` TEXT NOT NULL, " +
+                "`storedPath` TEXT NOT NULL, " +
+                "`label` TEXT NOT NULL, " +
+                "`mimeType` TEXT NOT NULL, " +
+                "`language` TEXT, " +
+                "`pickedAt` INTEGER NOT NULL, " +
+                "PRIMARY KEY(`stableKey`) )",
+        )
+    }
+}

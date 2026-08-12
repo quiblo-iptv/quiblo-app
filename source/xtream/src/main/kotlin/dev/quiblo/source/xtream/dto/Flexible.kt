@@ -24,8 +24,11 @@ import kotlinx.serialization.descriptors.PrimitiveSerialDescriptor
 import kotlinx.serialization.descriptors.SerialDescriptor
 import kotlinx.serialization.encoding.Decoder
 import kotlinx.serialization.encoding.Encoder
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonDecoder
+import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.contentOrNull
@@ -110,3 +113,58 @@ internal object FlexibleBooleanSerializer : KSerializer<Boolean?> {
         encoder.encodeString(value?.toString().orEmpty())
     }
 }
+
+/**
+ * The subtitle list a panel may attach to a film, in whatever shape it sends it.
+ *
+ * There is no agreement between panels about this field. Some omit it, some send an empty array,
+ * some send an array of URL strings, some an array of objects — and the object's key for the URL
+ * is `url` on one panel and `link`, `file` or `src` on the next. All of it is read, and anything
+ * unrecognisable is dropped rather than failing the response: a film with an odd subtitle entry
+ * is still a film, and losing its plot and its cover over one is not a trade worth making.
+ */
+internal object FlexibleSubtitleListSerializer : KSerializer<List<XtreamSubtitle>> {
+    override val descriptor: SerialDescriptor =
+        PrimitiveSerialDescriptor("FlexibleSubtitles", PrimitiveKind.STRING)
+
+    override fun deserialize(decoder: Decoder): List<XtreamSubtitle> {
+        val jsonDecoder = decoder as? JsonDecoder ?: return emptyList()
+        val array = jsonDecoder.decodeJsonElement() as? JsonArray ?: return emptyList()
+        return array.mapNotNull { it.toSubtitle() }
+    }
+
+    override fun serialize(encoder: Encoder, value: List<XtreamSubtitle>) {
+        encoder.encodeString("")
+    }
+
+    private fun JsonElement.toSubtitle(): XtreamSubtitle? = when (this) {
+        // A bare entry is a URL, so it has to be a string and it has to look like one. A number
+        // in the array is a panel sending an id where a location belongs, and an id loads nothing.
+        is JsonPrimitive ->
+            contentOrNull
+                ?.trim()
+                ?.takeIf { isString && (it.contains('/') || it.contains('.')) }
+                ?.let { XtreamSubtitle(url = it) }
+        is JsonObject -> pick(URL_KEYS)?.let {
+            XtreamSubtitle(url = it, language = pick(LANGUAGE_KEYS), label = pick(LABEL_KEYS))
+        }
+
+        else -> null
+    }
+
+    private fun JsonObject.pick(keys: List<String>): String? = keys
+        .firstNotNullOfOrNull { key -> (this[key] as? JsonPrimitive)?.contentOrNull }
+        ?.trim()
+        ?.takeIf { it.isNotEmpty() }
+
+    private val URL_KEYS = listOf("url", "link", "file", "src", "path")
+    private val LANGUAGE_KEYS = listOf("language", "lang", "iso639")
+    private val LABEL_KEYS = listOf("label", "title", "name")
+}
+
+/** One subtitle entry as a panel described it. Nothing here is trusted to be present. */
+internal data class XtreamSubtitle(
+    val url: String,
+    val language: String? = null,
+    val label: String? = null,
+)

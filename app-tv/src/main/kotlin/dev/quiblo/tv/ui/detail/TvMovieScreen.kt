@@ -30,6 +30,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -37,10 +38,14 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import dev.quiblo.core.data.MetadataRefresh
+import dev.quiblo.core.data.ScanRefusal
 import dev.quiblo.core.model.Channel
 import dev.quiblo.feature.vod.MovieDetailUiState
 import dev.quiblo.feature.vod.MovieDetailViewModel
@@ -97,6 +102,7 @@ fun TvMovieScreen(
             onPlay = onPlay,
             onToggleFavorite = viewModel::toggleFavorite,
             onRemoveFromHistory = viewModel::removeFromHistory,
+            onRefreshMetadata = viewModel::refreshMetadata,
             modifier = modifier,
         )
     }
@@ -109,6 +115,7 @@ private fun Loaded(
     onPlay: (Long?) -> Unit,
     onToggleFavorite: () -> Unit,
     onRemoveFromHistory: () -> Unit,
+    onRefreshMetadata: () -> Unit,
     modifier: Modifier,
 ) {
     val firstAction = remember { FocusRequester() }
@@ -226,8 +233,54 @@ private fun Loaded(
                             onClick = onRemoveFromHistory,
                         )
                     }
+
+                    // Last in the row on purpose. It is the least used control here and the
+                    // one a viewer reaches for only when the screen already looks wrong, so
+                    // it must not sit between Play and the favourite (AC-TV-01's ordering is
+                    // about what a remote walks past to reach what it wants).
+                    if (state.canRefreshMetadata) {
+                        DetailButton(
+                            label = stringResource(
+                                if (state.isEnriching) {
+                                    R.string.tv_detail_refresh_working
+                                } else {
+                                    R.string.tv_detail_refresh
+                                },
+                            ),
+                            onClick = onRefreshMetadata,
+                        )
+                    }
+                }
+
+                state.refreshResult?.let { result ->
+                    Text(
+                        text = stringResource(result.messageRes()),
+                        color = if (result is MetadataRefresh.Refused) {
+                            Color(0xFFFF8A80)
+                        } else {
+                            Color.White.copy(alpha = 0.75f)
+                        },
+                        fontSize = 14.sp,
+                        modifier = Modifier.padding(top = 10.dp),
+                    )
                 }
             }
         }
+    }
+}
+
+/**
+ * Which sentence a refresh outcome gets on the television.
+ *
+ * A function rather than a `when` inside the composable because the series screen needs the
+ * same mapping, and two copies of a six-branch map is how one of them quietly stops matching.
+ */
+internal fun MetadataRefresh.messageRes(): Int = when (this) {
+    is MetadataRefresh.Updated -> R.string.tv_detail_refresh_updated
+    MetadataRefresh.NoMatch -> R.string.tv_detail_refresh_no_match
+    is MetadataRefresh.Refused -> when (reason) {
+        ScanRefusal.RATE_LIMITED -> R.string.tv_detail_refresh_rate_limited
+        ScanRefusal.KEY_REJECTED -> R.string.tv_detail_refresh_key_rejected
+        ScanRefusal.UNAVAILABLE -> R.string.tv_detail_refresh_unavailable
     }
 }

@@ -162,6 +162,13 @@
     <string name="tv_detail_favourite">Add to favourites</string>
     <string name="tv_detail_unfavourite">Remove from favourites</string>
     <string name="tv_detail_remove_history">Remove from history</string>
+    <string name="tv_detail_refresh">Refresh information</string>
+    <string name="tv_detail_refresh_working">Asking…</string>
+    <string name="tv_detail_refresh_updated">Information updated.</string>
+    <string name="tv_detail_refresh_no_match">The metadata service has nothing about this title.</string>
+    <string name="tv_detail_refresh_rate_limited">The metadata service asked us to slow down. Nothing was changed.</string>
+    <string name="tv_detail_refresh_key_rejected">The metadata key was refused. Nothing was changed.</string>
+    <string name="tv_detail_refresh_unavailable">Could not reach the metadata service. Nothing was changed.</string>
 
     <!-- Series -->
     <string name="tv_series_unavailable">That series could not be loaded.</string>

@@ -17,4 +17,11 @@
     <string name="movie_minutes">%1$d min</string>
     <string name="movie_overview_loading">Looking for a description…</string>
     <string name="movie_no_overview">No description is available for this movie.</string>
+    <string name="movie_refresh_metadata">Refresh information</string>
+    <string name="movie_refresh_working">Asking the metadata service…</string>
+    <string name="movie_refresh_updated">Information updated.</string>
+    <string name="movie_refresh_no_match">The metadata service has nothing about this title.</string>
+    <string name="movie_refresh_rate_limited">The metadata service asked us to slow down. Nothing was changed — try again shortly.</string>
+    <string name="movie_refresh_key_rejected">The metadata key was refused. Nothing was changed — check it in Settings.</string>
+    <string name="movie_refresh_unavailable">Could not reach the metadata service. Nothing was changed.</string>
 </resources>

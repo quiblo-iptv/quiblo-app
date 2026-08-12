@@ -21,6 +21,7 @@ package dev.quiblo.feature.series
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dev.quiblo.core.data.ChannelRepository
+import dev.quiblo.core.data.MetadataRefresh
 import dev.quiblo.core.data.TitleMetadataRepository
 import dev.quiblo.core.data.WatchHistoryRepository
 import dev.quiblo.core.model.Channel
@@ -60,6 +61,24 @@ sealed interface SeriesDetailUiState {
         /** From TMDB, when the user has enabled it and a match was found. */
         val metadata: TitleMetadata? = null,
         /**
+         * What the last press of refresh did, or null.
+         *
+         * Kept in the state rather than raised as an event because it survives a rotation,
+         * and a message about a request the viewer made is exactly the sort of thing that
+         * should not vanish because the screen turned.
+         */
+        val refreshResult: MetadataRefresh? = null,
+        /**
+         * Whether a metadata key is configured.
+         *
+         * The refresh control is **absent** rather than disabled when it is false. `AC-META-01`
+         * says nothing here issues a request without a key, so a button that cannot work is a
+         * hollow control — and a greyed-out one still invites the press that does nothing.
+         */
+        val canRefreshMetadata: Boolean = false,
+        /** True while a refresh is in flight, so the control can say so. */
+        val isEnriching: Boolean = false,
+        /**
          * Whether this series is favourited.
          *
          * Streamed rather than taken from [channel], which is a snapshot from when the
@@ -76,6 +95,8 @@ class SeriesDetailViewModel(
     private val metadataRepository: TitleMetadataRepository,
     private val historyRepository: WatchHistoryRepository,
 ) : ViewModel() {
+
+    private var isRefreshing = false
 
     private val _uiState = MutableStateFlow<SeriesDetailUiState>(SeriesDetailUiState.Loading)
     val uiState: StateFlow<SeriesDetailUiState> = _uiState.asStateFlow()
@@ -181,7 +202,12 @@ class SeriesDetailViewModel(
             metadataRepository.load()
             val metadata = metadataRepository.forTitle(channel.name, MediaKind.SERIES)
             (_uiState.value as? SeriesDetailUiState.Success)?.let {
-                _uiState.value = it.copy(metadata = metadata)
+                _uiState.value = it.copy(
+                    metadata = metadata,
+                    // Read after load(), which is what fills the key from storage. Reading it
+                    // before would report "no key" on every cold open of this screen.
+                    canRefreshMetadata = metadataRepository.isEnabled,
+                )
             }
         }
     }
@@ -202,5 +228,44 @@ class SeriesDetailViewModel(
                 }
             }
         }
+    }
+
+    /**
+     * Asks the metadata service about this title again, ignoring what is cached.
+     *
+     * `INC-F7`. The reason the intake asks for it is artwork that never arrived or a plot that
+     * is out of date, so **the outcome has to be visible**: the poster changes, or a message
+     * says what happened. A button whose only feedback is that the screen looks the same is
+     * indistinguishable from a button that does nothing.
+     *
+     * A refusal leaves the existing record alone — that is the repository's promise, and this
+     * reports it rather than blanking the screen.
+     */
+    fun refreshMetadata() {
+        val channel = (_uiState.value as? SeriesDetailUiState.Success)?.channel ?: return
+        if (isRefreshing) return
+        isRefreshing = true
+
+        viewModelScope.launch {
+            update { it.copy(isEnriching = true, refreshResult = null) }
+            val outcome = metadataRepository.refresh(channel.name, MediaKind.SERIES)
+            update {
+                it.copy(
+                    isEnriching = false,
+                    refreshResult = outcome,
+                    metadata = (outcome as? MetadataRefresh.Updated)?.metadata ?: it.metadata,
+                )
+            }
+            isRefreshing = false
+        }
+    }
+
+    /** Dismisses the message the refresh left behind, so it does not outlive the screen. */
+    fun dismissRefreshResult() {
+        update { it.copy(refreshResult = null) }
+    }
+
+    private fun update(block: (SeriesDetailUiState.Success) -> SeriesDetailUiState.Success) {
+        (_uiState.value as? SeriesDetailUiState.Success)?.let { _uiState.value = block(it) }
     }
 }

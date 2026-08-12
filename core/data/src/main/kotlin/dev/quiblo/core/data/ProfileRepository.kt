@@ -104,14 +104,25 @@ class ProfileRepository(
         profileStore.setActiveProfileId(null)
     }
 
-    suspend fun addProfile(name: String): Profile? {
+    suspend fun addProfile(name: String, avatar: String? = null): Profile? {
         val cleaned = name.trim()
         if (cleaned.isBlank()) return null
 
         val id = profileDao.insert(
-            ProfileEntity(name = cleaned, createdAtEpochMillis = now(), isGuest = false),
+            ProfileEntity(name = cleaned, createdAtEpochMillis = now(), isGuest = false, avatar = avatar),
         )
-        return Profile(id = id, name = cleaned)
+        return Profile(id = id, name = cleaned, avatar = avatar)
+    }
+
+    /**
+     * Changes which face a profile shows.
+     *
+     * Its own method rather than a general update, because the name is the identity a
+     * household recognises a profile by and changing it is a different decision from changing
+     * a picture. Nothing else about a profile is editable today and this does not open that.
+     */
+    suspend fun setAvatar(profile: Profile, avatar: String?) {
+        profileDao.setAvatar(profile.id, avatar)
     }
 
     /**
@@ -153,4 +164,4 @@ class ProfileRepository(
     }
 }
 
-private fun ProfileEntity.toDomain() = Profile(id = id, name = name, isGuest = isGuest)
+private fun ProfileEntity.toDomain() = Profile(id = id, name = name, isGuest = isGuest, avatar = avatar)

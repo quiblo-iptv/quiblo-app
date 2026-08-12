@@ -41,6 +41,18 @@ data class Profile(
      * kills never gets to tidy up after itself.
      */
     val isGuest: Boolean = false,
+    /**
+     * Which illustrated face this profile chose, or null for none.
+     *
+     * A key into a fixed set the app ships, and deliberately not a picture the viewer supplied.
+     * A chosen file would need copying into app storage, deleting when the profile is deleted,
+     * a size cap, and a decision about whether it belongs in a backup — and `AC-DATA` promises
+     * a portable backup, which somebody's photograph would quietly stop being.
+     *
+     * Null draws the initial-on-a-colour fallback, which is a picture too. Nobody is left
+     * looking at a blank circle.
+     */
+    val avatar: String? = null,
 ) {
     companion object {
         /**

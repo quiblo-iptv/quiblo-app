@@ -533,6 +533,9 @@ interface ProfileDao {
     @Insert
     suspend fun insert(profile: ProfileEntity): Long
 
+    @Query("UPDATE profiles SET avatar = :avatar WHERE id = :id")
+    suspend fun setAvatar(id: Long, avatar: String?)
+
     @Query("DELETE FROM profiles WHERE id = :id")
     suspend fun delete(id: Long)
 

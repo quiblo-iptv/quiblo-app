@@ -58,8 +58,9 @@ class ProfilesViewModel(private val profiles: ProfileRepository) : ViewModel() {
      * Somebody typing their name on a remote has said who they are; asking them to then pick
      * themselves off a list would be a second answer to a question already answered.
      */
-    fun addAndSelect(name: String) = viewModelScope.launch {
-        profiles.addProfile(name)?.let { profiles.select(it) }
+    /** [avatar] is a key into the shipped face set, or null for the initial-on-a-colour fallback. */
+    fun addAndSelect(name: String, avatar: String? = null) = viewModelScope.launch {
+        profiles.addProfile(name, avatar)?.let { profiles.select(it) }
     }
 
     fun select(profile: Profile) = viewModelScope.launch {

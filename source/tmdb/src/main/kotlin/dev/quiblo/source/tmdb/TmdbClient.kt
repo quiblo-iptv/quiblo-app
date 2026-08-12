@@ -36,6 +36,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.Json
+import java.util.concurrent.ConcurrentHashMap
 
 /**
  * Which half of TMDB to ask.
@@ -100,7 +101,7 @@ class TmdbClient(
      * process, is what lets a genre arrive with the cheap one-request record instead of
      * costing a second request per title.
      */
-    private val genreNames = mutableMapOf<TmdbKind, Map<Int, String>>()
+    private val genreNames = ConcurrentHashMap<TmdbKind, Map<Int, String>>()
     private val genreMutex = Mutex()
 
     /**
@@ -206,6 +207,12 @@ class TmdbClient(
      * for the life of the process and quietly cost every title fetched afterwards its
      * genres — a whole scan producing a genre filter with nothing in it, for one bad moment
      * on the network.
+     *
+     * The map is a [ConcurrentHashMap] because the unlocked read below is the fast path and it
+     * runs on whatever IO thread got here: the scan alone has four workers, and browse adds
+     * more. A plain `HashMap` read racing the write under the mutex is the textbook broken
+     * double-checked lock — it can observe a table mid-resize. The mutex is still what makes
+     * the *fetch* happen once; the concurrent map is what makes the read safe.
      */
     private suspend fun genreNamesFor(apiKey: String, kind: TmdbKind): Map<Int, String> {
         genreNames[kind]?.let { return it }

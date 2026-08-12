@@ -25,7 +25,7 @@ Every item below lands on a screen that round is repairing.
 | INC-F6 | Both | M | #015 | Merge seasons into one list, and reverse the order — remembered per profile |
 | INC-F7 | Both | S | A key | Refresh this title's information from the metadata service |
 | INC-F8 | Both | S | — | ~~Category editing scrolls inside Settings~~ — **built 2026-08-12**, and it was a removal rather than an addition |
-| INC-F9 | Both | M | — | A section whose text is right-to-left is laid out right-to-left |
+| INC-F9 | Both | M | — | ~~A section whose text is right-to-left is laid out right-to-left~~ — **built 2026-08-12**. First-strong detector in `:core:common`, `AutoDirection` in `:feature:designsystem`, applied to the title and plot on all four detail screens |
 | INC-F10 | Both | L | — | Subtitle files: the provider's, or one the viewer picks |
 | INC-F11 | Both | M | INC-F10 | Subtitle appearance, set from the player |
 | INC-F12 | Both | S | — | **Audio track selection. Not new scope — see below** |

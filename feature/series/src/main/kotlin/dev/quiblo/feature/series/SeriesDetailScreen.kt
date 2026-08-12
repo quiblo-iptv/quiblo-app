@@ -80,6 +80,7 @@ import dev.quiblo.core.model.Episode
 import dev.quiblo.core.model.Season
 import dev.quiblo.core.model.SeriesDetails
 import dev.quiblo.core.model.TitleMetadata
+import dev.quiblo.designsystem.AutoDirection
 import dev.quiblo.feature.browse.DetailOverlayActions
 import dev.quiblo.feature.browse.TitleFacts
 import dev.quiblo.source.api.SourceError
@@ -440,11 +441,15 @@ private fun SeriesHeader(channel: Channel, details: SeriesDetails, metadata: Tit
                 .weight(1f)
                 .padding(start = 16.dp),
         ) {
-            Text(
-                text = details.title.ifBlank { channel.name },
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold,
-            )
+            val title = details.title.ifBlank { channel.name }
+            AutoDirection(title) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
 
             metadata?.let {
                 TitleFacts(metadata = it, modifier = Modifier.padding(top = 6.dp))
@@ -455,13 +460,16 @@ private fun SeriesHeader(channel: Channel, details: SeriesDetails, metadata: Tit
             val overview = details.overview?.takeIf { it.isNotBlank() } ?: metadata?.overview
             if (!overview.isNullOrBlank()) {
                 Spacer(modifier = Modifier.height(8.dp))
-                Text(
-                    text = overview,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 4,
-                    overflow = TextOverflow.Ellipsis,
-                )
+                AutoDirection(overview) {
+                    Text(
+                        text = overview,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 4,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
             }
         }
     }

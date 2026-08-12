@@ -25,3 +25,7 @@ plugins {
 android {
     namespace = "dev.quiblo.designsystem"
 }
+
+dependencies {
+    api(projects.core.common)
+}

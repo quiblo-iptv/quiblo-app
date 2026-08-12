@@ -70,6 +70,7 @@ import dev.quiblo.core.data.MetadataRefresh
 import dev.quiblo.core.data.ScanRefusal
 import dev.quiblo.core.model.Channel
 import dev.quiblo.core.model.VodDetails
+import dev.quiblo.designsystem.AutoDirection
 import dev.quiblo.feature.browse.DetailOverlayActions
 import dev.quiblo.feature.browse.TitleFacts
 import org.koin.androidx.compose.koinViewModel
@@ -182,11 +183,14 @@ private fun MovieDetail(
                     .weight(1f)
                     .verticalScroll(rememberScrollState()),
             ) {
-                Text(
-                    text = state.channel.name,
-                    style = MaterialTheme.typography.headlineSmall,
-                    fontWeight = FontWeight.Bold,
-                )
+                AutoDirection(state.channel.name) {
+                    Text(
+                        text = state.channel.name,
+                        style = MaterialTheme.typography.headlineSmall,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
                 Details(
                     state = state,
                     onPlay = onPlay,
@@ -242,11 +246,13 @@ private fun Details(
         val overview = state.details?.overview?.takeIf { it.isNotBlank() }
             ?: state.metadata?.overview?.takeIf { it.isNotBlank() }
         if (overview != null) {
-            Text(
-                text = overview,
-                style = MaterialTheme.typography.bodyMedium,
-                modifier = Modifier.padding(top = 20.dp),
-            )
+            AutoDirection(overview) {
+                Text(
+                    text = overview,
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.padding(top = 20.dp),
+                )
+            }
         } else if (state.isEnriching) {
             // Not "there is no description" — we do not know that yet. Saying so before
             // the answer arrives is a wrong statement that corrects itself, which reads

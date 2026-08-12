@@ -26,6 +26,7 @@ import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -49,6 +50,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.SubcomposeAsyncImage
 import dev.quiblo.core.model.TitleMetadata
+import dev.quiblo.designsystem.AutoDirection
 
 /**
  * The parts a film and a series detail screen both need.
@@ -141,15 +143,19 @@ fun DetailOverview(
             modifier = Modifier.padding(top = 14.dp),
         )
 
-        !overview.isNullOrBlank() -> Text(
-            text = overview,
-            color = Color.White.copy(alpha = 0.85f),
-            fontSize = 16.sp,
-            lineHeight = 24.sp,
-            maxLines = OVERVIEW_MAX_LINES,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.padding(top = 14.dp),
-        )
+        !overview.isNullOrBlank() -> AutoDirection(overview) {
+            Text(
+                text = overview,
+                color = Color.White.copy(alpha = 0.85f),
+                fontSize = 16.sp,
+                lineHeight = 24.sp,
+                maxLines = OVERVIEW_MAX_LINES,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 14.dp),
+            )
+        }
     }
 
     if (!author.isNullOrBlank() && !authorLabel.isNullOrBlank()) {
@@ -223,18 +229,21 @@ fun DetailButton(
 /** Title, big, with whatever the provider called it. */
 @Composable
 fun DetailTitle(title: String) {
-    Text(
-        text = title,
-        color = Color.White,
-        fontSize = 26.sp,
-        // Without an explicit line height the default is too tight for type this large and
-        // the two lines overlap — visible immediately on any title long enough to wrap,
-        // which on a panel's own naming is most of them.
-        lineHeight = 33.sp,
-        fontWeight = FontWeight.SemiBold,
-        maxLines = 2,
-        overflow = TextOverflow.Ellipsis,
-    )
+    AutoDirection(title) {
+        Text(
+            text = title,
+            color = Color.White,
+            fontSize = 26.sp,
+            // Without an explicit line height the default is too tight for type this large
+            // and the two lines overlap — visible immediately on any title long enough to
+            // wrap, which on a panel's own naming is most of them.
+            lineHeight = 33.sp,
+            fontWeight = FontWeight.SemiBold,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.fillMaxWidth(),
+        )
+    }
 }
 
 /** Centres a message — loading, or a title the provider has since dropped. */

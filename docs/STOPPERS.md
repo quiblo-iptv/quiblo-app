@@ -263,12 +263,19 @@ every screen the bar is on and that nothing above it becomes unreachable. Then t
 television already, and a profile created on the television gets the initial-on-a-colour
 fallback, which is a picture rather than an empty circle. Nothing is broken while this waits.
 
-## S12 — ~~The television has no way to ask a one-question question~~ — **decided 2026-08-12**
+## S12 — ~~The television has no way to ask a one-question question~~ — **closed 2026-08-12, built**
 
-**Closed as a stopper.** It asked for a decision about what a one-question question looks like on
-this app, and the sweep answered it: *"works on mobile but not on tv it should be on tv also"*
-(7.5). Build it. The reasoning below stands as the record of why it waited, and whoever builds it
-still has to answer the focus question rather than reach for a `DropdownMenu`.
+**Decided, then built the same day.** The sweep answered the question it was waiting on —
+*"works on mobile but not on tv it should be on tv also"* (7.5) — and the answer it produced is
+worth keeping, because the next one-question question on this app should copy it rather than
+re-open this:
+
+**The confirm is the control itself.** Long-press arms the tile, its label becomes the question,
+the ordinary centre press answers it, and moving focus away disarms it. No dialog, no menu,
+nothing to get stuck inside, and no Cancel to find a place for. It is the same shape as
+`TvSettingsScreen`'s rename pencil, which is this app's only other one-question control.
+
+The reasoning below stands as the record of why it waited.
 
 <details><summary>The original entry</summary>
 

@@ -49,14 +49,13 @@ object XtreamUrl {
     /** @return the canonical base, or null when [scheme] or [authority] is unusable. */
     private fun buildBase(scheme: String, authority: String): String? {
         if (scheme != "http" && scheme != "https") return null
-        if (authority.isEmpty()) return null
 
-        // Split on the last colon explicitly. substringAfterLast's missing-delimiter
-        // default is indistinguishable from a genuinely empty port, which silently
-        // rejected every host that had no port at all.
-        val colonIndex = authority.lastIndexOf(':')
-        val host = if (colonIndex >= 0) authority.substring(0, colonIndex) else authority
-        val port = if (colonIndex >= 0) authority.substring(colonIndex + 1) else null
+        // Anything before an @ is userinfo, and it is dropped rather than carried into the base.
+        // A panel's credentials belong in the query parameters XtreamClient adds, and a base
+        // silently carrying a second copy of them is one more place for them to be logged.
+        val hostAndPort = authority.substringAfterLast('@')
+        val split = hostAndPort.takeIf { it.isNotEmpty() }?.let(::splitHostAndPort) ?: return null
+        val (host, port) = split
 
         val hostValid = host.isNotEmpty() && !host.contains(' ')
         val portValid = port == null || (port.isNotEmpty() && port.all { it.isDigit() })
@@ -65,6 +64,40 @@ object XtreamUrl {
             if (port == null) "$scheme://${host.lowercase()}" else "$scheme://${host.lowercase()}:$port"
         } else {
             null
+        }
+    }
+
+    /**
+     * Splits `host:port` into its two halves, with a bracketed IPv6 literal kept whole.
+     *
+     * The naive "split on the last colon" this replaces is right for a name and wrong for an
+     * address: `[::1]` is all colons, so the split landed inside the literal and produced a host
+     * of `[:` and a port of `:1]`, which failed the digit check and rejected an address that was
+     * perfectly valid. A colon only separates a port when it comes after the closing bracket.
+     */
+    private fun splitHostAndPort(hostAndPort: String): Pair<String, String?>? =
+        if (hostAndPort.startsWith('[')) {
+            splitBracketedHost(hostAndPort)
+        } else {
+            val colonIndex = hostAndPort.lastIndexOf(':')
+            if (colonIndex >= 0) {
+                hostAndPort.substring(0, colonIndex) to hostAndPort.substring(colonIndex + 1)
+            } else {
+                hostAndPort to null
+            }
+        }
+
+    /** The `[…]` form, where only a colon after the closing bracket separates a port. */
+    private fun splitBracketedHost(hostAndPort: String): Pair<String, String?>? {
+        val close = hostAndPort.indexOf(']')
+        if (close < 0) return null
+
+        val host = hostAndPort.substring(0, close + 1)
+        val rest = hostAndPort.substring(close + 1)
+        return when {
+            rest.isEmpty() -> host to null
+            rest.startsWith(':') -> host to rest.substring(1)
+            else -> null
         }
     }
 

@@ -271,12 +271,17 @@ private fun ContinueTile(
 
             // The episode, when this is one. A series is listed by its own name, so without
             // this a viewer cannot tell which episode "continue" would resume.
-            if (entry.seasonNumber != null && entry.episodeNumber != null) {
+            // Bound to locals rather than asserted: these are `val`s in another module, which is
+            // the one case Kotlin will not smart-cast, and !! on something already null-checked
+            // reads as a real nullability risk when there is none.
+            val season = entry.seasonNumber
+            val episode = entry.episodeNumber
+            if (season != null && episode != null) {
                 Text(
                     text = stringResource(
                         R.string.tv_series_episode_number,
-                        entry.seasonNumber!!,
-                        entry.episodeNumber!!,
+                        season,
+                        episode,
                     ),
                     color = Color.White.copy(alpha = 0.55f),
                     fontSize = 12.sp,

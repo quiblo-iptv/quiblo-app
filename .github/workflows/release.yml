@@ -160,6 +160,34 @@ jobs:
             exit 1
           fi
 
+      # The release notes, written by whoever built the thing.
+      #
+      # `generate_release_notes` produces a list of commit subjects and a link to a compare
+      # view. That is a description of the diff, not of the release: it answers "which commits"
+      # when the person reading it asked "what do I get if I install this". CHANGELOG.md carries
+      # the answer, written at the time the work was done, and this reads the section out.
+      - name: Read the changelog entry
+        id: notes
+        env:
+          TAG: ${{ inputs.tag || github.ref_name }}
+        run: |
+          set -euo pipefail
+          VERSION="${TAG#v}"
+
+          BODY=$(awk -v v="## $VERSION" '$0 == v {f=1; next} f && /^## / {exit} f' CHANGELOG.md)
+          if [ -z "$(printf '%s' "$BODY" | tr -d '[:space:]')" ]; then
+            # Refused rather than filled in. A release published with a generated stub is a
+            # release nobody reads, and every one after it is trusted a little less.
+            echo "::error::CHANGELOG.md has no entry for $VERSION. Add one and re-run; the APKs are built and nothing has been published."
+            exit 1
+          fi
+
+          {
+            echo 'body<<QUIBLO_NOTES_EOF'
+            printf '%s\n' "$BODY"
+            echo 'QUIBLO_NOTES_EOF'
+          } >> "$GITHUB_OUTPUT"
+
       - name: Publish release
         uses: softprops/action-gh-release@v2
         with:
@@ -169,7 +197,9 @@ jobs:
           # releases page ends up describing a version no user can download.
           draft: false
           prerelease: ${{ steps.kind.outputs.prerelease }}
-          generate_release_notes: true
+          body: ${{ steps.notes.outputs.body }}
+          # Off deliberately. See "Read the changelog entry" above.
+          generate_release_notes: false
           files: |
             app/build/outputs/apk/release/quiblo-*.apk
             app/build/outputs/apk/release/quiblo-*.apk.sha256

@@ -89,6 +89,49 @@ class TitleMetadataRepository(
     suspend fun previewFor(title: String, kind: MediaKind): TitleMetadata? =
         cachedOrFetched(title, kind, acceptPartial = true)
 
+    /**
+     * Asks the service about [title] again, ignoring whatever is cached.
+     *
+     * `INC-F7`. The intake asks for this because artwork is sometimes missing or a plot is
+     * sometimes out of date, and a viewer looking at a wrong-looking screen has no other way
+     * to say "ask again" — the cached answer otherwise stands for a fortnight.
+     *
+     * **Three properties, and two of them were bought with defects in `005`:**
+     *
+     * - **A refusal is never cached.** A rate limit or a rejected key leaves the existing row
+     *   exactly as it was. That is [fetchAndCache]'s existing behaviour and this inherits it
+     *   rather than reimplementing it — the whole reason this goes through the same path.
+     * - **It spends the same rate limit as everything else.** A button a viewer can press
+     *   repeatedly is a request source like any other, and this project has had an account
+     *   blocked twice.
+     * - **It returns the outcome rather than the metadata**, so the screen can tell "the
+     *   service has nothing about this title" from "the service would not answer". Those look
+     *   identical in a null and must not look identical on screen.
+     *
+     * Returns [MetadataRefresh.NoMatch] without asking when the feature is off, which is also
+     * what the button's absence should already have prevented.
+     */
+    suspend fun refresh(title: String, kind: MediaKind): MetadataRefresh {
+        val key = keyStore.apiKey.value?.takeIf { it.isNotBlank() }
+        val tmdbKind = kind.toTmdbKind()
+        val identity = title.titleIdentity().takeIf { it.searchTitle.isNotBlank() }
+        if (key == null || tmdbKind == null || identity == null) return MetadataRefresh.NoMatch
+
+        // Straight to the fetch. Going through resolve() would find the fresh row this call
+        // exists to disbelieve and return it without asking anyone.
+        return fetchAndCache(
+            apiKey = key,
+            title = title,
+            kind = kind,
+            tmdbKind = tmdbKind,
+            identity = identity,
+            // The full record, never the cheap half: a viewer pressing refresh on a detail
+            // screen is looking at the plot and the cast, and a partial row would overwrite a
+            // complete one with less than it had.
+            partial = false,
+        ).toMetadataRefresh()
+    }
+
     /** Just the score. Kept for callers that render a badge and nothing else. */
     suspend fun ratingFor(title: String, kind: MediaKind): Double? = previewFor(title, kind)?.rating
 
@@ -236,6 +279,38 @@ class TitleMetadataRepository(
          */
         const val CACHE_TTL_MILLIS = 14L * 24 * 60 * 60 * 1000
     }
+}
+
+/**
+ * What pressing refresh did.
+ *
+ * Named for the metadata rather than for the gesture because `RefreshOutcome` is already taken
+ * by [SourceRepository], where refreshing means reloading a whole playlist. Two different things
+ * called Refresh is the sort of collision that reads fine until somebody imports the wrong one.
+ *
+ * A restatement of `TmdbAnswer` rather than a reuse of it, on the same rule as `ScanRefusal`:
+ * `docs/PLAN.md` §2 says features talk to `:core:data` and nothing else, and a detail screen
+ * importing `:source:tmdb` to render a message would be the first crack in it.
+ *
+ * Three cases rather than a nullable, because all three need different words on screen and two
+ * of them look identical in a null.
+ */
+sealed interface MetadataRefresh {
+
+    /** The service answered, and this is what it now knows. The screen redraws. */
+    data class Updated(val metadata: TitleMetadata) : MetadataRefresh
+
+    /** The service was asked and holds nothing about this title. Not a failure. */
+    data object NoMatch : MetadataRefresh
+
+    /** The service would not answer. **Nothing was overwritten**, and saying so matters. */
+    data class Refused(val reason: ScanRefusal) : MetadataRefresh
+}
+
+private fun TmdbAnswer.toMetadataRefresh(): MetadataRefresh = when (this) {
+    is TmdbAnswer.Found -> MetadataRefresh.Updated(metadata)
+    TmdbAnswer.NoMatch -> MetadataRefresh.NoMatch
+    is TmdbAnswer.Refused -> MetadataRefresh.Refused(reason.toScanRefusal())
 }
 
 /**

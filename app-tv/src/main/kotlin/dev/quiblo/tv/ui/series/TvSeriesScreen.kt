@@ -65,6 +65,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import dev.quiblo.core.data.MetadataRefresh
 import dev.quiblo.core.model.Channel
 import dev.quiblo.core.model.Episode
 import dev.quiblo.feature.series.SeriesDetailUiState
@@ -77,6 +78,7 @@ import dev.quiblo.tv.ui.detail.DetailFacts
 import dev.quiblo.tv.ui.detail.DetailOverview
 import dev.quiblo.tv.ui.detail.DetailTitle
 import dev.quiblo.tv.ui.detail.genresOrEmpty
+import dev.quiblo.tv.ui.detail.messageRes
 import dev.quiblo.tv.ui.detail.openDetailScreen
 import org.koin.androidx.compose.koinViewModel
 import org.koin.core.parameter.parametersOf
@@ -135,6 +137,7 @@ fun TvSeriesScreen(
                 onPlayEpisode = onPlayEpisode,
                 onToggleFavorite = viewModel::toggleFavorite,
                 onRemoveFromHistory = viewModel::removeFromHistory,
+                onRefreshMetadata = viewModel::refreshMetadata,
                 focusEpisodeId = focusEpisodeId,
             )
         }
@@ -147,6 +150,7 @@ private fun Loaded(
     onPlayEpisode: (Episode, Long?) -> Unit,
     onToggleFavorite: () -> Unit,
     onRemoveFromHistory: () -> Unit,
+    onRefreshMetadata: () -> Unit,
     focusEpisodeId: String?,
 ) {
     val seasons = state.details.seasons
@@ -216,6 +220,7 @@ private fun Loaded(
                 onPlayEpisode = onPlayEpisode,
                 onToggleFavorite = onToggleFavorite,
                 onRemoveFromHistory = onRemoveFromHistory,
+                onRefreshMetadata = onRefreshMetadata,
             )
         }
 
@@ -285,6 +290,7 @@ private fun SeriesHeader(
     onPlayEpisode: (Episode, Long?) -> Unit,
     onToggleFavorite: () -> Unit,
     onRemoveFromHistory: () -> Unit,
+    onRefreshMetadata: () -> Unit,
 ) {
     Row(horizontalArrangement = Arrangement.spacedBy(DETAIL_COLUMN_GAP)) {
         DetailArtwork(
@@ -323,6 +329,7 @@ private fun SeriesHeader(
                 onPlayEpisode = onPlayEpisode,
                 onToggleFavorite = onToggleFavorite,
                 onRemoveFromHistory = onRemoveFromHistory,
+                onRefreshMetadata = onRefreshMetadata,
             )
         }
     }
@@ -337,6 +344,7 @@ private fun SeriesActions(
     onPlayEpisode: (Episode, Long?) -> Unit,
     onToggleFavorite: () -> Unit,
     onRemoveFromHistory: () -> Unit,
+    onRefreshMetadata: () -> Unit,
 ) {
     val hasResume = state.resumeEpisode != null
 
@@ -402,6 +410,35 @@ private fun SeriesActions(
                 onClick = onRemoveFromHistory,
             )
         }
+
+        // Last, for the same reason as on the film screen: it is the control a viewer reaches
+        // for only when the screen already looks wrong, and it must not sit between Resume and
+        // the favourite on the way there.
+        if (state.canRefreshMetadata) {
+            DetailButton(
+                label = stringResource(
+                    if (state.isEnriching) {
+                        R.string.tv_detail_refresh_working
+                    } else {
+                        R.string.tv_detail_refresh
+                    },
+                ),
+                onClick = onRefreshMetadata,
+            )
+        }
+    }
+
+    state.refreshResult?.let { result ->
+        Text(
+            text = stringResource(result.messageRes()),
+            color = if (result is MetadataRefresh.Refused) {
+                Color(0xFFFF8A80)
+            } else {
+                Color.White.copy(alpha = 0.75f)
+            },
+            fontSize = 14.sp,
+            modifier = Modifier.padding(top = 10.dp),
+        )
     }
 }
 

@@ -40,6 +40,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Replay
 import androidx.compose.material.icons.filled.Tv
 import androidx.compose.material3.Button
@@ -70,6 +71,8 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.compose.SubcomposeAsyncImage
+import dev.quiblo.core.data.MetadataRefresh
+import dev.quiblo.core.data.ScanRefusal
 import dev.quiblo.core.model.Channel
 import dev.quiblo.core.model.Episode
 import dev.quiblo.core.model.Season
@@ -128,6 +131,7 @@ fun SeriesDetailScreen(
                     state = state,
                     onEpisodeClick = onEpisodeClick,
                     onRemoveFromHistory = viewModel::removeFromHistory,
+                    onRefreshMetadata = viewModel::refreshMetadata,
                 )
             }
         }
@@ -264,6 +268,7 @@ private fun SeriesDetailContent(
     state: SeriesDetailUiState.Success,
     onEpisodeClick: (Episode, Channel, Long?) -> Unit,
     onRemoveFromHistory: () -> Unit,
+    onRefreshMetadata: () -> Unit,
 ) {
     val channel = state.channel
     val details = state.details
@@ -285,6 +290,15 @@ private fun SeriesDetailContent(
     ) {
         item {
             SeriesHeader(channel = channel, details = details, metadata = state.metadata)
+        }
+
+        item {
+            RefreshMetadata(
+                canRefresh = state.canRefreshMetadata,
+                isWorking = state.isEnriching,
+                result = state.refreshResult,
+                onRefresh = onRefreshMetadata,
+            )
         }
 
         // Only when there is something to resume. An always-present button that sometimes
@@ -480,6 +494,63 @@ private fun EpisodeItem(episode: Episode, onClick: () -> Unit) {
                     overflow = TextOverflow.Ellipsis,
                 )
             }
+        }
+    }
+}
+
+/**
+ * "Refresh information", and what happened when it was pressed.
+ *
+ * The film screen's twin, and deliberately a copy rather than a shared composable: the two
+ * screens keep their own strings so a series can say something a film should not, and one
+ * composable in a third module for eleven lines of column would be the smallest possible module.
+ * If a third screen ever wants it, that is the moment to move it.
+ *
+ * **Absent rather than disabled without a key** — `AC-META-01` means it cannot work, and a
+ * greyed-out button still invites the press that does nothing.
+ */
+@Composable
+private fun RefreshMetadata(
+    canRefresh: Boolean,
+    isWorking: Boolean,
+    result: MetadataRefresh?,
+    onRefresh: () -> Unit,
+) {
+    if (!canRefresh) return
+
+    Column(modifier = Modifier.padding(horizontal = 16.dp)) {
+        TextButton(onClick = onRefresh, enabled = !isWorking) {
+            Icon(imageVector = Icons.Filled.Refresh, contentDescription = null)
+            Text(
+                text = stringResource(
+                    if (isWorking) R.string.series_refresh_working else R.string.series_refresh_metadata,
+                ),
+                modifier = Modifier.padding(start = 8.dp),
+            )
+        }
+
+        val message = when (result) {
+            is MetadataRefresh.Updated -> R.string.series_refresh_updated
+            MetadataRefresh.NoMatch -> R.string.series_refresh_no_match
+            is MetadataRefresh.Refused -> when (result.reason) {
+                ScanRefusal.RATE_LIMITED -> R.string.series_refresh_rate_limited
+                ScanRefusal.KEY_REJECTED -> R.string.series_refresh_key_rejected
+                ScanRefusal.UNAVAILABLE -> R.string.series_refresh_unavailable
+            }
+            null -> null
+        }
+
+        message?.let {
+            Text(
+                text = stringResource(it),
+                style = MaterialTheme.typography.bodySmall,
+                color = if (result is MetadataRefresh.Refused) {
+                    MaterialTheme.colorScheme.error
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                },
+                modifier = Modifier.padding(start = 12.dp, top = 2.dp),
+            )
         }
     }
 }

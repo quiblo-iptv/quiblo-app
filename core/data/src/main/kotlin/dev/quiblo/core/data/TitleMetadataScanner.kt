@@ -293,7 +293,7 @@ class TitleMetadataScanner(
  * written by whatever wrote the row, and a scan is not the place to discover that a
  * database holds a kind this build has never heard of.
  */
-private fun TmdbRefusal.toScanRefusal(): ScanRefusal = when (this) {
+internal fun TmdbRefusal.toScanRefusal(): ScanRefusal = when (this) {
     TmdbRefusal.RATE_LIMITED -> ScanRefusal.RATE_LIMITED
     TmdbRefusal.KEY_REJECTED -> ScanRefusal.KEY_REJECTED
     TmdbRefusal.UNAVAILABLE -> ScanRefusal.UNAVAILABLE

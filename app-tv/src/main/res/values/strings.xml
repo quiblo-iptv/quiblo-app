@@ -39,6 +39,9 @@
     <string name="tv_settings_profile_switch">Switch</string>
 
     <string name="tv_placeholder">%1$s content appears here.</string>
+    <string name="tv_guide_none">No listings for this channel.</string>
+    <string name="tv_guide_on_now">On now</string>
+    <string name="tv_guide_time">%1$s – %2$s</string>
     <string name="tv_no_channels">No channels yet. Add a playlist on your phone and import it here.</string>
     <!-- Shown wherever a catalogue is empty because nothing has been configured at all. One
          string for every such screen: "no playlist" is the same fact on Live as on Search,

@@ -82,8 +82,9 @@ numbers in one file.
 
 ### A3 — INC-F3, long-press to forget something
 
-**Where:** phone, on the Continue watching row. The television half is **not built** —
-`STOPPERS.md` **S12**.
+**Where:** both apps, on the Continue watching row. The television half was built later the same
+day — `STOPPERS.md` **S12**, closed — and holds the centre button to arm the tile rather than
+opening a menu.
 
 | | |
 | :---- | :---- |
@@ -212,6 +213,39 @@ nobody has configured, and it is the half that matters to somebody who needs lar
 
 **One thing that is the design.** Match system forgets the explicit choices rather than hiding
 them behind a flag, so turning it off returns the defaults and not what was set before.
+
+### INC-F4 — the full guide, on a timeline
+
+Merged 2026-08-12. **Nothing here has been seen on a device**, and it cannot be seen without a
+working panel: the listing comes from `get_simple_data_table`, which the M3U side has no answer
+for and no test account has ever been asked for.
+
+| | |
+| :---- | :---- |
+| **What to look at** | Long-press a live channel on the phone |
+| **Passes if** | The sheet still opens with Now and Next, and a Full guide strip under it opens scrolled to the programme playing |
+| **Fails if** | The strip opens at the far left, is empty against a panel that has listings, or the sheet no longer scrolls |
+
+| | |
+| :---- | :---- |
+| **What to look at** | Hold the centre button on a channel on the television |
+| **Passes if** | A strip appears across the bottom with focus on the programme on now, left and right walk it, the header names what is focused, and Back closes it |
+| **Fails if** | The remote looks dead when the panel opens, focus lands on the first block instead of the one playing, or Back leaves the app instead of closing the panel |
+
+| | |
+| :---- | :---- |
+| **What to look at** | The times on the strip against the clock on the wall |
+| **Passes if** | The ruler ticks on the hour and the now-marker sits where the current time is |
+| **Fails if** | Everything is a whole number of hours out — that is a zone applied twice, and a now/next label hides it where a timeline cannot |
+
+**The gesture itself is what is unproven on the television.** Holding the centre button is this
+app's only long-press, and the one other control that uses it — arming a continue-watching tile,
+`S12` — has never been seen on a remote either. If the panel never opens, check that before
+looking at anything in the guide code.
+
+**Watch the request count.** Opening the panel is one call per channel per session and browsing
+the list is still none. A panel that starts refusing the account after a few long-presses means
+the dedupe is not holding, and that is the failure this project has already had twice.
 
 ---
 

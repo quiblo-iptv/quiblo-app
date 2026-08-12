@@ -355,6 +355,27 @@ class XtreamSource internal constructor(
         }
     }
 
+    override suspend fun fullGuideFor(
+        request: SourceRequest,
+        channelKey: String,
+        providerStreamId: String,
+    ): GuideResult {
+        if (isBlocked()) return GuideResult.Failure(SourceError.ProviderBlocked)
+
+        val base = XtreamUrl.normalize(request.location)
+            ?: return GuideResult.Failure(SourceError.UnreachableHost)
+        val credentials = credentialStore.credentials(request.sourceId)
+            ?: return GuideResult.Failure(SourceError.Unauthorized)
+
+        return when (val result = client.fullEpg(base, credentials, providerStreamId)) {
+            is ApiResult.Err -> noteBlocked(result.error, GuideResult::Failure)
+
+            is ApiResult.Ok -> GuideResult.Success(
+                result.value.listings.mapNotNull { it.toProgramme(request.sourceId, channelKey) },
+            )
+        }
+    }
+
     override suspend fun seriesDetails(
         request: SourceRequest,
         seriesId: String,

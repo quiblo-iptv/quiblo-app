@@ -15,6 +15,19 @@ Formatted after [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and ve
 
 ## Unreleased
 
+### Added
+
+- **A channel's whole programme guide, on a timeline.** Long-press a channel — with a finger on
+  the phone, by holding the centre button on the television — and the listing is laid out against
+  the clock: an hour behind, half a day ahead, each programme as wide as it is long. What is on
+  now is marked, and the times are the television's own, whatever zone the panel keeps.
+- The phone opens the strip scrolled to now and writes out whichever programme you tap, since a
+  half-hour block has room for a title and not for a plot. The television walks the strip with the
+  D-pad and shows the same detail above it, with no dialog: the channel list stays behind the
+  panel and Back closes it.
+- The full listing is asked of the provider only when a viewer asks for it, and once per channel
+  per session. Browsing a list still fetches nothing but now and next.
+
 ## 0.11.0
 
 ### Added

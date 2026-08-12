@@ -207,6 +207,7 @@ fun BrowseScreen(
             listState = listState,
             onItemClick = onItemClick,
             onHistoryClick = openHistory,
+            onHistoryRemove = viewModel::removeFromHistory,
             onToggleFavorite = viewModel::toggleFavorite,
             onShowGuide = { guideFor = it },
         )
@@ -249,6 +250,7 @@ private fun BrowseCatalogue(
     listState: LazyListState,
     onItemClick: (Channel) -> Unit,
     onHistoryClick: (HistoryEntry) -> Unit,
+    onHistoryRemove: (HistoryEntry) -> Unit,
     onToggleFavorite: (Channel) -> Unit,
     onShowGuide: (Channel) -> Unit,
 ) {
@@ -263,6 +265,7 @@ private fun BrowseCatalogue(
                 entries = history,
                 posters = state.posters,
                 onClick = onHistoryClick,
+                onRemove = onHistoryRemove,
                 modifier = Modifier.padding(top = 4.dp, bottom = 12.dp),
             )
             CentredMessage(emptyMessage)
@@ -285,6 +288,7 @@ private fun BrowseCatalogue(
                         entries = history,
                         posters = state.posters,
                         onClick = onHistoryClick,
+                        onRemove = onHistoryRemove,
                         modifier = Modifier.padding(bottom = 12.dp),
                     )
                 }
@@ -321,6 +325,7 @@ private fun BrowseCatalogue(
                         entries = history,
                         posters = state.posters,
                         onClick = onHistoryClick,
+                        onRemove = onHistoryRemove,
                         modifier = Modifier.padding(top = 4.dp, bottom = 12.dp),
                     )
                 }

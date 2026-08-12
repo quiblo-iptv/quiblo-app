@@ -418,6 +418,20 @@ class BrowseViewModel(
         viewModelScope.launch { channelRepository.toggleFavorite(channel) }
     }
 
+    fun removeFromHistory(entry: HistoryEntry) {
+        viewModelScope.launch {
+            val seriesStableKey = entry.seriesStableKey
+            if (seriesStableKey != null) {
+                // A series tile represents the whole programme collapsed to the episode last watched.
+                // Removing only that episode leaves the row showing the episode before it, which reads
+                // to a viewer as the action failing. So we remove the whole series.
+                historyRepository.removeSeriesFromHistory(seriesStableKey)
+            } else {
+                historyRepository.removeFromHistory(entry.stableKey)
+            }
+        }
+    }
+
     private companion object {
         const val STOP_TIMEOUT_MILLIS = 5_000L
         const val SEARCH_DEBOUNCE_MILLIS = 120L

@@ -22,6 +22,17 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
+private const val NANOS_PER_MILLI = 1_000_000L
+
+/**
+ * Elapsed milliseconds from a monotonic source.
+ *
+ * The origin is arbitrary and meaningless; only the difference between two readings is ever
+ * used, which is all a token bucket needs. `nanoTime` rather than `SystemClock.elapsedRealtime`
+ * so this module stays a plain JVM library with no Android dependency.
+ */
+internal fun monotonicMillis(): Long = System.nanoTime() / NANOS_PER_MILLI
+
 /**
  * How fast this app is willing to talk to one panel, at all, for any reason.
  *
@@ -39,13 +50,24 @@ import kotlinx.coroutines.sync.withLock
  * together and does not care which screen they came from.
  */
 internal class PanelRateLimiter(
-    private val now: () -> Long = System::currentTimeMillis,
+    /**
+     * A **monotonic** millisecond clock, and that word is the whole of this parameter.
+     *
+     * This used to be `System::currentTimeMillis`, which is the wall clock and can move
+     * backwards. When it does — an NTP correction after boot, which is routine on the cheap
+     * television boxes this app runs on, since they have no battery-backed clock — `elapsed`
+     * goes negative, [refill] declines to run, and tokens never come back while the debt keeps
+     * growing. Every subsequent request waits longer than the last, for as long as it takes the
+     * wall clock to catch up to where it used to be. `Media3PlayerController` already avoids
+     * exactly this for its load timer, for exactly this reason.
+     */
+    private val now: () -> Long = ::monotonicMillis,
     private val pause: suspend (Long) -> Unit = { delay(it) },
 ) {
 
     private val mutex = Mutex()
     private var tokens: Double = BURST_CAPACITY.toDouble()
-    private var lastRefillEpochMillis: Long = now()
+    private var lastRefillMillis: Long = now()
 
     /** Suspends until this request is within budget. */
     suspend fun acquire() {
@@ -68,14 +90,15 @@ internal class PanelRateLimiter(
 
     private fun refill() {
         val timestamp = now()
-        val elapsed = timestamp - lastRefillEpochMillis
+        val elapsed = timestamp - lastRefillMillis
         if (elapsed > 0) {
             tokens = (tokens + elapsed / MILLIS_PER_TOKEN).coerceAtMost(BURST_CAPACITY.toDouble())
-            lastRefillEpochMillis = timestamp
+            lastRefillMillis = timestamp
         }
     }
 
     private companion object {
+
         /**
          * Sustained rate: one request every 400 ms, so two and a half a second.
          *

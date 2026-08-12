@@ -20,6 +20,8 @@ package dev.quiblo.core.database.di
 
 import android.content.Context
 import dev.quiblo.core.database.QuibloDatabase
+import dev.quiblo.core.database.RoomTransactionRunner
+import dev.quiblo.core.database.TransactionRunner
 import org.koin.core.module.Module
 import org.koin.dsl.module
 
@@ -31,6 +33,7 @@ import org.koin.dsl.module
  */
 val databaseModule: Module = module {
     single { QuibloDatabase.create(get<Context>()) }
+    single<TransactionRunner> { RoomTransactionRunner(get<QuibloDatabase>()) }
     single { get<QuibloDatabase>().sourceDao() }
     single { get<QuibloDatabase>().titleMetadataDao() }
     single { get<QuibloDatabase>().channelLogoDao() }

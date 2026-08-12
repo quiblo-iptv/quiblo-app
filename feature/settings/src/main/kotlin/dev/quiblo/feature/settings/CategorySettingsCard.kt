@@ -18,12 +18,14 @@
 
 package dev.quiblo.feature.settings
 
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.lazy.LazyListScope
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Edit
@@ -45,6 +47,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -61,45 +64,75 @@ import dev.quiblo.core.model.MediaKind
  * provider's, which stays the key — a refresh reassigns everything else, and an edit keyed
  * to anything but the original title would come unstuck the first time a playlist reloaded.
  *
- * The rows are items of the settings list itself rather than children of a nested scroller.
- * A bounded inner LazyColumn capped at 320dp showed about four categories and swallowed
- * drags that should have moved the outer screen; emitting each row as its own item gives one
- * scroll surface, one drag direction, and lets a list of several hundred categories scroll
- * the same way every other card on the screen does.
+ * The category rows scroll inside a fixed-height inner LazyColumn bounded at 220–420dp.
+ * The box has a visible border so it reads as its own scrolling region rather than as a
+ * clipped list — without the edge a drag inside it is ambiguous, and the viewer cannot tell
+ * whether they are moving the categories or the outer settings screen. 420dp shows roughly
+ * a dozen rows, which is enough to orient without dominating the screen.
  */
-internal fun LazyListScope.categorySettingsItems(
+@Composable
+internal fun CategorySettingsCard(
     selectedKind: MediaKind,
     categories: List<Category>,
     onSelectKind: (MediaKind) -> Unit,
     onSetHidden: (Category, Boolean) -> Unit,
-    onRenameRequest: (Category) -> Unit,
+    onRename: (Category, String?) -> Unit,
 ) {
-    item {
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surfaceVariant,
-            ),
-        ) {
-            Column(modifier = Modifier.padding(16.dp)) {
+    // Rename state lives inside the card: it is category-specific and nothing outside the
+    // card needs to know about it.
+    var renaming: Category? by remember { mutableStateOf(null) }
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant,
+        ),
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Text(
+                text = stringResource(R.string.settings_categories_title),
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+            )
+            Text(
+                text = stringResource(R.string.settings_categories_summary),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 4.dp, bottom = 12.dp),
+            )
+
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                MediaKind.entries.forEach { kind ->
+                    FilterChip(
+                        selected = kind == selectedKind,
+                        onClick = { onSelectKind(kind) },
+                        label = { Text(stringResource(kind.labelRes())) },
+                    )
+                }
+            }
+
+            if (categories.isEmpty()) {
                 Text(
-                    text = stringResource(R.string.settings_categories_title),
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold,
-                )
-                Text(
-                    text = stringResource(R.string.settings_categories_summary),
+                    text = stringResource(R.string.settings_categories_empty),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = 4.dp, bottom = 12.dp),
+                    modifier = Modifier.padding(top = 16.dp),
                 )
-
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    MediaKind.entries.forEach { kind ->
-                        FilterChip(
-                            selected = kind == selectedKind,
-                            onClick = { onSelectKind(kind) },
-                            label = { Text(stringResource(kind.labelRes())) },
+            } else {
+                val shape = MaterialTheme.shapes.medium
+                LazyColumn(
+                    modifier = Modifier
+                        .padding(top = 12.dp)
+                        .fillMaxWidth()
+                        .heightIn(min = 220.dp, max = 420.dp)
+                        .border(1.dp, MaterialTheme.colorScheme.outlineVariant, shape)
+                        .clip(shape),
+                ) {
+                    items(items = categories, key = { it.title }) { category ->
+                        CategoryRow(
+                            category = category,
+                            onToggle = { onSetHidden(category, !category.isHidden) },
+                            onRename = { renaming = category },
                         )
                     }
                 }
@@ -107,23 +140,15 @@ internal fun LazyListScope.categorySettingsItems(
         }
     }
 
-    if (categories.isEmpty()) {
-        item {
-            Text(
-                text = stringResource(R.string.settings_categories_empty),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = 16.dp),
-            )
-        }
-    } else {
-        items(items = categories, key = { it.title }) { category ->
-            CategoryRow(
-                category = category,
-                onToggle = { onSetHidden(category, !category.isHidden) },
-                onRename = { onRenameRequest(category) },
-            )
-        }
+    renaming?.let { category ->
+        RenameDialog(
+            category = category,
+            onConfirm = {
+                onRename(category, it)
+                renaming = null
+            },
+            onDismiss = { renaming = null },
+        )
     }
 }
 
@@ -132,7 +157,7 @@ private fun CategoryRow(category: Category, onToggle: () -> Unit, onRename: () -
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 4.dp),
+            .padding(horizontal = 12.dp, vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(modifier = Modifier.weight(1f)) {

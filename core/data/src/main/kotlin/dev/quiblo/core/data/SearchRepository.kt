@@ -20,10 +20,11 @@ package dev.quiblo.core.data
 
 import dev.quiblo.core.database.dao.ChannelDao
 import dev.quiblo.core.database.dao.ChannelTitle
+import dev.quiblo.core.database.dao.TitleGenreRow
 import dev.quiblo.core.database.dao.TitleMetadataDao
 import dev.quiblo.core.model.Channel
 import dev.quiblo.core.model.MediaKind
-import dev.quiblo.source.tmdb.cleanedForSearch
+import dev.quiblo.source.tmdb.TitleIdentity
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -133,7 +134,7 @@ class SearchRepository(
 
             GenreIndex(
                 genres = genres,
-                coveragePercent = coverage(titles, cached.mapTo(HashSet()) { it.searchTitle to it.kind }),
+                coveragePercent = coverage(titles, cached.mapTo(HashSet()) { it.identity() }),
             )
         }
     }
@@ -150,11 +151,9 @@ class SearchRepository(
      * leaving them in the denominator would cap the figure below 100% permanently and make
      * a complete cache look like a broken one.
      */
-    private fun coverage(titles: List<ChannelTitle>, cachedKeys: Set<Pair<String, String>>): Int {
+    private fun coverage(titles: List<ChannelTitle>, cachedKeys: Set<CacheIdentity>): Int {
         val wanted = titles.asSequence()
-            .mapNotNull { title ->
-                title.name.searchKey()?.let { it to title.kind }
-            }
+            .mapNotNull { it.name.cacheIdentity(it.kind) }
             .toSet()
 
         if (wanted.isEmpty()) return 0
@@ -186,11 +185,11 @@ class SearchRepository(
             val inGenre = cached.asSequence()
                 .filterNot { it.isMiss }
                 .filter { row -> row.genres.orEmpty().splitGenres().any { it.equals(genre, ignoreCase = true) } }
-                .mapTo(HashSet()) { it.searchTitle to it.kind }
+                .mapTo(HashSet()) { it.identity() }
 
             titles.asSequence()
                 .filter { term.isBlank() || it.name.contains(term, ignoreCase = true) }
-                .filter { title -> title.name.searchKey()?.let { (it to title.kind) in inGenre } == true }
+                .filter { title -> title.name.cacheIdentity(title.kind) in inGenre }
                 // Two kinds share one cap so a genre held mostly by series still returns
                 // films, and the split back into columns happens after the rows are read.
                 .take(limit * KINDS_WITH_METADATA)
@@ -250,11 +249,5 @@ class SearchRepository(
 private fun String.splitGenres(): Sequence<String> =
     splitToSequence('\n').map { it.trim() }.filter { it.isNotBlank() }
 
-/**
- * The key this title is filed under in the metadata cache, or null if it is not filed at all.
- *
- * The same two steps `TitleMetadataRepository` takes before it writes a row. Written out here
- * rather than shared through a helper because the two must agree exactly, and a mismatch
- * would show as a genre filter that quietly returns nothing.
- */
-private fun String.searchKey(): String? = cleanedForSearch().lowercase().takeIf { it.isNotBlank() }
+/** The cache row this cached projection stands for, so the two sides join on the whole key. */
+private fun TitleGenreRow.identity() = CacheIdentity(TitleIdentity(searchTitle, year), kind)

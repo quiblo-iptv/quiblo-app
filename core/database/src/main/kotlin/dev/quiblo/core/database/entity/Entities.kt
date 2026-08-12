@@ -251,11 +251,34 @@ data class ProgrammeEntity(
  * series and they are not the same record. With the title alone, whichever tab the user
  * opened first would answer for the other.
  */
-@Entity(tableName = "title_metadata", primaryKeys = ["searchTitle", "kind"])
+@Entity(tableName = "title_metadata", primaryKeys = ["searchTitle", "kind", "year"])
 data class TitleMetadataEntity(
     val searchTitle: String,
     /** A [dev.quiblo.core.model.MediaKind] name — `VOD` or `SERIES`. */
     val kind: String,
+    /**
+     * The release year the provider's title carried, or `0` when it carried none.
+     *
+     * The third of the key, and it was missing until #024. The cleaner that produces
+     * [searchTitle] strips bracketed groups whole because that is what makes a good search
+     * query — and a provider year is almost always bracketed. So `Dune (1984)` and
+     * `Dune (2021)` were one row, the first fetched won, and the other film showed the
+     * winner's poster and plot until the entry expired.
+     *
+     * `0` rather than null because SQLite does not consider two nulls equal, so a nullable
+     * column in a primary key would let every undated title insert a fresh row on each visit
+     * — the cache failing open, which is worse than the fault it replaced.
+     */
+    val year: Int = 0,
+    /**
+     * The service's own id for this title, when the answer carried one.
+     *
+     * Stored but not yet keyed on. It is the only identity in this problem that is not an
+     * inference — [searchTitle] and [year] are both read out of a string a provider typed —
+     * and `014`'s grouping needs an identity it can trust when two rows disagree. Filled now
+     * so grouping does not cost this table a second migration for the same reason.
+     */
+    val tmdbId: Int? = null,
     val overview: String? = null,
     /** Newline-separated. A list table for a handful of short strings is not worth a join. */
     val genres: String? = null,

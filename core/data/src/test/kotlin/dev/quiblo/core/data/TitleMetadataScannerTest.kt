@@ -93,11 +93,8 @@ class TitleMetadataScannerTest {
     }
 
     @Test
-    @DisplayName("of several wordings for one film, the one carrying its year is asked")
-    fun `the title with a year wins`() = runTest {
-        // Both clean to "the matrix", so they are one title to look up — a bracketed year is
-        // stripped by the cleaning, an unbracketed one is not, and only the bracketed form
-        // therefore collapses like this.
+    @DisplayName("a dated title and an undated one are two titles, and both are asked")
+    fun `an undated wording does not collapse into a dated one`() = runTest {
         catalogue(title(1, "The Matrix"), title(2, "The Matrix (1999)"))
         val asked = mutableListOf<String>()
         coEvery { client.summary(any(), any(), any(), any()) } answers {
@@ -107,16 +104,20 @@ class TitleMetadataScannerTest {
 
         scanAndAwait()
 
-        // The year is what tells a remake from an original, and TMDB is given it as a search
-        // parameter only when the wording the scan picked still carries it.
-        assertEquals(listOf("The Matrix (1999)"), asked)
+        // Before #024 these were one work item and the scan picked the wording that still
+        // carried its year. They are two now, and the extra request is the point rather than
+        // a cost that slipped in: the scan cannot know that an undated "The Matrix" is the
+        // 1999 one, and the alternative to asking twice is filing both under whichever
+        // answer came back first. That is the false merge this whole item exists to end, and
+        // it is the failure that shows a viewer the wrong film rather than a slower scan.
+        assertEquals(listOf("The Matrix", "The Matrix (1999)"), asked)
     }
 
     @Test
     @DisplayName("a scan interrupted half way starts again half way")
     fun `titles already cached are not asked about again`() = runTest {
         catalogue(title(1, "The Matrix (1999)"), title(2, "Heat (1995)"))
-        metadataDao.put("the matrix", MediaKind.VOD, fetchedAt = FIXED_NOW)
+        metadataDao.put("the matrix", MediaKind.VOD, year = 1999, fetchedAt = FIXED_NOW)
         val asked = mutableListOf<String>()
         coEvery { client.summary(any(), any(), any(), any()) } answers {
             asked += secondArg<String>()
@@ -133,7 +134,7 @@ class TitleMetadataScannerTest {
     @DisplayName("an answer older than the cache's fortnight is asked again")
     fun `a stale row is not treated as known`() = runTest {
         catalogue(title(1, "The Matrix (1999)"))
-        metadataDao.put("the matrix", MediaKind.VOD, fetchedAt = FIXED_NOW - FIFTEEN_DAYS_MILLIS)
+        metadataDao.put("the matrix", MediaKind.VOD, year = 1999, fetchedAt = FIXED_NOW - FIFTEEN_DAYS_MILLIS)
         coEvery { client.summary(any(), any(), any(), any()) } returns FOUND
 
         assertEquals(MetadataScanState.Finished(total = 1, found = 1, missing = 0), scanAndAwait())
@@ -253,29 +254,30 @@ class TitleMetadataScannerTest {
 
     /** A cache that can be inspected, since what is *not* written is the point here. */
     private class RecordingMetadataDao : TitleMetadataDao {
-        val rows = mutableMapOf<Pair<String, String>, TitleMetadataEntity>()
+        val rows = mutableMapOf<Triple<String, String, Int>, TitleMetadataEntity>()
 
-        override suspend fun find(searchTitle: String, kind: String): TitleMetadataEntity? =
-            rows[searchTitle to kind]
+        override suspend fun find(searchTitle: String, kind: String, year: Int): TitleMetadataEntity? =
+            rows[Triple(searchTitle, kind, year)]
 
         override suspend fun allGenreRows(): List<TitleGenreRow> = rows.values.map {
-            TitleGenreRow(it.searchTitle, it.kind, it.genres, it.isMiss)
+            TitleGenreRow(it.searchTitle, it.kind, it.year, it.genres, it.isMiss)
         }
 
         override suspend fun allKeys(): List<CachedTitleKey> = rows.values.map {
-            CachedTitleKey(it.searchTitle, it.kind, it.fetchedAtEpochMillis)
+            CachedTitleKey(it.searchTitle, it.kind, it.year, it.fetchedAtEpochMillis)
         }
 
         override suspend fun upsert(entity: TitleMetadataEntity) {
-            rows[entity.searchTitle to entity.kind] = entity
+            rows[Triple(entity.searchTitle, entity.kind, entity.year)] = entity
         }
 
         override suspend fun clear() = rows.clear()
 
-        fun put(searchTitle: String, kind: MediaKind, fetchedAt: Long) {
-            rows[searchTitle to kind.name] = TitleMetadataEntity(
+        fun put(searchTitle: String, kind: MediaKind, year: Int, fetchedAt: Long) {
+            rows[Triple(searchTitle, kind.name, year)] = TitleMetadataEntity(
                 searchTitle = searchTitle,
                 kind = kind.name,
+                year = year,
                 fetchedAtEpochMillis = fetchedAt,
                 rating = 8.0,
             )

@@ -53,6 +53,75 @@ fun String.cleanedForSearch(): String = this
 /** The year in a provider title, when it has one, for narrowing the search. */
 fun String.yearInTitle(): Int? = YEAR.find(this)?.groupValues?.get(1)?.toIntOrNull()
 
+/**
+ * What makes two provider titles the same title.
+ *
+ * **Not the same question as [cleanedForSearch], and conflating the two was #024.** That
+ * function builds a *query*, and it is right to strip the year: TMDB takes the year as its
+ * own parameter, and a year inside the query text narrows nothing and matches worse. But the
+ * metadata cache used its output as a *key*, and a key that has thrown the year away cannot
+ * tell `Dune (1984)` from `Dune (2021)`. One row held both films, the first fetched won, and
+ * the other film showed the winner's poster and plot for a fortnight at a time.
+ *
+ * So identity is the search string **plus the year, read from the raw title** — before the
+ * brackets that usually carry it are stripped. That last detail is the whole of the fix:
+ * reading the year off the cleaned string would find it only when the provider happened not
+ * to bracket it, which is how three of `014`'s four opening rows shared a key and the fourth
+ * did not.
+ *
+ * A [searchTitle] of `""` means there was nothing here worth looking up, and callers must
+ * keep treating it as "do not ask" rather than as a key a hundred junk titles can share.
+ */
+fun String.titleIdentity(): TitleIdentity {
+    val year = yearInTitle()
+    val cleaned = cleanedForSearch().lowercase()
+    return TitleIdentity(
+        searchTitle = if (year == null) cleaned else cleaned.withoutYear(year),
+        year = year ?: NO_YEAR,
+    )
+}
+
+/**
+ * The cleaned title with its year taken out of the words, now that it is held as a field.
+ *
+ * **A bracketed year is already gone and a bare one is not**, so without this the identity
+ * of `Interstellar (2014)` is `interstellar` and the identity of `Interstellar 2014` is
+ * `interstellar 2014` — one film, two rows, decided by a provider's punctuation. That is the
+ * half of #024 the plan did not predict and the test found: the year has to leave the string
+ * on both paths, not just the one the bracket stripper happens to cover.
+ *
+ * **Unless taking it out leaves nothing.** `2012` is a film, `1917` is a film, and a title
+ * that is only a year is a title rather than a date — reducing it to blank would mark it "not
+ * worth looking up" and it would never be enriched again. Keeping it costs at most that `2012`
+ * carries its own year twice, which nothing can misread.
+ *
+ * Only the *identity* is stripped. [cleanedForSearch] is untouched, so the query TMDB actually
+ * receives is exactly what it was: this changes what the cache calls a row, not what is asked.
+ */
+private fun String.withoutYear(year: Int): String {
+    val stripped = replace(year.toString(), " ").replace(WHITESPACE, " ").trim()
+    return stripped.ifBlank { this }
+}
+
+/**
+ * A cleaned title and the year it was released, together.
+ *
+ * [year] is [NO_YEAR] rather than null when the provider supplied none, because this is a
+ * database key before it is anything else and SQLite does not consider two nulls equal — a
+ * nullable year column in a primary key would let every undated title insert a fresh row on
+ * every visit, which is the cache failing open rather than a title staying separate.
+ */
+data class TitleIdentity(val searchTitle: String, val year: Int)
+
+/**
+ * The year of a title whose provider did not say.
+ *
+ * Not a match for anything dated. An absent year is an absence and not a wildcard: folding
+ * an undated `Dune` into either dated one would be guessing which, and guessing wrong here
+ * is the silent failure this whole mechanism exists to stop.
+ */
+const val NO_YEAR: Int = 0
+
 private val BRACKETED = Regex("""[\[(][^\])]*[\])]""")
 
 /**

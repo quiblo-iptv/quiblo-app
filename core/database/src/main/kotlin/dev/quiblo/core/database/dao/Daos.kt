@@ -414,6 +414,8 @@ interface ProgrammeDao {
 data class TitleGenreRow(
     val searchTitle: String,
     val kind: String,
+    /** Part of the key since #024, and read because the join is on the whole key. */
+    val year: Int,
     val genres: String?,
     val isMiss: Boolean,
 )
@@ -429,14 +431,19 @@ data class TitleGenreRow(
 data class CachedTitleKey(
     val searchTitle: String,
     val kind: String,
+    /** Part of the key since #024, and read because the subtraction is on the whole key. */
+    val year: Int,
     val fetchedAtEpochMillis: Long,
 )
 
 @Dao
 interface TitleMetadataDao {
 
-    @Query("SELECT * FROM title_metadata WHERE searchTitle = :searchTitle AND kind = :kind")
-    suspend fun find(searchTitle: String, kind: String): TitleMetadataEntity?
+    @Query(
+        "SELECT * FROM title_metadata " +
+            "WHERE searchTitle = :searchTitle AND kind = :kind AND year = :year",
+    )
+    suspend fun find(searchTitle: String, kind: String, year: Int): TitleMetadataEntity?
 
     /**
      * Every answer the cache holds, misses included.
@@ -446,11 +453,11 @@ interface TitleMetadataDao {
      * asked about; it is known, and pretending otherwise would make the figure creep
      * upward forever without ever arriving.
      */
-    @Query("SELECT searchTitle, kind, genres, isMiss FROM title_metadata")
+    @Query("SELECT searchTitle, kind, year, genres, isMiss FROM title_metadata")
     suspend fun allGenreRows(): List<TitleGenreRow>
 
     /** Every key the cache holds, with its age, for the scan to skip what it already knows. */
-    @Query("SELECT searchTitle, kind, fetchedAtEpochMillis FROM title_metadata")
+    @Query("SELECT searchTitle, kind, year, fetchedAtEpochMillis FROM title_metadata")
     suspend fun allKeys(): List<CachedTitleKey>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)

@@ -132,21 +132,21 @@ class TitleMetadataRepositoryTest {
     }
 
     private class FakeTitleMetadataDao : TitleMetadataDao {
-        val rows = mutableMapOf<Pair<String, String>, TitleMetadataEntity>()
+        val rows = mutableMapOf<Triple<String, String, Int>, TitleMetadataEntity>()
 
-        override suspend fun find(searchTitle: String, kind: String): TitleMetadataEntity? =
-            rows[searchTitle to kind]
+        override suspend fun find(searchTitle: String, kind: String, year: Int): TitleMetadataEntity? =
+            rows[Triple(searchTitle, kind, year)]
 
         override suspend fun allKeys(): List<CachedTitleKey> = rows.values.map {
-            CachedTitleKey(it.searchTitle, it.kind, it.fetchedAtEpochMillis)
+            CachedTitleKey(it.searchTitle, it.kind, it.year, it.fetchedAtEpochMillis)
         }
 
         override suspend fun allGenreRows(): List<TitleGenreRow> = rows.values.map {
-            TitleGenreRow(searchTitle = it.searchTitle, kind = it.kind, genres = it.genres, isMiss = it.isMiss)
+            TitleGenreRow(it.searchTitle, it.kind, it.year, it.genres, it.isMiss)
         }
 
         override suspend fun upsert(entity: TitleMetadataEntity) {
-            rows[entity.searchTitle to entity.kind] = entity
+            rows[Triple(entity.searchTitle, entity.kind, entity.year)] = entity
         }
 
         override suspend fun clear() = rows.clear()

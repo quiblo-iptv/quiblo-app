@@ -106,6 +106,7 @@ dependencies {
     implementation(projects.core.model)
     implementation(projects.core.media)
 
+    implementation(projects.feature.designsystem)
     implementation(projects.feature.browse)
     implementation(projects.feature.sources)
     implementation(projects.feature.live)

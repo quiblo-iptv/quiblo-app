@@ -22,6 +22,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
+import dev.quiblo.designsystem.QuibloShapes
 
 /**
  * Always dark, and deliberately not the phone theme.
@@ -38,6 +39,7 @@ fun QuibloTvTheme(content: @Composable () -> Unit) {
             background = Color.Black,
             surface = Color(0xFF101014),
         ),
+        shapes = QuibloShapes,
         content = content,
     )
 }

@@ -73,6 +73,12 @@ include(":source:iptvorg")
 
 // Feature layer. Compose UI, consumes :core:data only.
 //
+// :feature:designsystem holds what both apps must agree on rather than what either does —
+// the corner radius scale today. It is not a feature, and it is here for the same reason
+// :feature:browse is: AC-NFR-06 forbids Compose in :core:*, so there is no :core:ui to put
+// it in.
+include(":feature:designsystem")
+//
 // :feature:browse holds the list UI that Live, Movies, Series and Favourites all share.
 // It lives in the feature layer rather than in :core: because AC-NFR-06 forbids Compose
 // in :core:*, which rules out a :core:ui module entirely. The alternative was the same

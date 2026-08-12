@@ -12,6 +12,11 @@ amendment" below.
 [`013`](013_Increment_Round_of_Quiblo_—_the_catalogue_a_viewer_actually_uses.md)
 pass 3, whose language detector this shares.
 
+**Read [`016`](016_Grouping_of_Quiblo_—_what_014_needs_that_the_tree_does_not_have.md)
+beside this.** It reads this design against the tree and finds the false merge below is not a
+risk to design against — it is current behaviour in the metadata cache, filed there as **#024**.
+It also corrects four assumptions here, one of which deletes this document's riskiest migration.
+
 ---
 
 ## The problem, stated precisely

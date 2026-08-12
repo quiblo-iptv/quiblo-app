@@ -139,6 +139,42 @@ class MigrationTest {
     }
 
     @Test
+    fun `13 to 14 adds series preferences without touching anything else`() {
+        helper.createDatabase(DB_NAME, 13).use { old ->
+            old.execSQL(
+                "INSERT INTO `profiles` (`id`, `name`, `createdAtEpochMillis`, `isGuest`) " +
+                    "VALUES (1, 'Mahmoud', 0, 0)",
+            )
+        }
+
+        val db = helper.runMigrationsAndValidate(DB_NAME, 14, true, MIGRATION_13_14)
+
+        // A new table and nothing else. The profile is untouched, and no preference row is
+        // invented — absence means the defaults, so an upgrade changes nothing anybody sees
+        // until one of the two controls is pressed.
+        db.query("SELECT COUNT(*) FROM series_preferences").use { cursor ->
+            assertTrue(cursor.moveToFirst())
+            assertEquals(0, cursor.getInt(0))
+        }
+        db.query("SELECT `name` FROM `profiles`").use { cursor ->
+            assertTrue(cursor.moveToFirst())
+            assertEquals("Mahmoud", cursor.getString(0))
+        }
+
+        // The profile owns them: deleting it takes its preferences with it, by foreign key.
+        db.execSQL(
+            "INSERT INTO `series_preferences` (`profileId`, `seriesKey`, `isMerged`, `isDescending`) " +
+                "VALUES (1, 'one-piece', 1, 1)",
+        )
+        db.execSQL("PRAGMA foreign_keys = ON")
+        db.execSQL("DELETE FROM `profiles` WHERE `id` = 1")
+        db.query("SELECT COUNT(*) FROM series_preferences").use { cursor ->
+            assertTrue(cursor.moveToFirst())
+            assertEquals(0, cursor.getInt(0))
+        }
+    }
+
+    @Test
     fun `10 to 11 adopts existing favourites rather than dropping them`() {
         // The opposite promise to the one above, and the one that matters more: this is the
         // viewer's own data and nobody can hand it back. AC-DATA-04.

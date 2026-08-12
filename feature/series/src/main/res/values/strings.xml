@@ -36,4 +36,8 @@
     <string name="series_refresh_rate_limited">The metadata service asked us to slow down. Nothing was changed — try again shortly.</string>
     <string name="series_refresh_key_rejected">The metadata key was refused. Nothing was changed — check it in Settings.</string>
     <string name="series_refresh_unavailable">Could not reach the metadata service. Nothing was changed.</string>
+    <string name="series_all_episodes">All episodes</string>
+    <string name="series_merge_seasons">Merge seasons</string>
+    <string name="series_newest_first">Newest first</string>
+    <string name="series_episode_label_merged">S%1$d E%2$d: %3$s</string>
 </resources>

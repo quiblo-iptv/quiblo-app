@@ -7,11 +7,16 @@ written out item by item: INC-F0, INC-F3, INC-F8, INC-F5 and INC-E1…E4.
 **Ships as:** `1.1.0`. Nothing here enters `1.0.0`, so no `FREEZE.md` amendment accompanies it —
 same rule as `013`, which this document is a pass of rather than a successor to.
 
-**Written while the acceptance sweep is open, and deliberately not built.** A freeze is a
-boundary and not a pause (`docs/RELEASE-MANAGEMENT.md` §0), but the sweep runs against a
-published artefact, and code landing under a sweep means sweeping the tree twice. What this
-document does is remove the thinking from the critical path, so that the day `012` closes the
-work starts at an editor rather than at a blank page.
+~~**Written while the acceptance sweep is open, and deliberately not built.**~~
+
+**Built 2026-08-12 — steps 0 to 4, and the chooser half of step 6.** The reasoning for holding it did not
+survive being written down: it says the sweep runs against a *published artefact*, and it does —
+`STOPPERS.md` S1 step 1 sends the tester to `v0.2.7`. A moving `main` does not sweep the tree
+twice; **publishing a release mid-sweep would**, and nothing here does that. What is left unbuilt
+is `STOPPERS.md` **S10**, **S11** and **S12**, and none of them is held back by the sweep — all
+three are held back by needing a panel to judge them on.
+
+What each item now owes a device is in [`TESTING-REQUIRED.md`](../docs/TESTING-REQUIRED.md) §A.
 
 ---
 
@@ -28,6 +33,11 @@ value of writing the pass out before building it.
 | INC-E4 | A shape scale to raise | Neither theme declares `Shapes` at all. There is no project scale to raise — there is one to write |
 
 Pass 1 is therefore **five items of work, not eight**, and one of the five is a deletion.
+
+**Building it found a fifth thing this table did not predict**, and it is recorded under INC-F0
+below: `012` #016 had already rebuilt both chooser screens and left the television's tile a
+round slot with a comment saying a picture goes here. The half of INC-F0 this document schedules
+last was mostly waiting for the half it schedules first.
 
 ---
 
@@ -238,20 +248,38 @@ Pass 1 splits along one line — what needs the remote and what does not. `012` 
 either way, but this ordering means the parts that never needed hardware are finished before
 the hardware arrives.
 
-| Step | Items | Needs the remote |
-| :---- | :---- | :---- |
-| 0 | Close INC-F5. Delete the row from `013`'s table | No |
-| 1 | INC-E4 — the shape scale, both themes | No |
-| 2 | INC-F8 — the phone settings screen becomes one scroller | No |
-| 3 | INC-F0 data half — migration 11→12, model field, generated avatar, migration test | No |
-| 4 | INC-F3 phone half — long-press on the continue-watching tile | No |
-| 5 | INC-E2, then re-ask INC-E1 | The panel, to look at |
-| 6 | INC-F0 screen half — both choosers, both entry points | Yes, on `012` #016 |
-| 7 | INC-F3 television half | Yes, on `012` #014 |
-| 8 | INC-E3 — build, look, keep or delete | Yes |
+| Step | Items | Needs the remote | State |
+| :---- | :---- | :---- | :---- |
+| 0 | Close INC-F5. Delete the row from `013`'s table | No | **Done 2026-08-12** |
+| 1 | INC-E4 — the shape scale, both themes | No | **Built.** In a new `:feature:designsystem`, because both themes must read one copy |
+| 2 | INC-F8 — the phone settings screen becomes one scroller | No | **Built**, with the Robolectric reachability test |
+| 3 | INC-F0 data half — migration, model field, generated avatar, migration test | No | **Built** — as **12→13**, not 11→12; see below |
+| 4 | INC-F3 phone half — long-press on the continue-watching tile | No | **Built** |
+| 5 | INC-E2, then re-ask INC-E1 | The panel, to look at | **Not built** — `STOPPERS.md` S10 |
+| 6 | INC-F0 screen half — both choosers, both entry points | ~~Yes, on `012` #016~~ | **Choosers built** — #016 had already rebuilt them. Entry points and the television picker are `STOPPERS.md` S11 |
+| 7 | INC-F3 television half | Yes, and not for the reason given | **Not built** — `STOPPERS.md` **S12**. The dependency on `012` #014 was real but minor; what stops it is that `app-tv` contains no dialog at all |
+| 8 | INC-E3 — build, look, keep or delete | Yes | **Not built** — `STOPPERS.md` S10 |
 
-Steps 1 to 4 are the pass's whole no-hardware half, and none of them is blocked by anything in
-`docs/STOPPERS.md`.
+**The "needs the remote" column was wrong on both of its qualified yeses, in opposite
+directions.** Step 6 was marked as depending on `012` #016, which turned out to be *already built
+and merely unswept* — a dependency on unfinished work and a dependency on unverified work look
+identical in a table and are not the same thing. Step 7 was marked as depending on `012` #014,
+which was also already built, so by the same reasoning it should have fallen out easily; it did
+not, and the real obstacle was never in this column at all. See **S12**.
+
+**Built 2026-08-12 — steps 0 to 4, and the choosers from step 6.**
+
+### The migration number moved
+
+This document says `MIGRATION_11_12` for the avatar column. It is **12→13**. `016`'s #024 took
+11→12 the same day, because it is a `1.0.0` defect and the avatars are `1.1.0`, so the `1.0.0`
+item goes first in the schema as it does in the release.
+
+That collision is the sort of thing two documents written against the same tree on the same day
+will produce, and the cheap defence turned out to be the one that was missing entirely: **nothing
+in this repository had ever run a migration.** Eleven were declared and every one had been signed
+off by reading it. `core/database` has a test source set now, and `MigrationTest` walks 1 through
+13 against the exported schemas. It is the second thing #024 paid for.
 
 ## What this document does not decide
 

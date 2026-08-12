@@ -17,21 +17,21 @@ Every item below lands on a screen that round is repairing.
 
 | Item | Platform | Cost | Depends on | Description |
 | :---- | :---- | :---- | :---- | :---- |
-| INC-F0 | Both | S | #016 | Avatars for profiles, and a profile control beside the settings gear |
+| INC-F0 | Both | S | #016 | ~~Avatars for profiles~~ — **built 2026-08-12**, schema 13, both choosers, phone picker. The television picker and the control beside the gear are `STOPPERS.md` **S11** |
 | INC-F1 | Both | M | — | Autocomplete in search, from the local catalogue |
 | INC-F2 | Both | L | The scan | Suggestions from what has been watched |
-| INC-F3 | Both | S | #014 | Long-press a history entry to remove it |
+| INC-F3 | Both | S | #014 | Long-press a history entry to remove it — **phone half built 2026-08-12**. The television half is `STOPPERS.md` **S12**: that app has no dialog anywhere, and a one-action menu on a remote is a pattern it does not yet have |
 | INC-F4 | Both | M | — | Long-press a channel for its full guide, on a timeline |
-| INC-F5 | — | S | A release | ~~"Get it on GitHub" in the README~~ — **done**, `README.md` §Install. See [`015`](015_Pass_One_of_Quiblo_—_the_screens_012_leaves_open.md) |
 | INC-F6 | Both | M | #015 | Merge seasons into one list, and reverse the order — remembered per profile |
 | INC-F7 | Both | S | A key | Refresh this title's information from the metadata service |
-| INC-F8 | Both | S | — | Category editing scrolls inside Settings |
+| INC-F8 | Both | S | — | ~~Category editing scrolls inside Settings~~ — **built 2026-08-12**, and it was a removal rather than an addition |
 | INC-F9 | Both | M | — | A section whose text is right-to-left is laid out right-to-left |
 | INC-F10 | Both | L | — | Subtitle files: the provider's, or one the viewer picks |
 | INC-F11 | Both | M | INC-F10 | Subtitle appearance, set from the player |
 | INC-F12 | Both | S | — | **Audio track selection. Not new scope — see below** |
 | INC-F14 | Both | M | INC-F9 | Filter the catalogue to one language |
-| INC-E1…E4 | Both | S | — | The search screen's shape, and the corner radius |
+| INC-E4 | Both | S | — | ~~The corner radius~~ — **built 2026-08-12**. There was no scale to raise; there was one to write |
+| INC-E1…E3 | TV | S | The panel | The search screen's shape. **Not built** — each is a question about how a screen reads from three metres. `STOPPERS.md` **S10** |
 
 **Cost is S/M/L against this codebase**, not against a calendar: S is a screen and its test,
 M is a screen plus a repository or a schema addition, L is either a new subsystem or a change
@@ -309,15 +309,17 @@ the suggestions, and revisit it as a better scoring function rather than as a mo
 
 ## The README
 
-### INC-F5 — get it on GitHub
+### INC-F5 — get it on GitHub — **closed 2026-08-12**
 
-A badge and a section pointing at the latest release: the two APKs, which is which, and how to
-verify a checksum. `006` gate 2 already lists the README badge, and gate 3 wants the same
-material on the wiki. **Write it once and link, rather than describing the same download in
-three places** — the wiki page is the one that can be corrected without a release.
+**It was already built, and reading the tree is what found that.** `README.md:41`–`63` carries
+the release badge, the Download link in the header rail, the Install section naming both APKs
+and what each installs on, the note that the phone build never appears in a television launcher,
+and the checksum command. That is every part of the intake's request and both parts this document
+added to it.
 
-Depends on a published release existing, which makes it the one item here that can be done the
-day `1.0.0-beta.1` ships rather than after the increment.
+What is left is the wiki half of `006` gate 3, which is a wiki task and not this one. The rule
+this item was written around still stands — write the download once and link to it — and the
+README is now the copy that exists.
 
 ---
 
@@ -328,7 +330,7 @@ leaves the app releasable:
 
 | Pass | Items | Why together |
 | :---- | :---- | :---- |
-| 1 | INC-F0, INC-F3, INC-F8, INC-F5, INC-E1…E4 | Small, visible, and they finish screens `012` has just opened. E1–E4 and F0 are the whole of what a viewer sees changed. **Written out in [`015`](015_Pass_One_of_Quiblo_—_the_screens_012_leaves_open.md)**, which finds four of the eight are not the work this table assumes |
+| 1 | INC-F0, INC-F3, INC-F8, INC-F5, INC-E1…E4 | **Built 2026-08-12, apart from INC-E1…E3.** Written out in [`015`](015_Pass_One_of_Quiblo_—_the_screens_012_leaves_open.md), which found four of the eight were not the work this table assumed — and building it found a fifth. What each item owes a device is in [`TESTING-REQUIRED.md`](../docs/TESTING-REQUIRED.md) §A |
 | 2 | INC-F6, INC-F7, INC-F1 | The detail screens and search, each one repository call deep |
 | 3 | INC-F9, INC-F14, INC-F10, INC-F11 | Text and language, in that order: F9's detector is F14's, and F10 has to exist before F11 can style it |
 | 4 | INC-F4, INC-F2 | The two that need a new composable and a new subsystem. Last because they are the two most likely to be cut |

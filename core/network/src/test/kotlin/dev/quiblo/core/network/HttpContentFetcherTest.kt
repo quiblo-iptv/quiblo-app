@@ -82,49 +82,81 @@ class HttpContentFetcherTest {
     }
 
     @Test
-    fun `returns the body and content type on success`() = runTest {
+    fun `streams the body and declares the content type on success`() = runTest {
+        var seenContentType: String? = null
+
         val result = fetcherReturning(
             status = HttpStatusCode.OK,
             body = "#EXTM3U\n",
             contentType = "audio/x-mpegurl",
-        ).fetch(playlistUrl)
+        ).fetch(playlistUrl) { body ->
+            seenContentType = body.contentType
+            body.reader().readText()
+        }
 
         val success = assertInstanceOf(FetchResult.Success::class.java, result)
-        assertEquals("#EXTM3U\n", success.body)
-        assertTrue(success.contentType!!.contains("audio/x-mpegurl"))
+        assertEquals("#EXTM3U\n", success.value)
+        assertTrue(seenContentType!!.contains("audio/x-mpegurl"))
+    }
+
+    @Test
+    @DisplayName("AC-PL-05 — the body is a stream, not a string the whole playlist has to fit in")
+    fun `the body can be read a line at a time`() = runTest {
+        val playlist = buildString {
+            append("#EXTM3U\n")
+            repeat(2_000) { append("#EXTINF:-1,Channel $it\nhttp://host.invalid/$it.ts\n") }
+        }
+
+        val result = fetcherReturning(HttpStatusCode.OK, body = playlist).fetch(playlistUrl) { body ->
+            // Counting without ever holding the document: the property the parser is built on.
+            body.reader().lineSequence().count { it.startsWith("#EXTINF") }
+        }
+
+        assertEquals(2_000, assertInstanceOf(FetchResult.Success::class.java, result).value)
+    }
+
+    @Test
+    fun `the reader block is never entered on a failure`() = runTest {
+        var entered = false
+
+        fetcherReturning(HttpStatusCode.NotFound).fetch(playlistUrl) { entered = true }
+
+        assertFalse(entered, "a failed fetch still handed a body to the caller")
     }
 
     @Test
     @DisplayName("AC-PL-07 — 404 is distinguished from other statuses")
     fun `maps 404 to NotFound`() = runTest {
-        val result = fetcherReturning(HttpStatusCode.NotFound).fetch(playlistUrl)
+        val result = fetcherReturning(HttpStatusCode.NotFound).fetch(playlistUrl) { it.reader().readText() }
         assertEquals(SourceError.NotFound, (result as FetchResult.Failure).error)
     }
 
     @Test
     fun `maps other error statuses to HttpStatus carrying the code`() = runTest {
         val engine = MockEngine { respondError(HttpStatusCode.InternalServerError) }
-        val result = HttpContentFetcher(HttpClient(engine), online).fetch(playlistUrl)
+        val result = HttpContentFetcher(HttpClient(engine), online).fetch(playlistUrl) { it.reader().readText() }
 
         assertEquals(SourceError.HttpStatus(500), (result as FetchResult.Failure).error)
     }
 
     @Test
     fun `reports no network before attempting a request`() = runTest {
-        val result = fetcherReturning(HttpStatusCode.OK, connectivity = offline).fetch(playlistUrl)
+        val result = fetcherReturning(HttpStatusCode.OK, connectivity = offline)
+            .fetch(playlistUrl) { it.reader().readText() }
         assertEquals(SourceError.NoNetwork, (result as FetchResult.Failure).error)
     }
 
     @Test
     fun `maps an unresolvable host to UnreachableHost`() = runTest {
-        val result = fetcherThrowing(UnknownHostException("playlist.example.invalid")).fetch(playlistUrl)
+        val result = fetcherThrowing(UnknownHostException("playlist.example.invalid"))
+            .fetch(playlistUrl) { it.reader().readText() }
         assertEquals(SourceError.UnreachableHost, (result as FetchResult.Failure).error)
     }
 
     @Test
     @DisplayName("AC-PL-07 — an unexpected exception never escapes as a crash or a stack trace")
     fun `unexpected failures become an opaque typed error`() = runTest {
-        val result = fetcherThrowing(IllegalStateException("boom")).fetch(playlistUrl)
+        val result = fetcherThrowing(IllegalStateException("boom")).fetch(playlistUrl) { it.reader().readText() }
 
         val failure = assertInstanceOf(FetchResult.Failure::class.java, result)
         val error = assertInstanceOf(SourceError.Unknown::class.java, failure.error)
@@ -133,7 +165,7 @@ class HttpContentFetcherTest {
 
     @Test
     fun `the opaque error detail never carries the requested location`() = runTest {
-        val result = fetcherThrowing(IllegalStateException(playlistUrl)).fetch(playlistUrl)
+        val result = fetcherThrowing(IllegalStateException(playlistUrl)).fetch(playlistUrl) { it.reader().readText() }
 
         val error = (result as FetchResult.Failure).error as SourceError.Unknown
         assertFalse(

@@ -136,6 +136,7 @@ components ship.
 - `androidx.media3:media3-exoplayer-dash`
 - `androidx.media3:media3-exoplayer-hls`
 - `androidx.media3:media3-extractor`
+- `androidx.media3:media3-ui`
 - `androidx.navigation:navigation-common`
 - `androidx.navigation:navigation-common-android`
 - `androidx.navigation:navigation-compose`
@@ -148,6 +149,7 @@ components ship.
 - `androidx.navigationevent:navigationevent-compose-android`
 - `androidx.print:print`
 - `androidx.profileinstaller:profileinstaller`
+- `androidx.recyclerview:recyclerview`
 - `androidx.resourceinspection:resourceinspection-annotation`
 - `androidx.room:room-common`
 - `androidx.room:room-common-jvm`

@@ -23,9 +23,12 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material3.Text
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.hasScrollAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.v2.createComposeRule
+import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performScrollToNode
 import dev.quiblo.core.model.Category
 import dev.quiblo.core.model.MediaKind
@@ -39,18 +42,18 @@ import org.robolectric.annotation.Config
 private const val ROBOLECTRIC_SDK = 34
 
 /**
- * Are the category rows items of the settings list, not children of a nested scroller?
+ * Are the category rows inside a bounded inner scroller, not items of the outer settings list?
  *
- * The old layout put a `LazyColumn` capped at 320dp inside the settings screen's own
- * scrollable column. That gave the categories their own scroll surface: a drag could move
- * the inner list or the outer screen, and which one it moved was never obviously right.
- * Worse, scrolling the outer list to the sentinel below the category section would never
- * encounter the category items at all, because they were children of a different scrollable.
+ * The layout puts a LazyColumn capped at 420dp inside the settings screen's own scrollable
+ * column. That gives the categories their own scroll surface within a fixed-height box,
+ * keeping the outer list short and predictable regardless of how many categories a source
+ * has. The box has a visible border so the two scroll regions read as distinct.
  *
- * The property under test is reachability through one list. If `performScrollToNode` on the
- * single `LazyColumn` can find both the 300th category and a sentinel placed after all
- * categories, every row is an item of the outer list and there is no inner scroller boxing
- * them in.
+ * The property under test is containment. If the outer list can reach a sentinel placed
+ * after the category card without scrolling through 300 individual category rows, the
+ * categories are inside the inner scroller and not items of the outer list. The sentinel
+ * is reachable because the outer list holds only the card (one item) and the sentinel
+ * (another), not 300 separate rows.
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(
@@ -66,40 +69,69 @@ class CategorySettingsScrollTest {
     val compose = createComposeRule()
 
     /**
-     * A sentinel placed after all 300 category items is reachable by scrolling the single
-     * list. If the categories were inside a nested bounded scroller, the outer list would
-     * hold only the header card (one item) and the sentinel (another), with the 300
-     * categories invisible to `performScrollToNode` on the outer list entirely.
+     * There are exactly two scrolling surfaces: the settings list, and the category box.
+     *
+     * **This is the property the panel asked for**, and it is the one an earlier version of this
+     * file asserted the opposite of. A flat settings screen has one scroller and the categories
+     * spread through it; this shape has two, and the second is bounded.
+     *
+     * Asserting the count rather than the geometry is deliberate — heights are a design decision
+     * that will change, and "how many things scroll" is the thing a viewer's drag actually meets.
      */
     @Test
-    fun `sentinel after 300 categories is reachable through the list`() {
+    fun `the screen has two scrollers, the outer list and the category box`() {
         setContent()
 
-        compose.onNode(hasScrollAction())
-            .performScrollToNode(hasText(SENTINEL))
+        compose.onAllNodes(hasScrollAction()).assertCountEquals(2)
     }
 
     /**
-     * The 300th category is itself an item of the list, not hidden inside a child scroller.
+     * The settings list reaches what is below the categories without walking through them.
+     *
+     * With three hundred categories inside the box, the outer list holds a handful of items. If
+     * the rows were its own items again, this scroll would travel through all three hundred.
      */
     @Test
-    fun `the 300th category is reachable through the list`() {
+    fun `the outer list reaches the section below the categories`() {
         setContent()
 
-        compose.onNode(hasScrollAction())
+        compose.onAllNodes(hasScrollAction())[OUTER]
+            .performScrollToNode(hasText(SENTINEL))
+        compose.onNodeWithText(SENTINEL).assertIsDisplayed()
+    }
+
+    /**
+     * And the box itself still reaches its own last row.
+     *
+     * A bounded list that cannot be scrolled to its end would be the fault this shape is most
+     * likely to introduce: the categories beyond the box's height would simply be unreachable,
+     * which is worse than the ambiguous drag it replaced.
+     */
+    @Test
+    fun `the category box reaches its own last category`() {
+        setContent()
+
+        // `performScrollToNode` throws if the node is not reachable in that scrollable, so
+        // reaching it is the assertion. `assertIsDisplayed` deliberately is not used here:
+        // whether the box is on screen depends on where the *outer* list is sitting, which is
+        // the property the test above covers and not this one.
+        compose.onAllNodes(hasScrollAction())[INNER]
             .performScrollToNode(hasText(categoryTitle(CATEGORY_COUNT)))
+        compose.onNodeWithText(categoryTitle(CATEGORY_COUNT)).assertExists()
     }
 
     private fun setContent() {
         compose.setContent {
             LazyColumn(modifier = Modifier.fillMaxSize()) {
-                categorySettingsItems(
-                    selectedKind = MediaKind.LIVE,
-                    categories = categories(),
-                    onSelectKind = {},
-                    onSetHidden = { _, _ -> },
-                    onRenameRequest = {},
-                )
+                item {
+                    CategorySettingsCard(
+                        selectedKind = MediaKind.LIVE,
+                        categories = categories(),
+                        onSelectKind = {},
+                        onSetHidden = { _, _ -> },
+                        onRename = { _, _ -> },
+                    )
+                }
                 item { Text(SENTINEL) }
             }
         }
@@ -117,6 +149,10 @@ class CategorySettingsScrollTest {
     private fun categoryTitle(index: Int) = "Category $index"
 
     private companion object {
+        /** Depth-first semantics order: the settings list is composed before the box inside it. */
+        const val OUTER = 0
+        const val INNER = 1
+
         const val CATEGORY_COUNT = 300
         const val SENTINEL = "the section below categories"
     }

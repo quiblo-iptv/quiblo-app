@@ -37,6 +37,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -303,12 +304,41 @@ fun TvSettingsScreen(
             )
         }
 
-        items(items = categories, key = { "${categoryKind.name}-${it.title}" }) { category ->
-            CategoryEditRow(
-                category = category,
-                onToggleHidden = { viewModel.setCategoryHidden(category, !category.isHidden) },
-                onRename = { viewModel.renameCategory(category, it) },
-            )
+        // The categories scroll inside a fixed-height box rather than as items of the outer
+        // list, which is what the panel asked for.
+        //
+        // A scrollable region inside a scrollable screen must hand focus back at its edges or
+        // the remote is stuck inside it forever — the worst failure this app can have, since a
+        // viewer's only way out is to kill it. `focusGroup()` is what does that here.
+        //
+        // **That is measured rather than argued**: `TvCategoryBoxFocusEscapeTest` drives this
+        // exact shape and asserts focus leaves at both ends, including with three hundred
+        // categories where the list has not composed the rows past the viewport. Four previous
+        // television focus questions in this project were answered by confident reasoning and
+        // all four were wrong, and #021 is still open on this very screen.
+        item {
+            val shape = RoundedCornerShape(8.dp)
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 220.dp, max = 420.dp)
+                    .border(1.dp, Color.White.copy(alpha = 0.18f), shape)
+                    .clip(shape)
+                    .focusGroup(),
+            ) {
+                items(
+                    items = categories,
+                    key = { "${categoryKind.name}-${it.title}" },
+                ) { category ->
+                    CategoryEditRow(
+                        category = category,
+                        onToggleHidden = {
+                            viewModel.setCategoryHidden(category, !category.isHidden)
+                        },
+                        onRename = { viewModel.renameCategory(category, it) },
+                    )
+                }
+            }
         }
 
         item { SectionHeading(stringResource(R.string.tv_settings_backup)) }

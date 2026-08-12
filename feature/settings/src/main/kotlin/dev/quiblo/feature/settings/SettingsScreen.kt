@@ -51,7 +51,6 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import dev.quiblo.core.model.Category
 import org.koin.androidx.compose.koinViewModel
 
 /**
@@ -110,10 +109,6 @@ fun SettingsScreen(
     // locale or configuration change like every other string on the screen.
     val defaultFilename = stringResource(R.string.settings_backup_default_filename)
 
-    // Rename state lives here because categorySettingsItems is a LazyListScope extension
-    // and cannot hold composable state or render a dialog.
-    var renaming: Category? by remember { mutableStateOf(null) }
-
     LazyColumn(
         modifier = modifier
             .fillMaxSize()
@@ -154,13 +149,15 @@ fun SettingsScreen(
             )
         }
 
-        categorySettingsItems(
-            selectedKind = categoryKind,
-            categories = categories,
-            onSelectKind = viewModel::selectCategoryKind,
-            onSetHidden = viewModel::setCategoryHidden,
-            onRenameRequest = { renaming = it },
-        )
+        cardItem {
+            CategorySettingsCard(
+                selectedKind = categoryKind,
+                categories = categories,
+                onSelectKind = viewModel::selectCategoryKind,
+                onSetHidden = viewModel::setCategoryHidden,
+                onRename = viewModel::renameCategory,
+            )
+        }
 
         cardItem {
             MetadataSettingsCard(
@@ -188,26 +185,17 @@ fun SettingsScreen(
     }
 
     BackupResultDialog(state = backupState, onDismiss = viewModel::dismiss)
-
-    renaming?.let { category ->
-        RenameDialog(
-            category = category,
-            onConfirm = {
-                viewModel.renameCategory(category, it)
-                renaming = null
-            },
-            onDismiss = { renaming = null },
-        )
-    }
 }
 
 /**
  * A settings card, with the gap that used to be a Spacer between it and the next one.
  *
- * The spacing is per card rather than `verticalArrangement` on the list, because the category
- * rows are items of this same list and they are not cards. A uniform 16dp would put that gap
- * between every one of several hundred rows, which is a denser screen made sparse to save
- * seven modifiers.
+ * The spacing is per card rather than `verticalArrangement` on the list. It was written when
+ * the category rows were items of this same list and a uniform gap would have spaced several
+ * hundred of them apart; they are back inside their own card now, so the two would agree —
+ * but per-card spacing is still what says "this gap belongs between cards" rather than
+ * "everything in this list is 16dp apart", and the next thing added at the top level will be
+ * glad of the difference.
  */
 private fun LazyListScope.cardItem(content: @Composable () -> Unit) = item {
     Box(modifier = Modifier.padding(bottom = 16.dp)) { content() }

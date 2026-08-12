@@ -355,3 +355,41 @@ data class CategoryOverrideEntity(
     val customName: String? = null,
     val isHidden: Boolean = false,
 )
+
+/**
+ * How one viewer prefers to read one series: merged or by season, newest first or oldest.
+ *
+ * `INC-F6`. A series with a thousand episodes is unusable if the newest is a thousand rows away,
+ * and a preference that is not remembered is a preference re-entered every evening.
+ *
+ * **Per profile, not global.** One household member reading a long-running series from the end
+ * does not decide how anyone else reads it — the same reasoning that put favourites behind a
+ * profile.
+ *
+ * Keyed by `seriesKey`, which is the series' [ChannelEntity.stableKey], for the reason that key
+ * exists at all: a refresh reassigns every row id, and a preference keyed to one would be lost
+ * the first time a playlist reloaded (`AC-FAV-03`'s lesson, applied before it could bite).
+ *
+ * A row exists only once somebody has changed something. Absence means the defaults, which is
+ * why both columns are non-null with defaults rather than nullable.
+ */
+@Entity(
+    tableName = "series_preferences",
+    primaryKeys = ["profileId", "seriesKey"],
+    foreignKeys = [
+        ForeignKey(
+            entity = ProfileEntity::class,
+            parentColumns = ["id"],
+            childColumns = ["profileId"],
+            onDelete = ForeignKey.CASCADE,
+        ),
+    ],
+)
+data class SeriesPreferenceEntity(
+    val profileId: Long,
+    val seriesKey: String,
+    /** True when every season is shown as one continuous list. */
+    val isMerged: Boolean = false,
+    /** True when the newest episode is first. */
+    val isDescending: Boolean = false,
+)

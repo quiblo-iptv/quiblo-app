@@ -27,6 +27,7 @@ import dev.quiblo.core.data.LocalFileContentFetcher
 import dev.quiblo.core.data.PlayerSettingsRepository
 import dev.quiblo.core.data.ProfileRepository
 import dev.quiblo.core.data.SearchRepository
+import dev.quiblo.core.data.SeriesPreferenceRepository
 import dev.quiblo.core.data.SourceRepository
 import dev.quiblo.core.data.TitleMetadataRepository
 import dev.quiblo.core.data.TitleMetadataScanner
@@ -71,6 +72,7 @@ val dataModule: Module = module {
 
     single { SourceRepository(get(), get(), get(), get()) }
     single { ProfileRepository(profileDao = get(), profileStore = get()) }
+    single { SeriesPreferenceRepository(dao = get(), profiles = get()) }
     // Named, and deliberately so. This class takes three collaborators followed by four
     // parameters that carry defaults — a clock and a dispatcher among them — and a positional
     // list cannot tell the two groups apart. Inserting `profiles` in the middle and appending

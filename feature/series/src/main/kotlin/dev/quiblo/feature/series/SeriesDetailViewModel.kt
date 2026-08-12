@@ -22,11 +22,15 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dev.quiblo.core.data.ChannelRepository
 import dev.quiblo.core.data.MetadataRefresh
+import dev.quiblo.core.data.SeriesPreference
+import dev.quiblo.core.data.SeriesPreferenceRepository
 import dev.quiblo.core.data.TitleMetadataRepository
 import dev.quiblo.core.data.WatchHistoryRepository
+import dev.quiblo.core.data.arrangedBy
 import dev.quiblo.core.model.Channel
 import dev.quiblo.core.model.Episode
 import dev.quiblo.core.model.MediaKind
+import dev.quiblo.core.model.Season
 import dev.quiblo.core.model.SeriesDetails
 import dev.quiblo.core.model.TitleMetadata
 import dev.quiblo.source.api.SeriesDetailsResult
@@ -76,6 +80,21 @@ sealed interface SeriesDetailUiState {
          * hollow control — and a greyed-out one still invites the press that does nothing.
          */
         val canRefreshMetadata: Boolean = false,
+        /**
+         * How this viewer reads this series: merged or by season, newest first or oldest.
+         *
+         * `INC-F6`. Held in the state rather than read by the screen so that the arrangement
+         * and the seasons it produced can never disagree — they are recomputed together.
+         */
+        val preference: SeriesPreference = SeriesPreference(),
+        /**
+         * The seasons as they should be drawn, already arranged.
+         *
+         * Separate from `details.seasons`, which stays the provider's own answer. A screen that
+         * sorted on every recomposition would sort a thousand episodes on every frame, and a
+         * screen that sorted in place would lose the original order it needs to go back to.
+         */
+        val seasons: List<Season> = emptyList(),
         /** True while a refresh is in flight, so the control can say so. */
         val isEnriching: Boolean = false,
         /**
@@ -94,6 +113,7 @@ class SeriesDetailViewModel(
     private val channelRepository: ChannelRepository,
     private val metadataRepository: TitleMetadataRepository,
     private val historyRepository: WatchHistoryRepository,
+    private val preferences: SeriesPreferenceRepository,
 ) : ViewModel() {
 
     private var isRefreshing = false
@@ -130,9 +150,13 @@ class SeriesDetailViewModel(
                         resumePositionMillis = watched?.second ?: 0L,
                         firstEpisode = episodes.firstOrNull(),
                         isFavorite = channel.isFavorite,
+                        // The provider's own order until the preference arrives, which is one
+                        // frame later. Leaving it empty would flash an episode-less screen.
+                        seasons = result.details.seasons,
                     )
 
                     observeFavorite(channel)
+                    observePreference(channel.stableKey)
                     enrich(channel)
                 }
             }
@@ -267,5 +291,38 @@ class SeriesDetailViewModel(
 
     private fun update(block: (SeriesDetailUiState.Success) -> SeriesDetailUiState.Success) {
         (_uiState.value as? SeriesDetailUiState.Success)?.let { _uiState.value = block(it) }
+    }
+
+    /**
+     * Follows this viewer's arrangement for this series, and re-arranges when it changes.
+     *
+     * Collected for as long as the screen is open rather than read once, because switching
+     * profile while a series is open should show that person's arrangement — the preference is
+     * theirs, not the screen's.
+     */
+    private fun observePreference(seriesKey: String) {
+        viewModelScope.launch {
+            preferences.observe(seriesKey).collect { preference ->
+                (_uiState.value as? SeriesDetailUiState.Success)?.let {
+                    _uiState.value = it.copy(
+                        preference = preference,
+                        seasons = it.details.seasons.arrangedBy(preference),
+                    )
+                }
+            }
+        }
+    }
+
+    /** Merge every season into one list, or put them back. */
+    fun setMerged(isMerged: Boolean) = updatePreference { it.copy(isMerged = isMerged) }
+
+    /** Newest episode first, or oldest. */
+    fun setDescending(isDescending: Boolean) = updatePreference { it.copy(isDescending = isDescending) }
+
+    private fun updatePreference(block: (SeriesPreference) -> SeriesPreference) {
+        val state = _uiState.value as? SeriesDetailUiState.Success ?: return
+        viewModelScope.launch {
+            preferences.set(state.channel.stableKey, block(state.preference))
+        }
     }
 }

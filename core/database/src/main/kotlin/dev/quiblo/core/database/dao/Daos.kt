@@ -33,6 +33,7 @@ import dev.quiblo.core.database.entity.FavoriteEntity
 import dev.quiblo.core.database.entity.ProfileEntity
 import dev.quiblo.core.database.entity.ProgrammeEntity
 import dev.quiblo.core.database.entity.ResumePositionEntity
+import dev.quiblo.core.database.entity.SeriesPreferenceEntity
 import dev.quiblo.core.database.entity.SourceEntity
 import dev.quiblo.core.database.entity.TitleMetadataEntity
 import kotlinx.coroutines.flow.Flow
@@ -549,4 +550,15 @@ interface ProfileDao {
      */
     @Query("DELETE FROM profiles WHERE isGuest = 1")
     suspend fun deleteGuests()
+}
+
+/** How one viewer reads one series. See [SeriesPreferenceEntity]. */
+@Dao
+interface SeriesPreferenceDao {
+
+    @Query("SELECT * FROM series_preferences WHERE profileId = :profileId AND seriesKey = :seriesKey")
+    fun observe(profileId: Long, seriesKey: String): Flow<SeriesPreferenceEntity?>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsert(preference: SeriesPreferenceEntity)
 }

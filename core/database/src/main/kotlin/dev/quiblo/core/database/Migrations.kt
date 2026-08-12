@@ -425,3 +425,25 @@ val MIGRATION_12_13 = object : Migration(12, 13) {
         db.execSQL("ALTER TABLE `profiles` ADD COLUMN `avatar` TEXT")
     }
 }
+
+/**
+ * How a viewer likes one series laid out.
+ *
+ * A new table and nothing else — no existing row is read, rewritten or dropped, which makes this
+ * the safest kind of migration there is. Absence of a row means the defaults, so an upgrade
+ * changes nothing anybody sees until they press one of the two new controls.
+ */
+val MIGRATION_13_14 = object : Migration(13, 14) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            "CREATE TABLE IF NOT EXISTS `series_preferences` (" +
+                "`profileId` INTEGER NOT NULL, " +
+                "`seriesKey` TEXT NOT NULL, " +
+                "`isMerged` INTEGER NOT NULL, " +
+                "`isDescending` INTEGER NOT NULL, " +
+                "PRIMARY KEY(`profileId`, `seriesKey`), " +
+                "FOREIGN KEY(`profileId`) REFERENCES `profiles`(`id`) " +
+                "ON UPDATE NO ACTION ON DELETE CASCADE )",
+        )
+    }
+}

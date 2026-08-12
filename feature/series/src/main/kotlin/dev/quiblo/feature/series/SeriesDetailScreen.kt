@@ -71,8 +71,10 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.compose.SubcomposeAsyncImage
+import dev.quiblo.core.data.MERGED_SEASON_NUMBER
 import dev.quiblo.core.data.MetadataRefresh
 import dev.quiblo.core.data.ScanRefusal
+import dev.quiblo.core.data.SeriesPreference
 import dev.quiblo.core.model.Channel
 import dev.quiblo.core.model.Episode
 import dev.quiblo.core.model.Season
@@ -132,6 +134,8 @@ fun SeriesDetailScreen(
                     onEpisodeClick = onEpisodeClick,
                     onRemoveFromHistory = viewModel::removeFromHistory,
                     onRefreshMetadata = viewModel::refreshMetadata,
+                    onMerged = viewModel::setMerged,
+                    onDescending = viewModel::setDescending,
                 )
             }
         }
@@ -269,12 +273,16 @@ private fun SeriesDetailContent(
     onEpisodeClick: (Episode, Channel, Long?) -> Unit,
     onRemoveFromHistory: () -> Unit,
     onRefreshMetadata: () -> Unit,
+    onMerged: (Boolean) -> Unit,
+    onDescending: (Boolean) -> Unit,
 ) {
     val channel = state.channel
     val details = state.details
-    var selectedSeasonIndex by remember { mutableIntStateOf(0) }
+    // Keyed on the arrangement: merging collapses several seasons into one, so an index of 4
+    // would point at nothing the moment the switch is flipped.
+    var selectedSeasonIndex by remember(state.preference) { mutableIntStateOf(0) }
     val defaultSeasonName = stringResource(R.string.series_season_label, 1)
-    val seasons = details.seasons.ifEmpty {
+    val seasons = state.seasons.ifEmpty {
         listOf(Season(seasonNumber = 1, name = defaultSeasonName, episodes = emptyList()))
     }
     val currentSeason = seasons.getOrNull(selectedSeasonIndex) ?: seasons.first()
@@ -316,6 +324,14 @@ private fun SeriesDetailContent(
             }
         }
 
+        item {
+            SeriesArrangement(
+                preference = state.preference,
+                onMerged = onMerged,
+                onDescending = onDescending,
+            )
+        }
+
         if (seasons.size > 1) {
             item {
                 LazyRow(
@@ -329,7 +345,7 @@ private fun SeriesDetailContent(
                         FilterChip(
                             selected = index == selectedSeasonIndex,
                             onClick = { selectedSeasonIndex = index },
-                            label = { Text(season.name) },
+                            label = { Text(season.displayName()) },
                         )
                     }
                 }
@@ -338,7 +354,7 @@ private fun SeriesDetailContent(
 
         item {
             Text(
-                text = currentSeason.name,
+                text = currentSeason.displayName(),
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
@@ -364,6 +380,10 @@ private fun SeriesDetailContent(
             items(currentSeason.episodes) { episode ->
                 EpisodeItem(
                     episode = episode,
+                    // Merging puts episode 3 of season 2 beside episode 3 of season 5, so the
+                    // season has to survive on the row or the list is ambiguous at exactly the
+                    // point it is most useful.
+                    showSeason = state.preference.isMerged,
                     // Null, not zero: an episode tapped in the list starts wherever it was
                     // left, which is what its own resume point already records.
                     onClick = { onEpisodeClick(episode, channel, null) },
@@ -448,7 +468,7 @@ private fun SeriesHeader(channel: Channel, details: SeriesDetails, metadata: Tit
 }
 
 @Composable
-private fun EpisodeItem(episode: Episode, onClick: () -> Unit) {
+private fun EpisodeItem(episode: Episode, showSeason: Boolean, onClick: () -> Unit) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -483,11 +503,23 @@ private fun EpisodeItem(episode: Episode, onClick: () -> Unit) {
                     .padding(start = 12.dp),
             ) {
                 Text(
-                    text = stringResource(
-                        R.string.series_episode_label,
-                        episode.episodeNumber,
-                        episode.title,
-                    ),
+                    // The season is carried only when the list is merged. Adding it always
+                    // would repeat, on every one of a season's rows, the number written at the
+                    // top of that same list.
+                    text = if (showSeason) {
+                        stringResource(
+                            R.string.series_episode_label_merged,
+                            episode.seasonNumber,
+                            episode.episodeNumber,
+                            episode.title,
+                        )
+                    } else {
+                        stringResource(
+                            R.string.series_episode_label,
+                            episode.episodeNumber,
+                            episode.title,
+                        )
+                    },
                     style = MaterialTheme.typography.bodyLarge,
                     fontWeight = FontWeight.Medium,
                     maxLines = 1,
@@ -554,3 +586,49 @@ private fun RefreshMetadata(
         }
     }
 }
+
+/**
+ * The two controls that decide how a long series is read.
+ *
+ * `INC-F6`. On the screen itself rather than behind a menu, because the series this matters for
+ * are the ones with a thousand episodes and the viewer's problem is that the newest is a thousand
+ * rows away — a fix behind two taps is a fix they will not find.
+ *
+ * Both are remembered per series, per profile, so this is the last time they touch them.
+ */
+@Composable
+private fun SeriesArrangement(
+    preference: SeriesPreference,
+    onMerged: (Boolean) -> Unit,
+    onDescending: (Boolean) -> Unit,
+) {
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+    ) {
+        FilterChip(
+            selected = preference.isMerged,
+            onClick = { onMerged(!preference.isMerged) },
+            label = { Text(stringResource(R.string.series_merge_seasons)) },
+        )
+        FilterChip(
+            selected = preference.isDescending,
+            onClick = { onDescending(!preference.isDescending) },
+            label = { Text(stringResource(R.string.series_newest_first)) },
+        )
+    }
+}
+
+/**
+ * What to call a season on screen.
+ *
+ * The merged one carries no name — `:core:data` holds no display strings — so it is named here,
+ * where the language is known.
+ */
+@Composable
+private fun Season.displayName(): String =
+    if (seasonNumber == MERGED_SEASON_NUMBER && name.isEmpty()) {
+        stringResource(R.string.series_all_episodes)
+    } else {
+        name
+    }

@@ -65,6 +65,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import dev.quiblo.core.data.MERGED_SEASON_NUMBER
 import dev.quiblo.core.data.MetadataRefresh
 import dev.quiblo.core.model.Channel
 import dev.quiblo.core.model.Episode
@@ -138,6 +139,8 @@ fun TvSeriesScreen(
                 onToggleFavorite = viewModel::toggleFavorite,
                 onRemoveFromHistory = viewModel::removeFromHistory,
                 onRefreshMetadata = viewModel::refreshMetadata,
+                onMerged = viewModel::setMerged,
+                onDescending = viewModel::setDescending,
                 focusEpisodeId = focusEpisodeId,
             )
         }
@@ -151,9 +154,11 @@ private fun Loaded(
     onToggleFavorite: () -> Unit,
     onRemoveFromHistory: () -> Unit,
     onRefreshMetadata: () -> Unit,
+    onMerged: (Boolean) -> Unit,
+    onDescending: (Boolean) -> Unit,
     focusEpisodeId: String?,
 ) {
-    val seasons = state.details.seasons
+    val seasons = state.seasons.ifEmpty { state.details.seasons }
 
     // Returning to an episode means returning to its season, not to the first one.
     val returningSeason = remember(state.details.seriesId, focusEpisodeId) {
@@ -161,7 +166,11 @@ private fun Loaded(
             seasons.indexOfFirst { season -> season.episodes.any { it.id == id } }.takeIf { it >= 0 }
         }
     }
-    var selectedSeason by remember(state.details.seriesId) { mutableIntStateOf(returningSeason ?: 0) }
+    // Also keyed on the arrangement: merging collapses several seasons into one, so an index
+    // of 4 points at nothing the moment the switch is flipped.
+    var selectedSeason by remember(state.details.seriesId, state.preference) {
+        mutableIntStateOf(returningSeason ?: 0)
+    }
     val episodes = seasons.getOrNull(selectedSeason)?.episodes.orEmpty()
 
     val firstAction = remember { FocusRequester() }
@@ -236,6 +245,32 @@ private fun Loaded(
             return@LazyColumn
         }
 
+        item(key = "arrangement") {
+            LazyRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                // Its own focus group, so walking along it with the remote does not step into
+                // the season chips below by accident.
+                modifier = Modifier
+                    .padding(top = 6.dp)
+                    .focusGroup(),
+            ) {
+                item {
+                    SeasonChip(
+                        label = stringResource(R.string.tv_series_merge_seasons),
+                        isSelected = state.preference.isMerged,
+                        onClick = { onMerged(!state.preference.isMerged) },
+                    )
+                }
+                item {
+                    SeasonChip(
+                        label = stringResource(R.string.tv_series_newest_first),
+                        isSelected = state.preference.isDescending,
+                        onClick = { onDescending(!state.preference.isDescending) },
+                    )
+                }
+            }
+        }
+
         if (seasons.size > 1) {
             item(key = "seasons") {
                 LazyRow(
@@ -247,8 +282,12 @@ private fun Loaded(
                         key = { _, season -> season.seasonNumber },
                     ) { index, season ->
                         SeasonChip(
-                            label = season.name.ifBlank {
-                                stringResource(R.string.tv_series_season, season.seasonNumber)
+                            label = if (season.seasonNumber == MERGED_SEASON_NUMBER && season.name.isEmpty()) {
+                                stringResource(R.string.tv_series_all_episodes)
+                            } else {
+                                season.name.ifBlank {
+                                    stringResource(R.string.tv_series_season, season.seasonNumber)
+                                }
                             },
                             isSelected = index == selectedSeason,
                             onClick = { selectedSeason = index },

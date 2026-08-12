@@ -163,6 +163,9 @@
     <string name="tv_detail_unfavourite">Remove from favourites</string>
     <string name="tv_detail_remove_history">Remove from history</string>
     <string name="tv_detail_refresh">Refresh information</string>
+    <string name="tv_series_all_episodes">All episodes</string>
+    <string name="tv_series_merge_seasons">Merge seasons</string>
+    <string name="tv_series_newest_first">Newest first</string>
     <string name="tv_detail_refresh_working">Asking…</string>
     <string name="tv_detail_refresh_updated">Information updated.</string>
     <string name="tv_detail_refresh_no_match">The metadata service has nothing about this title.</string>

@@ -386,6 +386,28 @@ interface ProgrammeDao {
     )
     fun observeNowPlaying(sourceId: Long, nowEpochMillis: Long): Flow<List<ProgrammeEntity>>
 
+    /**
+     * Every programme on one channel that overlaps a window (INC-F4).
+     *
+     * Overlaps rather than starts inside: the programme a viewer is watching began before the
+     * window did, and a timeline that omitted it would open with a gap where "now" is.
+     */
+    @Query(
+        """
+        SELECT * FROM programmes
+        WHERE sourceId = :sourceId AND channelKey = :channelKey
+          AND endEpochMillis > :fromEpochMillis
+          AND startEpochMillis < :toEpochMillis
+        ORDER BY startEpochMillis ASC
+        """,
+    )
+    fun observeBetween(
+        sourceId: Long,
+        channelKey: String,
+        fromEpochMillis: Long,
+        toEpochMillis: Long,
+    ): Flow<List<ProgrammeEntity>>
+
     @Query("SELECT COUNT(*) FROM programmes WHERE sourceId = :sourceId AND channelKey = :channelKey")
     suspend fun countFor(sourceId: Long, channelKey: String): Int
 

@@ -25,6 +25,7 @@ import dev.quiblo.core.database.dao.TitleMetadataDao
 import dev.quiblo.core.model.Channel
 import dev.quiblo.core.model.MediaKind
 import dev.quiblo.source.tmdb.TitleIdentity
+import dev.quiblo.source.tmdb.titleIdentity
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -248,6 +249,18 @@ class SearchRepository(
 /** Newline-separated, as `TitleMetadataRepository` writes them. */
 private fun String.splitGenres(): Sequence<String> =
     splitToSequence('\n').map { it.trim() }.filter { it.isNotBlank() }
+
+/**
+ * What makes two catalogue titles the same suggestion.
+ *
+ * `INC-F1`. A provider that lists one film in four qualities should offer **one** suggestion, and
+ * the cleaner that already decides that for the metadata cache decides it here too — one cleaner,
+ * one place, which is the rule `014` states and `016` proved the cost of breaking.
+ *
+ * Exposed from `:core:data` rather than letting a feature reach into `:source:tmdb`: `PLAN.md` §2
+ * says features talk to this layer and nothing else.
+ */
+fun String.suggestionKey(): String = titleIdentity().searchTitle
 
 /** The cache row this cached projection stands for, so the two sides join on the whole key. */
 private fun TitleGenreRow.identity() = CacheIdentity(TitleIdentity(searchTitle, year), kind)

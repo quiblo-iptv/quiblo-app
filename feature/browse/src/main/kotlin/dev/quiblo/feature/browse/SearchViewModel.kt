@@ -24,6 +24,7 @@ import dev.quiblo.core.data.SearchRepository
 import dev.quiblo.core.data.SearchResults
 import dev.quiblo.core.data.SourceRepository
 import dev.quiblo.core.data.TitleMetadataRepository
+import dev.quiblo.core.data.suggestionKey
 import dev.quiblo.core.model.Channel
 import dev.quiblo.core.model.MediaKind
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -62,6 +63,15 @@ data class SearchUiState(
     /** Scores and artwork for what is on screen, exactly as the browse grid fills them in. */
     val ratings: Map<String, Double> = emptyMap(),
     val posters: Map<String, String> = emptyMap(),
+    /**
+     * Titles to offer under the field as the term is typed.
+     *
+     * `INC-F1`. **Derived from the results already fetched, so autocomplete costs no query at
+     * all** — `AC-TV-14` forbids a database read per keystroke, and the surest way to obey that
+     * is not to add a read. The results flow is already debounced and already `mapLatest`, and
+     * these come out of its answer rather than out of a second path beside it.
+     */
+    val suggestions: List<String> = emptyList(),
 ) {
     /** True once a question has been asked, which is what moves the bar off the middle. */
     val isActive: Boolean get() = query.isNotBlank() || selectedGenre != null
@@ -170,6 +180,7 @@ class SearchViewModel(
             hasSource = extras.hasSource,
             ratings = extras.ratings,
             posters = extras.posters,
+            suggestions = found.suggestionsFor(text),
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS), SearchUiState())
 
@@ -253,3 +264,39 @@ class SearchViewModel(
         const val MAX_CONCURRENT_PREVIEW_FETCHES = 4
     }
 }
+
+/**
+ * The distinct titles among these results, for the suggestion list.
+ *
+ * **One suggestion per title, not per row.** A provider listing one film in four qualities is
+ * one thing a viewer is looking for, and four identical lines under the field would be the
+ * feature actively getting in the way.
+ *
+ * Empty until there is something to complete: with a blank or one-character term the results are
+ * either absent or so broad that a suggestion list is noise rather than a shortcut.
+ *
+ * The *provider's* own title is what is shown. The cleaned form is only how two rows are told to
+ * be the same title — a viewer searching their catalogue should see the names their catalogue
+ * uses.
+ */
+private fun SearchResults.suggestionsFor(term: String): List<String> {
+    if (term.length < MIN_SUGGESTION_TERM) return emptyList()
+
+    val seen = LinkedHashMap<String, String>()
+    (movies + series + live).forEach { channel ->
+        val key = channel.name.suggestionKey()
+        if (key.isNotBlank()) seen.putIfAbsent(key, channel.name)
+    }
+    return seen.values.take(MAX_SUGGESTIONS)
+}
+
+/**
+ * Below this the results are too broad for a suggestion to be a shortcut.
+ *
+ * Two rather than one: a single character matches most of a catalogue, and a list of six
+ * arbitrary titles from it is worse than nothing because it looks like an answer.
+ */
+private const val MIN_SUGGESTION_TERM = 2
+
+/** Six. Enough to be worth reading from three metres, few enough not to bury the results. */
+private const val MAX_SUGGESTIONS = 6

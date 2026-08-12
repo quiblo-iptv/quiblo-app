@@ -27,7 +27,7 @@ Every item below lands on a screen that round is repairing.
 | INC-F8 | Both | S | — | ~~Category editing scrolls inside Settings~~ — **built 2026-08-12**, and it was a removal rather than an addition |
 | INC-F9 | Both | M | — | ~~A section whose text is right-to-left is laid out right-to-left~~ — **built 2026-08-12**. First-strong detector in `:core:common`, `AutoDirection` in `:feature:designsystem`, applied to the title and plot on all four detail screens |
 | INC-F10 | Both | L | — | ~~Subtitle files: the provider's, or one the viewer picks~~ — **built 2026-08-12**. Format sniffed from the file rather than its name, encoding detected rather than assumed, the picked file copied into the app and remembered against the title. Schema 15. Nothing seen on a device yet |
-| INC-F11 | Both | M | INC-F10 | Subtitle appearance, set from the player |
+| INC-F11 | Both | M | INC-F10 | ~~Subtitle appearance, set from the player~~ — **built 2026-08-12**. Size, colour and background in the track menu, offered only while a subtitle is showing. Starts from Android's own caption style; "Match system" returns to it. **Building it found that nothing had ever drawn a subtitle cue** — see below |
 | INC-F12 | Both | S | — | **Audio track selection. Not new scope — see below** |
 | INC-F14 | Both | M | INC-F9 | ~~Filter the catalogue to one language~~ — **built 2026-08-12** as a subtraction, not a selection: hide titles written in scripts the viewer does not read. App-wide, never applied to favourites |
 | INC-E4 | Both | S | — | ~~The corner radius~~ — **built 2026-08-12**. There was no scale to raise; there was one to write |
@@ -232,6 +232,19 @@ the title rather than the session.
 doing on the existing seam rather than beside it.
 
 ### INC-F11 — subtitle appearance, from the player
+
+**What building this found: no subtitle has ever been visible in either app.** The engine has
+exposed `textTracks` and `selectTextTrack` since the player was written, and `agile/012` #023
+gave both apps a menu to use them. Neither ever showed anything. Media3 decodes a text track and
+reports the cues; something has to draw them, and a player built on a bare `SurfaceView` — which
+both apps are, deliberately, so that no feature module names a Media3 type — has nowhere to put
+them.
+
+So `AC-PLAY-04`'s subtitle half was never passable, #023 closed on a menu that could not work,
+and INC-F10 would have shipped a file that loaded and did nothing. The renderer is a
+`SubtitleView` built and fed inside `Media3PlayerController` and handed out as a plain `View`,
+which keeps the seam intact. It is the same lesson this project keeps meeting from the other
+side: a mechanism is not a symptom, and a menu is not a feature.
 
 Size, colour, background colour and opacity, changed from a menu inside the player where the
 effect is visible, and persisted. Media3 renders through `CaptionStyleCompat`, so this is a

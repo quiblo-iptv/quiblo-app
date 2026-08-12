@@ -138,8 +138,10 @@ fun PlayerScreen(
     // apps cannot disagree about what a stream offers (#023).
     val subtitlesOff = stringResource(R.string.player_subtitles_off)
     val subtitleActions = rememberSubtitleActions(state)
-    val trackMenu = remember(state.audioTracks, state.textTracks, subtitlesOff, subtitleActions) {
-        trackMenu(state, subtitlesOff, subtitleActions)
+    val subtitleStyle by viewModel.subtitleStyle.collectAsStateWithLifecycle()
+    val appearance = rememberSubtitleAppearance(subtitleStyle)
+    val trackMenu = remember(state.audioTracks, state.textTracks, subtitlesOff, subtitleActions, appearance) {
+        trackMenu(state, subtitlesOff, subtitleActions, appearance)
     }
 
     // INC-F10. The picker is remembered here rather than inside the menu, which leaves
@@ -257,6 +259,8 @@ fun PlayerScreen(
             hasRenderedFirstFrame = state.hasRenderedFirstFrame,
             modifier = Modifier.fillMaxSize(),
         )
+
+        SubtitleOutput(viewModel = viewModel, modifier = Modifier.fillMaxSize())
 
         // While locked the lock button is the only thing on screen, and the only thing that
         // responds. It stays visible rather than auto-hiding, because a lock with no
@@ -499,6 +503,26 @@ private const val PERCENT = 100
  * A [SurfaceView] rather than a `TextureView`: it composites in the display pipeline
  * rather than through the GPU, which matters for battery on long viewing sessions.
  */
+/**
+ * Where the engine draws subtitle cues (INC-F10, INC-F11).
+ *
+ * **Without this nothing shows subtitles at all.** The engine decodes a text track and hands the
+ * cues out; a player drawing into a bare `SurfaceView` — which both apps do, so that no feature
+ * module ever names a Media3 type — has nowhere to put them. Selecting a subtitle and seeing an
+ * unchanged picture was the symptom, on every track the app has ever offered.
+ *
+ * The view comes from the controller already wired up, so this is only where it goes: over the
+ * video, under the controls, so a control bar never sits behind a line of dialogue.
+ */
+@Composable
+private fun SubtitleOutput(viewModel: PlayerViewModel, modifier: Modifier = Modifier) {
+    val controller = remember { viewModel.controllerHandle() }
+    AndroidView(
+        factory = { context -> controller.subtitleOutput(context) },
+        modifier = modifier,
+    )
+}
+
 @Composable
 private fun VideoSurface(
     viewModel: PlayerViewModel,

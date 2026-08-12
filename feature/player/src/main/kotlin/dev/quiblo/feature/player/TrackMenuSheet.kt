@@ -80,10 +80,7 @@ internal fun TrackMenuSheet(
                 menu.sections.forEachIndexed { index, section ->
                     Text(
                         text = stringResource(
-                            when (section.kind) {
-                                TrackMenuKind.AUDIO -> R.string.player_audio
-                                TrackMenuKind.SUBTITLES -> R.string.player_subtitles
-                            },
+                            section.kind.headingRes(),
                         ),
                         color = Color.White.copy(alpha = 0.55f),
                         fontSize = 13.sp,
@@ -155,3 +152,12 @@ private fun TrackRow(label: String, isSelected: Boolean, onClick: () -> Unit) {
 
 private val SHEET_MAX_WIDTH = 360.dp
 private const val SELECTED_MARK = "✓"
+
+/** One heading per section, so neither app has to hold its own copy of the mapping. */
+internal fun TrackMenuKind.headingRes(): Int = when (this) {
+    TrackMenuKind.AUDIO -> R.string.player_audio
+    TrackMenuKind.SUBTITLES -> R.string.player_subtitles
+    TrackMenuKind.SUBTITLE_SIZE -> R.string.player_subtitles_size
+    TrackMenuKind.SUBTITLE_TEXT_COLOUR -> R.string.player_subtitles_text_colour
+    TrackMenuKind.SUBTITLE_BACKGROUND -> R.string.player_subtitles_background
+}

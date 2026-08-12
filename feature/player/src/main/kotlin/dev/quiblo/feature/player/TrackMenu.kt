@@ -67,9 +67,20 @@ enum class TrackMenuActionKind {
     REMOVE_SUBTITLE_FILE,
 }
 
+/**
+ * The headings the menu can have.
+ *
+ * The three appearance sections are here rather than behind a second panel because INC-F11 is
+ * specific about where this belongs: a size chosen over the film it will sit on is a decision, and
+ * the same size chosen against a settings card is a guess. They are also only offered while a
+ * subtitle is actually showing — see [trackMenu].
+ */
 enum class TrackMenuKind {
     AUDIO,
     SUBTITLES,
+    SUBTITLE_SIZE,
+    SUBTITLE_TEXT_COLOUR,
+    SUBTITLE_BACKGROUND,
 }
 
 /**
@@ -107,6 +118,13 @@ fun trackMenu(
      * the device has a file picker at all, which a television often does not.
      */
     subtitleActions: List<TrackMenuAction> = emptyList(),
+    /**
+     * The appearance sections, already labelled, or none (INC-F11).
+     *
+     * Built by the screen for the same reason as everything else passed in here — the words are
+     * resources and this module has no composition to read them from.
+     */
+    appearance: List<TrackMenuSection> = emptyList(),
 ): TrackMenu {
     val sections = buildList {
         if (state.audioTracks.size > 1) {
@@ -137,6 +155,11 @@ fun trackMenu(
             }
             add(TrackMenuSection(TrackMenuKind.SUBTITLES, entries, subtitleActions))
         }
+
+        // Only while something is actually showing. Offering a caption colour over a film with
+        // no subtitle on it is offering a choice whose effect cannot be seen, which is the one
+        // thing INC-F11 asks this menu not to do.
+        if (state.textTracks.any { it.isSelected }) addAll(appearance)
     }
 
     return TrackMenu(sections)

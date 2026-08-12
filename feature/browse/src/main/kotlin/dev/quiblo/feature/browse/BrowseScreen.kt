@@ -214,9 +214,13 @@ fun BrowseScreen(
     }
 
     guideFor?.let { channel ->
+        // Remembered against the channel, not rebuilt per recomposition: a fresh Flow instance
+        // restarts collection, and a restarted collection empties the sheet for a frame.
         GuideSheet(
             channel = channel,
-            nowNext = viewModel.nowNextFor(channel),
+            nowNext = remember(channel.stableKey) { viewModel.nowNextFor(channel) },
+            schedule = remember(channel.stableKey) { viewModel.scheduleFor(channel) },
+            onOpen = { viewModel.requestFullGuide(channel) },
             onDismiss = { guideFor = null },
         )
     }

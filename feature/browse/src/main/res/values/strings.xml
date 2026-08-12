@@ -20,6 +20,7 @@
     <string name="browse_next">Next</string>
     <string name="browse_no_guide">No guide information for this channel.</string>
     <string name="browse_guide_time">%1$s – %2$s</string>
+    <string name="browse_guide_full">Full guide</string>
     <string name="browse_close">Close</string>
 
     <string name="browse_close_search">Close search</string>

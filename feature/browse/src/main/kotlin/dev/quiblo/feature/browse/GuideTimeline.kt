@@ -78,8 +78,9 @@ fun guideTimeline(
     hoursBehind: Int = DEFAULT_HOURS_BEHIND,
     hoursAhead: Int = DEFAULT_HOURS_AHEAD,
 ): GuideTimeline {
-    val from = nowEpochMillis - hoursBehind * MILLIS_PER_HOUR
-    val to = nowEpochMillis + hoursAhead * MILLIS_PER_HOUR
+    val window = guideWindow(nowEpochMillis, hoursBehind, hoursAhead)
+    val from = window.first
+    val to = window.last
     val span = (to - from).toFloat()
 
     val blocks = mutableListOf<GuideBlock>()
@@ -112,6 +113,19 @@ fun guideTimeline(
         nowFraction = ((nowEpochMillis - from) / span).takeIf { it in 0f..1f },
     )
 }
+
+/**
+ * The stretch of time a timeline covers.
+ *
+ * Exposed so the query and the drawing cannot disagree about it: the rows fetched from storage
+ * are the rows [guideTimeline] lays out, and widening one without the other gives a timeline
+ * that is either short of data or holding rows it will throw away.
+ */
+fun guideWindow(
+    nowEpochMillis: Long,
+    hoursBehind: Int = DEFAULT_HOURS_BEHIND,
+    hoursAhead: Int = DEFAULT_HOURS_AHEAD,
+): LongRange = (nowEpochMillis - hoursBehind * MILLIS_PER_HOUR)..(nowEpochMillis + hoursAhead * MILLIS_PER_HOUR)
 
 private fun gap(startMillis: Long, endMillis: Long, from: Long, span: Float) = GuideBlock(
     programme = null,

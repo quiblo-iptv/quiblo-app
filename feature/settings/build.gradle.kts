@@ -22,10 +22,25 @@ plugins {
 
 android {
     namespace = "dev.quiblo.feature.settings"
+
+    testOptions {
+        unitTests {
+            // Robolectric renders the real Compose UI, which needs the module's resources
+            // and a working `android.*` implementation rather than stubbed methods.
+            isIncludeAndroidResources = true
+        }
+    }
 }
 
 dependencies {
     implementation(projects.core.data)
     implementation(projects.core.model)
     implementation(projects.core.media)
+
+    testImplementation(platform(libs.compose.bom))
+    testImplementation(libs.compose.ui.test.junit4)
+    testImplementation(libs.robolectric)
+    testImplementation(libs.androidx.test.junit)
+    testRuntimeOnly(libs.junit.vintage.engine)
+    debugImplementation(libs.compose.ui.test.manifest)
 }

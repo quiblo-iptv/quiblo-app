@@ -42,6 +42,38 @@ import dev.quiblo.core.database.entity.SourceEntity
 import dev.quiblo.core.database.entity.TitleMetadataEntity
 
 /**
+ * The current schema version.
+ *
+ * A top-level constant rather than a companion member because the annotation below needs it at
+ * compile time and cannot reach into the class it annotates. [MigrationTest] reads the same
+ * constant, so the version the app ships and the version the upgrade path is tested against
+ * cannot drift apart.
+ */
+const val SCHEMA_VERSION = 12
+
+/**
+ * Every migration, in order, in one place.
+ *
+ * Named rather than listed inline in [QuibloDatabase.create] so that the builder and the
+ * migration test take the same list. A migration registered in one and forgotten in the other
+ * is a migration that is either untested or unreachable, and both of those look fine until an
+ * upgrade on somebody's television.
+ */
+val ALL_MIGRATIONS = arrayOf(
+    MIGRATION_1_2,
+    MIGRATION_2_3,
+    MIGRATION_3_4,
+    MIGRATION_4_5,
+    MIGRATION_5_6,
+    MIGRATION_6_7,
+    MIGRATION_7_8,
+    MIGRATION_8_9,
+    MIGRATION_9_10,
+    MIGRATION_10_11,
+    MIGRATION_11_12,
+)
+
+/**
  * The single local database. There is no remote counterpart and never will be
  * (docs/FREEZE.md §2).
  */
@@ -57,7 +89,7 @@ import dev.quiblo.core.database.entity.TitleMetadataEntity
         ChannelLogoEntity::class,
         ProfileEntity::class,
     ],
-    version = 11,
+    version = SCHEMA_VERSION,
     exportSchema = true,
 )
 abstract class QuibloDatabase : RoomDatabase() {
@@ -91,20 +123,13 @@ abstract class QuibloDatabase : RoomDatabase() {
          * requires version mismatches to be handled explicitly rather than by discarding
          * state. Every schema change from here needs a real migration.
          */
+        // The spread copies an eleven-element array once, at startup, on the only call that
+        // builds the database. The alternative is listing the migrations a second time here
+        // and letting the two lists drift, which is the failure this array exists to prevent.
+        @Suppress("SpreadOperator")
         fun create(context: Context): QuibloDatabase =
             Room.databaseBuilder(context, QuibloDatabase::class.java, NAME)
-                .addMigrations(
-                    MIGRATION_1_2,
-                    MIGRATION_2_3,
-                    MIGRATION_3_4,
-                    MIGRATION_4_5,
-                    MIGRATION_5_6,
-                    MIGRATION_6_7,
-                    MIGRATION_7_8,
-                    MIGRATION_8_9,
-                    MIGRATION_9_10,
-                    MIGRATION_10_11,
-                )
+                .addMigrations(*ALL_MIGRATIONS)
                 .build()
     }
 }

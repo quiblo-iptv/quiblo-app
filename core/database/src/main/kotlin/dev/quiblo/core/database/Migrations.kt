@@ -356,3 +356,53 @@ val MIGRATION_10_11 = object : Migration(10, 11) {
         )
     }
 }
+
+/**
+ * #024: the metadata cache key gains the year, and the table gains the service's own id.
+ *
+ * The cache keyed rows on a cleaned search title, and the cleaner strips bracketed groups
+ * whole — including the year, because a provider year is almost always in brackets. So
+ * `Dune (1984)` and `Dune (2021)` were one row. The first fetched won, permanently, and the
+ * other film showed the winner's poster, plot, rating and cast. Nothing was empty and nothing
+ * errored; a viewer saw a catalogue that did not have their film.
+ *
+ * `year` belongs in the primary key, and SQLite cannot add a column to a primary key in place,
+ * so the table is rebuilt — `MIGRATION_10_11`'s shape, which is the model for this.
+ *
+ * **Every existing row is dropped rather than adopted, and that is the opposite of what
+ * `MIGRATION_10_11` does.** The difference is whose data it is. Favourites and resume points
+ * are the viewer's and cannot be recovered by asking anyone; this table is a fortnight-long
+ * cache of somebody else's answers, and `setApiKey` already empties it wholesale when the key
+ * changes. More to the point, **these are the rows we have just established may hold the wrong
+ * film's details** — carrying them across under a key that now claims to be precise would
+ * launder a known-bad row into a trustworthy-looking one. Re-fetching costs a request per
+ * title on next visit, which is what the cache is for.
+ *
+ * The cost is stated rather than hidden: the first browse after this upgrade is as slow as a
+ * first install, and on a scanned catalogue the search screen's coverage figure reads 0% until
+ * a scan is run again.
+ */
+val MIGRATION_11_12 = object : Migration(11, 12) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("DROP TABLE IF EXISTS `title_metadata`")
+        db.execSQL(
+            "CREATE TABLE IF NOT EXISTS `title_metadata` (" +
+                "`searchTitle` TEXT NOT NULL, " +
+                "`kind` TEXT NOT NULL, " +
+                "`year` INTEGER NOT NULL, " +
+                "`tmdbId` INTEGER, " +
+                "`overview` TEXT, " +
+                "`genres` TEXT, " +
+                "`ageRating` TEXT, " +
+                "`rating` REAL, " +
+                "`author` TEXT, " +
+                "`topCast` TEXT, " +
+                "`posterUrl` TEXT, " +
+                "`backdropUrl` TEXT, " +
+                "`fetchedAtEpochMillis` INTEGER NOT NULL, " +
+                "`isMiss` INTEGER NOT NULL, " +
+                "`isPartial` INTEGER NOT NULL, " +
+                "PRIMARY KEY(`searchTitle`, `kind`, `year`))",
+        )
+    }
+}

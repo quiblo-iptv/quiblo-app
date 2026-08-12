@@ -24,12 +24,13 @@ import dev.quiblo.core.datastore.TmdbKeyStore
 import dev.quiblo.core.model.AuthorLabel
 import dev.quiblo.core.model.MediaKind
 import dev.quiblo.core.model.TitleMetadata
+import dev.quiblo.source.tmdb.NO_YEAR
+import dev.quiblo.source.tmdb.TitleIdentity
 import dev.quiblo.source.tmdb.TmdbAnswer
 import dev.quiblo.source.tmdb.TmdbClient
 import dev.quiblo.source.tmdb.TmdbKind
-import dev.quiblo.source.tmdb.cleanedForSearch
 import dev.quiblo.source.tmdb.metadataOrNull
-import dev.quiblo.source.tmdb.yearInTitle
+import dev.quiblo.source.tmdb.titleIdentity
 import kotlinx.coroutines.flow.StateFlow
 
 /**
@@ -111,14 +112,14 @@ class TitleMetadataRepository(
     ): TmdbAnswer {
         val key = keyStore.apiKey.value?.takeIf { it.isNotBlank() }
         val tmdbKind = kind.toTmdbKind()
-        val cacheKey = title.cleanedForSearch().lowercase().takeIf { it.isNotBlank() }
+        val identity = title.titleIdentity().takeIf { it.searchTitle.isNotBlank() }
 
         // Three ways there is nothing to look up: the feature is off, the item is a live
         // channel, or the title cleaned down to nothing worth searching for. None of them is
         // a failure, and none of them is worth asking about twice.
-        if (key == null || tmdbKind == null || cacheKey == null) return TmdbAnswer.NoMatch
+        if (key == null || tmdbKind == null || identity == null) return TmdbAnswer.NoMatch
 
-        return resolve(key, tmdbKind, title, kind, cacheKey, acceptPartial)
+        return resolve(key, tmdbKind, title, kind, identity, acceptPartial)
     }
 
     @Suppress("LongParameterList")
@@ -127,10 +128,10 @@ class TitleMetadataRepository(
         tmdbKind: TmdbKind,
         title: String,
         kind: MediaKind,
-        cacheKey: String,
+        identity: TitleIdentity,
         acceptPartial: Boolean,
     ): TmdbAnswer {
-        val fresh = dao.find(cacheKey, kind.name)
+        val fresh = dao.find(identity.searchTitle, kind.name, identity.year)
             ?.takeIf { now() - it.fetchedAtEpochMillis < CACHE_TTL_MILLIS }
 
         if (fresh != null && fresh.answers(acceptPartial)) {
@@ -142,7 +143,7 @@ class TitleMetadataRepository(
             title = title,
             kind = kind,
             tmdbKind = tmdbKind,
-            cacheKey = cacheKey,
+            identity = identity,
             partial = acceptPartial,
         )
     }
@@ -161,12 +162,13 @@ class TitleMetadataRepository(
         title: String,
         kind: MediaKind,
         tmdbKind: TmdbKind,
-        cacheKey: String,
+        identity: TitleIdentity,
         partial: Boolean,
     ): TmdbAnswer {
-        // The year narrows a search that would otherwise match a remake. Provider titles
-        // carry it often enough to be worth reading.
-        val year = title.yearInTitle()
+        // The year narrows a search that would otherwise match a remake. The identity has
+        // already read it off the raw title, so it is not read a second time here — two
+        // places reading one fact out of one string is how they come to disagree.
+        val year = identity.year.takeIf { it != NO_YEAR }
         val answer = if (partial) {
             client.summary(apiKey = apiKey, title = title, kind = tmdbKind, year = year)
         } else {
@@ -174,13 +176,14 @@ class TitleMetadataRepository(
         }
 
         when (answer) {
-            is TmdbAnswer.Found -> dao.upsert(answer.metadata.toEntity(cacheKey, kind.name, now()))
+            is TmdbAnswer.Found -> dao.upsert(answer.metadata.toEntity(identity, kind.name, now()))
 
             // A miss is recorded rather than forgotten, so the next visit costs nothing.
             TmdbAnswer.NoMatch -> dao.upsert(
                 TitleMetadataEntity(
-                    searchTitle = cacheKey,
+                    searchTitle = identity.searchTitle,
                     kind = kind.name,
+                    year = identity.year,
                     fetchedAtEpochMillis = now(),
                     isMiss = true,
                 ),
@@ -204,12 +207,12 @@ class TitleMetadataRepository(
      * has not done. The freshness rule lives here rather than at the caller because the TTL
      * is this class's business and two copies of it would drift.
      */
-    internal suspend fun freshlyCachedKeys(): Set<Pair<String, String>> {
+    internal suspend fun freshlyCachedKeys(): Set<CacheIdentity> {
         val horizon = now() - CACHE_TTL_MILLIS
         return dao.allKeys()
             .asSequence()
             .filter { it.fetchedAtEpochMillis > horizon }
-            .mapTo(HashSet()) { it.searchTitle to it.kind }
+            .mapTo(HashSet()) { CacheIdentity(TitleIdentity(it.searchTitle, it.year), it.kind) }
     }
 
     suspend fun setApiKey(apiKey: String?) {
@@ -234,6 +237,32 @@ class TitleMetadataRepository(
         const val CACHE_TTL_MILLIS = 14L * 24 * 60 * 60 * 1000
     }
 }
+
+/**
+ * Which row of the metadata cache a title belongs to: its identity, and which catalogue.
+ *
+ * [kind] is half the key rather than a column, because "Fargo" is a film and "Fargo" is a
+ * series and they are not the same record.
+ *
+ * This type exists because **three places have to agree on it exactly** — the repository that
+ * writes the row, the scanner that subtracts what is already cached from its work list, and
+ * the search screen's genre index that joins the catalogue back onto the cache. They used to
+ * agree by each spelling the key out, with a comment in `SearchRepository` explaining that
+ * they must agree and were therefore written separately. That reasoning is backwards, and
+ * #024 is what it cost: the moment the key changed, two of the three would have gone on
+ * building the old one and the genre filter would have quietly returned nothing.
+ */
+data class CacheIdentity(val title: TitleIdentity, val kind: String)
+
+/**
+ * Where this provider title is filed in the metadata cache, or null if it is filed nowhere.
+ *
+ * Null means the title cleaned away to nothing — a name written entirely in a non-Latin
+ * script, or a bare language tag. It is never looked up and never cached, and callers must
+ * keep skipping it rather than filing a hundred such titles under one empty key.
+ */
+internal fun String.cacheIdentity(kind: String): CacheIdentity? =
+    titleIdentity().takeIf { it.searchTitle.isNotBlank() }?.let { CacheIdentity(it, kind) }
 
 /**
  * Which TMDB catalogue, if any, describes this kind of item.
@@ -274,9 +303,10 @@ private fun TitleMetadataEntity.toMetadata() = TitleMetadata(
     isPartial = isPartial,
 )
 
-private fun TitleMetadata.toEntity(searchTitle: String, kind: String, fetchedAt: Long) = TitleMetadataEntity(
-    searchTitle = searchTitle,
+private fun TitleMetadata.toEntity(identity: TitleIdentity, kind: String, fetchedAt: Long) = TitleMetadataEntity(
+    searchTitle = identity.searchTitle,
     kind = kind,
+    year = identity.year,
     overview = overview,
     genres = genres.joinToString(LIST_SEPARATOR).takeIf { it.isNotBlank() },
     ageRating = ageRating,

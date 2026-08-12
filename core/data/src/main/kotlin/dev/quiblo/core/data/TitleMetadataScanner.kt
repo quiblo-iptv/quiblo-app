@@ -22,8 +22,6 @@ import dev.quiblo.core.database.dao.ChannelDao
 import dev.quiblo.core.model.MediaKind
 import dev.quiblo.source.tmdb.TmdbAnswer
 import dev.quiblo.source.tmdb.TmdbRefusal
-import dev.quiblo.source.tmdb.cleanedForSearch
-import dev.quiblo.source.tmdb.yearInTitle
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -253,21 +251,19 @@ class TitleMetadataScanner(
 
         // Insertion-ordered, so the scan walks the catalogue in the provider's own order and
         // a viewer watching the counter sees it move through something recognisable.
-        val chosen = LinkedHashMap<Pair<String, String>, ScanItem>()
+        val chosen = LinkedHashMap<CacheIdentity, ScanItem>()
 
         channelDao.titlesForMetadata(sourceId).forEach { row ->
-            val key = row.name.cleanedForSearch().lowercase().takeIf { it.isNotBlank() } ?: return@forEach
+            val identity = row.name.cacheIdentity(row.kind) ?: return@forEach
             val kind = row.kind.toMediaKindOrNull() ?: return@forEach
-            val identity = key to row.kind
             if (identity in cached) return@forEach
 
-            val existing = chosen[identity]
-            // Of the several rows that clean to one key, the one still carrying its year is
-            // asked: the year narrows the search, and it is what tells a 1996 Fargo from a
-            // 2014 one. They are otherwise interchangeable by construction.
-            val isBetter = existing == null ||
-                (existing.title.yearInTitle() == null && row.name.yearInTitle() != null)
-            if (isBetter) chosen[identity] = ScanItem(row.name, kind)
+            // First row wins, and since #024 that is simply true rather than a compromise.
+            // The year is part of the identity now, so every row sharing one is the same
+            // title at a different quality and any of them asks the same question — where
+            // this used to have to prefer whichever row still carried its year, because
+            // without it a 1996 Fargo and a 2014 Fargo were the same work item.
+            chosen.getOrPut(identity) { ScanItem(row.name, kind) }
         }
 
         return chosen.values.toList()

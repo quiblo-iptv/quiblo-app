@@ -20,6 +20,7 @@ package dev.quiblo.core.media
 
 import android.view.SurfaceView
 import dev.quiblo.core.model.PlayerSettings
+import dev.quiblo.core.model.SubtitleFile
 import kotlinx.coroutines.flow.StateFlow
 
 /**
@@ -85,6 +86,14 @@ data class PlayableItem(
     val isLive: Boolean,
     /** Where to resume from, for VOD only (AC-PLAY-03). */
     val startPositionMillis: Long = 0L,
+    /**
+     * Subtitle files to load alongside the stream (INC-F10).
+     *
+     * Loaded, not selected. They join the container's own text tracks in the menu and none of
+     * them starts showing on its own — a viewer who attached a file still has to turn it on,
+     * for the same reason a container that declares subtitles starts with them off.
+     */
+    val subtitles: List<SubtitleFile> = emptyList(),
 )
 
 /** A selectable audio or subtitle track. */

@@ -159,6 +159,33 @@ because `K` is a Latin letter — hiding Latin loses it. And an Arabic film rele
 transliterated Latin title is not hidden at all, because nothing in a playlist says it is Arabic.
 Report these as observations, not as failures.
 
+### INC-F10 — subtitle files, the panel's and the viewer's own
+
+Merged 2026-08-12. **Nothing here has been seen on a device.** Every part of it is covered by
+unit tests — the format sniffing, the encoding detection, the copy-and-remember, the menu shape —
+and none of those is a subtitle appearing over a film.
+
+| | |
+| :---- | :---- |
+| **What to look at** | Play any film. Open Audio and subtitles. The list ends with "Add a subtitle file…" |
+| **Passes if** | Picking a `.srt` restarts the film at the position it was at, the file's name appears in the Subtitles list, choosing it shows the lines over the picture, and it is still listed the next time that title is played |
+| **Fails if** | The menu has no such entry, the picker does not open, playback restarts from the beginning, the file is listed but shows nothing, or the entry is gone next time |
+
+**Take an Arabic `.srt` that is not UTF-8.** That is the case this was built for and the one a
+UTF-8 file cannot exercise: encoded in windows-1256, it used to render as a line of symbols. It
+should read as Arabic. A file already in UTF-8 proves nothing about this.
+
+**Three things that are the design, not defects.** Attaching restarts the stream, because the
+engine takes subtitle files as part of the media item — a second of buffering is expected. A
+subtitle a panel supplies is only fetched for a film, never for a live channel or an episode.
+And a television with no document picker installed says so rather than offering an entry that
+does nothing; on such a device the whole feature is unreachable, which is worth reporting as a
+fact about the device rather than a fault in the app.
+
+**The panel half is untested against a real panel.** No account available here supplies subtitle
+files, so what a populated `subtitles` field does has only been proven against synthetic payloads
+in the shapes panels are known to send.
+
 ---
 
 ## B — Owed from `012`, still owed

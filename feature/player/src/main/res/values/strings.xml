@@ -16,6 +16,15 @@
     <string name="player_audio">Audio</string>
     <string name="player_subtitles">Subtitles</string>
     <string name="player_subtitles_off">Off</string>
+
+    <!-- INC-F10: a subtitle file from the device, for a film whose panel supplies none. -->
+    <string name="player_subtitles_add_file">Add a subtitle file…</string>
+    <string name="player_subtitles_remove_file">Remove the added file</string>
+    <string name="player_subtitles_attached">Subtitle file loaded. Choose it from Subtitles.</string>
+    <string name="player_subtitles_not_subtitles">That file does not look like subtitles.</string>
+    <string name="player_subtitles_unreadable">That file could not be opened.</string>
+    <string name="player_subtitles_too_large">That file is too large to be subtitles.</string>
+    <string name="player_subtitles_no_picker">This device has no app for picking files.</string>
     <string name="player_close">Close</string>
     <string name="player_live">LIVE</string>
     <string name="player_reconnecting">Reconnecting… (attempt %1$d of 3)</string>

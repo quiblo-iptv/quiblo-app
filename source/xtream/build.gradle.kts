@@ -25,6 +25,7 @@ plugins {
 dependencies {
     implementation(projects.source.api)
     implementation(projects.core.model)
+    implementation(projects.core.common)
     implementation(libs.kotlinx.coroutines.core)
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.ktor.client.core)

@@ -80,9 +80,15 @@ import dev.quiblo.core.model.AspectRatioMode
 import dev.quiblo.core.model.PlayerSettings
 import dev.quiblo.core.model.videoScale
 import dev.quiblo.feature.player.PlayerViewModel
+import dev.quiblo.feature.player.SubtitleNotice
 import dev.quiblo.feature.player.TrackMenu
+import dev.quiblo.feature.player.TrackMenuActionKind
 import dev.quiblo.feature.player.TrackMenuKind
 import dev.quiblo.feature.player.messageRes
+import dev.quiblo.feature.player.rememberSubtitleActions
+import dev.quiblo.feature.player.rememberSubtitleFilePicker
+import dev.quiblo.feature.player.subtitleActionHandler
+import dev.quiblo.feature.player.subtitleNoticeText
 import dev.quiblo.feature.player.trackMenu
 import dev.quiblo.tv.R
 import dev.quiblo.tv.ui.detail.DetailButton
@@ -116,9 +122,18 @@ fun TvPlayerScreen(
     // What there is to choose between, if anything. AC-PLAY-04 has required this since the
     // player was written and no screen has ever offered it (#023).
     val offLabel = stringResource(R.string.tv_player_subtitles_off)
-    val trackMenu = remember(state.audioTracks, state.textTracks, offLabel) {
-        trackMenu(state, offLabel)
+    val subtitleActions = rememberSubtitleActions(state)
+    val trackMenu = remember(state.audioTracks, state.textTracks, offLabel, subtitleActions) {
+        trackMenu(state, offLabel, subtitleActions)
     }
+
+    // INC-F10. Many televisions ship without a document picker at all, so launching is
+    // wrapped and the viewer is told rather than dropped into a crash.
+    val subtitleNotice by viewModel.subtitleNotice.collectAsStateWithLifecycle()
+    val pickSubtitleFile = rememberSubtitleFilePicker(
+        onPicked = viewModel::attachSubtitleFile,
+        onNoPicker = { viewModel.showSubtitleNotice(SubtitleNotice.NO_PICKER) },
+    )
 
     val focusRequester = remember { FocusRequester() }
 
@@ -276,7 +291,25 @@ fun TvPlayerScreen(
                 tracksVisible = false
             },
             onDismissTracks = { tracksVisible = false },
+            onSubtitleAction = subtitleActionHandler(
+                onPick = {
+                    tracksVisible = false
+                    pickSubtitleFile()
+                },
+                onRemove = {
+                    tracksVisible = false
+                    viewModel.detachSubtitleFile()
+                },
+            ),
+            subtitleNotice = subtitleNotice,
         )
+    }
+
+    LaunchedEffect(subtitleNotice) {
+        if (subtitleNotice != null) {
+            delay(SUBTITLE_NOTICE_MILLIS)
+            viewModel.showSubtitleNotice(null)
+        }
     }
 }
 
@@ -305,6 +338,8 @@ private fun PlayerOverlays(
     onBack: () -> Unit,
     onSelectTrack: (TrackMenuKind, String?) -> Unit,
     onDismissTracks: () -> Unit,
+    onSubtitleAction: (TrackMenuActionKind) -> Unit,
+    subtitleNotice: SubtitleNotice?,
 ) {
     if (state.status == PlaybackStatus.BUFFERING) {
         Buffering(retryAttempt = state.retryAttempt)
@@ -336,7 +371,40 @@ private fun PlayerOverlays(
     if (tracksVisible && !hasFailed) {
         // Closed on a choice, and playback is never touched: AC-TV-06 says these controls
         // must not pause, and switching a track does not restart a stream.
-        TvTrackMenu(menu = trackMenu, onSelect = onSelectTrack, onDismiss = onDismissTracks)
+        TvTrackMenu(
+            menu = trackMenu,
+            onSelect = onSelectTrack,
+            onAction = onSubtitleAction,
+            onDismiss = onDismissTracks,
+        )
+    }
+
+    subtitleNotice?.let { SubtitleNoticeBanner(it) }
+}
+
+/**
+ * What happened to the subtitle file the viewer picked (INC-F10).
+ *
+ * Bottom-centred and larger than the phone's, for the reason everything on this app is: it is
+ * read from a sofa. Not a dialog — this app has none, and an acknowledgement that has to be
+ * dismissed with a remote is worse than no acknowledgement at all.
+ */
+@Composable
+private fun SubtitleNoticeBanner(notice: SubtitleNotice) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(48.dp),
+        contentAlignment = Alignment.BottomCenter,
+    ) {
+        Text(
+            text = subtitleNoticeText(notice),
+            color = Color.White,
+            fontSize = 20.sp,
+            modifier = Modifier
+                .background(Color.Black.copy(alpha = 0.75f), RoundedCornerShape(10.dp))
+                .padding(horizontal = 20.dp, vertical = 12.dp),
+        )
     }
 }
 
@@ -788,6 +856,9 @@ private fun Hint(text: String) {
 
 private const val CONTROLS_TIMEOUT_MILLIS = 4_000L
 private const val ZAP_NOTICE_MILLIS = 2_500L
+
+/** Longer than the zap notice: this one is a sentence, and it is read from across a room. */
+private const val SUBTITLE_NOTICE_MILLIS = 5_000L
 private const val MILLIS_PER_SECOND = 1000
 private const val SECONDS_PER_MINUTE = 60
 private const val SECONDS_PER_HOUR = 3600

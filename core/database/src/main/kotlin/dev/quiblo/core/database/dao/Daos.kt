@@ -30,6 +30,7 @@ import dev.quiblo.core.database.entity.CategoryOverrideEntity
 import dev.quiblo.core.database.entity.ChannelEntity
 import dev.quiblo.core.database.entity.ChannelLogoEntity
 import dev.quiblo.core.database.entity.FavoriteEntity
+import dev.quiblo.core.database.entity.PickedSubtitleEntity
 import dev.quiblo.core.database.entity.ProfileEntity
 import dev.quiblo.core.database.entity.ProgrammeEntity
 import dev.quiblo.core.database.entity.ResumePositionEntity
@@ -561,4 +562,21 @@ interface SeriesPreferenceDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(preference: SeriesPreferenceEntity)
+}
+
+/** Subtitle files a viewer picked. See [PickedSubtitleEntity]. */
+@Dao
+interface PickedSubtitleDao {
+
+    @Query("SELECT * FROM picked_subtitles WHERE stableKey = :stableKey")
+    suspend fun forTitle(stableKey: String): PickedSubtitleEntity?
+
+    @Query("SELECT * FROM picked_subtitles")
+    suspend fun all(): List<PickedSubtitleEntity>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsert(subtitle: PickedSubtitleEntity)
+
+    @Query("DELETE FROM picked_subtitles WHERE stableKey = :stableKey")
+    suspend fun delete(stableKey: String)
 }

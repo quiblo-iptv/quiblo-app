@@ -38,4 +38,11 @@ data class VodDetails(
     val genre: String? = null,
     val rating: String? = null,
     val durationSeconds: Int? = null,
+    /**
+     * Sidecar subtitle files the panel supplies with this film (INC-F10).
+     *
+     * Usually empty. Most panels do not carry subtitle files at all, which is exactly why the
+     * viewer can also point the player at one of their own.
+     */
+    val subtitles: List<SubtitleFile> = emptyList(),
 )

@@ -27,6 +27,8 @@ import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
 
 private const val OFF = "Off"
+private val ADD = TrackMenuAction(TrackMenuActionKind.ADD_SUBTITLE_FILE, "Add a subtitle file…")
+private val REMOVE = TrackMenuAction(TrackMenuActionKind.REMOVE_SUBTITLE_FILE, "Remove the added file")
 
 /**
  * What the track menu offers, and — more importantly — what it does not.
@@ -98,6 +100,43 @@ class TrackMenuTest {
     @Test
     fun `a stream with neither offers nothing at all`() {
         assertTrue(trackMenu(state(), OFF).isEmpty)
+    }
+
+    @Test
+    @DisplayName("a film with no subtitle track still offers the way to add one (INC-F10)")
+    fun `subtitle actions bring the section into existence`() {
+        // The case that matters most and would be easiest to miss: a viewer wants to attach a
+        // file exactly when the stream carries nothing, and a section hidden until a track
+        // exists is a section hidden when it is needed.
+        val menu = trackMenu(state(), OFF, listOf(ADD))
+
+        val subtitles = menu.sections.single { it.kind == TrackMenuKind.SUBTITLES }
+        assertTrue(subtitles.entries.isEmpty(), "nothing to turn off, so no off entry")
+        assertEquals(listOf(ADD), subtitles.actions)
+    }
+
+    @Test
+    fun `actions sit beside the tracks, not among them`() {
+        val menu = trackMenu(state(text = listOf(track("s1", "English"))), OFF, listOf(ADD, REMOVE))
+
+        val subtitles = menu.sections.single { it.kind == TrackMenuKind.SUBTITLES }
+        assertEquals(listOf(OFF, "English"), subtitles.entries.map { it.label })
+        assertEquals(listOf(ADD, REMOVE), subtitles.actions)
+    }
+
+    @Test
+    fun `an action never carries a tick, because it is not a choice`() {
+        val menu = trackMenu(state(), OFF, listOf(ADD))
+
+        assertTrue(menu.sections.single().actions.none { action -> action.label.isEmpty() })
+        assertTrue(menu.sections.single().entries.none { it.isSelected })
+    }
+
+    @Test
+    fun `audio is unaffected by subtitle actions`() {
+        val menu = trackMenu(state(), OFF, listOf(ADD))
+
+        assertTrue(menu.sections.none { it.kind == TrackMenuKind.AUDIO })
     }
 
     private fun state(

@@ -21,7 +21,7 @@ Every item below lands on a screen that round is repairing.
 | INC-F1 | Both | M | — | Autocomplete in search, from the local catalogue |
 | INC-F2 | Both | L | The scan | Suggestions from what has been watched |
 | INC-F3 | Both | S | #014 | Long-press a history entry to remove it — **phone half built 2026-08-12**. The television half is `STOPPERS.md` **S12**: that app has no dialog anywhere, and a one-action menu on a remote is a pattern it does not yet have |
-| INC-F4 | Both | M | — | Long-press a channel for its full guide, on a timeline |
+| INC-F4 | Both | M | — | ~~Long-press a channel for its full guide, on a timeline~~ — **built 2026-08-12**. Shared arithmetic in `:feature:browse`, a dragged strip on the phone and a D-pad one on the television. `get_simple_data_table`, asked once per channel per session. Nothing seen on a device yet |
 | INC-F6 | Both | M | #015 | Merge seasons into one list, and reverse the order — remembered per profile |
 | INC-F7 | Both | S | A key | Refresh this title's information from the metadata service |
 | INC-F8 | Both | S | — | ~~Category editing scrolls inside Settings~~ — **built 2026-08-12**, and it was a removal rather than an addition |
@@ -259,10 +259,26 @@ that returns to it.
 
 ### INC-F4 — a channel's full programme guide
 
-Long-press a channel in the Live list to see its programme catalogue on a timeline aligned to
-the television's clock.
+**Built 2026-08-12.** Long-press a channel in the Live list — a finger on the phone, the centre
+button held on the television — and the listing is drawn against the clock: an hour behind,
+twelve ahead, each block as wide as the programme is long.
 
-**Three things this needs that do not exist**, and they are the reason this is M rather than S:
+All three of the things below were built. What they cost, and what was decided along the way:
+
+- The listing comes from `get_simple_data_table`, asked for on the long-press and once per
+  channel per session. `fullGuideFor` defaults to `guideFor` on the source interface, so a
+  provider with only a short-EPG call draws the window it has rather than nothing.
+- **The arithmetic is shared and the drawing is not** — `PLAN-TV.md` §2. `guideTimeline` in
+  `:feature:browse` has no Compose in it and answers where each block sits; the phone drags its
+  strip and the television walks it with a D-pad. Overlapping listings, which panels do send, are
+  clipped so the earlier one keeps its ground, and holes are drawn as holes.
+- **On the television the now-marker is not a line.** A line is invisible to somebody reading the
+  block that has focus, so the block carries its own mark and the header says "On now" in words.
+- **No dialog on the television**: a strip across the bottom with the channel list dimmed behind
+  it, Back to close. The panel opens with focus on the programme playing.
+- Nothing has been seen on a device. The whole thing is unrun against a real panel — S2.
+
+**Three things this needed that did not exist**, and they are the reason this is M rather than S:
 
 - **More than now and next.** `get_short_epg` supplies a small window; the full listing is
   `get_simple_data_table`. Another call to the user's panel, so it is made on the long-press and

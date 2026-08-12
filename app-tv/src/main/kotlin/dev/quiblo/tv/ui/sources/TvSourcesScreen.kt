@@ -63,6 +63,7 @@ import dev.quiblo.feature.sources.AddSourceState
 import dev.quiblo.feature.sources.SourcesViewModel
 import dev.quiblo.tv.R
 import dev.quiblo.tv.ui.common.TvTextField
+import dev.quiblo.tv.ui.common.tryRequestFocus
 import org.koin.androidx.compose.koinViewModel
 
 /**
@@ -396,14 +397,3 @@ private fun AddSourceForm(
 
 private val BUTTON_WIDTH = 220.dp
 private const val FIELD_WIDTH_FRACTION = 0.6f
-
-/**
- * Requests focus, tolerating there being nothing to focus.
- *
- * The branch being focused may not have composed yet on the frame this runs, and a
- * [FocusRequester] treats that as a programming error and throws. Leaving focus where it is
- * for a frame is the right outcome; bringing the app down is not.
- */
-private fun FocusRequester.tryRequestFocus() {
-    runCatching { requestFocus() }
-}

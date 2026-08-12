@@ -72,6 +72,7 @@ import dev.quiblo.core.model.Channel
 import dev.quiblo.core.model.MediaKind
 import dev.quiblo.tv.R
 import dev.quiblo.tv.ui.browse.TvPosterRows
+import dev.quiblo.tv.ui.common.tryRequestFocus
 import dev.quiblo.tv.ui.consent.TvConsentScreen
 import dev.quiblo.tv.ui.detail.TvMovieScreen
 import dev.quiblo.tv.ui.live.TvLiveScreen
@@ -647,15 +648,3 @@ private val TAB_LABEL_HEIGHT = 24.dp
 private val TAB_ICON_SIZE = 22.dp
 private const val SELECTED_ALPHA = 0.90f
 private const val IDLE_ALPHA = 0.55f
-
-/**
- * Requests focus, tolerating there being nothing to focus.
- *
- * A content area can legitimately hold no focusable at all — an empty catalogue, a spinner,
- * a line of explanatory text — and [FocusRequester] treats that as a programming error and
- * throws. Here it is an ordinary state, and the right behaviour is to leave focus where it
- * is rather than to bring the app down.
- */
-private fun FocusRequester.tryRequestFocus() {
-    runCatching { requestFocus() }
-}

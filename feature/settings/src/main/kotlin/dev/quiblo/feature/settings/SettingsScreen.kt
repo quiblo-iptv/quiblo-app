@@ -75,6 +75,7 @@ fun SettingsScreen(
     val categoryKind by viewModel.selectedCategoryKind.collectAsStateWithLifecycle()
     val categories by viewModel.categories.collectAsStateWithLifecycle()
     val appearance by viewModel.appearance.collectAsStateWithLifecycle()
+    val hiddenScripts by viewModel.hiddenScripts.collectAsStateWithLifecycle()
     val channelLogosEnabled by viewModel.channelLogosEnabled.collectAsStateWithLifecycle()
     val context = LocalContext.current
 
@@ -146,6 +147,14 @@ fun SettingsScreen(
                 onSeekInterval = viewModel::setSeekInterval,
                 onBufferMode = viewModel::setBufferMode,
                 onMaxBitrate = viewModel::setMaxBitrate,
+            )
+        }
+
+        cardItem {
+            ScriptSettingsCard(
+                hidden = hiddenScripts,
+                onSetHidden = viewModel::setScriptHidden,
+                onShowEverything = viewModel::showEveryScript,
             )
         }
 

@@ -98,6 +98,21 @@
     <string name="tv_settings_on">On</string>
     <string name="tv_settings_off">Off</string>
 
+    <string name="tv_settings_scripts">Writing systems</string>
+    <string name="tv_settings_scripts_description">Hide titles written in a script you do not read. Nothing is hidden until you pick one, and your favourites are never hidden.</string>
+    <string name="tv_settings_scripts_show_all">Show everything again</string>
+    <string name="tv_settings_scripts_show_all_action">Show all</string>
+    <string name="tv_settings_scripts_hidden_count">%1$d hidden</string>
+    <string name="tv_settings_script_latin">Latin</string>
+    <string name="tv_settings_script_arabic">Arabic</string>
+    <string name="tv_settings_script_hebrew">Hebrew</string>
+    <string name="tv_settings_script_cyrillic">Cyrillic</string>
+    <string name="tv_settings_script_greek">Greek</string>
+    <string name="tv_settings_script_han">Chinese</string>
+    <string name="tv_settings_script_kana">Japanese</string>
+    <string name="tv_settings_script_hangul">Korean</string>
+    <string name="tv_settings_script_devanagari">Devanagari</string>
+    <string name="tv_settings_script_thai">Thai</string>
     <string name="tv_settings_categories">Categories</string>
     <string name="tv_settings_category_kind">Editing categories for</string>
     <string name="tv_settings_rename_field">Rename to</string>

@@ -24,7 +24,9 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import dev.quiblo.core.common.TitleScript
 import dev.quiblo.core.model.Appearance
 import dev.quiblo.core.model.BufferMode
 import dev.quiblo.core.model.MaxBitrateCap
@@ -86,6 +88,30 @@ class PlayerSettingsStore(context: Context) {
         dataStore.edit { it[DYNAMIC_COLOR] = enabled }
     }
 
+    /**
+     * Writing systems the viewer has said they do not read (INC-F14).
+     *
+     * App-wide rather than per profile, so that two people looking at the same catalogue on the
+     * same television are never shown different numbers of titles with no way to tell why.
+     *
+     * Stored by name for the reason at the top of this file, and a stored name that no longer
+     * maps to an entry is dropped rather than defaulted — the safe reading of "hide this" that
+     * this code no longer understands is to hide nothing.
+     */
+    val hiddenScripts: Flow<Set<TitleScript>> = dataStore.data.map { preferences ->
+        preferences[HIDDEN_SCRIPTS]
+            .orEmpty()
+            .mapNotNullTo(mutableSetOf()) { stored ->
+                TitleScript.entries.firstOrNull { it.name == stored }
+            }
+    }
+
+    suspend fun setHiddenScripts(value: Set<TitleScript>) {
+        dataStore.edit { preferences ->
+            preferences[HIDDEN_SCRIPTS] = value.mapTo(mutableSetOf()) { it.name }
+        }
+    }
+
     private suspend fun put(key: Preferences.Key<String>, value: String) {
         dataStore.edit { it[key] = value }
     }
@@ -105,5 +131,6 @@ class PlayerSettingsStore(context: Context) {
         val MAX_BITRATE = stringPreferencesKey("max_bitrate")
         val THEME_MODE = stringPreferencesKey("theme_mode")
         val DYNAMIC_COLOR = booleanPreferencesKey("dynamic_color")
+        val HIDDEN_SCRIPTS = stringSetPreferencesKey("hidden_scripts")
     }
 }

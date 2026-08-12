@@ -18,6 +18,7 @@
 
 package dev.quiblo.core.data
 
+import dev.quiblo.core.common.TitleScript
 import dev.quiblo.core.database.dao.ChannelDao
 import dev.quiblo.core.database.dao.FavoriteDao
 import dev.quiblo.core.database.dao.SourceDao
@@ -40,6 +41,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import java.util.concurrent.ConcurrentHashMap
@@ -90,6 +92,13 @@ class ChannelRepository(
      * thread, which is the whole point of it — see [browseDispatcher]'s use below.
      */
     private val browseDispatcher: CoroutineDispatcher = Dispatchers.Default,
+    /**
+     * The writing systems this viewer has hidden (INC-F14).
+     *
+     * A flow rather than the repository that owns it, so a test can hand this one value in
+     * without standing up a DataStore, and so the default is the honest one: hide nothing.
+     */
+    private val hiddenScripts: Flow<Set<TitleScript>> = flowOf(emptySet()),
 ) {
 
     /**
@@ -117,8 +126,10 @@ class ChannelRepository(
                 favoritesOnly = if (favoritesOnly) 1 else 0,
             )
         }.map { rows -> rows.map { it.channel.toDomain(isFavorite = it.isFavorite) } }
+            .hidingUnreadableScripts(hiddenScripts) { it.name }
             .flowOn(browseDispatcher)
 
+    // Favourites are not filtered, and that is the point — see [hidingUnreadableScripts].
     /** Favourites across every content type (AC-FAV-01). */
     fun observeFavorites(sourceId: Long, query: String = ""): Flow<List<Channel>> =
         profiles.activeProfile.flatMapLatest { profile ->

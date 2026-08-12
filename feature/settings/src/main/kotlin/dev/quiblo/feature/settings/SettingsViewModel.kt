@@ -20,10 +20,12 @@ package dev.quiblo.feature.settings
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import dev.quiblo.core.common.TitleScript
 import dev.quiblo.core.data.CategoryRepository
 import dev.quiblo.core.data.ChannelLogoRepository
 import dev.quiblo.core.data.MetadataScanState
 import dev.quiblo.core.data.PlayerSettingsRepository
+import dev.quiblo.core.data.ScriptFilterRepository
 import dev.quiblo.core.data.SourceRepository
 import dev.quiblo.core.data.TitleMetadataRepository
 import dev.quiblo.core.data.TitleMetadataScanner
@@ -93,6 +95,7 @@ class SettingsViewModel(
     private val sourceRepository: SourceRepository,
     private val channelLogoRepository: ChannelLogoRepository,
     private val metadataScanner: TitleMetadataScanner,
+    private val scriptFilter: ScriptFilterRepository,
 ) : ViewModel() {
 
     /**
@@ -232,6 +235,16 @@ class SettingsViewModel(
     fun setDynamicColor(enabled: Boolean) = viewModelScope.launch {
         playerSettingsRepository.setDynamicColor(enabled)
     }
+
+    /** Writing systems the viewer has hidden from the catalogue and from search (INC-F14). */
+    val hiddenScripts: StateFlow<Set<TitleScript>> = scriptFilter.hiddenScripts
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(SUBSCRIPTION_TIMEOUT_MILLIS), emptySet())
+
+    fun setScriptHidden(script: TitleScript, hidden: Boolean) = viewModelScope.launch {
+        scriptFilter.setHidden(script, hidden)
+    }
+
+    fun showEveryScript() = viewModelScope.launch { scriptFilter.showEverything() }
 
     /**
      * Produces the export payload and hands it to [write].

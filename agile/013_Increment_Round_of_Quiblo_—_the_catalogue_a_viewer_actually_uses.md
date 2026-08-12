@@ -29,7 +29,7 @@ Every item below lands on a screen that round is repairing.
 | INC-F10 | Both | L | — | Subtitle files: the provider's, or one the viewer picks |
 | INC-F11 | Both | M | INC-F10 | Subtitle appearance, set from the player |
 | INC-F12 | Both | S | — | **Audio track selection. Not new scope — see below** |
-| INC-F14 | Both | M | INC-F9 | Filter the catalogue to one language |
+| INC-F14 | Both | M | INC-F9 | ~~Filter the catalogue to one language~~ — **built 2026-08-12** as a subtraction, not a selection: hide titles written in scripts the viewer does not read. App-wide, never applied to favourites |
 | INC-E4 | Both | S | — | ~~The corner radius~~ — **built 2026-08-12**. There was no scale to raise; there was one to write |
 | INC-E1…E3 | TV | S | The panel | The search screen's shape. **Not built** — each is a question about how a screen reads from three metres. `STOPPERS.md` **S10** |
 

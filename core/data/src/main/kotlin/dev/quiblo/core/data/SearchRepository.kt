@@ -18,6 +18,8 @@
 
 package dev.quiblo.core.data
 
+import dev.quiblo.core.common.TitleScript
+import dev.quiblo.core.common.isInHiddenScript
 import dev.quiblo.core.database.dao.ChannelDao
 import dev.quiblo.core.database.dao.ChannelTitle
 import dev.quiblo.core.database.dao.TitleGenreRow
@@ -28,6 +30,9 @@ import dev.quiblo.source.tmdb.TitleIdentity
 import dev.quiblo.source.tmdb.titleIdentity
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.withContext
 
 /** What one search returned, kept apart by kind because that is how it is read. */
@@ -38,6 +43,16 @@ data class SearchResults(
 ) {
     val isEmpty: Boolean get() = live.isEmpty() && movies.isEmpty() && series.isEmpty()
     val total: Int get() = live.size + movies.size + series.size
+
+    /** Drops results written in a script the viewer has hidden (INC-F14). */
+    fun hidingUnreadableScripts(hidden: Set<TitleScript>): SearchResults {
+        if (hidden.isEmpty()) return this
+        return SearchResults(
+            live = live.filterNot { it.name.isInHiddenScript(hidden) },
+            movies = movies.filterNot { it.name.isInHiddenScript(hidden) },
+            series = series.filterNot { it.name.isInHiddenScript(hidden) },
+        )
+    }
 }
 
 /**
@@ -82,6 +97,8 @@ class SearchRepository(
      * on a television for the length of the filter.
      */
     private val matchDispatcher: CoroutineDispatcher = Dispatchers.Default,
+    /** The writing systems this viewer has hidden — see [ScriptFilterRepository]. */
+    private val hiddenScripts: Flow<Set<TitleScript>> = flowOf(emptySet()),
 ) {
 
     /**
@@ -100,7 +117,10 @@ class SearchRepository(
         val term = query.trim()
         if (term.isBlank() && genre.isNullOrBlank()) return SearchResults()
 
-        return if (genre.isNullOrBlank()) {
+        // Read once for this search rather than per result list, so all three lists are
+        // filtered against the same answer even if the setting changes mid-query.
+        val hidden = hiddenScripts.first()
+        val results = if (genre.isNullOrBlank()) {
             SearchResults(
                 live = matches(sourceId, MediaKind.LIVE, term, limitPerKind),
                 movies = matches(sourceId, MediaKind.VOD, term, limitPerKind),
@@ -109,6 +129,7 @@ class SearchRepository(
         } else {
             byGenre(sourceId, term, genre, limitPerKind)
         }
+        return results.hidingUnreadableScripts(hidden)
     }
 
     /**

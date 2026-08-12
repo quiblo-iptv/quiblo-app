@@ -26,6 +26,7 @@ import dev.quiblo.core.data.GuideRepository
 import dev.quiblo.core.data.LocalFileContentFetcher
 import dev.quiblo.core.data.PlayerSettingsRepository
 import dev.quiblo.core.data.ProfileRepository
+import dev.quiblo.core.data.ScriptFilterRepository
 import dev.quiblo.core.data.SearchRepository
 import dev.quiblo.core.data.SeriesPreferenceRepository
 import dev.quiblo.core.data.SourceRepository
@@ -86,11 +87,24 @@ val dataModule: Module = module {
             profiles = get(),
             sourceDao = get(),
             mediaSources = get(),
+            hiddenScripts = get<ScriptFilterRepository>().hiddenScripts,
         )
     }
+    single { ScriptFilterRepository(get()) }
     single { WatchHistoryRepository(get(), get()) }
     single { CategoryRepository(get(), get()) }
-    single { SearchRepository(get(), get(), get(), get()) }
+    // Named, unlike the four positional `get()`s this replaced: the fifth argument is a
+    // dispatcher with a default, and appending one more `get()` would have handed Koin's
+    // answer for `Flow<Set<TitleScript>>` to `matchDispatcher`.
+    single {
+        SearchRepository(
+            channelDao = get(),
+            profiles = get(),
+            titleMetadataDao = get(),
+            metadataRepository = get(),
+            hiddenScripts = get<ScriptFilterRepository>().hiddenScripts,
+        )
+    }
     // A singleton because its scope is the application's: a scan started in settings has to
     // outlive the screen that started it, and an hour of lookups outlives several.
     single { TitleMetadataScanner(channelDao = get(), metadataRepository = get()) }

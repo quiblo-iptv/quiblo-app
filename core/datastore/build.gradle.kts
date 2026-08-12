@@ -27,7 +27,7 @@ android {
 dependencies {
     api(projects.core.model)
     api(projects.source.api)
-    implementation(projects.core.common)
+    api(projects.core.common)
     implementation(libs.androidx.datastore.preferences)
     implementation(libs.androidx.security.crypto)
     implementation(libs.kotlinx.coroutines.core)

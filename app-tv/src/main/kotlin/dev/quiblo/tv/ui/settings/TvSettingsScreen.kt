@@ -32,6 +32,8 @@ import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -67,6 +69,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import dev.quiblo.core.common.TitleScript
 import dev.quiblo.core.data.MetadataScanState
 import dev.quiblo.core.data.ScanRefusal
 import dev.quiblo.core.data.progressFraction
@@ -126,6 +129,7 @@ fun TvSettingsScreen(
     val categories by viewModel.categories.collectAsStateWithLifecycle()
     val backupState by viewModel.backupState.collectAsStateWithLifecycle()
     val scanState by viewModel.metadataScan.collectAsStateWithLifecycle()
+    val hiddenScripts by viewModel.hiddenScripts.collectAsStateWithLifecycle()
 
     // Collapsed by default: twelve components are an obligation to make available, not
     // twelve rows to walk past on the way to anything else.
@@ -288,6 +292,29 @@ fun TvSettingsScreen(
                     onStart = viewModel::startMetadataScan,
                     onCancel = viewModel::cancelMetadataScan,
                     onDismiss = viewModel::dismissMetadataScan,
+                )
+            }
+        }
+
+        item { SectionHeading(stringResource(R.string.tv_settings_scripts)) }
+
+        item {
+            ScriptRow(
+                hidden = hiddenScripts,
+                onToggle = { script -> viewModel.setScriptHidden(script, script !in hiddenScripts) },
+            )
+        }
+
+        if (hiddenScripts.isNotEmpty()) {
+            item {
+                ActionRow(
+                    label = stringResource(R.string.tv_settings_scripts_show_all),
+                    description = stringResource(
+                        R.string.tv_settings_scripts_hidden_count,
+                        hiddenScripts.size,
+                    ),
+                    action = stringResource(R.string.tv_settings_scripts_show_all_action),
+                    onClick = viewModel::showEveryScript,
                 )
             }
         }
@@ -985,6 +1012,74 @@ private fun <T> OptionRow(
             }
         }
     }
+}
+
+/**
+ * The writing systems a viewer does not read (INC-F14).
+ *
+ * Every script on screen at once, like [OptionRow], and for the same reason — but several
+ * can be on rather than one, so these are toggles rather than a choice. They wrap onto a
+ * second line because ten chips do not fit across a television beside a label, and the
+ * D-pad walks the grid the wrapping makes.
+ *
+ * Phrased as a subtraction: nothing is hidden until the viewer hides it, and favourites are
+ * never filtered. A viewer who cannot find something gets one control that undoes all of it.
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun ScriptRow(hidden: Set<TitleScript>, onToggle: (TitleScript) -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 10.dp),
+        verticalAlignment = Alignment.Top,
+    ) {
+        Column(modifier = Modifier.width(LABEL_WIDTH)) {
+            Text(
+                text = stringResource(R.string.tv_settings_scripts),
+                color = Color.White,
+                fontSize = 17.sp,
+                lineHeight = 22.sp,
+            )
+            Text(
+                text = stringResource(R.string.tv_settings_scripts_description),
+                color = Color.White.copy(alpha = 0.55f),
+                fontSize = 13.sp,
+                lineHeight = 18.sp,
+                modifier = Modifier.padding(top = 3.dp),
+            )
+        }
+
+        Spacer(modifier = Modifier.width(COLUMN_GAP))
+
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+            modifier = Modifier.focusGroup(),
+        ) {
+            TitleScript.offered.forEach { script ->
+                TvChip(
+                    label = stringResource(script.labelRes()),
+                    isSelected = script in hidden,
+                    onClick = { onToggle(script) },
+                )
+            }
+        }
+    }
+}
+
+/** Named for what a viewer calls it, not for the Unicode block. */
+private fun TitleScript.labelRes(): Int = when (this) {
+    TitleScript.Latin -> R.string.tv_settings_script_latin
+    TitleScript.Arabic -> R.string.tv_settings_script_arabic
+    TitleScript.Hebrew -> R.string.tv_settings_script_hebrew
+    TitleScript.Cyrillic -> R.string.tv_settings_script_cyrillic
+    TitleScript.Greek -> R.string.tv_settings_script_greek
+    TitleScript.Han -> R.string.tv_settings_script_han
+    TitleScript.Kana -> R.string.tv_settings_script_kana
+    TitleScript.Hangul -> R.string.tv_settings_script_hangul
+    TitleScript.Devanagari -> R.string.tv_settings_script_devanagari
+    TitleScript.Thai -> R.string.tv_settings_script_thai
 }
 
 /**

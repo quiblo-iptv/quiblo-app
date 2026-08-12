@@ -48,7 +48,7 @@ fun String.isRightToLeft(): Boolean = firstStrongDirection() == TextDirection.Ri
  * swallows the rest of the string, which is what the algorithm says and is also the safer answer:
  * nothing decides, and the caller keeps the direction it had.
  */
-private fun String.codePointsOutsideIsolates(): Sequence<Int> = sequence {
+internal fun String.codePointsOutsideIsolates(): Sequence<Int> = sequence {
     var index = 0
     var isolateDepth = 0
     while (index < length) {

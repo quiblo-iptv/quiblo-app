@@ -54,7 +54,6 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.onSizeChanged
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -205,9 +204,8 @@ internal fun ColumnScope.SearchHeader(
     /**
      * How tall the area under the tab bar is.
      *
-     * Passed in because centring the resting block on the *screen* needs to know how much of
-     * the screen sits above this area, and the difference between the window and this box is
-     * exactly that. Centring inside the box alone leaves the block half a tab bar low.
+     * The block is centred in it, and it is measured rather than assumed — see the note on
+     * `topSpace` for why every version of this that used a constant broke.
      */
     contentHeight: Dp,
     state: SearchUiState,
@@ -219,26 +217,25 @@ internal fun ColumnScope.SearchHeader(
     onToggleAdvanced: () -> Unit,
 ) {
     /*
-     * The gap that puts the resting block on the middle of the *screen*.
+     * The gap that centres the resting block.
      *
-     * It was a fixed gap under the tab bar, which centres nothing — it puts the block wherever
-     * that constant happens to land, and every change to the mark or the wordmark moved it
-     * again. Twice.
+     * **Both numbers in it are measured. Neither is a constant, and that is the whole point.**
+     * This was a fixed gap first, then a calculation off the window height and an assumed
+     * padding — and each of those broke the moment something changed: the first every time the
+     * mark or the name was resized, the second on any device whose chrome is not the one it was
+     * written against. A layout that has to be told the size of the thing it is inside is a
+     * layout that is wrong somewhere else.
      *
-     * Nothing here is guessed. **The block's height** is the wordmark's, which is fixed, plus
-     * the field row's, which measures itself — so this stays right through any future change to
-     * either. **The chrome above this screen** is the difference between the window and the box
-     * this is drawn in, less the padding underneath it.
+     * The area is what this screen was handed, and the block is the wordmark's height plus the
+     * field row measuring itself. Half the difference is the gap, and it cannot be wrong on a
+     * panel it has never seen.
      */
-    val screenHeight = LocalConfiguration.current.screenHeightDp.dp
     val fieldDensity = LocalDensity.current
     var fieldRowHeight by remember { mutableStateOf(0.dp) }
 
     val topSpace by animateDpAsState(
         targetValue = if (isResting && fieldRowHeight > 0.dp && contentHeight > 0.dp) {
-            val block = WORDMARK_HEIGHT + fieldRowHeight
-            val above = screenHeight - contentHeight - CONTENT_BOTTOM_PADDING
-            ((screenHeight - block) / 2 - above).coerceAtLeast(0.dp)
+            ((contentHeight - WORDMARK_HEIGHT - fieldRowHeight) / 2).coerceAtLeast(0.dp)
         } else {
             0.dp
         },
@@ -536,8 +533,6 @@ internal fun searchRows(
  */
 // Reduced when the mark joined the wordmark: the block above the field is twice the height it
 // was, and the old spacing pushed the whole composition into the bottom half of the panel.
-/** `TvApp` pads the content area by this much underneath. See the note on `topSpace`. */
-private val CONTENT_BOTTOM_PADDING = 48.dp
 
 /*
  * The mark, the name, and the room they need.

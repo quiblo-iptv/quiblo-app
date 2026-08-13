@@ -113,16 +113,14 @@ object M3uParser {
                     pendingGroup = line.removePrefix(EXTGRP).trim().takeIf { it.isNotEmpty() }
                 }
 
-                // Any other directive (#EXTVLCOPT, #EXTVLCOPT, comments) is not ours.
+                // Any other directive (#EXTVLCOPT, #PLAYLIST, comments) is not ours.
                 line.startsWith("#") -> Unit
 
                 else -> {
+                    // A URL with no preceding #EXTINF, or plain junk text. Neither is an entry,
+                    // so neither is counted as a skipped one — the line is simply passed over.
                     val entry = pending
-                    if (entry == null) {
-                        // A URL with no preceding #EXTINF, or plain junk text. Neither is
-                        // an entry, so neither is counted as a skipped one.
-                        Unit
-                    } else {
+                    if (entry != null) {
                         pending = null
                         val channel = entry.toChannel(
                             sourceId = sourceId,

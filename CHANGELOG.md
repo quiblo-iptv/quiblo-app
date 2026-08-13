@@ -15,6 +15,8 @@ Formatted after [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and ve
 
 ## Unreleased
 
+## 0.15.1
+
 ### Fixed
 
 - **The television's launcher tile is a banner rather than a cropped icon.** It was the square

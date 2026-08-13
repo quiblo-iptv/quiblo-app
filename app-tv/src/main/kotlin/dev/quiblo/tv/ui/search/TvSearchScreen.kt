@@ -48,6 +48,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
@@ -250,6 +251,27 @@ internal fun ColumnScope.SearchHeader(
         horizontalArrangement = if (isResting) Arrangement.Center else Arrangement.Start,
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        /*
+         * A mirror of Advanced, on the left, invisible.
+         *
+         * Centring a row centres the *row*, so putting Advanced beside the field pushed the
+         * field left of the screen's middle while the mark and the name above it stayed on it —
+         * three things that should share an axis and did not. Measured on a 50-inch panel,
+         * which is where it is obvious and on a laptop is not.
+         *
+         * A copy of the same text at zero alpha takes exactly the same width as the real one,
+         * so the field lands on the true centre without anything having to be measured. It is
+         * invisible, it is not focusable, and it exists only while the row is centred at all.
+         */
+        if (isResting) {
+            Text(
+                text = stringResource(R.string.tv_search_advanced),
+                fontSize = CHIP_TEXT_SIZE,
+                modifier = Modifier.alpha(0f),
+            )
+            Spacer(modifier = Modifier.width(COLUMN_GAP))
+        }
+
         TvTextField(
             value = state.query,
             onValueChange = onQueryChange,
@@ -281,8 +303,10 @@ internal fun ColumnScope.SearchHeader(
          * press from where the viewer is already typing, which is the same cost the chip row
          * had and one row cheaper on a panel with 444dp to spend.
          *
-         * It stays in the chip row as well. Reaching it by going down is how it has always
-         * worked, and taking that away to add a second way in would be a trade, not a gain.
+         * **It is no longer in the chip row.** Keeping both was meant to preserve the old way
+         * in, and on the panel it read as exactly what it was: the same control twice, one
+         * above the other, on a screen that has almost nothing else on it. One control, one
+         * place.
          */
         Spacer(modifier = Modifier.width(COLUMN_GAP))
         TvChip(
@@ -342,16 +366,6 @@ internal fun ColumnScope.SearchHeader(
             .padding(vertical = CHIP_STRIP_PADDING)
             .focusGroup(),
     ) {
-        // Always present, and the first thing under the field, so the way into the filters is
-        // one press down from where the viewer is already typing.
-        item(key = ADVANCED_KEY) {
-            TvChip(
-                label = stringResource(R.string.tv_search_advanced),
-                isSelected = isAdvanced,
-                onClick = onToggleAdvanced,
-            )
-        }
-
         // Only once there is something to clear. A remote walking a row of chips should not
         // have to pass a control that would do nothing.
         if (state.isActive) {
@@ -475,6 +489,9 @@ private val LOGO_SIZE = 62.dp
 
 /** Matches the field's own shape, so the glow rides its outline rather than crossing it. */
 private val FIELD_CORNER = 12.dp
+
+/** `TvChip`'s own size, so the invisible mirror beside the field is exactly as wide as it. */
+private val CHIP_TEXT_SIZE = 15.sp
 private val WORDMARK_TEXT_SIZE = 40.sp
 
 /** Wider at rest, where it is the only thing on the panel and reads as an invitation. */
@@ -502,4 +519,3 @@ private val CHIP_STRIP_PADDING = 4.dp
 
 /** Stable, so the chip row is not rebuilt when the genres behind it change. */
 private const val CLEAR_KEY = "__clear__"
-private const val ADVANCED_KEY = "__advanced__"

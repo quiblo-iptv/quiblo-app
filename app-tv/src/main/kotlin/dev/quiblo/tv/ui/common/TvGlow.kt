@@ -31,7 +31,6 @@ import androidx.compose.ui.composed
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ShaderBrush
 import androidx.compose.ui.graphics.SweepGradientShader
@@ -66,7 +65,7 @@ fun Modifier.travellingGlow(
     isActive: Boolean,
     cornerRadius: Dp,
     colour: Color = Color.White,
-    width: Dp = 2.dp,
+    width: Dp = 3.dp,
 ): Modifier = composed {
     val transition = rememberInfiniteTransition(label = "glow")
     val angle by transition.animateFloat(
@@ -85,35 +84,66 @@ fun Modifier.travellingGlow(
         val centre = Offset(size.width / 2f, size.height / 2f)
 
         /*
-         * Mostly nothing, with one bright arc in it.
+         * Mostly nothing, with one bright arc in it, drawn three times.
          *
-         * The stops matter more than the colours: the lit part is a tenth of the circuit, so
+         * The stops matter more than the colours: the lit part is a sixth of the circuit, so
          * what travels reads as a single light rather than as a rotating rainbow. The first and
          * last stop are the same value because a sweep gradient wraps, and a seam is visible
          * from three metres when nothing else on the screen is moving.
+         *
+         * Three passes, widest and faintest first.
+         *
+         * **A single hairline is invisible on a fifty-inch panel, which is what the first
+         * version of this was.** There is no blur to reach for — `Modifier.blur` wants API 31
+         * and this app supports 30 — so the bloom is built by stroking the same outline three
+         * times, each wider and fainter than the last. The eye reads the stack as one light
+         * with a halo, which is what a glow is, and it costs three draw calls.
          */
-        val shader = SweepGradientShader(
-            center = centre,
-            colors = listOf(
-                colour.copy(alpha = 0f),
-                colour.copy(alpha = 0f),
-                colour.copy(alpha = 0.9f),
-                colour.copy(alpha = 0f),
-                colour.copy(alpha = 0f),
-            ),
-            colorStops = listOf(0f, ARC_START, ARC_PEAK, ARC_END, 1f),
-        )
-        shader.setLocalMatrix(Matrix().apply { setRotate(angle, centre.x, centre.y) })
+        BLOOM.forEach { (multiplier, alpha) ->
+            val shader = SweepGradientShader(
+                center = centre,
+                colors = listOf(
+                    colour.copy(alpha = 0f),
+                    colour.copy(alpha = 0f),
+                    colour.copy(alpha = alpha),
+                    colour.copy(alpha = 0f),
+                    colour.copy(alpha = 0f),
+                ),
+                colorStops = listOf(0f, ARC_START, ARC_PEAK, ARC_END, 1f),
+            )
+            shader.setLocalMatrix(Matrix().apply { setRotate(angle, centre.x, centre.y) })
 
-        drawRoundRect(
-            brush = ShaderBrush(shader),
-            topLeft = Offset(width.toPx() / 2f, width.toPx() / 2f),
-            size = Size(size.width - width.toPx(), size.height - width.toPx()),
-            cornerRadius = CornerRadius(cornerRadius.toPx()),
-            style = Stroke(width = width.toPx()),
-        )
+            /*
+             * Drawn on the node's own edge, not inside it.
+             *
+             * The first version inset the rectangle by half the stroke, which put the light a
+             * couple of pixels in from the field's outline — close enough to look like a
+             * mistake rather than a highlight. Straddling the border is what makes it read as
+             * the field lighting up instead of as something drawn near it.
+             */
+            drawRoundRect(
+                brush = ShaderBrush(shader),
+                topLeft = Offset.Zero,
+                size = size,
+                cornerRadius = CornerRadius(cornerRadius.toPx()),
+                style = Stroke(width = width.toPx() * multiplier),
+            )
+        }
     }
 }
+
+/**
+ * The bloom, as stroke width against brightness.
+ *
+ * Widest first so the sharp core lands on top of its own halo. The numbers are tuned for a
+ * television across a room: the outer pass is nearly invisible up close and is the whole reason
+ * the light reads at all from a sofa.
+ */
+private val BLOOM = listOf(
+    4.5f to 0.10f,
+    2.4f to 0.26f,
+    1.0f to 1.0f,
+)
 
 /*
  * Where the lit arc begins, peaks and ends, round a circuit measured from 0 to 1.

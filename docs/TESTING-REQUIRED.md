@@ -307,6 +307,47 @@ Both of these worked before and are the things a rewritten key map takes away si
 
 ---
 
+## A7 — the television's own furniture, `v0.15.0` and the branch after it
+
+**Where:** the television. **All of this has been walked on the emulator with the D-pad and
+screenshotted**, which is new — see the premise note at the top of
+[`STOPPERS.md`](STOPPERS.md). That retires "can it be reached" and not "is it right", so every
+row below is a question about how the screen reads and not about whether the control exists.
+
+### A7.1 — the launcher tile
+
+| | |
+| :---- | :---- |
+| **What to look at** | The Apps row of the launcher, from the sofa |
+| **Passes if** | The tile reads as Quiblo before the label under it does. No bar down either side, and the name is legible at the size the launcher draws it |
+| **Why it is here** | It was the square app icon dropped into a 16:9 frame, which the launcher letterboxed. It is now drawn at 320x180 with the name beside the mark — a piece of artwork nobody has seen anywhere but a 1080p window |
+
+### A7.2 — the gear and the face at the end of the bar
+
+| | |
+| :---- | :---- |
+| **What to look at** | Walk right along the tab bar past the last tab. Gear, then the face. Then left, back through both |
+| **Passes if** | The two icons read as one group rather than as two stray controls, the highlight is obvious on each from across the room, and the face is recognisably the profile's own |
+| **Why it is here** | The spacing was wrong by 28dp and only looked wrong; `TvBarKeysTest` was green throughout |
+
+### A7.3 — the resting search screen
+
+| | |
+| :---- | :---- |
+| **What to look at** | Open Search and do not type. The mark, the name, the field and Advanced |
+| **Passes if** | The block sits on what reads as the middle of the panel from three metres, and Advanced reads as belonging to the field above it |
+| **Why it is here** | This screen's position has been wrong four times, each time for a different reason, and twice it measured as correct while looking wrong. It is now measured against a line 46% down the panel rather than half way — **the lift is the part most likely to be wrong on a large screen**, in either direction |
+
+### A7.4 — picking a face for a new profile
+
+| | |
+| :---- | :---- |
+| **What to look at** | Add a profile. Type a name, then walk the row of faces with the D-pad |
+| **Passes if** | The faces are told apart from the sofa, the chosen one is obviously chosen, and the on-screen keyboard does not bury the row it belongs to |
+| **Why it is here** | The keyboard covers the row while the name field has focus. That is normal on a television and it is also the first thing anyone will hit, so it wants judging rather than assuming |
+
+---
+
 ## B — Owed from `012`, still owed
 
 `012` built twelve defect fixes on 2026-08-10. **Two were swept and rejected. Ten have never

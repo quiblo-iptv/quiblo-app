@@ -28,6 +28,7 @@ import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import dev.quiblo.core.common.TitleScript
 import dev.quiblo.core.model.Appearance
+import dev.quiblo.core.model.AutoNextDelay
 import dev.quiblo.core.model.BufferMode
 import dev.quiblo.core.model.MaxBitrateCap
 import dev.quiblo.core.model.PlayerSettings
@@ -64,10 +65,17 @@ class PlayerSettingsStore(context: Context) {
             seekInterval = preferences.readEnum(SEEK_INTERVAL, SeekInterval.entries, PlayerSettings().seekInterval),
             bufferMode = preferences.readEnum(BUFFER_MODE, BufferMode.entries, PlayerSettings().bufferMode),
             maxBitrate = preferences.readEnum(MAX_BITRATE, MaxBitrateCap.entries, PlayerSettings().maxBitrate),
+            autoNextDelay = preferences.readEnum(
+                AUTO_NEXT_DELAY,
+                AutoNextDelay.entries,
+                PlayerSettings().autoNextDelay,
+            ),
         )
     }
 
     suspend fun setSeekInterval(value: SeekInterval) = put(SEEK_INTERVAL, value.name)
+
+    suspend fun setAutoNextDelay(value: AutoNextDelay) = put(AUTO_NEXT_DELAY, value.name)
 
     suspend fun setBufferMode(value: BufferMode) = put(BUFFER_MODE, value.name)
 
@@ -174,6 +182,7 @@ class PlayerSettingsStore(context: Context) {
         val SEEK_INTERVAL = stringPreferencesKey("seek_interval")
         val BUFFER_MODE = stringPreferencesKey("buffer_mode")
         val MAX_BITRATE = stringPreferencesKey("max_bitrate")
+        val AUTO_NEXT_DELAY = stringPreferencesKey("auto_next_delay")
         val THEME_MODE = stringPreferencesKey("theme_mode")
         val DYNAMIC_COLOR = booleanPreferencesKey("dynamic_color")
         val HIDDEN_SCRIPTS = stringSetPreferencesKey("hidden_scripts")

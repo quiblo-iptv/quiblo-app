@@ -91,6 +91,8 @@
     <string name="tv_settings_playback">Playback</string>
     <string name="tv_settings_artwork">Artwork</string>
     <string name="tv_settings_seek_interval">Skip forward and back by</string>
+    <string name="tv_settings_auto_next">Start the next episode after</string>
+    <string name="tv_settings_auto_next_detail">When an episode ends, the next one is offered. Off waits for you to choose it.</string>
     <string name="tv_settings_buffer">Buffering</string>
     <string name="tv_settings_bitrate">Maximum quality</string>
     <string name="tv_settings_channel_logos">Fill in missing channel logos</string>
@@ -200,18 +202,30 @@
     <string name="tv_series_episode_number">S%1$d E%2$d</string>
     <string name="tv_series_resume">Continue from season %1$d, episode %2$d</string>
     <string name="tv_player_live">LIVE</string>
-    <string name="tv_player_hint_play">OK to play</string>
-    <string name="tv_player_hint_pause">OK to pause</string>
-    <string name="tv_player_hint_seek">◀ ▶ to skip %1$d s</string>
     <string name="tv_player_hint_zap">▲ to change channel</string>
-    <string name="tv_player_hint_aspect">Menu or up: %1$s</string>
-    <string name="tv_player_hint_tracks">▼ for audio and subtitles</string>
     <string name="tv_player_audio">Audio</string>
     <string name="tv_player_subtitles">Subtitles</string>
     <string name="tv_player_subtitles_off">Off</string>
 
-    <!-- Spoken, not shown. TalkBack runs on Android TV and a spinner is silent to it. -->
+    <!-- The next-episode banner. The count is redrawn every second, so it is its own string. -->
+    <string name="tv_player_next_episode_in">Next episode in %1$d</string>
+    <string name="tv_player_next_episode_ready">Next episode</string>
+    <string name="tv_player_next_episode_play">Play now</string>
+    <string name="tv_player_next_episode_stop">Stop</string>
+
+    <!--
+      Spoken, not shown, except where a control has no label of its own: every button in the
+      player is a circle with an icon in it, and an icon says nothing to TalkBack.
+    -->
     <string name="tv_a11y_buffering">Buffering</string>
+    <string name="tv_a11y_play">Play</string>
+    <string name="tv_a11y_pause">Pause</string>
+    <string name="tv_a11y_rewind">Back %1$d seconds</string>
+    <string name="tv_a11y_forward">Forward %1$d seconds</string>
+    <string name="tv_a11y_next_episode">Next episode</string>
+    <string name="tv_a11y_previous_episode">Previous episode</string>
+    <string name="tv_a11y_tracks">Audio and subtitles</string>
+    <string name="tv_a11y_aspect">Picture fit: %1$s</string>
     <plurals name="tv_series_seasons">
         <item quantity="one">%1$d season</item>
         <item quantity="other">%1$d seasons</item>

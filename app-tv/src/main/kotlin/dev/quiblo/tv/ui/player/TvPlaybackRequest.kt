@@ -19,6 +19,7 @@
 package dev.quiblo.tv.ui.player
 
 import dev.quiblo.core.model.Channel
+import dev.quiblo.core.model.Episode as SeriesEpisode
 
 /**
  * What the television player has been asked to play.
@@ -114,5 +115,55 @@ sealed interface TvPlaybackRequest {
         val seasonNumber: Int,
         val episodeNumber: Int,
         val startPositionMillis: Long? = null,
-    ) : TvPlaybackRequest
+        /**
+         * The whole series in the order it is watched, and where this episode sits in it.
+         *
+         * Here for the same reason [Live] carries its queue: the player is what asks for the
+         * next episode and the player is the one screen that cannot know what the next one is.
+         * Episodes are fetched per series and held for a session, so nothing the player could
+         * query would have them.
+         *
+         * **In broadcast order, whatever order the list was drawn in.** The series screen can
+         * show newest first, and under that arrangement the row below the one playing is the
+         * episode *before* it — so a run built from the drawing would make "next" walk a series
+         * backwards. The order things are watched in is not a display preference.
+         *
+         * Empty for an episode opened from somewhere with no run behind it, which is what
+         * makes [steppedBy] answer null rather than the caller having to check first.
+         */
+        val run: List<SeriesEpisode> = emptyList(),
+        val runIndex: Int = 0,
+    ) : TvPlaybackRequest {
+
+        /** True when there is an episode after this one to offer at the end of it. */
+        val hasNext: Boolean get() = run.getOrNull(runIndex + 1) != null
+
+        val hasPrevious: Boolean get() = runIndex > 0 && run.getOrNull(runIndex - 1) != null
+
+        /**
+         * The episode [direction] steps away, or null at either end of the series.
+         *
+         * **It does not wrap, and [Live.zappedBy] does.** A channel list is a ring a viewer
+         * walks round; a series is a thing that finishes. Rolling off the finale into the pilot
+         * would restart a series somebody has just finished watching, silently, from an
+         * unattended countdown — which is the one outcome this feature must never produce.
+         *
+         * Always starts from the beginning: a next episode is one nobody has watched, so
+         * there is no position to resume and an inherited one would drop the viewer into the
+         * middle of it.
+         */
+        fun steppedBy(direction: Int): Episode? {
+            val target = runIndex + direction
+            val episode = run.getOrNull(target)?.takeIf { target >= 0 } ?: return null
+            return copy(
+                episodeId = episode.id,
+                streamUrl = episode.streamUrl,
+                episodeTitle = episode.title,
+                seasonNumber = episode.seasonNumber,
+                episodeNumber = episode.episodeNumber,
+                startPositionMillis = 0L,
+                runIndex = target,
+            )
+        }
+    }
 }

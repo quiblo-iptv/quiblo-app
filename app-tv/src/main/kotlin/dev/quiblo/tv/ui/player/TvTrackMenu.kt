@@ -74,11 +74,30 @@ import dev.quiblo.feature.player.R as PlayerR
 @Composable
 internal fun TvTrackMenu(
     menu: TrackMenu,
+    /**
+     * Which section the remote lands in.
+     *
+     * The player has a subtitles button and an audio button, and they open this same panel —
+     * two questions a viewer arrives with, one list that answers both. Landing at the top
+     * regardless would make the audio button "open the panel and then scroll", which is the
+     * one control the panel already had.
+     *
+     * Ignored when the panel has no such section, which happens legitimately: a stream with a
+     * single audio track has no Audio heading, and by then the button that named it is not
+     * drawn either.
+     */
+    openAt: TrackMenuKind?,
     onSelect: (TrackMenuKind, String?) -> Unit,
     onAction: (TrackMenuActionKind) -> Unit,
     onDismiss: () -> Unit,
 ) {
     val firstEntry = remember { FocusRequester() }
+
+    // The section to open in, as an index, or the first one when the asked-for section is not
+    // there. Never null, so the panel always has somewhere to put the remote.
+    val landingSection = remember(menu, openAt) {
+        menu.sections.indexOfFirst { it.kind == openAt }.takeIf { it >= 0 } ?: 0
+    }
 
     // Something must hold focus the moment this appears or the remote looks dead — AC-TV-02,
     // and the failure this project has already had on three screens.
@@ -123,7 +142,7 @@ internal fun TvTrackMenu(
                         label = entry.label,
                         isSelected = entry.isSelected,
                         onClick = { onSelect(section.kind, entry.trackId) },
-                        modifier = if (sectionIndex == 0 && entryIndex == 0) {
+                        modifier = if (sectionIndex == landingSection && entryIndex == 0) {
                             Modifier.focusRequester(firstEntry)
                         } else {
                             Modifier
@@ -142,7 +161,9 @@ internal fun TvTrackMenu(
                             isSelected = false,
                             onClick = { onAction(action.kind) },
                             modifier = if (
-                                sectionIndex == 0 && actionIndex == 0 && section.entries.isEmpty()
+                                sectionIndex == landingSection &&
+                                actionIndex == 0 &&
+                                section.entries.isEmpty()
                             ) {
                                 Modifier.focusRequester(firstEntry)
                             } else {

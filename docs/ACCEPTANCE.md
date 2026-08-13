@@ -113,6 +113,8 @@ except where a criterion names an input method the television does not have.
 | AC-TV-13 | A live source with more than one category can be filtered from the Live list by remote, and filtering never issues a request per category passed over. |
 | AC-TV-14 | A title can be found by name from one screen whichever kind the provider filed it under, and every result is reachable and openable with the D-pad. A term typed on the on-screen keyboard does not put a query to the database per keystroke, and no term returns more rows than a viewer could walk. |
 | AC-TV-15 | Playlists and accounts are reachable from Settings, and back from them returns to Settings rather than to the catalogue. They are not in the tab bar. |
+| AC-TV-16 | Every control the player draws is reachable and operable with the D-pad, and pressing down twice reaches the second row. The remote's own keys continue to drive playback with nothing on screen, and focus returns to the screen when the controls time out. *(Added by `FREEZE.md` Amendment 10.)* |
+| AC-TV-17 | From inside the player, a series moves to the next and previous episode in the order the episodes were made, stopping at the first and the last. When an episode ends the next is offered; the offer is not made for a film, at the end of a series, or after a failure, and it starts nothing once the viewer has declined it or left. *(Added by `FREEZE.md` Amendment 10.)* |
 
 ## AC-META — Film and series information
 

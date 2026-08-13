@@ -22,7 +22,7 @@ down at the bottom of `012` is the one this page is built around:
 
 So every row below says **what to look at**, not what was changed.
 
-Last updated: **2026-08-12**.
+Last updated: **2026-08-13**.
 
 ---
 
@@ -246,6 +246,64 @@ looking at anything in the guide code.
 **Watch the request count.** Opening the panel is one call per channel per session and browsing
 the list is still none. A panel that starts refusing the account after a few long-presses means
 the dedupe is not holding, and that is the failure this project has already had twice.
+
+---
+
+## A6 — the television player, rebuilt around focusable controls (`v0.13.0`)
+
+**Where:** the television, on a series with at least three episodes. **Nothing of this has run
+anywhere but the JVM**, and it is the largest change the player has had since it was written:
+the screen went from having no focusable control on it to having eight.
+
+The JVM cover is real and it is narrow. `TvPlayerControlsReachableTest` walks every button with
+a D-pad at the panel's own geometry, and `TvPlayerKeyMapTest` holds the rule that lets it —
+while the controls are up the key map answers no arrow, so focus traversal can have them. What
+neither can see is the panel: whether focus lands where it should when the controls appear at
+all, whether it comes back to the screen when they time out, and whether a real remote's key
+repeat outruns any of it.
+
+### A6.1 — the controls appear, and the remote can reach all of them
+
+| | |
+| :---- | :---- |
+| **What to look at** | Press **down** during an episode. Play/pause is focused. Press **left** and **right** along the row: rewind, forward, and the two episode steps outside them. Press **down** again: the row underneath — subtitles, audio, picture fit |
+| **Passes if** | Every button takes focus in turn, and the white fill makes it obvious which one has it from across the room |
+| **Fails if** | A button is drawn and cannot be focused, **or** pressing down a second time does nothing, **or** focus vanishes entirely at any point. The last is AC-TV-02 and is the worst of the three — a remote with nowhere to be is indistinguishable from a frozen app |
+
+**Then let them time out.** They hide after six seconds without a press. **Press left
+immediately afterwards.** The film should seek, not move focus — that is the screen taking
+focus back, and if it did not, the remote is now dead until something else is pressed.
+
+### A6.2 — next and previous episode
+
+| | |
+| :---- | :---- |
+| **What to look at** | The two outer buttons. From the middle of a season, both are there; on the **first** episode there is no previous button and on the **last** there is no next |
+| **Passes if** | Each press starts the neighbouring episode from the beginning, and **back** returns to the series list once — not once per episode stepped through |
+| **Fails if** | It plays the wrong episode. Check this against a season listed **newest first** as well: the run is built in broadcast order deliberately, and getting it wrong walks the series backwards |
+
+### A6.3 — the countdown, which is the one thing that acts on nobody's press
+
+**Watch a whole episode to its end**, or seek to the last few seconds of one.
+
+| | |
+| :---- | :---- |
+| **What to look at** | A banner slides in at the top right counting down. **Stop** and **Play now** underneath, focus on Play now |
+| **Passes if** | The count falls a second at a time and the next episode starts at zero. Pressing **Stop** ends it and nothing starts. Pressing **back** leaves the player and nothing starts after that either |
+| **Fails if** | It fires more than once, **or** it fires after Stop, **or** it appears at the end of a **film** or after a stream **fails** — a failure has its own Try again screen and skipping past it would quietly lose the half nobody watched |
+
+**And with the setting off** (Settings → Playback → "Start the next episode after" → Off): the
+banner still appears and nothing ever starts on its own. That is the intended behaviour, not a
+bug — what is off is the counting, not the offer.
+
+### A6.4 — what the change might have broken
+
+Both of these worked before and are the things a rewritten key map takes away silently.
+
+| | |
+| :---- | :---- |
+| **Live** | Zapping still works with up/down and the channel keys, and the player draws **no** seek or episode buttons on a channel |
+| **The track panel** | The subtitles button opens it at Subtitles and the audio button at Audio, rather than both at the top. AC-PLAY-04's audio half is still unrun for want of a two-track stream — `STOPPERS.md` S3 |
 
 ---
 

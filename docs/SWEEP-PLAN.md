@@ -210,6 +210,9 @@ of them were fixed once, rejected on this television, and rebuilt** — those tw
 | 3.11 | `AC-TV-13` | Live | Filter by category with the remote. Count requests | Filtering works and issues **no request per category passed over** |
 | 3.12 | `AC-TV-14` | Search | Search a title filed under any kind. Watch the query count while typing | Found from one screen whatever it was filed under, every result openable by D-pad, and **no query per keystroke**. Use the large account — the cap is the point |
 | 3.13 | `AC-TV-15` | Settings → Sources | Open playlists from Settings, then press back | Back returns to **Settings**, not to the catalogue. There is no Sources tab in the bar |
+| 3.14 | `AC-TV-16` | Player | Press down. Walk the transport row left and right, press down again, walk the second row. Let it time out, then press left | Every button takes focus; the second press of down reaches the lower row; after the timeout **left seeks** rather than moving focus. Focus is never nowhere |
+| 3.15 | `AC-TV-17` | Player, series | From mid-season, step next and previous. Check the first and last episode. Then watch one to its end | Each step plays the neighbouring episode from the start, and back returns to the series **once**. No previous button on the first episode, no next on the last. The end-of-episode banner counts down, Stop ends it, and it never appears on a film |
+| 3.16 | `AC-TV-17` | Series listed newest first | Turn on "Newest first", then step to the next episode | It plays the episode that comes **after** in broadcast order, not the row below on screen |
 
 ## Session 4 — Phone, Android 11 (row A)
 

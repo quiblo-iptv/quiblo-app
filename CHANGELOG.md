@@ -15,6 +15,8 @@ Formatted after [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and ve
 
 ## Unreleased
 
+## 0.14.0
+
 ### Added
 
 - **The television is not black any more.** Whatever has focus lights the screen behind it — the

@@ -73,6 +73,7 @@ import dev.quiblo.core.common.TitleScript
 import dev.quiblo.core.data.MetadataScanState
 import dev.quiblo.core.data.ScanRefusal
 import dev.quiblo.core.data.progressFraction
+import dev.quiblo.core.model.AutoNextDelay
 import dev.quiblo.core.model.BufferMode
 import dev.quiblo.core.model.Category
 import dev.quiblo.core.model.MaxBitrateCap
@@ -215,6 +216,24 @@ fun TvSettingsScreen(
                 selected = playerSettings.seekInterval,
                 labelFor = { stringResource(R.string.tv_settings_seconds, it.seconds) },
                 onSelect = viewModel::setSeekInterval,
+            )
+        }
+
+        // Directly under the seek interval, because both answer "what happens without me".
+        item {
+            OptionRow(
+                label = stringResource(R.string.tv_settings_auto_next),
+                description = stringResource(R.string.tv_settings_auto_next_detail),
+                options = AutoNextDelay.entries,
+                selected = playerSettings.autoNextDelay,
+                labelFor = { delay ->
+                    if (delay == AutoNextDelay.OFF) {
+                        stringResource(R.string.tv_settings_off)
+                    } else {
+                        stringResource(R.string.tv_settings_seconds, delay.seconds)
+                    }
+                },
+                onSelect = viewModel::setAutoNextDelay,
             )
         }
 

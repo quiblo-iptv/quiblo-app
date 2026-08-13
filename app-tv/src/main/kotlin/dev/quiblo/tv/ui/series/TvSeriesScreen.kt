@@ -69,6 +69,7 @@ import dev.quiblo.core.data.MERGED_SEASON_NUMBER
 import dev.quiblo.core.data.MetadataRefresh
 import dev.quiblo.core.model.Channel
 import dev.quiblo.core.model.Episode
+import dev.quiblo.core.model.Season
 import dev.quiblo.feature.series.SeriesDetailUiState
 import dev.quiblo.feature.series.SeriesDetailViewModel
 import dev.quiblo.tv.R
@@ -100,7 +101,13 @@ import org.koin.core.parameter.parametersOf
 @Composable
 fun TvSeriesScreen(
     channel: Channel,
-    onPlayEpisode: (Episode, Long?) -> Unit,
+    /**
+     * Play this episode, out of this run, from here.
+     *
+     * The run travels with the press rather than being looked up later, because this screen is
+     * the only one that has the episodes at all — see `TvPlaybackRequest.Episode.run`.
+     */
+    onPlayEpisode: (Episode, List<Episode>, Long?) -> Unit,
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
     focusEpisodeId: String? = null,
@@ -150,7 +157,7 @@ fun TvSeriesScreen(
 @Composable
 private fun Loaded(
     state: SeriesDetailUiState.Success,
-    onPlayEpisode: (Episode, Long?) -> Unit,
+    onPlayEpisode: (Episode, List<Episode>, Long?) -> Unit,
     onToggleFavorite: () -> Unit,
     onRemoveFromHistory: () -> Unit,
     onRefreshMetadata: () -> Unit,
@@ -159,6 +166,15 @@ private fun Loaded(
     focusEpisodeId: String?,
 ) {
     val seasons = state.seasons.ifEmpty { state.details.seasons }
+
+    /*
+     * The run is the same for every press on this screen, so it is bound once here and the
+     * parts below keep the two-argument callback they already had. Threading a third argument
+     * through the header, the actions and the rows would have put the same constant in four
+     * signatures for no reader's benefit.
+     */
+    val run = remember(seasons) { episodeRun(seasons) }
+    val play: (Episode, Long?) -> Unit = { episode, resumeFrom -> onPlayEpisode(episode, run, resumeFrom) }
 
     // Returning to an episode means returning to its season, not to the first one.
     val returningSeason = remember(state.details.seriesId, focusEpisodeId) {
@@ -226,7 +242,7 @@ private fun Loaded(
                 state = state,
                 seasonCount = seasons.size,
                 firstAction = firstAction,
-                onPlayEpisode = onPlayEpisode,
+                onPlayEpisode = play,
                 onToggleFavorite = onToggleFavorite,
                 onRemoveFromHistory = onRemoveFromHistory,
                 onRefreshMetadata = onRefreshMetadata,
@@ -302,7 +318,7 @@ private fun Loaded(
             EpisodeRow(
                 episode = episode,
                 onClick = {
-                    onPlayEpisode(episode, state.resumePositionMillis.takeIf { isResume })
+                    play(episode, state.resumePositionMillis.takeIf { isResume })
                 },
                 modifier = if (episode.id == focusEpisodeId) {
                     Modifier.focusRequester(episodeCursor)
@@ -555,6 +571,21 @@ private fun EpisodeRow(episode: Episode, onClick: () -> Unit, modifier: Modifier
         )
     }
 }
+
+/**
+ * Every episode of a series, in the order somebody watches them.
+ *
+ * A plain function, and public to its module, because this is the whole definition of what
+ * "next episode" means and it deserves a test rather than a reading. It is deliberately not
+ * derived from what the screen is drawing: the season strip can be reversed and the seasons
+ * can be merged, and neither of those changes which episode follows which.
+ *
+ * Sorting by season and then by number covers both arrangements with one rule. Merging puts
+ * everything in a single season whose own number is a sentinel, but the episodes inside it
+ * keep the season they came from, so they sort back into their real order here.
+ */
+internal fun episodeRun(seasons: List<Season>): List<Episode> =
+    seasons.flatMap { it.episodes }.sortedWith(compareBy({ it.seasonNumber }, { it.episodeNumber }))
 
 @Composable
 private fun Centered(content: @Composable () -> Unit) {

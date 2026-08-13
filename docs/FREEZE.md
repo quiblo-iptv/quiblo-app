@@ -404,3 +404,60 @@ television can read. `006` gate 3 built the page first for the same reason.
 **What does not change.** Every non-goal in §2 stands, no permission is added, nothing is sent
 anywhere, and the app still works with no account of any kind. This screen states a position the
 project already held; it does not create one.
+
+---
+
+### Amendment 10 — the television player gains controls, and a series gains an order (2026-08-13)
+
+**Ships in.** `0.13.0`
+**Release class.** Minor — nothing stored changes and no capability is withdrawn. One new
+preference is added with a default that matches how the app already behaved for films.
+
+**Decision.** Two things, and only the second is scope:
+
+1. **The television player's controls become focusable buttons.** This corrects a design, it
+   does not extend one. §3.4 of `PLAN-TV.md` specified a control layer driven entirely by the
+   remote's own keys, which is right for the five things a remote has keys for and had no
+   answer for anything else. Everything past those five was reaching the viewer through a key
+   that already meant something — subtitles on a second press of Down, picture fit on Up, on a
+   film, where zapping happened not to be using it. The keys all still work; the buttons are a
+   second way in.
+2. **A series carries its own order into the player**, so next and previous episode exist, and
+   the end of an episode offers the next one on a countdown the viewer sets or turns off.
+
+**Rationale.** The first is the same lesson as Amendment 7's: a specification written accurately
+for a smaller version of the app, overtaken by work this document already admitted. Each feature
+the television gained after §3.4 was written — aspect ratio, then audio and subtitles, now
+episodes — arrived with nowhere to go, and the last one had nowhere left at all.
+
+The second is a gap between the two apps rather than an addition to either. §7 requires v1.0 to
+hold on a television driven by a remote alone, and a viewer watching a series had to leave the
+player, walk back to the list and find the next row after every episode. Nothing about that was
+a decision anybody made; it was what happened when the player was built before series were.
+
+**Two constraints, both of them decisions:**
+
+1. **The run does not wrap.** `Live.zappedBy` wraps deliberately — past the last channel is the
+   first, as a television does it. A series is a thing that finishes, and rolling off the finale
+   into the pilot from an unattended countdown, with nobody in the room, is the one outcome this
+   must never produce.
+2. **The countdown is a delay with an Off value, not a switch beside a delay.** "Do not do this"
+   and "do it after ten seconds" are the same question asked once. Off still *offers* the next
+   episode; what stops is the counting.
+
+**Two new criteria**, added to `ACCEPTANCE.md` §AC-TV. Both are written against the symptom:
+
+> **AC-TV-16** — Every control the player draws is reachable and operable with the D-pad, and
+> pressing down twice reaches the second row. The remote's own keys continue to drive playback
+> with nothing on screen, and focus returns to the screen when the controls time out.
+
+> **AC-TV-17** — From inside the player, a series moves to the next and previous episode in the
+> order the episodes were made, stopping at the first and the last. When an episode ends the
+> next is offered; the offer is not made for a film, at the end of a series, or after a failure,
+> and it starts nothing once the viewer has declined it or left.
+
+**What does not change.** Every non-goal in §2 stands, no permission is added, nothing is sent
+anywhere, and the phone player is untouched — it gets the same controls after the television
+build has been watched on a panel, which is why the new preference is offered on the television's
+settings screen only. A setting shown on an app it does not affect is the hollow-feature shape
+this project has deleted nine of.

@@ -228,6 +228,14 @@ private fun TvOverlayScreen(
                 val live = overlay.request as? TvPlaybackRequest.Live
                 if (live != null) onReplaceTop(TvOverlay.Playing(live.zappedBy(direction)))
             },
+            // The same replace, for the same reason: six episodes into an evening, back
+            // belongs to the series, not to episode five. It also keeps `popRestoringCursor`
+            // honest — the top of the stack is always the episode actually playing, so the
+            // series reopens on that row rather than on whichever one was pressed first.
+            onStepEpisode = { direction ->
+                val episode = (overlay.request as? TvPlaybackRequest.Episode)?.steppedBy(direction)
+                if (episode != null) onReplaceTop(TvOverlay.Playing(episode))
+            },
         )
 
         is TvOverlay.Series -> TvSeriesScreen(
@@ -235,7 +243,7 @@ private fun TvOverlayScreen(
             // Set when the viewer backs out of an episode, so the list reopens on the row
             // they were watching rather than at the top of the season (#020).
             focusEpisodeId = overlay.focusEpisodeId,
-            onPlayEpisode = { episode, resumeFrom ->
+            onPlayEpisode = { episode, run, resumeFrom ->
                 onPush(
                     TvOverlay.Playing(
                         TvPlaybackRequest.Episode(
@@ -246,6 +254,12 @@ private fun TvOverlayScreen(
                             seasonNumber = episode.seasonNumber,
                             episodeNumber = episode.episodeNumber,
                             startPositionMillis = resumeFrom,
+                            run = run,
+                            // Found rather than passed. The screen knows which row was
+                            // pressed and the run is sorted, so the two indices are not the
+                            // same number and handing over the wrong one would put the
+                            // viewer one episode out for the rest of the series.
+                            runIndex = run.indexOfFirst { it.id == episode.id }.coerceAtLeast(0),
                         ),
                     ),
                 )

@@ -167,7 +167,7 @@ The engine and every setting carry over unchanged. The control layer does not:
 | Phone | TV |
 |---|---|
 | Tap to toggle controls | **D-pad down** shows controls, **back** hides |
-| Skip buttons | **Left/right** seeks by the configured interval; centre plays/pauses |
+| Skip buttons | On-screen buttons, **and** left/right seek directly with nothing on screen |
 | Drag left half for brightness | **Dropped.** Not app-controllable on a TV |
 | Drag right half for volume | **Dropped.** The remote and the TV own volume |
 | Screen lock | **Dropped.** Nothing to lock — no touchscreen to pocket |
@@ -178,6 +178,54 @@ Channel zapping — up/down to change channel with an overlay showing what you m
 the one control TV needs that the phone app has no equivalent of. It is also
 `ZapBarOverlay`, deleted in `c0bf585` for never having been wired up. Rebuild it properly
 here rather than reverting that deletion.
+
+#### 3.4.1 Two ways in, and the rule that keeps them apart
+
+**Written 2026-08-13, replacing a control layer that had no focusable control in it at all.**
+
+The original design above was right about the five things a remote has keys for and had no
+answer for anything else. Everything past those five ended up smuggled onto a key that already
+meant something: subtitles arrived on a *second* press of Down, and picture fit on Up, on a
+film, where zapping happened not to be using it. **A key map with no keys left cannot take
+another feature**, and next and previous episode are two more.
+
+So the player draws its controls where the phone draws them — play in the middle of the screen,
+the two skips either side, the two episode steps outside those, and subtitles, audio and picture
+fit in a row underneath. The keys still work with nothing on screen, because that is the fastest
+way to pause something and there was never a reason to take it away.
+
+**The rule that keeps the two from fighting is one line in `handleKey`: while the controls are
+on screen, the arrows belong to focus and the key map answers none of them.** A key consumed
+there is a key Compose's focus traversal never sees, so the alternative is every button drawn,
+correct and unreachable — the hollow-feature shape arrived at from the opposite direction, and
+one this project has already met for real in the licence list. The keys that are *not* arrows —
+play, rewind, the channel keys — answer in both states, because a remote's play key means one
+thing wherever the viewer is looking.
+
+**Which way each arrow goes is stated, not inferred.** Compose's focus search picks the nearest
+rectangle, and with a centred transport row above an options row against the left margin, the
+nearest thing below the play button is the options row's *last* button. Both rows carry their
+own four directions per button, with `FocusRequester.Cancel` at the ends. Measured, not argued —
+`TvPlayerControlsReachableTest` walks it.
+
+#### 3.4.2 Episodes
+
+A series travels with the request, the way a channel list already travelled with a live one.
+The player is what asks for the next episode and is the one screen that cannot know what it is:
+episodes are fetched per series and are never rows in the channel table.
+
+Two decisions worth not re-deriving:
+
+- **The run is in broadcast order, whatever order the list was drawn in.** The series screen can
+  show newest first, and under that arrangement the row below the one playing is the episode
+  *before* it. The order things are watched in is not a display preference.
+- **It does not wrap, and `Live.zappedBy` does.** A channel list is a ring a viewer walks round;
+  a series is a thing that finishes. Rolling off the finale into the pilot would restart a
+  series somebody has just finished, from an unattended countdown, with nobody in the room.
+
+The countdown at the end of an episode is `AutoNextDelay` in `:core:model`, offered on the
+television's settings screen only — the phone player has no auto-advance yet, and a setting that
+changes nothing on the app showing it is the shape this project has deleted nine of.
 
 ### 3.5 Sources and Settings
 

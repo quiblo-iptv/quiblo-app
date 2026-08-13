@@ -88,7 +88,8 @@ immediate ban — see [`CONTRIBUTING.md`](CONTRIBUTING.md).
 | **Sources** | M3U/M3U8 by URL or local file, and Xtream Codes API |
 | **Content & Series** | Live TV, movies, series with seasons & episode breakdown |
 | **Guide & EPG** | Now/next per channel, fetched on demand and cached |
-| **Player Controls** | Play/pause, seek, configurable skip interval, Start Over, subtitle & audio track selection, screen lock |
+| **Player Controls** | Play/pause, seek, configurable skip interval, Start Over, subtitle & audio track selection, screen lock. On the television these are on-screen buttons the D-pad walks through — play in the middle with the skips either side of it, and subtitles, audio and picture fit in a row underneath — while the remote's own keys keep working with nothing on screen |
+| **Episodes** | On the television, next and previous episode from inside the player, in the order the episodes were made. When one ends the next is offered with a countdown, adjustable from three seconds to fifteen or off entirely |
 | **Picture & Sound** | Fit/Fill/Zoom/Stretch aspect modes, drag for brightness and volume, full-screen playback that keeps the screen awake |
 | **Playback Tuning** | Skip interval, buffering profile and a maximum-bitrate cap, all in Settings |
 | **Movies & Series** | Detail screens with artwork and overview, and Resume or Start from beginning |

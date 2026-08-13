@@ -15,6 +15,8 @@ Formatted after [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and ve
 
 ## Unreleased
 
+## 0.14.1
+
 ### Fixed
 
 - **Search only offers Advanced once now.** It was on screen twice — beside the field and again

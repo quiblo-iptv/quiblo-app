@@ -194,8 +194,8 @@ class TvSearchResultsFitTest {
                 SearchHeader(
                     state = state,
                     // The harness is the working shape, where the centring gap is zero and
-                    // this value is unused. It still has to be a real height.
-                    contentHeight = PANEL_HEIGHT,
+                    // this value is unused. It still has to be a real distance.
+                    centreLine = PANEL_HEIGHT / 2,
                     isResting = false,
                     isAdvanced = isAdvanced,
                     onQueryChange = {},

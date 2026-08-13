@@ -53,8 +53,12 @@ import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.findRootCoordinates
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
@@ -105,6 +109,37 @@ fun TvSearchScreen(
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
 
+    TvSearchPanel(
+        state = state,
+        onOpen = onOpen,
+        onQueryChange = viewModel::search,
+        onSelectGenre = viewModel::selectGenre,
+        onClear = viewModel::clear,
+        onResultVisible = viewModel::onResultVisible,
+        modifier = modifier,
+    )
+}
+
+/**
+ * The screen itself, with no ViewModel behind it.
+ *
+ * Split off so the resting shape can be **measured** rather than looked at. Where the mark, the
+ * name and the field come to rest is the whole of what this screen is at rest, it was wrong on a
+ * real panel and right on a laptop, and the difference is arithmetic on a window height — which
+ * is a fact a test can hold and an eye cannot. See `TvSearchRestingCentreTest`.
+ *
+ * The state above this line is the ViewModel's; everything below is the screen's own.
+ */
+@Composable
+internal fun TvSearchPanel(
+    state: SearchUiState,
+    onOpen: (List<Channel>, Int) -> Unit,
+    onQueryChange: (String) -> Unit,
+    onSelectGenre: (String?) -> Unit,
+    onClear: () -> Unit,
+    onResultVisible: (Channel) -> Unit,
+    modifier: Modifier = Modifier,
+) {
     // Survives a configuration change, so a viewer who opened the filters does not find them
     // shut again for a reason that has nothing to do with them.
     var isAdvanced by rememberSaveable { mutableStateOf(false) }
@@ -124,24 +159,46 @@ fun TvSearchScreen(
         searchRows(state, liveTitle, filmsTitle, seriesTitle)
     }
 
-    // How tall the area under the tab bar is, read off the column itself rather than by
-    // wrapping it in something that measures it. See `SearchHeader`'s note on `topSpace`.
+    /*
+     * Where the middle of the *panel* is, measured from the top of this column.
+     *
+     * **The screen's middle, not this container's.** The column starts under the tab bar and
+     * inside the overscan padding, so centring the resting block within it put the mark, the name
+     * and the field visibly high — the block was centred on a rectangle whose top edge is some
+     * 90dp down the television. Right by the layout and wrong by the eye, which is the only
+     * measurement that matters on something watched from three metres away.
+     *
+     * Both halves are measured, and both are read off the layout itself — the height of what is
+     * being drawn into, and how far down it this column begins. So nothing here has to be told the
+     * height of the tab bar, and nothing breaks when that changes. The bar has already grown once,
+     * when the profile control joined the gear.
+     *
+     * **The root of the composition, not `LocalWindowInfo`.** The window is a larger and vaguer
+     * thing than the surface: it was tried, and it reported 1264px for a panel drawn 1080px tall,
+     * which centred the block below the screen's middle by exactly the difference. The root is the
+     * rectangle the app is actually painting into, which is the one a viewer is looking at.
+     */
     val density = LocalDensity.current
-    var contentHeight by remember { mutableStateOf(0.dp) }
+    var centreLine by remember { mutableStateOf(0.dp) }
 
     Column(
         modifier = modifier
             .fillMaxSize()
-            .onSizeChanged { contentHeight = with(density) { it.height.toDp() } },
+            .onGloballyPositioned { coordinates ->
+                val panelHeight = coordinates.findRootCoordinates().size.height
+                centreLine = with(density) {
+                    (panelHeight / 2f - coordinates.positionInRoot().y).toDp()
+                }
+            },
     ) {
         SearchHeader(
-            contentHeight = contentHeight,
+            centreLine = centreLine,
             state = state,
             isResting = isResting,
             isAdvanced = isAdvanced,
-            onQueryChange = viewModel::search,
-            onSelectGenre = viewModel::selectGenre,
-            onClear = viewModel::clear,
+            onQueryChange = onQueryChange,
+            onSelectGenre = onSelectGenre,
+            onClear = onClear,
             onToggleAdvanced = { isAdvanced = !isAdvanced },
         )
 
@@ -174,7 +231,7 @@ fun TvSearchScreen(
                     rows = found.rows,
                     ratings = state.ratings,
                     posters = state.posters,
-                    onVisible = viewModel::onResultVisible,
+                    onVisible = onResultVisible,
                     // Indexed against the flat list, so a live result opened from here still
                     // has every other result to zap through.
                     onItemClick = { item -> onOpen(found.flat, item.flatIndex) },
@@ -202,12 +259,12 @@ fun TvSearchScreen(
 @Suppress("CyclomaticComplexMethod")
 internal fun ColumnScope.SearchHeader(
     /**
-     * How tall the area under the tab bar is.
+     * How far below the top of this column the middle of the television's panel lies.
      *
-     * The block is centred in it, and it is measured rather than assumed — see the note on
+     * The block is centred on it, and it is measured rather than assumed — see the note on
      * `topSpace` for why every version of this that used a constant broke.
      */
-    contentHeight: Dp,
+    centreLine: Dp,
     state: SearchUiState,
     isResting: Boolean,
     isAdvanced: Boolean,
@@ -219,23 +276,27 @@ internal fun ColumnScope.SearchHeader(
     /*
      * The gap that centres the resting block.
      *
-     * **Both numbers in it are measured. Neither is a constant, and that is the whole point.**
+     * **Every number in it is measured. None is a constant, and that is the whole point.**
      * This was a fixed gap first, then a calculation off the window height and an assumed
      * padding — and each of those broke the moment something changed: the first every time the
      * mark or the name was resized, the second on any device whose chrome is not the one it was
      * written against. A layout that has to be told the size of the thing it is inside is a
      * layout that is wrong somewhere else.
      *
-     * The area is what this screen was handed, and the block is the wordmark's height plus the
-     * field row measuring itself. Half the difference is the gap, and it cannot be wrong on a
-     * panel it has never seen.
+     * The block is the wordmark's height plus the field row measuring itself; half of it above
+     * [centreLine] is where the gap ends. It cannot be wrong on a panel it has never seen.
+     *
+     * Clamped at zero, which is what stops this from being worse than the version it replaces.
+     * On a short window the panel's middle can fall above this column entirely — [centreLine]
+     * goes negative — and a negative gap would drag the field up under the tab bar. It rests at
+     * the top instead, and the results below it keep the room they need.
      */
     val fieldDensity = LocalDensity.current
     var fieldRowHeight by remember { mutableStateOf(0.dp) }
 
     val topSpace by animateDpAsState(
-        targetValue = if (isResting && fieldRowHeight > 0.dp && contentHeight > 0.dp) {
-            ((contentHeight - WORDMARK_HEIGHT - fieldRowHeight) / 2).coerceAtLeast(0.dp)
+        targetValue = if (isResting && fieldRowHeight > 0.dp && centreLine > 0.dp) {
+            (centreLine - (WORDMARK_HEIGHT + fieldRowHeight) / 2).coerceAtLeast(0.dp)
         } else {
             0.dp
         },
@@ -267,7 +328,8 @@ internal fun ColumnScope.SearchHeader(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .height(wordmarkHeight),
+            .height(wordmarkHeight)
+            .testTag(WORDMARK_TAG),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
@@ -290,6 +352,7 @@ internal fun ColumnScope.SearchHeader(
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .testTag(FIELD_ROW_TAG)
             .onSizeChanged { fieldRowHeight = with(fieldDensity) { it.height.toDp() } },
         horizontalArrangement = if (isResting) Arrangement.Center else Arrangement.Start,
         verticalAlignment = Alignment.CenterVertically,
@@ -525,14 +588,17 @@ internal fun searchRows(
 }
 
 /**
- * How far down the panel the resting field sits.
+ * The two edges of the resting block, named so a test can measure it.
  *
- * Enough to put the name and the field near the middle of the 540dp panel once overscan and
- * the tab bar are taken off it, without measuring: the three things above the results come to
- * about 150dp, and this is half of what is left.
+ * The block is the wordmark column and the field row together, and neither edge can be found
+ * any other way: the mark is a `Canvas` and carries no semantics — correctly, it is a
+ * decoration — and the row's bottom is the tallest of three controls rather than any one of
+ * them. Naming the ends is what lets `TvSearchRestingCentreTest` assert where the block sits
+ * without being told the height of the mark, the name or the field, none of which are the
+ * thing under test and all of which get adjusted.
  */
-// Reduced when the mark joined the wordmark: the block above the field is twice the height it
-// was, and the old spacing pushed the whole composition into the bottom half of the panel.
+internal const val WORDMARK_TAG = "search.wordmark"
+internal const val FIELD_ROW_TAG = "search.fieldRow"
 
 /*
  * The mark, the name, and the room they need.

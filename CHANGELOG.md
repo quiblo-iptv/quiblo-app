@@ -15,6 +15,8 @@ Formatted after [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and ve
 
 ## Unreleased
 
+## 0.13.1
+
 ### Fixed
 
 - **"On now" no longer freezes at the moment you opened the screen.** The guide asked what the

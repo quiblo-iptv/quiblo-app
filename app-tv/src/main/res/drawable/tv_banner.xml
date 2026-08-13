@@ -4,12 +4,65 @@
   Copyright (C) 2026 The Quiblo Authors
   Licensed under the GNU General Public License v3.0 or later. See LICENSE.
 
-  The TV launcher banner, 320x180 as leanback requires. Drawn as a vector rather than
-  shipped as a PNG so it stays sharp on a 4K panel and costs nothing in the APK.
+  The Android TV launcher banner: 320x180, as leanback requires, drawn as a vector so it stays
+  sharp on a 4K panel at no cost in the APK.
+
+  **Authored at 320x180 rather than assembled from the launcher icon.** It was a layer-list of
+  a colour and the 108dp adaptive foreground, and a launcher asked to draw a square drawable in
+  a 16:9 frame did the only thing it could: bars down both sides, and a mark stretched to touch
+  the top and bottom edges. A banner is its own artwork at its own aspect ratio.
+
+  **The mark is sized by its ink, not by its box.** The adaptive foreground paints only the
+  middle 43 of its 108 units — the rest is the safe margin a launcher may crop — so scaling the
+  box to a chosen height produces a mark barely half that. Every number below is derived from
+  the ink bounds, which is why the mark reads larger than the word beside it rather than
+  smaller.
+
+  The name is beside the mark because that is what a banner is for: the label a launcher prints
+  underneath is small, and the tile is what identifies the app across a room. The glyphs are
+  outlines rather than text, so nothing depends on a font being installed.
 -->
-<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
-    <item android:drawable="@color/tv_banner_background" />
-    <item
-        android:drawable="@drawable/ic_launcher_foreground"
-        android:gravity="center" />
-</layer-list>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="320dp"
+    android:height="180dp"
+    android:viewportWidth="320"
+    android:viewportHeight="180">
+
+    <!-- Full bleed, so there is no edge left for a launcher to letterbox. -->
+    <path
+        android:fillColor="@color/tv_banner_background"
+        android:pathData="M0,0 H320 V180 H0 Z" />
+
+    <!-- The mark, in its own 108 box, placed so its ink is 80px and centred on y=90. -->
+    <group
+        android:translateX="-40.93"
+        android:translateY="-12.33"
+        android:scaleX="1.860465"
+        android:scaleY="1.860465">
+        <path
+            android:strokeColor="#FFFFFF"
+            android:strokeWidth="5"
+            android:fillColor="#00000000"
+            android:pathData="M36,54 a18,18 0 1,0 36,0 a18,18 0 1,0 -36,0" />
+        <path
+            android:strokeColor="#FFFFFF"
+            android:strokeWidth="5"
+            android:strokeLineCap="round"
+            android:fillColor="#00000000"
+            android:pathData="M64,64 L74,74" />
+        <path
+            android:fillColor="#FFFFFF"
+            android:pathData="M49,45 L49,63 L65,54 Z" />
+    </group>
+
+    <!-- The name. Font units run y-up, so the group flips and lands the baseline at 107. -->
+    <group
+        android:translateX="123.39"
+        android:translateY="107.50"
+        android:scaleX="0.023437500"
+        android:scaleY="-0.023437500">
+        <path
+            android:fillColor="#FFFFFF"
+            android:pathData="M911 -27H881Q512 -27 307 177Q102 381 102 745Q102 1108 306 1314Q511 1520 870 1520Q1233 1520 1436 1316Q1638 1112 1638 745Q1638 493 1530 311Q1423 129 1221 37L1522 -299H1155ZM870 1241Q694 1241 597 1111Q500 981 500 745Q500 505 595 378Q690 250 870 250Q1047 250 1144 380Q1241 510 1241 745Q1241 981 1144 1111Q1047 1241 870 1241Z M1901 436V1120H2261V1008Q2261 917 2260 780Q2259 642 2259 596Q2259 461 2266 402Q2273 342 2290 315Q2312 280 2348 261Q2383 242 2429 242Q2541 242 2605 328Q2669 414 2669 567V1120H3027V0H2669V162Q2588 64 2498 18Q2407 -29 2298 -29Q2104 -29 2002 90Q1901 209 1901 436Z M3371 1120H3729V0H3371ZM3371 1556H3729V1264H3371Z M4669 231Q4784 231 4844 315Q4905 399 4905 559Q4905 719 4844 803Q4784 887 4669 887Q4554 887 4492 802Q4431 718 4431 559Q4431 400 4492 316Q4554 231 4669 231ZM4431 956Q4505 1054 4595 1100Q4685 1147 4802 1147Q5009 1147 5142 982Q5275 818 5275 559Q5275 300 5142 136Q5009 -29 4802 -29Q4685 -29 4595 18Q4505 64 4431 162V0H4073V1556H4431Z M5539 1556H5897V0H5539Z M6774 891Q6655 891 6592 806Q6530 720 6530 559Q6530 398 6592 312Q6655 227 6774 227Q6891 227 6953 312Q7015 398 7015 559Q7015 720 6953 806Q6891 891 6774 891ZM6774 1147Q7063 1147 7226 991Q7388 835 7388 559Q7388 283 7226 127Q7063 -29 6774 -29Q6484 -29 6320 127Q6157 283 6157 559Q6157 835 6320 991Q6484 1147 6774 1147Z" />
+    </group>
+</vector>

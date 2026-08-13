@@ -15,6 +15,18 @@ Formatted after [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and ve
 
 ## Unreleased
 
+### Fixed
+
+- **The television's launcher tile is a banner rather than a cropped icon.** It was the square
+  app icon dropped into a 16:9 frame, which left a dark bar down each side and a mark stretched
+  to the top and bottom edges. It is now drawn at 320x180 with the name beside the mark, which
+  is what a viewer picks the app out by from across a room.
+- **The gear and the profile picture sit together at the end of the top bar.** They were spaced
+  as far apart as two tab labels and read as two unrelated controls.
+- **Advanced sits under the search field at rest, and the whole resting screen is centred.** It
+  was beside the field, balanced by an invisible copy of itself, which centred the field while
+  leaving what a viewer actually sees hanging to the right of the middle.
+
 ## 0.15.0
 
 ### Added

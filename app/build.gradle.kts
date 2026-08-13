@@ -54,8 +54,8 @@ android {
 
     defaultConfig {
         applicationId = "dev.quiblo.player"
-        versionCode = 27
-        versionName = "0.14.2"
+        versionCode = 28
+        versionName = "0.14.3"
     }
 
     buildFeatures {

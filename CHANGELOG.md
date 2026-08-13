@@ -15,6 +15,8 @@ Formatted after [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and ve
 
 ## Unreleased
 
+## 0.14.3
+
 ### Fixed
 
 - **The search screen sits in the middle of the screen.** It was a fixed gap under the tab bar,

@@ -15,6 +15,8 @@ Formatted after [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and ve
 
 ## Unreleased
 
+## 0.15.0
+
 ### Added
 
 - **Pick a face for a profile on the television.** Creating a profile offers a row of generated

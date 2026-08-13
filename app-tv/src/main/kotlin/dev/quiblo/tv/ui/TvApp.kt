@@ -21,6 +21,7 @@ package dev.quiblo.tv.ui
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -36,6 +37,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Search
@@ -55,6 +57,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
@@ -71,6 +74,7 @@ import dev.quiblo.core.data.ProfileRepository
 import dev.quiblo.core.datastore.ConsentStore
 import dev.quiblo.core.model.Channel
 import dev.quiblo.core.model.MediaKind
+import dev.quiblo.designsystem.ProfileAvatar
 import dev.quiblo.tv.R
 import dev.quiblo.tv.ui.browse.TvPosterRows
 import dev.quiblo.tv.ui.common.LocalAmbientSink
@@ -176,6 +180,11 @@ private fun TvAppBehindConsent() {
             onOpenSettings = { backStack.add(TvOverlay.Settings) },
             onOpen = { items, index -> overlayFor(items, index)?.let(backStack::add) },
             onOpenChannel = { channel -> backStack.add(detailFor(channel)) },
+            // The same sign-out Settings offers, one press closer. Both land on the chooser,
+            // because there is only one thing "switch profile" can mean.
+            onSwitchProfile = { profileSwitch() },
+            activeProfileName = activeProfile?.name,
+            activeProfileAvatar = activeProfile?.avatar,
         )
     } else {
         TvOverlayScreen(
@@ -364,6 +373,9 @@ private fun TvShell(
     onOpenSettings: () -> Unit,
     onOpen: (List<Channel>, Int) -> Unit,
     onOpenChannel: (Channel) -> Unit,
+    onSwitchProfile: () -> Unit,
+    activeProfileName: String?,
+    activeProfileAvatar: String?,
 ) {
     // Focus starts in the bar, so the first thing a viewer sees is where they are. An app
     // that opens with nothing focused leaves the remote apparently dead.
@@ -410,6 +422,9 @@ private fun TvShell(
                 focusRequester = barFocusRequester,
                 onEnterContent = { contentFocusRequester.tryRequestFocus() },
                 onOpenSettings = onOpenSettings,
+                onSwitchProfile = onSwitchProfile,
+                activeProfileName = activeProfileName,
+                activeProfileAvatar = activeProfileAvatar,
             )
 
             Box(
@@ -473,6 +488,9 @@ private fun TvTopBar(
     focusRequester: FocusRequester,
     onEnterContent: () -> Unit,
     onOpenSettings: () -> Unit,
+    onSwitchProfile: () -> Unit,
+    activeProfileName: String?,
+    activeProfileAvatar: String?,
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val isFocused by interactionSource.collectIsFocusedAsState()
@@ -488,7 +506,7 @@ private fun TvTopBar(
      * the content below, and the gear could not be reached by remote at all. That is half
      * of why #004 read as a missing screen when it was really an unreachable one.
      */
-    var onGear by remember { mutableStateOf(false) }
+    var spot by remember { mutableStateOf(TvBarSpot.TABS) }
 
     Row(
         modifier = Modifier
@@ -497,21 +515,26 @@ private fun TvTopBar(
             .focusRequester(focusRequester)
             .onPreviewKeyEvent { event ->
                 if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
-                when (val action = tvBarAction(event.key, TvBarState(selectedTab, onGear), lastIndex)) {
+                when (val action = tvBarAction(event.key, TvBarState(selectedTab, spot), lastIndex)) {
                     is TvBarAction.Move -> {
-                        onGear = action.state.onGear
+                        spot = action.state.spot
                         if (action.state.selectedTab != selectedTab) onSelect(action.state.selectedTab)
                         true
                     }
 
                     TvBarAction.EnterContent -> {
-                        onGear = false
+                        spot = TvBarSpot.TABS
                         onEnterContent()
                         true
                     }
 
                     TvBarAction.OpenSettings -> {
                         onOpenSettings()
+                        true
+                    }
+
+                    TvBarAction.SwitchProfile -> {
+                        onSwitchProfile()
                         true
                     }
 
@@ -524,9 +547,10 @@ private fun TvTopBar(
     ) {
         TvTab.entries.forEachIndexed { index, tab ->
             // Bright only when the bar itself holds the remote *and* the remote is on the
-            // tabs rather than the gear. While focus is down in the content the selected tab
-            // stays legible but recedes, which is how a viewer tells where a press will land.
-            val isBarFocused = isFocused && !onGear
+            // tabs rather than one of the icons past them. While focus is down in the content
+            // the selected tab stays legible but recedes, which is how a viewer tells where a
+            // press will land.
+            val isBarFocused = isFocused && spot == TvBarSpot.TABS
 
             if (tab.isIconOnly) {
                 IconTab(
@@ -549,8 +573,61 @@ private fun TvTopBar(
         BarIcon(
             icon = Icons.Filled.Settings,
             contentDescription = stringResource(R.string.tv_settings),
-            isHighlighted = onGear && isFocused,
+            isHighlighted = spot == TvBarSpot.GEAR && isFocused,
         )
+
+        Spacer(modifier = Modifier.width(BAR_ICON_GAP))
+
+        /*
+         * Who is watching, on the right of the gear.
+         *
+         * **Their own face rather than a generic figure**, which is the whole point of it being
+         * here: the one thing this control has to answer from across a room is "is this still
+         * mine", and a person-shaped outline answers that for nobody. It is the same
+         * `ProfileAvatar` the chooser draws, at a corner-control size, so the picture somebody
+         * picked when they made the profile is the picture they see in the bar afterwards.
+         *
+         * Last along the bar, so it is one press further than Settings. Settings is where a
+         * viewer goes on purpose; this is where they go when the remote changes hands, which is
+         * rarer and is the one press nobody minds.
+         */
+        BarProfile(
+            name = activeProfileName,
+            avatar = activeProfileAvatar,
+            isHighlighted = spot == TvBarSpot.PROFILE && isFocused,
+        )
+    }
+}
+
+/**
+ * The active profile's face, drawn as a bar control.
+ *
+ * Not focusable, for the same reason [BarIcon] is not: the bar above owns focus and decides where
+ * along itself the remote is resting. The ring is how that answer is drawn here — a scale would
+ * shift the two icons beside each other every time the remote moved between them.
+ */
+@Composable
+private fun BarProfile(name: String?, avatar: String?, isHighlighted: Boolean) {
+    Box(
+        modifier = Modifier
+            .size(40.dp)
+            .border(
+                width = if (isHighlighted) 2.dp else 0.dp,
+                color = if (isHighlighted) Color.White else Color.Transparent,
+                shape = CircleShape,
+            ),
+        contentAlignment = Alignment.Center,
+    ) {
+        // Null only in the frame between signing out and the chooser appearing. Nothing is drawn
+        // then rather than a placeholder, because the bar is on its way off screen.
+        if (name != null) {
+            ProfileAvatar(
+                name = name,
+                avatar = avatar,
+                size = BAR_AVATAR_SIZE,
+                modifier = Modifier.alpha(if (isHighlighted) 1f else IDLE_ALPHA),
+            )
+        }
     }
 }
 
@@ -684,3 +761,9 @@ private val TAB_LABEL_HEIGHT = 24.dp
 private val TAB_ICON_SIZE = 22.dp
 private const val SELECTED_ALPHA = 0.90f
 private const val IDLE_ALPHA = 0.55f
+
+/** Close enough that the gear and the face read as one group at the end of the bar. */
+private val BAR_ICON_GAP = 8.dp
+
+/** Smaller than the 40dp control around it, so the highlight ring has somewhere to be drawn. */
+private val BAR_AVATAR_SIZE = 32.dp

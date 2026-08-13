@@ -68,6 +68,7 @@ import dev.quiblo.tv.R
 import dev.quiblo.tv.ui.browse.TvCategoryList
 import dev.quiblo.tv.ui.browse.TvCategoryRow
 import dev.quiblo.tv.ui.browse.TvRowItem
+import dev.quiblo.tv.ui.common.FIELD_CORNER
 import dev.quiblo.tv.ui.common.TvChip
 import dev.quiblo.tv.ui.common.TvTextField
 import dev.quiblo.tv.ui.common.travellingGlow
@@ -483,16 +484,20 @@ internal fun searchRows(
  */
 private val RESTING_TOP_SPACE = 96.dp
 
-/** Tall enough for the mark and the name together, now that both are there. */
-private val WORDMARK_HEIGHT = 124.dp
-private val LOGO_SIZE = 62.dp
-
-/** Matches the field's own shape, so the glow rides its outline rather than crossing it. */
-private val FIELD_CORNER = 12.dp
+/*
+ * The mark, the name, and the room they need.
+ *
+ * All three were raised after seeing them on a 50-inch panel: the mark was smaller than the
+ * word under it, which inverts the order they are meant to be read in, and the word was set at
+ * a size chosen against a laptop. On a television the resting screen is three things in the
+ * middle of a very large rectangle, so they can afford to be large.
+ */
+private val WORDMARK_HEIGHT = 190.dp
+private val LOGO_SIZE = 108.dp
 
 /** `TvChip`'s own size, so the invisible mirror beside the field is exactly as wide as it. */
 private val CHIP_TEXT_SIZE = 15.sp
-private val WORDMARK_TEXT_SIZE = 40.sp
+private val WORDMARK_TEXT_SIZE = 46.sp
 
 /** Wider at rest, where it is the only thing on the panel and reads as an invitation. */
 private val RESTING_FIELD_WIDTH = 560.dp

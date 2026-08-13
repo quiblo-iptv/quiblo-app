@@ -18,13 +18,26 @@
 
 package dev.quiblo.tv.ui.common
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsFocusedAsState
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusDirection
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
@@ -35,6 +48,8 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 
 /**
  * A text field a remote can actually leave — with the keyboard up or down.
@@ -84,12 +99,30 @@ fun TvTextField(
     onExitRight: (() -> Unit)? = null,
 ) {
     val focusManager = LocalFocusManager.current
+    val interactionSource = remember { MutableInteractionSource() }
+    val isFocused by interactionSource.collectIsFocusedAsState()
 
-    OutlinedTextField(
+    /*
+     * A box we draw, not `OutlinedTextField`.
+     *
+     * **Material's outlined field reserves height above its border for the label to float up
+     * into, so the component's bounds are taller than the outline a viewer can see.** Anything
+     * drawn against those bounds — a glow, a border, a focus ring — lands in the empty strip
+     * rather than on the box, which is exactly what the travelling highlight did on the panel:
+     * it traced a rectangle a centimetre above the field and read as a smudge floating near it.
+     *
+     * So the field has one rectangle now and it is the one on screen. The label is a
+     * placeholder inside the box that the typed text replaces, rather than a caption that
+     * animates out of it — on a television nobody is filling a form quickly enough to need the
+     * label to persist, and the popping animation was the other half of what looked wrong.
+     */
+    BasicTextField(
         value = value,
         onValueChange = onValueChange,
-        label = { Text(label) },
         singleLine = true,
+        textStyle = LocalTextStyle.current.copy(color = Color.White, fontSize = TEXT_SIZE),
+        cursorBrush = SolidColor(Color.White),
+        interactionSource = interactionSource,
         visualTransformation = if (isPassword) {
             PasswordVisualTransformation()
         } else {
@@ -103,6 +136,31 @@ fun TvTextField(
             onNext = { focusManager.moveFocus(FocusDirection.Down) },
             onDone = { focusManager.clearFocus() },
         ),
+        decorationBox = { field ->
+            Box(
+                modifier = Modifier
+                    .background(
+                        color = Color.White.copy(alpha = if (isFocused) 0.14f else 0.07f),
+                        shape = RoundedCornerShape(FIELD_CORNER),
+                    )
+                    .border(
+                        width = if (isFocused) 2.dp else 1.dp,
+                        color = Color.White.copy(alpha = if (isFocused) 1f else 0.35f),
+                        shape = RoundedCornerShape(FIELD_CORNER),
+                    )
+                    .padding(horizontal = 18.dp, vertical = 14.dp),
+                contentAlignment = Alignment.CenterStart,
+            ) {
+                if (value.isEmpty()) {
+                    Text(
+                        text = label,
+                        color = Color.White.copy(alpha = 0.5f),
+                        fontSize = TEXT_SIZE,
+                    )
+                }
+                field()
+            }
+        },
         modifier = modifier.onPreviewKeyEvent { event ->
             if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
             when (event.key) {
@@ -128,3 +186,9 @@ fun TvTextField(
         },
     )
 }
+
+/** Big enough to read from a sofa, and the same on every field in the app. */
+private val TEXT_SIZE = 17.sp
+
+/** One shape for the box, so the travelling glow has an outline it can actually trace. */
+internal val FIELD_CORNER = 12.dp

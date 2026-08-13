@@ -48,6 +48,7 @@ import coil3.request.SuccessResult
 import coil3.request.allowHardware
 import coil3.toBitmap
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 
 /**
@@ -226,12 +227,28 @@ private const val CROSSFADE_MILLIS = 700
 val LocalAmbientSink = staticCompositionLocalOf<(String?) -> Unit> { {} }
 
 /**
- * The colours of the artwork at [url], loaded small and read once.
+ * The colours of the artwork at [url].
  *
- * Coil is asked for a thumbnail rather than the poster: the cache already holds the full image
- * for the tile itself, and decoding a second full-size copy to read six pixels out of it would
- * be the most expensive thing on the screen. `allowHardware(false)` is required — a hardware
- * bitmap cannot be read back, and asking one for a pixel throws.
+ * **The first version of this took several seconds per poster and it was not the arithmetic.**
+ * Reading six pixels is free; what was not free was asking Coil for the picture again. A request
+ * at a different size is a different memory-cache key, so every time focus landed on a tile this
+ * went out and fetched a poster the tile beside it had *just* downloaded — a network round trip
+ * per press, on a television's wifi, while the catalogue was still loading its own images.
+ *
+ * Three things fix it, and the first is the one that matters:
+ *
+ * - **Every answer is kept.** A poster's colours cannot change, so they are worked out once per
+ *   URL for the life of the app and every later visit is a map lookup. Walking back along a row
+ *   is now instant, which is most of what walking a catalogue is.
+ * - **Nothing starts until focus settles.** Flying along a row used to queue a fetch per tile
+ *   and then wait for all of them; a short pause means only the tile actually being looked at
+ *   ever costs anything. This is the same lesson as the guide prefetch, in a different place —
+ *   rows flown past are not rows anyone read.
+ * - **The thumbnail is smaller.** Twenty-four pixels is still four times what the sampler reads,
+ *   and it is a quarter of the bytes to decode.
+ *
+ * A poster nobody has seen before still has to arrive before its colours can be read. That wait
+ * is the download, it is once per poster ever, and the screen simply stays as it was until then.
  */
 @Composable
 fun rememberAmbient(url: String?): AmbientColours {
@@ -244,20 +261,50 @@ fun rememberAmbient(url: String?): AmbientColours {
             return@LaunchedEffect
         }
 
+        // Already known: no wait, no request, no frame where the old light is still up.
+        remembered[url]?.let {
+            colours = it
+            return@LaunchedEffect
+        }
+
+        // Cancelled by the next focus change, so a row flown through costs one fetch at the end
+        // rather than one per tile passed.
+        delay(SETTLE_MILLIS)
+
         val request = ImageRequest.Builder(context)
             .data(url)
             .size(AMBIENT_THUMB, AMBIENT_THUMB)
+            // A hardware bitmap cannot be read back, and asking one for a pixel throws.
             .allowHardware(false)
             .build()
 
-        colours = withContext(Dispatchers.Default) {
+        val found = withContext(Dispatchers.Default) {
             val image = (SingletonImageLoader.get(context).execute(request) as? SuccessResult)?.image
             ambientFrom(image?.toBitmap())
         }
+
+        remembered[url] = found
+        colours = found
     }
 
     return colours
 }
 
-/** Big enough for six samples to mean something, small enough to be free. */
-private const val AMBIENT_THUMB = 48
+/**
+ * Every set of colours worked out this session, by artwork URL.
+ *
+ * Bounded, and evicted oldest-first, because a 67,000-title catalogue walked end to end would
+ * otherwise hold an entry per poster. A thousand of them is a few kilobytes and more than
+ * anybody scrolls past in one sitting.
+ */
+private val remembered = object : LinkedHashMap<String, AmbientColours>(0, 0.75f, true) {
+    override fun removeEldestEntry(eldest: Map.Entry<String, AmbientColours>) = size > REMEMBERED_MAX
+}
+
+private const val REMEMBERED_MAX = 1_000
+
+/** Long enough that a held D-pad passes straight through a tile without costing anything. */
+private const val SETTLE_MILLIS = 180L
+
+/** Four times what the sampler reads, and a quarter of the bytes the first version decoded. */
+private const val AMBIENT_THUMB = 24

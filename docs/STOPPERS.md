@@ -156,12 +156,44 @@ app against the organisation and adding a `SONAR_TOKEN` secret, neither of which
 **The action:** authorise SonarQube Cloud for `quiblo-iptv`, or say no and the self-hosted
 Community fallback becomes the plan.
 
-**Carrying on regardless — and this is most of the gate.** Dependency and deprecation scanning
-need no account at all, and they are where "vulnerable" usually lives. **They do not run yet.**
-They are written and unmerged in draft pull request #15 — `main` has no `dependabot.yml` and no
-dependency-review workflow — and that pull request's own CI run is red. `agile/006` gate 6 says
-"held", which is the accurate word. See it for what the scans will cover and what is still owed
-to Sonar.
+**One switch blocks the half that is already written.** The dependency review and the graph
+submission are built and cannot run: the repository's **dependency graph is disabled**, and the
+action stops with *"Dependency review is not supported on this repository"* rather than passing
+quietly, which is the right behaviour and also a red gate. The work is on a held pull request
+until this is thrown, because merging a check that fails for a reason unrelated to the code
+would teach everyone to ignore the gate — the same fault `agile/006` gate 0 was about.
+
+```bash
+# The one that unblocks the scanning already written.
+gh api -X PATCH repos/quiblo-iptv/quiblo-app \
+  -f 'security_and_analysis[dependency_graph][status]=enabled'
+```
+
+Or in the browser: **Settings → Advanced Security → Dependency graph → Enable**.
+
+**Two more switches beside it, both free on a public repository and neither ours to throw:**
+
+```bash
+# Secret scanning, and refusing a push that carries a secret. The keystore passwords and four
+# release secrets make this worth more here than on an average repository.
+gh api -X PATCH repos/quiblo-iptv/quiblo-app \
+  -f 'security_and_analysis[secret_scanning][status]=enabled' \
+  -f 'security_and_analysis[secret_scanning_push_protection][status]=enabled'
+
+# Dependabot opening a pull request when an alert fires, rather than only filing the alert.
+gh api -X PUT repos/quiblo-iptv/quiblo-app/automated-security-fixes
+```
+
+**Carrying on regardless — and this is most of the gate.** Dependency scanning needs no account
+at all, and it is where "vulnerable" usually lives. **It still does not run.** It is written and
+unmerged in draft pull request #15, and that pull request's own CI is red for the switch above
+and for nothing else — re-run on 2026-08-13, against a repository that is now public, it failed
+on the same line. `agile/006` gate 6 says "held", which is the accurate word.
+
+**Confirmed 2026-08-13, so nobody re-diagnoses it:** the organisation has
+`dependency_graph_enabled_for_new_repositories: false`, the repository carries no
+`dependency_graph` key at all, and its graph holds **zero manifests**. Going public did not turn
+it on. Nothing about the pull request is wrong; one switch is off.
 
 ## S9 — `AC-PROF-05` has its build to upgrade from — **cleared 2026-08-11**
 

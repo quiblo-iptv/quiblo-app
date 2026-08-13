@@ -32,6 +32,7 @@ import dev.quiblo.core.data.TitleMetadataScanner
 import dev.quiblo.core.data.backup.BackupRepository
 import dev.quiblo.core.data.backup.ImportResult
 import dev.quiblo.core.model.Appearance
+import dev.quiblo.core.model.AutoNextDelay
 import dev.quiblo.core.model.BufferMode
 import dev.quiblo.core.model.Category
 import dev.quiblo.core.model.MaxBitrateCap
@@ -223,6 +224,10 @@ class SettingsViewModel(
 
     fun setMaxBitrate(value: MaxBitrateCap) = viewModelScope.launch {
         playerSettingsRepository.setMaxBitrate(value)
+    }
+
+    fun setAutoNextDelay(value: AutoNextDelay) = viewModelScope.launch {
+        playerSettingsRepository.setAutoNextDelay(value)
     }
 
     val appearance: StateFlow<Appearance> = playerSettingsRepository.appearance

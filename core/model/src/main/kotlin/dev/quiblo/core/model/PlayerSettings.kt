@@ -34,6 +34,7 @@ data class PlayerSettings(
     val seekInterval: SeekInterval = SeekInterval.TEN,
     val bufferMode: BufferMode = BufferMode.BALANCED,
     val maxBitrate: MaxBitrateCap = MaxBitrateCap.UNLIMITED,
+    val autoNextDelay: AutoNextDelay = AutoNextDelay.FIVE,
 )
 
 /** How far the skip buttons jump (AC-PLAY-04). */
@@ -49,6 +50,28 @@ enum class SeekInterval(val seconds: Int) {
     private companion object {
         const val MILLIS_PER_SECOND = 1_000L
     }
+}
+
+/**
+ * How long an episode's last frame is held before the next one starts.
+ *
+ * [OFF] is a value rather than a separate switch, because "do not do this" and "do it after
+ * ten seconds" are the same question asked once. The banner still appears when it is off —
+ * what is offered is the next episode, and only the counting stops.
+ *
+ * The delays are short on purpose. This runs while the credits are on screen and a viewer who
+ * wants to read them presses Stop; one who does not is waiting, and thirty seconds of waiting
+ * is the fault this feature exists to remove.
+ */
+enum class AutoNextDelay(val seconds: Int) {
+    OFF(0),
+    THREE(3),
+    FIVE(5),
+    TEN(10),
+    FIFTEEN(15),
+    ;
+
+    val isAutomatic: Boolean get() = this != OFF
 }
 
 /**

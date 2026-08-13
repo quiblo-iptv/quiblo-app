@@ -20,6 +20,7 @@ package dev.quiblo.core.data
 
 import dev.quiblo.core.datastore.PlayerSettingsStore
 import dev.quiblo.core.model.Appearance
+import dev.quiblo.core.model.AutoNextDelay
 import dev.quiblo.core.model.BufferMode
 import dev.quiblo.core.model.MaxBitrateCap
 import dev.quiblo.core.model.PlayerSettings
@@ -45,6 +46,8 @@ class PlayerSettingsRepository(private val store: PlayerSettingsStore) {
     suspend fun setBufferMode(value: BufferMode) = store.setBufferMode(value)
 
     suspend fun setMaxBitrate(value: MaxBitrateCap) = store.setMaxBitrate(value)
+
+    suspend fun setAutoNextDelay(value: AutoNextDelay) = store.setAutoNextDelay(value)
 
     val appearance: Flow<Appearance> = store.appearance
 

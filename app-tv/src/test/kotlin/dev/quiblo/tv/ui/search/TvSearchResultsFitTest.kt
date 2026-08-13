@@ -193,6 +193,9 @@ class TvSearchResultsFitTest {
             Column(modifier = Modifier.fillMaxWidth()) {
                 SearchHeader(
                     state = state,
+                    // The harness is the working shape, where the centring gap is zero and
+                    // this value is unused. It still has to be a real height.
+                    contentHeight = PANEL_HEIGHT,
                     isResting = false,
                     isAdvanced = isAdvanced,
                     onQueryChange = {},

@@ -69,6 +69,7 @@ import dev.quiblo.feature.browse.RatingBadge
 import dev.quiblo.feature.browse.di.browseParams
 import dev.quiblo.feature.browse.labelRes
 import dev.quiblo.tv.R
+import dev.quiblo.tv.ui.common.LocalAmbientSink
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -369,6 +370,15 @@ internal fun TvPoster(
         ?: fallbackArtworkUrl?.takeIf { it.isNotBlank() }
     val interactionSource = remember { MutableInteractionSource() }
     val isFocused by interactionSource.collectIsFocusedAsState()
+
+    // Tells the shell which picture to take its background light from. One line, and it reports
+    // rather than reads — nothing about this tile changes because of it, which is the point:
+    // the scroll behaviour of these rows was expensive to get right and is measured by
+    // `TvBrowseScrollStabilityTest`. See `LocalAmbientSink`.
+    val ambientSink = LocalAmbientSink.current
+    LaunchedEffect(isFocused, artworkUrl) {
+        if (isFocused) ambientSink(artworkUrl)
+    }
 
     val scale by animateFloatAsState(
         targetValue = if (isFocused) FOCUSED_SCALE else 1f,

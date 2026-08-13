@@ -15,6 +15,19 @@ Formatted after [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and ve
 
 ## Unreleased
 
+### Added
+
+- **The television is not black any more.** Whatever has focus lights the screen behind it — the
+  poster you are looking at tints the corners of the catalogue, and in the player the picture
+  lights its own letterbox bars, so a film in 2.35:1 or a channel in 4:3 sits in a room rather
+  than in a void. It is light added to the black, never a replacement for it: artwork with no
+  usable colour in it leaves the screen exactly as it was.
+- **Search shows the app's own mark above the name**, and **Advanced now sits beside the field**
+  as well as under it — press right from the search box to reach it.
+- **The search field has a slow travelling highlight** while the remote is somewhere else. It
+  stops the moment the field takes focus, because the focus ring is the one moving thing on a
+  television that must never be competed with.
+
 ## 0.13.1
 
 ### Fixed

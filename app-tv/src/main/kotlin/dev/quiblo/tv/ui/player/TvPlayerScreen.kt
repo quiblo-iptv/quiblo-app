@@ -18,6 +18,10 @@
 
 package dev.quiblo.tv.ui.player
 
+import android.graphics.Bitmap
+import android.os.Handler
+import android.os.Looper
+import android.view.PixelCopy
 import android.view.SurfaceView
 import android.view.WindowManager
 import androidx.activity.compose.BackHandler
@@ -91,9 +95,15 @@ import dev.quiblo.feature.player.subtitleActionHandler
 import dev.quiblo.feature.player.subtitleNoticeText
 import dev.quiblo.feature.player.trackMenu
 import dev.quiblo.tv.R
+import dev.quiblo.tv.ui.common.AmbientColours
+import dev.quiblo.tv.ui.common.ambientBackdrop
+import dev.quiblo.tv.ui.common.ambientFrom
 import dev.quiblo.tv.ui.detail.DetailButton
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.suspendCancellableCoroutine
 import org.koin.androidx.compose.koinViewModel
+import kotlin.coroutines.resume
 import dev.quiblo.feature.player.R as PlayerR
 
 /**
@@ -784,7 +794,29 @@ private fun VideoSurface(
 ) {
     val controller = remember { viewModel.controllerHandle() }
 
-    BoxWithConstraints(modifier = Modifier.fillMaxSize().clipToBounds()) {
+    /*
+     * Ambient light from the picture itself.
+     *
+     * A film is 2.35:1 and a panel is 16:9, so a film plays inside two black bars for its whole
+     * length — and a channel that broadcasts in 4:3 plays inside two more. Those bars are the
+     * screen, and they were dead black. This lights them with the colours of the frame between
+     * them, which is what YouTube's ambient mode does and for the same reason: the bars stop
+     * being the edge of a small picture and start being the room the picture is in.
+     *
+     * It is drawn *behind* the surface, and it works because the surface is scaled by a graphics
+     * layer rather than letterboxed inside itself — the view genuinely occupies less of the box
+     * than the box has, so what is painted underneath shows around it. Where the video fills the
+     * screen exactly there are no bars, nothing shows, and none of this costs anything.
+     */
+    var ambient by remember { mutableStateOf(AmbientColours.None) }
+    var surface by remember { mutableStateOf<SurfaceView?>(null) }
+
+    BoxWithConstraints(
+        modifier = Modifier
+            .fillMaxSize()
+            .clipToBounds()
+            .ambientBackdrop(ambient),
+    ) {
         val scale = remember(videoAspectRatio, mode, maxWidth, maxHeight) {
             videoScale(
                 videoAspectRatio = videoAspectRatio,
@@ -800,8 +832,37 @@ private fun VideoSurface(
                     scaleX = scale.first
                     scaleY = scale.second
                 },
-            factory = { context -> SurfaceView(context).also(controller::attachSurface) },
+            factory = { context ->
+                SurfaceView(context).also {
+                    controller.attachSurface(it)
+                    surface = it
+                }
+            },
         )
+
+        /*
+         * One frame a second and a half, at 32x18.
+         *
+         * Both numbers are the point. A frame that small costs nothing to copy and nothing to
+         * read, and it is already the blur — sampling six colours out of thirty-two pixels
+         * cannot pick up a detail, only a cast. And a second and a half is far slower than the
+         * picture changes, which is what makes the light drift with a scene rather than flicker
+         * with a cut.
+         *
+         * Stopped whenever there is no first frame, so nothing is sampled off a dead surface.
+         */
+        LaunchedEffect(hasRenderedFirstFrame, surface) {
+            val view = surface ?: return@LaunchedEffect
+            if (!hasRenderedFirstFrame) {
+                ambient = AmbientColours.None
+                return@LaunchedEffect
+            }
+
+            while (isActive) {
+                ambient = sampleAmbient(view) ?: ambient
+                delay(AMBIENT_SAMPLE_MILLIS)
+            }
+        }
 
         /*
          * The shutter (#013).
@@ -961,6 +1022,42 @@ private fun ZapNotice(name: String) {
         )
     }
 }
+
+/**
+ * One frame off the video surface, as colours, or null if it could not be read.
+ *
+ * `PixelCopy` is the only way to read a `SurfaceView` — its content is a separate layer that
+ * the view hierarchy never draws, so every ordinary capture route returns an empty rectangle.
+ * It is also allowed to fail for perfectly normal reasons: the surface is gone, the stream is
+ * between items, the decoder is secure. **Every one of those returns null and keeps the light
+ * that is already on screen**, because the alternative is the room going dark at a cut.
+ */
+private suspend fun sampleAmbient(view: SurfaceView): AmbientColours? =
+    suspendCancellableCoroutine { continuation ->
+        if (!view.holder.surface.isValid) {
+            continuation.resume(null)
+            return@suspendCancellableCoroutine
+        }
+
+        val frame = Bitmap.createBitmap(AMBIENT_WIDTH, AMBIENT_HEIGHT, Bitmap.Config.ARGB_8888)
+        runCatching {
+            PixelCopy.request(view, frame, { result ->
+                val colours = if (result == PixelCopy.SUCCESS) ambientFrom(frame) else null
+                frame.recycle()
+                if (continuation.isActive) continuation.resume(colours)
+            }, Handler(Looper.getMainLooper()))
+        }.onFailure {
+            frame.recycle()
+            if (continuation.isActive) continuation.resume(null)
+        }
+    }
+
+/** Small enough to be free, and small enough to be the blur. See the caller. */
+private const val AMBIENT_WIDTH = 32
+private const val AMBIENT_HEIGHT = 18
+
+/** Far slower than the picture changes, so the light drifts with a scene rather than a cut. */
+private const val AMBIENT_SAMPLE_MILLIS = 1_500L
 
 /**
  * Longer than it was, because the controls are now something a viewer navigates rather than

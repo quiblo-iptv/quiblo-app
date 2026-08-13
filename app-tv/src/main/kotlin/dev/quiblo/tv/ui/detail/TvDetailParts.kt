@@ -51,6 +51,7 @@ import androidx.compose.ui.unit.sp
 import coil3.compose.SubcomposeAsyncImage
 import dev.quiblo.core.model.TitleMetadata
 import dev.quiblo.designsystem.AutoDirection
+import dev.quiblo.tv.ui.common.travellingGlow
 
 /**
  * The parts a film and a series detail screen both need.
@@ -206,6 +207,14 @@ fun DetailButton(
                 shape = RoundedCornerShape(10.dp),
             )
             .clickable(interactionSource = interactionSource, indication = null, onClick = onClick)
+            // Only on the primary action, only while the remote is elsewhere, and at a third of
+            // the search field's brightness. It says "this is the one" to somebody scanning the
+            // screen; it must not compete with the focus ring or with the form above it.
+            .travellingGlow(
+                isActive = isPrimary && !isFocused,
+                cornerRadius = 10.dp,
+                intensity = PRIMARY_GLOW,
+            )
             .padding(horizontal = 18.dp, vertical = 9.dp),
         contentAlignment = Alignment.Center,
     ) {
@@ -277,3 +286,6 @@ private const val POSTER_ASPECT_RATIO = 2f / 3f
 
 /** Three lines beside a 240dp cover, so the plot never pushes the actions off screen. */
 private const val OVERVIEW_MAX_LINES = 3
+
+/** A third of the search field's, which is the brightest thing this modifier is used at. */
+private const val PRIMARY_GLOW = 0.34f

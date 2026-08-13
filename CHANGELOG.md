@@ -15,6 +15,25 @@ Formatted after [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and ve
 
 ## Unreleased
 
+### Changed
+
+- **The television's text boxes are plain boxes now.** They were Material's outlined fields,
+  whose label floats up out of the box and leaves a strip of empty space above it — which is
+  where the search field's highlight was being drawn. The box is the box; the label sits inside
+  it and the typed text replaces it.
+- **The mark and the name on the search screen are bigger**, and sized against a television
+  rather than a laptop.
+- **Important buttons carry the same highlight, at a third of the brightness.** Play, Resume,
+  Save and Try again say "this is the one" without competing with wherever the remote is.
+
+### Fixed
+
+- **The background light keeps up with the remote now.** It was fetching each poster again from
+  the provider rather than reusing the one already on screen, so the colours arrived seconds
+  after the tile did. Every poster's colours are worked out once and kept, and nothing starts
+  until focus settles — so walking back along a row is instant and flying through one costs
+  nothing at all.
+
 ### Fixed
 
 - **Search only offers Advanced once now.** It was on screen twice — beside the field and again

@@ -66,6 +66,15 @@ fun Modifier.travellingGlow(
     cornerRadius: Dp,
     colour: Color = Color.White,
     width: Dp = 3.dp,
+    /**
+     * How bright the arc is, against the search field's own.
+     *
+     * Below one for anything that is not the screen's main event. The search field is the only
+     * thing on its screen, so it can carry a full-strength light; a Save button sits beside a
+     * form somebody is reading, and the same brightness there would pull the eye off the field
+     * they are still filling in. It is the difference between a hint and a distraction.
+     */
+    intensity: Float = 1f,
 ): Modifier = composed {
     val transition = rememberInfiniteTransition(label = "glow")
     val angle by transition.animateFloat(
@@ -105,7 +114,7 @@ fun Modifier.travellingGlow(
                 colors = listOf(
                     colour.copy(alpha = 0f),
                     colour.copy(alpha = 0f),
-                    colour.copy(alpha = alpha),
+                    colour.copy(alpha = alpha * intensity),
                     colour.copy(alpha = 0f),
                     colour.copy(alpha = 0f),
                 ),

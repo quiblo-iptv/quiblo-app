@@ -33,6 +33,7 @@ Formatted after [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and ve
   after the tile did. Every poster's colours are worked out once and kept, and nothing starts
   until focus settles — so walking back along a row is instant and flying through one costs
   nothing at all.
+## 0.14.1
 
 ### Fixed
 

@@ -15,6 +15,14 @@ Formatted after [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and ve
 
 ## Unreleased
 
+### Fixed
+
+- **The next-episode banner no longer flickers back on after starting the next episode.** Pressing
+  next, or letting the countdown run out, replaced the episode straight away while the player was
+  still reporting the previous one as finished — so for the moment in between, the banner slid
+  back in offering the episode that had just started. It never got far enough to do anything; it
+  looked wrong, and it happened between every pair of episodes of a series watched through.
+
 ## 0.13.0
 
 ### Added

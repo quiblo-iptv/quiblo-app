@@ -17,10 +17,10 @@ Formatted after [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and ve
 
 ### Fixed
 
-- **The search screen sits in the middle of the screen.** It was a fixed gap under the tab bar,
-  which is not centring — it put the block wherever that number happened to land, and every
-  change to the mark or the name moved it again. The block measures itself now, so it stays in
-  the middle whatever goes in it.
+- **The search screen is centred, on any panel.** It was a fixed gap under the tab bar, then a
+  sum worked out from the window's height — the first moved every time the mark or the name was
+  resized, the second was right on one screen and wrong on others. Both the area and the block
+  are measured now, so there is no number left in it to be wrong.
 - **The mark is the size it says it is.** It was drawn from the launcher icon, which keeps its
   outer third as margin for a launcher to crop, so a large logo came out filling about sixty per
   cent of its space. It fills the space now, and the name under it is smaller than it is.

@@ -22,6 +22,7 @@ import android.content.Context
 import android.net.Uri
 import dev.quiblo.source.api.ContentFetcher
 import dev.quiblo.source.api.FetchResult
+import dev.quiblo.source.api.FetchedBody
 import dev.quiblo.source.api.SourceError
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
@@ -44,19 +45,25 @@ class LocalFileContentFetcher(
         return normalized.startsWith("content://") || normalized.startsWith("file://")
     }
 
+    /**
+     * Streams the document into [read] rather than reading it whole.
+     *
+     * A picked playlist is the same size as a downloaded one, and the previous
+     * `readBytes().toString(UTF_8)` held it twice over — once as bytes and once as a UTF-16
+     * `String` — before the parser saw a single line of it.
+     */
     @Suppress("TooGenericExceptionCaught")
-    override suspend fun fetch(location: String): FetchResult = withContext(ioDispatcher) {
+    override suspend fun <T> fetch(
+        location: String,
+        read: suspend (FetchedBody) -> T,
+    ): FetchResult<T> = withContext(ioDispatcher) {
         try {
             val uri = Uri.parse(location.trim())
-            val body = context.contentResolver.openInputStream(uri)?.use { stream ->
-                stream.readBytes().toString(Charsets.UTF_8)
-            }
-
-            if (body == null) {
-                FetchResult.Failure(SourceError.FileUnreadable)
-            } else {
-                FetchResult.Success(body = body, contentType = context.contentResolver.getType(uri))
-            }
+            context.contentResolver.openInputStream(uri)?.use { stream ->
+                FetchResult.Success(
+                    read(FetchedBody(contentType = context.contentResolver.getType(uri), stream = stream)),
+                )
+            } ?: FetchResult.Failure(SourceError.FileUnreadable)
         } catch (_: SecurityException) {
             // The persisted permission was revoked, or the picker grant expired.
             FetchResult.Failure(SourceError.FileUnreadable)

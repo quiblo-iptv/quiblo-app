@@ -21,15 +21,18 @@ package dev.quiblo.source.m3u
 import dev.quiblo.core.model.SourceKind
 import dev.quiblo.source.api.ContentFetcher
 import dev.quiblo.source.api.FetchResult
+import dev.quiblo.source.api.FetchedBody
 import dev.quiblo.source.api.SourceError
 import dev.quiblo.source.api.SourceRequest
 import dev.quiblo.source.api.SourceResult
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertInstanceOf
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
+import java.io.ByteArrayInputStream
 
 class M3uSourceTest {
 
@@ -38,16 +41,39 @@ class M3uSourceTest {
             it.readBytes().toString(Charsets.UTF_8)
         }
 
-    /** A fetcher that returns whatever the test tells it to, for any location. */
-    private class FakeFetcher(private val result: FetchResult) : ContentFetcher {
+    /** A fetcher that serves the given text, as a stream, for any location. */
+    private class FakeFetcher(
+        private val body: String?,
+        private val contentType: String?,
+        private val error: SourceError?,
+    ) : ContentFetcher {
         override fun handles(location: String): Boolean = true
-        override suspend fun fetch(location: String): FetchResult = result
+
+        override suspend fun <T> fetch(location: String, read: suspend (FetchedBody) -> T): FetchResult<T> =
+            if (error != null) {
+                FetchResult.Failure(error)
+            } else {
+                FetchResult.Success(
+                    read(
+                        FetchedBody(
+                            contentType = contentType,
+                            stream = ByteArrayInputStream(body.orEmpty().toByteArray()),
+                        ),
+                    ),
+                )
+            }
     }
 
-    private fun sourceReturning(result: FetchResult) = M3uSource(listOf(FakeFetcher(result)))
+    private fun sourceFailing(error: SourceError) = M3uSource(
+        fetchers = listOf(FakeFetcher(body = null, contentType = null, error = error)),
+        parseDispatcher = Dispatchers.Unconfined,
+    )
 
-    private fun sourceServing(body: String, contentType: String? = null) =
-        sourceReturning(FetchResult.Success(body, contentType))
+    private fun sourceServing(body: String, contentType: String? = null) = M3uSource(
+        fetchers = listOf(FakeFetcher(body = body, contentType = contentType, error = null)),
+        // One thread, so the test scheduler is the only thing sequencing anything.
+        parseDispatcher = Dispatchers.Unconfined,
+    )
 
     private val request = SourceRequest(sourceId = 3L, location = "http://playlist.example.invalid/list.m3u")
 
@@ -136,7 +162,7 @@ class M3uSourceTest {
         )
 
         errors.forEach { error ->
-            val result = sourceReturning(FetchResult.Failure(error)).load(request)
+            val result = sourceFailing(error).load(request)
             val failure = assertInstanceOf(SourceResult.Failure::class.java, result)
             assertEquals(error, failure.error)
         }

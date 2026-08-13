@@ -68,12 +68,56 @@ class EncryptedCredentialStore(
 
     private val appContext = context.applicationContext
 
-    private val preferences: SharedPreferences by lazy {
+    @Volatile
+    private var cached: SharedPreferences? = null
+
+    /**
+     * The store, opening it if this is the first call, and recovering once if it will not open.
+     *
+     * **Opening can fail, and it used to fail all the way out of here.** The master key lives in
+     * the Android Keystore, and a keystore entry can be invalidated by things that have nothing
+     * to do with this app: a device restored from backup onto different hardware, a lock screen
+     * added or removed, a vendor upgrade that rotates the keystore. When that happens
+     * `EncryptedSharedPreferences.create` throws, the exception came out of [credentials], and
+     * the source failed in a way indistinguishable from the provider rejecting the account —
+     * so the user was told their password was wrong when the truth was that we could no longer
+     * read it.
+     *
+     * The recovery is to delete the file and start again. That does lose the stored credentials,
+     * but they were already unreadable; what it buys is that the app asks for them instead of
+     * insisting the provider is refusing. This is the deprecated library's failure mode, and the
+     * note below is why the library is still here — which makes having a way out of it more
+     * important, not less, since no upstream fix is coming.
+     *
+     * @return the store, or null when even a fresh one cannot be opened.
+     */
+    @Suppress("TooGenericExceptionCaught")
+    private fun preferences(): SharedPreferences? {
+        cached?.let { return it }
+
+        return synchronized(this) {
+            cached ?: run {
+                val opened = try {
+                    open()
+                } catch (_: Exception) {
+                    discardStore()
+                    try {
+                        open()
+                    } catch (_: Exception) {
+                        null
+                    }
+                }
+                opened?.also { cached = it }
+            }
+        }
+    }
+
+    private fun open(): SharedPreferences {
         val masterKey = MasterKey.Builder(appContext)
             .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
             .build()
 
-        EncryptedSharedPreferences.create(
+        return EncryptedSharedPreferences.create(
             appContext,
             FILE_NAME,
             masterKey,
@@ -82,9 +126,20 @@ class EncryptedCredentialStore(
         )
     }
 
+    /** Removes the unreadable file so the next open starts from nothing rather than from rubble. */
+    @Suppress("TooGenericExceptionCaught", "SwallowedException")
+    private fun discardStore() {
+        try {
+            appContext.deleteSharedPreferences(FILE_NAME)
+        } catch (_: Exception) {
+            // Nothing further to try, and the caller's fallback is already "no credentials".
+        }
+    }
+
     override suspend fun credentials(sourceId: Long): Credentials? = withContext(ioDispatcher) {
-        val username = preferences.getString(usernameKey(sourceId), null)
-        val password = preferences.getString(passwordKey(sourceId), null)
+        val store = preferences() ?: return@withContext null
+        val username = store.getString(usernameKey(sourceId), null)
+        val password = store.getString(passwordKey(sourceId), null)
         if (username.isNullOrEmpty() || password.isNullOrEmpty()) {
             null
         } else {
@@ -93,17 +148,21 @@ class EncryptedCredentialStore(
     }
 
     override suspend fun put(sourceId: Long, credentials: Credentials) = withContext(ioDispatcher) {
-        preferences.edit()
-            .putString(usernameKey(sourceId), credentials.username)
-            .putString(passwordKey(sourceId), credentials.password)
-            .apply()
+        preferences()
+            ?.edit()
+            ?.putString(usernameKey(sourceId), credentials.username)
+            ?.putString(passwordKey(sourceId), credentials.password)
+            ?.apply()
+        Unit
     }
 
     override suspend fun clear(sourceId: Long) = withContext(ioDispatcher) {
-        preferences.edit()
-            .remove(usernameKey(sourceId))
-            .remove(passwordKey(sourceId))
-            .apply()
+        preferences()
+            ?.edit()
+            ?.remove(usernameKey(sourceId))
+            ?.remove(passwordKey(sourceId))
+            ?.apply()
+        Unit
     }
 
     private fun usernameKey(sourceId: Long) = "source.$sourceId.username"

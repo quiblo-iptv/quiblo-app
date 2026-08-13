@@ -22,6 +22,17 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
+private const val NANOS_PER_MILLI = 1_000_000L
+
+/**
+ * Elapsed milliseconds from a monotonic source.
+ *
+ * The origin is arbitrary and meaningless; only the difference between two readings is ever
+ * used, which is all a token bucket needs. `nanoTime` rather than `SystemClock.elapsedRealtime`
+ * so this module stays a plain JVM library with no Android dependency.
+ */
+internal fun monotonicMillis(): Long = System.nanoTime() / NANOS_PER_MILLI
+
 /**
  * How fast this app is willing to talk to TMDB, at all, for any reason.
  *
@@ -36,13 +47,18 @@ import kotlinx.coroutines.sync.withLock
  * they came from.
  */
 internal class TmdbRateLimiter(
-    private val now: () -> Long = System::currentTimeMillis,
+    /**
+     * A **monotonic** millisecond clock, for the reason `PanelRateLimiter` sets out at length:
+     * the wall clock can move backwards, and when it does a bucket measured against it stops
+     * refilling while its debt keeps growing.
+     */
+    private val now: () -> Long = ::monotonicMillis,
     private val pause: suspend (Long) -> Unit = { delay(it) },
 ) {
 
     private val mutex = Mutex()
     private var tokens: Double = BURST_CAPACITY.toDouble()
-    private var lastRefillEpochMillis: Long = now()
+    private var lastRefillMillis: Long = now()
 
     /**
      * Suspends until this request is within budget.
@@ -80,10 +96,10 @@ internal class TmdbRateLimiter(
 
     private fun refill() {
         val timestamp = now()
-        val elapsed = timestamp - lastRefillEpochMillis
+        val elapsed = timestamp - lastRefillMillis
         if (elapsed > 0) {
             tokens = (tokens + elapsed / MILLIS_PER_TOKEN).coerceAtMost(BURST_CAPACITY.toDouble())
-            lastRefillEpochMillis = timestamp
+            lastRefillMillis = timestamp
         }
     }
 

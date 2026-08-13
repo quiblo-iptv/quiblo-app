@@ -24,6 +24,7 @@ import dev.quiblo.core.database.dao.ChannelDao
 import dev.quiblo.core.database.dao.ChannelTitle
 import dev.quiblo.core.database.dao.TitleGenreRow
 import dev.quiblo.core.database.dao.TitleMetadataDao
+import dev.quiblo.core.database.dao.escapeForLike
 import dev.quiblo.core.model.Channel
 import dev.quiblo.core.model.MediaKind
 import dev.quiblo.source.tmdb.TitleIdentity
@@ -185,7 +186,8 @@ class SearchRepository(
 
     private suspend fun matches(sourceId: Long, kind: MediaKind, term: String, limit: Int): List<Channel> {
         if (term.isBlank()) return emptyList()
-        return channelDao.search(profiles.activeProfileId, sourceId, kind.name, term, limit)
+        // Escaped so % and _ are searched for rather than acted on. See escapeForLike.
+        return channelDao.search(profiles.activeProfileId, sourceId, kind.name, escapeForLike(term), limit)
             .map { it.channel.toDomain(isFavorite = it.isFavorite) }
     }
 

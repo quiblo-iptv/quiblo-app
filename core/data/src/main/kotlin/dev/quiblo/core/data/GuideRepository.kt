@@ -29,7 +29,11 @@ import dev.quiblo.source.api.GuideSource
 import dev.quiblo.source.api.MediaSource
 import dev.quiblo.source.api.SourceError
 import dev.quiblo.source.api.SourceRequest
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
 
 /**
@@ -42,22 +46,53 @@ import kotlinx.coroutines.flow.map
  * Because everything is read from the cache rather than the network, the guide keeps
  * rendering with no connection at all (AC-EPG-05).
  */
+@OptIn(ExperimentalCoroutinesApi::class)
 class GuideRepository(
     private val programmeDao: ProgrammeDao,
     private val sourceDao: SourceDao,
     private val mediaSources: Map<SourceKind, MediaSource>,
     private val now: () -> Long = System::currentTimeMillis,
+    /**
+     * How often "now" is re-asked.
+     *
+     * Injected so a test can prove the query re-runs without waiting a real minute.
+     */
+    private val nowTickMillis: Long = NOW_TICK_MILLIS,
 ) {
+
+    /**
+     * A clock, as a flow.
+     *
+     * **The timestamp has to be re-read, and this is why.** Both "on now" queries take the
+     * current time as a *bind parameter*, so whatever value is passed is fixed for the life of
+     * the query. Room only re-emits when the `programmes` table is written, and when it does it
+     * re-runs with the same bound timestamp — so a list left open showed whatever was airing at
+     * the moment it was opened, indefinitely, while looking entirely correct.
+     *
+     * A minute is the resolution the screens actually need: a programme boundary is only ever
+     * accurate to the minute the panel reported, and re-querying faster would re-map every row
+     * for a change nobody can see.
+     */
+    private fun nowTicks(): Flow<Long> = flow {
+        while (true) {
+            emit(now())
+            delay(nowTickMillis)
+        }
+    }
 
     /** Now and next for one channel, straight from the cache. */
     fun observeNowNext(sourceId: Long, channelKey: String): Flow<List<Programme>> =
-        programmeDao.observeNowNext(sourceId, channelKey, now())
-            .map { rows -> rows.map { it.toDomain() } }
+        nowTicks().flatMapLatest { instant ->
+            programmeDao.observeNowNext(sourceId, channelKey, instant)
+                .map { rows -> rows.map { it.toDomain() } }
+        }
 
     /** Whatever is airing right now across a source, keyed by channel (AC-EPG-01). */
     fun observeNowPlaying(sourceId: Long): Flow<Map<String, Programme>> =
-        programmeDao.observeNowPlaying(sourceId, now())
-            .map { rows -> rows.associate { it.channelKey to it.toDomain() } }
+        nowTicks().flatMapLatest { instant ->
+            programmeDao.observeNowPlaying(sourceId, instant)
+                .map { rows -> rows.associate { it.channelKey to it.toDomain() } }
+        }
 
     /**
      * One channel's listing across a window, straight from the cache (INC-F4).
@@ -166,6 +201,13 @@ class GuideRepository(
     private var blockedUntilEpochMillis: Long = 0L
 
     private companion object {
+        /**
+         * How often the "on now" queries re-ask what the time is.
+         *
+         * A minute, because that is the resolution a programme boundary has in the first place.
+         */
+        const val NOW_TICK_MILLIS = 60L * 1000L
+
         const val RETENTION_MILLIS = 24L * 60L * 60L * 1000L
 
         /** Long enough for a panel's flood window to clear, short enough to self-heal. */

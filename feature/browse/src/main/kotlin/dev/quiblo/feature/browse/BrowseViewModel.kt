@@ -47,10 +47,10 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
-import java.util.concurrent.ConcurrentHashMap
 
 /** What a browse screen renders. */
 data class BrowseUiState(
@@ -99,6 +99,46 @@ data class BrowseUiState(
 )
 
 /**
+ * "Have we already asked about this one?", for a catalogue too big to remember all of.
+ *
+ * The four prefetch guards were unbounded sets that only ever grew: scroll a 67,000-item
+ * catalogue and every one of those stable keys is retained for the life of the ViewModel, to
+ * answer a question about rows that left the screen an hour ago.
+ *
+ * A bounded, insertion-ordered set instead. Forgetting the oldest entry costs at worst one
+ * repeated request for a row scrolled back to after thousands of others — and every one of these
+ * call paths is already idempotent and cached a layer below, which is why forgetting is safe here
+ * and would not be somewhere else. The capacity is several screenfuls in every direction.
+ *
+ * Synchronised rather than concurrent: `LinkedHashMap` in access order has no lock-free
+ * equivalent, and the critical section is a single map operation on the main thread.
+ */
+internal class RecentKeys(private val capacity: Int = DEFAULT_CAPACITY) {
+
+    private val seen = object : LinkedHashMap<String, Unit>(INITIAL_CAPACITY, LOAD_FACTOR, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Unit>): Boolean =
+            size > capacity
+    }
+
+    /** @return true when [key] had not been seen, which is the caller's cue to go and ask. */
+    fun add(key: String): Boolean = synchronized(seen) { seen.put(key, Unit) == null }
+
+    /** Forgets [key], so the next sighting asks again. */
+    fun remove(key: String) {
+        synchronized(seen) { seen.remove(key) }
+    }
+
+    private companion object {
+        /**
+         * Several screenfuls in each direction on the largest layout, which is a television grid.
+         */
+        const val DEFAULT_CAPACITY = 512
+        const val INITIAL_CAPACITY = 64
+        const val LOAD_FACTOR = 0.75f
+    }
+}
+
+/**
  * Which feed a browse screen is showing.
  *
  * The two travel together everywhere — a screen is Movies, or it is Favourites — so they
@@ -131,6 +171,8 @@ class BrowseViewModel(
     private val metadataRepository: TitleMetadataRepository,
     private val historyRepository: WatchHistoryRepository,
     private val channelLogoRepository: ChannelLogoRepository,
+    /** Injected like every repository's, rather than read off the wall clock inline. */
+    private val now: () -> Long = System::currentTimeMillis,
 ) : ViewModel() {
 
     /**
@@ -139,7 +181,7 @@ class BrowseViewModel(
      * Rows are re-composed constantly while scrolling; without this the same channel
      * would be fetched dozens of times.
      */
-    private val guideRequested = ConcurrentHashMap.newKeySet<String>()
+    private val guideRequested = RecentKeys()
 
     /** Caps concurrent guide requests so scrolling cannot stampede a panel. */
     private val guideLimiter = Semaphore(MAX_CONCURRENT_GUIDE_FETCHES)
@@ -150,14 +192,14 @@ class BrowseViewModel(
      * Kept apart from [guideRequested]: a channel whose now/next is already cached still has
      * a day of listings nobody has fetched, so one set cannot answer both questions.
      */
-    private val fullGuideRequested = ConcurrentHashMap.newKeySet<String>()
+    private val fullGuideRequested = RecentKeys()
 
     /** The same two guards for the metadata service, which rate-limits per key. */
-    private val ratingRequested = ConcurrentHashMap.newKeySet<String>()
+    private val ratingRequested = RecentKeys()
     private val ratingLimiter = Semaphore(MAX_CONCURRENT_RATING_FETCHES)
 
     /** The same guard again, for the channel logo index. */
-    private val logoRequested = ConcurrentHashMap.newKeySet<String>()
+    private val logoRequested = RecentKeys()
 
     private val ratings = MutableStateFlow<Map<String, Double>>(emptyMap())
     private val posters = MutableStateFlow<Map<String, String>>(emptyMap())
@@ -365,7 +407,7 @@ class BrowseViewModel(
                 logoRequested.remove(channel.stableKey)
                 return@launch
             }
-            posters.value = posters.value + (channel.stableKey to logo)
+            posters.update { it + (channel.stableKey to logo) }
         }
     }
 
@@ -403,9 +445,12 @@ class BrowseViewModel(
                     return@withPermit
                 }
                 val preview = metadataRepository.previewFor(title, kind) ?: return@withPermit
-                preview.rating?.let { ratings.value = ratings.value + (key to it) }
-                preview.posterUrl?.takeIf { it.isNotBlank() }?.let {
-                    posters.value = posters.value + (key to it)
+                // update {} rather than `value = value + x`, which is a read-modify-write with
+                // four of these in flight. It is safe today only because viewModelScope resumes
+                // on Main.immediate — not a property this code should be depending on.
+                preview.rating?.let { rating -> ratings.update { it + (key to rating) } }
+                preview.posterUrl?.takeIf { it.isNotBlank() }?.let { url ->
+                    posters.update { it + (key to url) }
                 }
             }
         }
@@ -421,7 +466,7 @@ class BrowseViewModel(
      * [requestFullGuide] answers. With no connection it draws the cache and nothing waits.
      */
     fun scheduleFor(channel: Channel): Flow<List<Programme>> {
-        val window = guideWindow(System.currentTimeMillis())
+        val window = guideWindow(now())
         return guideRepository.observeSchedule(
             sourceId = channel.sourceId,
             channelKey = channel.stableKey,

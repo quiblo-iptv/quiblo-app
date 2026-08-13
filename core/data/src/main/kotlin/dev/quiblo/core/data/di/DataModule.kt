@@ -111,7 +111,7 @@ val dataModule: Module = module {
     // outlive the screen that started it, and an hour of lookups outlives several.
     single { TitleMetadataScanner(channelDao = get(), metadataRepository = get()) }
     single { GuideRepository(get(), get(), get()) }
-    single { BackupRepository(get(), get(), get()) }
+    single { BackupRepository(get(), get(), get(), transactions = get()) }
     single { PlayerSettingsRepository(get()) }
     single { SubtitleRepository(dao = get(), files = AndroidPickedSubtitleFiles(get<Context>())) }
     single { TmdbClient(get<HttpClient>()) }

@@ -20,14 +20,18 @@ package dev.quiblo.core.network
 
 import dev.quiblo.source.api.ContentFetcher
 import dev.quiblo.source.api.FetchResult
+import dev.quiblo.source.api.FetchedBody
 import dev.quiblo.source.api.SourceError
 import io.ktor.client.HttpClient
 import io.ktor.client.plugins.HttpRequestTimeoutException
-import io.ktor.client.request.get
-import io.ktor.client.statement.bodyAsText
+import io.ktor.client.request.prepareGet
+import io.ktor.client.statement.bodyAsChannel
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
+import io.ktor.http.charset
+import io.ktor.http.contentType
 import io.ktor.http.isSuccess
+import io.ktor.utils.io.jvm.javaio.toInputStream
 import java.io.IOException
 import java.net.SocketTimeoutException
 import java.net.UnknownHostException
@@ -53,25 +57,41 @@ class HttpContentFetcher(
         return normalized.startsWith("http://") || normalized.startsWith("https://")
     }
 
+    /**
+     * Streams the response body into [read] rather than buffering it into a `String`.
+     *
+     * `prepareGet(...).execute { }` is what makes that possible: the response — and the socket
+     * under it — stays open for the duration of the block and is released on the way out.
+     * `client.get(...)` cannot do this, because by the time it returns the body has already
+     * been read into memory, which was the whole problem.
+     *
+     * The charset is the one the server declared, falling back to UTF-8, which is what
+     * `bodyAsText()` did and so is not a behaviour change.
+     */
     @Suppress("TooGenericExceptionCaught")
-    override suspend fun fetch(location: String): FetchResult {
+    override suspend fun <T> fetch(location: String, read: suspend (FetchedBody) -> T): FetchResult<T> {
         if (!connectivity.isOnline()) {
             return FetchResult.Failure(SourceError.NoNetwork)
         }
 
         return try {
-            val response = client.get(location.trim())
+            client.prepareGet(location.trim()).execute { response ->
+                when {
+                    response.status.isSuccess() -> FetchResult.Success(
+                        read(
+                            FetchedBody(
+                                contentType = response.headers[HttpHeaders.ContentType],
+                                stream = response.bodyAsChannel().toInputStream(),
+                                charset = response.contentType()?.charset() ?: Charsets.UTF_8,
+                            ),
+                        ),
+                    )
 
-            when {
-                response.status.isSuccess() -> FetchResult.Success(
-                    body = response.bodyAsText(),
-                    contentType = response.headers[HttpHeaders.ContentType],
-                )
+                    response.status == HttpStatusCode.NotFound ->
+                        FetchResult.Failure(SourceError.NotFound)
 
-                response.status == HttpStatusCode.NotFound ->
-                    FetchResult.Failure(SourceError.NotFound)
-
-                else -> FetchResult.Failure(SourceError.HttpStatus(response.status.value))
+                    else -> FetchResult.Failure(SourceError.HttpStatus(response.status.value))
+                }
             }
         } catch (_: HttpRequestTimeoutException) {
             FetchResult.Failure(SourceError.Timeout)

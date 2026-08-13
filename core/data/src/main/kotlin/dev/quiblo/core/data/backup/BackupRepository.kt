@@ -19,6 +19,7 @@
 package dev.quiblo.core.data.backup
 
 import dev.quiblo.core.data.ProfileRepository
+import dev.quiblo.core.database.TransactionRunner
 import dev.quiblo.core.database.dao.FavoriteDao
 import dev.quiblo.core.database.dao.SourceDao
 import dev.quiblo.core.database.entity.FavoriteEntity
@@ -68,6 +69,15 @@ class BackupRepository(
      */
     private val profiles: ProfileRepository,
     private val now: () -> Long = System::currentTimeMillis,
+    /**
+     * Makes the write half of an import all-or-nothing.
+     *
+     * The class already refused a file from a newer schema on the grounds that "a half-applied
+     * import is worse than none" — and then applied the rest a statement at a time, across two
+     * DAOs, with nothing to undo the sources if the favourites failed. This is that stated
+     * standard actually being met.
+     */
+    private val transactions: TransactionRunner = TransactionRunner.Direct,
 ) {
 
     suspend fun export(): String {
@@ -125,6 +135,11 @@ class BackupRepository(
         }
         if (backup.schemaVersion < 1) return ImportResult.Unreadable
 
+        // Everything from here writes, so everything from here is one transaction.
+        return transactions.inTransaction { apply(backup) }
+    }
+
+    private suspend fun apply(backup: BackupFile): ImportResult {
         val existingByUrl = sourceDao.allOnce().associateBy { it.url }
         val idByUrl = existingByUrl.mapValues { it.value.id }.toMutableMap()
         var sourcesRestored = 0

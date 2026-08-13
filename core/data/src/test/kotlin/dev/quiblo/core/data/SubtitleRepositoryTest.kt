@@ -64,7 +64,8 @@ class SubtitleRepositoryTest {
     ) : PickedSubtitleFiles {
         override fun nameOf(uri: String) = name
 
-        override fun bytesOf(uri: String) = bytes
+        /** Truncates at [limit], the way the real reader does, so the cap is actually exercised. */
+        override fun bytesOf(uri: String, limit: Int) = bytes?.copyOf(minOf(bytes.size, limit))
 
         override fun storageDirectory() = storage
     }
@@ -195,8 +196,39 @@ class SubtitleRepositoryTest {
         assertEquals(2, dao.rows.values.map { it.storedPath }.toSet().size)
     }
 
+    @Test
+    fun `a file past the cap is refused without being read whole`() = runTest {
+        var requestedLimit = Int.MAX_VALUE
+        val oversized = ByteArray(MAX_SUBTITLE_BYTES + 64) { '.'.code.toByte() }
+        val files = object : PickedSubtitleFiles {
+            override fun nameOf(uri: String) = "huge.srt"
+            override fun bytesOf(uri: String, limit: Int): ByteArray {
+                requestedLimit = limit
+                return oversized.copyOf(minOf(oversized.size, limit))
+            }
+            override fun storageDirectory() = storage
+        }
+        val repository = SubtitleRepository(
+            dao = dao,
+            files = files,
+            ioDispatcher = Dispatchers.Unconfined,
+            now = { FIXED_NOW },
+        )
+
+        val result = repository.attach(KEY, "content://picker/1")
+
+        assertTrue(result is AttachResult.TooLarge)
+        assertNull(dao.rows[KEY], "an over-long file was still written down")
+        // The guard is only a guard if it bounds the read. Asking for the whole file and
+        // measuring it afterwards is how a mis-tapped film becomes an OutOfMemoryError.
+        assertEquals(MAX_SUBTITLE_BYTES + 1, requestedLimit)
+    }
+
     private companion object {
         const val KEY = "http://panel.invalid/movie/1.mkv"
         const val FIXED_NOW = 1_770_000_000_000L
+
+        /** Mirrors `SubtitleRepository.MAX_SUBTITLE_BYTES`, which is private to it. */
+        const val MAX_SUBTITLE_BYTES = 8 * 1024 * 1024
     }
 }

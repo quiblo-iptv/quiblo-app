@@ -69,6 +69,25 @@ interface SourceDao {
 }
 
 /**
+ * Makes a viewer's search text mean itself inside a `LIKE` pattern.
+ *
+ * `%` and `_` are wildcards in SQL, and the search box passes whatever was typed straight into
+ * one. Untreated, a viewer typing `%` matched their entire catalogue and `_` matched any single
+ * character — so searching for `HD_1080` returned `HD 1080`, `HDX1080` and everything else of
+ * that shape. Never an injection risk, since the value has always been bound; simply the wrong
+ * answer, in a way that looks like the search being bad at its job.
+ *
+ * The backslash is escaped first, because doing it last would escape the escapes.
+ *
+ * Every query using this must declare `ESCAPE '\'`, and every caller must pass its text
+ * through here.
+ */
+fun escapeForLike(query: String): String = query
+    .replace("\\", "\\\\")
+    .replace("%", "\\%")
+    .replace("_", "\\_")
+
+/**
  * A channel row plus whether the user has favourited it.
  *
  * The favourite flag is joined in SQL rather than combined in Kotlin so that a
@@ -111,7 +130,7 @@ interface ChannelDao {
      * what keeps search inside the 200ms budget across 20,000 rows (AC-FAV-05).
      *
      * @param groupTitle null for "all categories".
-     * @param query empty for "no search".
+     * @param query empty for "no search". Must already be escaped with [escapeForLike].
      * @param favoritesOnly 1 to restrict to favourites, 0 for everything.
      */
     @Query(
@@ -123,7 +142,7 @@ interface ChannelDao {
         WHERE c.sourceId = :sourceId
           AND c.kind = :kind
           AND (:groupTitle IS NULL OR c.groupTitle = :groupTitle)
-          AND (:query = '' OR c.name LIKE '%' || :query || '%')
+          AND (:query = '' OR c.name LIKE '%' || :query || '%' ESCAPE '\')
           AND (:favoritesOnly = 0 OR f.stableKey IS NOT NULL)
         ORDER BY c.sortIndex ASC
         """,
@@ -146,7 +165,7 @@ interface ChannelDao {
         INNER JOIN favorites f ON f.sourceId = c.sourceId AND f.stableKey = c.stableKey
           AND f.profileId = :profileId
         WHERE c.sourceId = :sourceId
-          AND (:query = '' OR c.name LIKE '%' || :query || '%')
+          AND (:query = '' OR c.name LIKE '%' || :query || '%' ESCAPE '\')
         ORDER BY c.kind ASC, c.sortIndex ASC
         """,
     )
@@ -189,7 +208,7 @@ interface ChannelDao {
               AND f.profileId = :profileId
         WHERE c.sourceId = :sourceId
           AND c.kind = :kind
-          AND c.name LIKE '%' || :query || '%'
+          AND c.name LIKE '%' || :query || '%' ESCAPE '\'
         ORDER BY c.sortIndex ASC
         LIMIT :limit
         """,

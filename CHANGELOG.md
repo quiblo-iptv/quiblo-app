@@ -17,6 +17,40 @@ Formatted after [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and ve
 
 ### Fixed
 
+- **"On now" no longer freezes at the moment you opened the screen.** The guide asked what the
+  time was once, when the list was built, and then kept re-answering with it — so a channel list
+  left open went on showing whatever was airing when you opened it.
+- **Errors say what went wrong again in released builds.** Every typed playback and network error
+  — timed out, unreachable, unsupported format — was being decided by a class name that the
+  release build renames, so a shipped APK could only ever say "something went wrong". Debug
+  builds were unaffected, which is why it went unseen.
+- **A cancelled request is no longer reported as a provider failure.** Leaving a screen while it
+  was loading produced an error about your playlist, and the work carried on in the background
+  after it had been cancelled.
+- **Skipping and browsing recover from the clock going backwards.** Both request limiters
+  measured against a clock that a time correction can move backwards — routine on a television
+  box with no battery-backed clock — and a backward jump stopped them letting anything through
+  until it caught up.
+- **An episode no longer restarts from the beginning when the screen is rebuilt.** The guard
+  against reloading recognised films and channels and quietly exempted every episode, so
+  returning to one lost your place in it and any subtitle file you had attached.
+- **A subtitle file that is too large is refused instead of crashing.** The size limit was
+  checked after the whole file had been read into memory, so the one case it exists for was the
+  one case it could not prevent.
+- **Searching for a title containing `%` or `_` finds that title.** They were being read as
+  wildcards, so those searches matched far more than they should.
+- **Restoring a backup is all-or-nothing.** A failure part-way through used to leave half an
+  import behind.
+- **The app recovers when the encrypted credential store will not open** — after a restore to a
+  new device, say — instead of failing every playlist that needs a password with no way forward.
+- **Films and series with the same name no longer share a detail screen.** Two titles a provider
+  filed under one name could show each other's plot and artwork.
+- **Xtream addresses with IPv6 or a username in them are accepted.**
+
+### Changed
+
+- **A large playlist is parsed off the screen's thread and read as it arrives** rather than held
+  in memory whole. A 67,000-entry playlist was parsed on the frame you were looking at.
 - **The next-episode banner no longer flickers back on after starting the next episode.** Pressing
   next, or letting the countdown run out, replaced the episode straight away while the player was
   still reporting the previous one as finished — so for the moment in between, the banner slid

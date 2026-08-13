@@ -37,6 +37,60 @@ passed everywhere except the device.
 
 ---
 
+## Can a machine run any of this?
+
+**Asked 2026-08-13, with no tester available.** The honest answer is *some of it, and not the
+half that matters most* — but "some" is worth having, because it is the half that keeps coming
+back.
+
+### What is already automated, and what it has caught
+
+53 JVM test classes run on every push. The ones that stand in for a sweep row are Robolectric
+Compose tests: `TvPlayerControlsReachableTest` walks every player control with a D-pad at the
+panel's own geometry; `TvBarKeysTest` walks the top bar in both directions including both ends;
+`TvSearchResultsFitTest` measures whether a focused poster fits the panel it grows on;
+`TvSearchRestingCentreTest` measures where the resting search block lands. `core/database` runs
+its eleven migrations.
+
+**These caught real faults.** The bar's fourth position was proved reachable without a remote.
+The poster that went under the bottom edge when focused was found by arithmetic, not by eye.
+
+### The gap, and the tool that would close it
+
+**This project's most repeated failure is a screen that measures correctly and looks wrong.** The
+search screen's resting position has now been wrong four times, each for a different reason, and
+twice it passed a measurement while failing a look. A geometry assertion catches "the number
+changed"; it cannot catch "the composition is ugly", and nothing here renders a screen and
+compares it to the last agreed picture.
+
+**A screenshot test would.** Roborazzi runs on Robolectric — same JVM tests, same CI, no device —
+and writes a PNG per composable that a diff can reject. The cost is a golden image per screen and
+a habit of looking at the diff rather than accepting it. **Recommended, and the single highest
+return available without a tester**, because every one of the last four regressions on that
+screen would have shown up as a picture in a pull request.
+
+**An instrumented pass is now possible too**, which it was not a week ago: the television
+emulator runs a signed release build with hardware rendering and takes D-pad presses over `adb`.
+`reactivecircus/android-emulator-runner` does the same on a GitHub runner. That reaches things
+Robolectric cannot — the real focus engine, the real IME over a text field, a real launcher tile
+— and it is slow and flaky enough that it should carry a small number of high-value journeys and
+nothing else.
+
+### What no tool reaches, and why the sweep still has to happen
+
+| Not automatable | Why |
+| :---- | :---- |
+| Every `AC-PLAY-*` and `AC-XT-*` | They need a provider account and a real stream. There is no fixture for "the provider is slow today" |
+| "Reads from three metres" | A 1080p window at arm's length is a different instrument from a 50-inch panel across a room. Both wrong answers this project shipped looked fine on a desk |
+| Remote key repeat, HDMI colour, panel scaling | Hardware behaviour, on hardware |
+| `AC-NFR-*` timings | A CI runner's clock says nothing about a television box's |
+
+**So the shape is:** automate the geometry and the reachability, add pictures so the look has a
+record, and spend the tester on the stream and the room. **The emulator retires "can this be
+reached". It does not retire "is this right".**
+
+---
+
 ## Before day one
 
 ### 1. The three devices
@@ -280,6 +334,20 @@ screen to be opened.
 
 **7.3's upgrade half is `AC-PROF-05` in miniature** and uses the same prepared device — run them
 together.
+
+### Session 7b — the television's furniture, added 2026-08-13
+
+**Television only, and all of it is a look.** Every row has been walked with a D-pad on the
+emulator and screenshotted, so none of it is a question about whether the control exists. What is
+unanswered is how each reads on a panel, from a sofa. `TESTING-REQUIRED.md` §A7 carries the same
+list with the reasoning behind each.
+
+| # | Item | Screen | What to do | Passes when |
+| :---- | :---- | :---- | :---- | :---- |
+| 7.8 | **The launcher tile** | Android TV home → Apps | Look at the Quiblo tile from where you normally sit | It reads as Quiblo before you read the label under it. No bar down either side |
+| 7.9 | **The gear and the face** | Any screen with the top bar | Walk right past the last tab, then back left | The two icons read as **one group** at the end of the bar, not two strays. The highlight on each is obvious from the sofa |
+| 7.10 | **The resting search screen** | Search, nothing typed | Look at the mark, the name, the field and Advanced together | The block sits on what **looks** like the middle of the panel, and Advanced reads as belonging to the field above it. **It is deliberately a little above the true middle** — say so if that reads as too much or too little |
+| 7.11 | **Picking a face** | Add profile | Type a name, then walk the row of faces | The faces are told apart from the sofa and the chosen one is obviously chosen. Say whether the keyboard burying the row while you type is a problem in practice |
 
 ---
 

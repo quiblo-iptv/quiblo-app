@@ -13,11 +13,34 @@ Two rules for this page:
 - **Nothing waits on it that does not have to.** Each entry ends with what is being built around
   it, because the point of writing a blocker down is to stop it blocking anything else.
 
-Last reviewed: **2026-08-12**, after the first device sweep — see [`SWEEP-RESULTS-2026-08-12.md`](SWEEP-RESULTS-2026-08-12.md).
+Last reviewed: **2026-08-13**.
 
 **New on 2026-08-12: S10, S11 and S12.** All three came out of building `015`'s pass 1, and all
 three are the same shape — work that can be written but cannot be *judged* without the panel in
 front of somebody. What was built instead is in [`TESTING-REQUIRED.md`](TESTING-REQUIRED.md).
+
+## The premise changed on 2026-08-13: there is a working television emulator
+
+Several entries below say a thing "cannot be judged off the panel". That was true when the
+Android emulator on this machine drew every frame on the processor — the GPU ran on `nouveau`,
+the emulator fell back to `llvmpipe`, and it crashed often enough that nothing could be walked
+through end to end. **The proprietary driver is loaded now**, and a 1080p Android TV image built
+with `-gpu host`, 4GB of RAM and six cores runs a signed release build and takes D-pad presses
+over `adb` without falling over.
+
+**What that changes:** anything about *layout, focus order, or whether a control exists and can
+be reached* is now answerable at a desk, in minutes, with a screenshot as the record. S10's three
+enhancements and S11's focus order were both settled this way.
+
+**What it does not change:** how a screen reads from three metres, whether a highlight competes
+with the focus ring, and every criterion that involves a stream. A 1080p window at arm's length
+is a different instrument from a 50-inch panel across a room, and this project has already
+shipped two wrong answers to a question it thought it had looked at. **The emulator retires "can
+this be reached" and not "is this right".**
+
+The AVD's own traps — the data partition written to a temp path, 2GB of RAM, the GPU switched
+off — are in the notes beside `docs/` rather than here, because they are a machine's problem and
+not a stopper.
 
 ---
 
@@ -65,6 +88,40 @@ Row B was added because it had *never been tested on any build*, and that is sti
 Done in writing** and say that `1.0.0` ships tested on one OS version. Either is a real answer.
 Leaving it on the list and blocked at every sweep is the one that is not — it makes the sweep look
 half-run when it was fully run against the devices that exist.
+
+## S14 — Forty-seven security alerts on the build classpath, and no way to act on them
+
+**Blocks:** nothing yet. **Owner:** Mahmoud — this is a decision about a public security tab.
+**New 2026-08-13.**
+
+The repository's Dependabot alerts read **2 critical, 19 high, 24 moderate, 2 low**, which is the
+first thing a visitor sees on a public repository's security tab. Every one of them is on
+`settings.gradle.kts` — the Gradle plugin classpath — and the packages are netty, BouncyCastle,
+jose4j, jdom2 and commons-lang3, pulled in by the Android Gradle Plugin.
+
+**None of them ship.** Checked rather than assumed: the release APK contains no entry whose name
+matches any of those packages. They are libraries the build tool links against on a build
+machine, and the versions are AGP's choice rather than ours — `libs.versions.toml` names none of
+them.
+
+**Bumping AGP is not currently the answer.** 9.4.0 is published as an artefact but its plugin
+marker does not resolve, so `9.3.1` is the newest usable version. When 9.4.0 becomes installable
+it should be tried first, since that is the only fix that removes the alerts rather than
+explaining them.
+
+**The three real options, and none is ours to pick alone:**
+
+1. **Dismiss each alert as "vulnerable code is not actually used"**, which is the accurate reason
+   and the one GitHub offers. It clears the tab and leaves a written record on every alert.
+2. **Force versions on the plugin classpath** via `resolutionStrategy` in `pluginManagement`.
+   This makes the numbers go away and swaps a known non-exposure for an untested build tool.
+   Not recommended.
+3. **Leave them and say so** — in the README or the security policy — so a visitor reads the tab
+   correctly instead of concluding the project ships vulnerable code.
+
+**The action:** pick one. If it is (1), the dismissals are a dozen API calls and want the reason
+recorded here. **This entry is the record either way**, so that "47 open alerts" is never again
+something somebody has to work out from scratch.
 
 ## S2 — The Xtream test account is API-blocked
 
@@ -240,7 +297,25 @@ The drafting is ours; two questions inside it are not:
 
 **The action:** answer those two, and `TRADEMARK.md` can be finished around them.
 
-## S10 — The search screen's three enhancements cannot be judged off the panel
+## S10 — ~~The search screen's three enhancements cannot be judged off the panel~~ — **cleared 2026-08-13**
+
+**All three are built, looked at, and settled.** E2 shipped first as this entry recommended, and
+the mark and the name have been resized twice since against a real panel. E3 shipped and was
+kept, softened after the first version read as a loading bar. E1 was the interesting one: it
+shipped beside the field, was rejected, and now sits **under** the field at rest, which is the
+one shape this entry predicted might qualify.
+
+The resting screen's geometry stopped being a matter of opinion in the process — it is measured
+by `TvSearchRestingCentreTest`, which asserts that the block does not move when the bar above it
+grows and that it sits a little above the half-way line. The lift is deliberate: a block on the
+true middle of a television reads as low.
+
+**What is left is not a stopper:** the whole resting screen still wants one look from three
+metres, along with everything else in `TESTING-REQUIRED.md`.
+
+<details><summary>The original entry</summary>
+
+### S10 — The search screen's three enhancements cannot be judged off the panel
 
 **Blocks:** `013` INC-E1, INC-E2 and INC-E3 — `015`'s pass 1 steps 5 and 8.
 **Owner:** whoever has the remote. **This is a look, not a test.**
@@ -272,7 +347,32 @@ be deleted.
 **Carrying on regardless:** everything else in pass 1 is built and merged — see
 [`TESTING-REQUIRED.md`](TESTING-REQUIRED.md) §A.
 
-## S11 — The avatar's television-side entry points need the focus order settled on a panel
+</details>
+
+## S11 — ~~The avatar's television-side entry points need the focus order settled on a panel~~ — **cleared 2026-08-13**
+
+**Both halves are built.** The picker is a row of generated faces on the create-profile screen,
+and the control beside the gear is a fourth position on the bar, past it, exactly as this entry
+planned.
+
+**The focus order is asserted rather than tried.** `TvBarKeys.kt` is a plain function over
+`(key, state, lastIndex)`, and `TvBarKeysTest` walks every position along the bar in both
+directions including both ends — so "is a fourth position reachable, and does anything above it
+become unreachable" is a test rather than a sitting. The boolean that said *where along the bar*
+became an enum when the second icon arrived, because a second boolean would have let "on the gear
+and on the profile at once" be a state the type allows.
+
+Then it was walked with the D-pad on the emulator, which is what this entry actually asked for
+and what the premise note at the top of this page now makes cheap.
+
+**One thing this found that no test would have:** the two icons were children of a row that
+spaces its children 28dp apart to separate five tab labels, so the gear and the face sat as far
+from each other as two words and read as unrelated controls. Nested in their own row, they space
+themselves.
+
+<details><summary>The original entry</summary>
+
+### S11 — The avatar's television-side entry points need the focus order settled on a panel
 
 **Blocks:** the last part of `013` INC-F0 — `015`'s pass 1 step 6.
 **Owner:** whoever has the remote.
@@ -294,6 +394,12 @@ every screen the bar is on and that nothing above it becomes unreachable. Then t
 **Carrying on regardless:** a profile created on the phone with a face shows that face on the
 television already, and a profile created on the television gets the initial-on-a-colour
 fallback, which is a picture rather than an empty circle. Nothing is broken while this waits.
+
+</details>
+
+**Still open here, and it is a phone item rather than a television one:** the phone's picker
+offers only the illustrated set. `ProfileAvatar` draws a generated key wherever it is stored, so
+the phone *shows* a face chosen on the television — it cannot yet offer one.
 
 ## S12 — ~~The television has no way to ask a one-question question~~ — **closed 2026-08-12, built**
 

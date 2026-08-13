@@ -277,10 +277,15 @@ the hardware arrives.
 | 2 | INC-F8 — the phone settings screen becomes one scroller | No | **Built**, with the Robolectric reachability test |
 | 3 | INC-F0 data half — migration, model field, generated avatar, migration test | No | **Built** — as **12→13**, not 11→12; see below |
 | 4 | INC-F3 phone half — long-press on the continue-watching tile | No | **Built** |
-| 5 | INC-E2, then re-ask INC-E1 | The panel, to look at | **Not built** — `STOPPERS.md` S10 |
-| 6 | INC-F0 screen half — both choosers, both entry points | ~~Yes, on `012` #016~~ | **Choosers built** — #016 had already rebuilt them. Entry points and the television picker are `STOPPERS.md` S11 |
-| 7 | INC-F3 television half | Yes, and not for the reason given | **Not built** — `STOPPERS.md` **S12**. The dependency on `012` #014 was real but minor; what stops it is that `app-tv` contains no dialog at all |
-| 8 | INC-E3 — build, look, keep or delete | Yes | **Not built** — `STOPPERS.md` S10 |
+| 5 | INC-E2, then re-ask INC-E1 | The panel, to look at | **Built 2026-08-13.** E2 first, as S10 asked. E1 was re-asked twice: beside the field, rejected, and now under it at rest — the one shape S10 predicted might qualify. `STOPPERS.md` S10 is cleared |
+| 6 | INC-F0 screen half — both choosers, both entry points | ~~Yes, on `012` #016~~ | **Built 2026-08-13.** Choosers were already there; the television picker and the control past the gear both shipped, and the bar's focus order is asserted in `TvBarKeysTest` rather than tried. `STOPPERS.md` S11 is cleared. **The phone's picker still offers only the illustrated set** |
+| 7 | INC-F3 television half | Yes, and not for the reason given | **Built 2026-08-12** — `STOPPERS.md` **S12**, closed. The answer was that the confirm is the control itself: long-press arms the tile, its label becomes the question, the ordinary press answers it |
+| 8 | INC-E3 — build, look, keep or delete | Yes | **Built and kept.** Softened after the first version read as a loading bar rather than as light. It stops the moment the field takes focus, which is the rule it had to earn |
+
+**Pass one is finished as of 2026-08-13.** Every step above is built. What none of it has had is a
+sitting in front of a television — see [`TESTING-REQUIRED.md`](../docs/TESTING-REQUIRED.md) §A7,
+and the note at the top of [`STOPPERS.md`](../docs/STOPPERS.md) on what an emulator does and does
+not retire.
 
 **The "needs the remote" column was wrong on both of its qualified yeses, in opposite
 directions.** Step 6 was marked as depending on `012` #016, which turned out to be *already built

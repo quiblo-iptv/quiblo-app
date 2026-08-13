@@ -277,6 +277,16 @@ nothing to get stuck inside, and no Cancel to find a place for. It is the same s
 
 The reasoning below stands as the record of why it waited.
 
+**A second one, 2026-08-13, and it is the nearest this app has come to a modal.** The
+end-of-episode banner has a sentence, a countdown and two buttons, which is the shape S12 said
+should be decided in front of a panel rather than at a desk. It was built anyway, and the
+argument for it is that none of what makes a television modal dangerous applies: playback has
+already stopped, so nothing is being covered; it occupies a corner rather than the middle; it
+cannot be arrived at by accident, only by an episode ending; both ways out are on screen at
+once; and back leaves the player and cancels, so there is no state to be stuck inside. **If the
+panel disagrees, the thing to change is the banner and not the rule** — the rule is what kept
+this honest enough to write down.
+
 <details><summary>The original entry</summary>
 
 ### S12 — The television has no way to ask a one-question question

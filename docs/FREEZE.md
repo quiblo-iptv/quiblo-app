@@ -1,7 +1,7 @@
 # Freeze Prompt — Quiblo
 
 **Tagline:** a vibe-coded IPTV player. Free, open source, GPLv3. Bring your own playlist.
-**Repo / org:** `quiblo-tv`
+**Repo / org:** `quiblo-iptv/quiblo-app` *(corrected 2026-08-11, see Amendment 8)*
 **Application ID:** `dev.quiblo.player`
 **Status:** FROZEN for v1.0
 **Date:** 2026-08-03
@@ -329,3 +329,135 @@ while the thing it guards against is happening.
 **What does not change.** Every non-goal in §2 stands. No storage permission is added, SAF
 remains how files are read and written, and nothing here permits a permission this project
 declares itself.
+
+### Amendment 8 — this document points at the repository it lives in (2026-08-11)
+
+**Ships in.** `1.0.0-beta.1`
+**Release class.** None — nothing a viewer runs changes. This corrects a pointer, and it is
+written as an amendment rather than edited quietly because the header of a frozen document is
+the last place a silent change should be possible.
+
+**Decision.** The **Repo / org** line read `quiblo-tv`. It is `quiblo-iptv/quiblo-app`.
+
+**Rationale.** `quiblo-tv` was the org named in `PLAN.md`'s first task, before anything existed
+to put in it. Two things then happened and neither came back to this line: the plain `quiblo`
+org was unavailable, so the organisation is `quiblo-iptv`; and Amendment 3 renamed the project
+without re-reading the header it was renaming.
+
+That would be a footnote in any other file. **This document is the first thing handed to every
+new contributor and every agent asked to work on this codebase** — §Purpose says so — and it has
+been sending all of them to a repository that is not this one. A canonical description that is
+wrong about where the code lives is wrong about the first thing a reader needs.
+
+**What this makes true elsewhere.** `PLAN.md`'s first task is corrected in the same change, and
+it now says *why* the org is not simply `quiblo`, so the next person to notice the mismatch
+finds the answer instead of the discrepancy.
+
+**What does not change.** The application IDs — `dev.quiblo.player` and `dev.quiblo.tv` — are
+untouched, and they are the identifiers that actually bind: an application ID cannot be changed
+after release without every install being replaced by hand. §1's naming note stands in full; the
+distance from the reseller namespace was never about the org's name.
+
+### Amendment 9 — the app says what it is before it says anything else (2026-08-11)
+
+**Ships in.** `1.0.0-beta.1`
+**Release class.** Minor — a screen is added, nothing stored changes, and no capability is
+withdrawn.
+
+**Decision.** On a fresh install, before the profile chooser, Quiblo shows **two screens**: what
+this app is and is not, then what the person installing it is agreeing to. The second carries a
+link to the full terms on the wiki and a button that starts the app. Acceptance is recorded per
+install, with the version of the terms it was given for.
+
+**Rationale.** The project's position on content is already written and already good — the
+README says Quiblo supplies no playlists and no way to find any, and that the person configuring
+a source is responsible for it. **A README is read by contributors and by nobody who downloads
+an APK.** So the protection this project relies on has been living in a document its users never
+see, which is the same shape as every other fault this codebase keeps finding: the thing exists,
+and nobody can reach it.
+
+`1.0.0-beta.1` is the first artefact a stranger installs. That is the moment the gap starts
+costing something, and it is why this is scope rather than polish.
+
+**What is on the screen, and what is behind the link.** The essential text is on the screen. The
+wiki page is the full version. That order is not a style choice — a television has no browser
+worth using, and a link that is the *only* way to read the terms is a term nobody on a
+television can read. `006` gate 3 built the page first for the same reason.
+
+**Five constraints, all of them decisions:**
+
+1. **There is no decline path that closes the app.** If somebody will not accept the terms of a
+   player they downloaded, they can read and leave. An app that force-quits on decline is
+   theatre, and it teaches people to press the button without reading.
+2. **Per install, not per profile.** Amendment 6 gives profiles favourites and resume positions
+   and nothing else. Consent is not a viewing preference, and the Guest profile is not asked
+   again.
+3. **Fresh install only.** An upgrade must not show it. There is nothing to upgrade from today,
+   which makes `1.0.0-beta.1` → `-beta.2` the first real test of that and an argument for
+   building this early in the beta rather than at the end.
+4. **The acceptance carries a version.** A materially changed policy can ask again; a corrected
+   sentence cannot. Without the version the only options are asking nobody or asking everybody.
+5. **It is driven by a remote as well as a finger.** Two screens with a link and a button is
+   exactly the shape that becomes unreachable by D-pad, and this project has deleted nine
+   features for that. It is tested by key events on the television, not by clicking a node.
+
+**What does not change.** Every non-goal in §2 stands, no permission is added, nothing is sent
+anywhere, and the app still works with no account of any kind. This screen states a position the
+project already held; it does not create one.
+
+---
+
+### Amendment 10 — the television player gains controls, and a series gains an order (2026-08-13)
+
+**Ships in.** `0.13.0`
+**Release class.** Minor — nothing stored changes and no capability is withdrawn. One new
+preference is added with a default that matches how the app already behaved for films.
+
+**Decision.** Two things, and only the second is scope:
+
+1. **The television player's controls become focusable buttons.** This corrects a design, it
+   does not extend one. §3.4 of `PLAN-TV.md` specified a control layer driven entirely by the
+   remote's own keys, which is right for the five things a remote has keys for and had no
+   answer for anything else. Everything past those five was reaching the viewer through a key
+   that already meant something — subtitles on a second press of Down, picture fit on Up, on a
+   film, where zapping happened not to be using it. The keys all still work; the buttons are a
+   second way in.
+2. **A series carries its own order into the player**, so next and previous episode exist, and
+   the end of an episode offers the next one on a countdown the viewer sets or turns off.
+
+**Rationale.** The first is the same lesson as Amendment 7's: a specification written accurately
+for a smaller version of the app, overtaken by work this document already admitted. Each feature
+the television gained after §3.4 was written — aspect ratio, then audio and subtitles, now
+episodes — arrived with nowhere to go, and the last one had nowhere left at all.
+
+The second is a gap between the two apps rather than an addition to either. §7 requires v1.0 to
+hold on a television driven by a remote alone, and a viewer watching a series had to leave the
+player, walk back to the list and find the next row after every episode. Nothing about that was
+a decision anybody made; it was what happened when the player was built before series were.
+
+**Two constraints, both of them decisions:**
+
+1. **The run does not wrap.** `Live.zappedBy` wraps deliberately — past the last channel is the
+   first, as a television does it. A series is a thing that finishes, and rolling off the finale
+   into the pilot from an unattended countdown, with nobody in the room, is the one outcome this
+   must never produce.
+2. **The countdown is a delay with an Off value, not a switch beside a delay.** "Do not do this"
+   and "do it after ten seconds" are the same question asked once. Off still *offers* the next
+   episode; what stops is the counting.
+
+**Two new criteria**, added to `ACCEPTANCE.md` §AC-TV. Both are written against the symptom:
+
+> **AC-TV-16** — Every control the player draws is reachable and operable with the D-pad, and
+> pressing down twice reaches the second row. The remote's own keys continue to drive playback
+> with nothing on screen, and focus returns to the screen when the controls time out.
+
+> **AC-TV-17** — From inside the player, a series moves to the next and previous episode in the
+> order the episodes were made, stopping at the first and the last. When an episode ends the
+> next is offered; the offer is not made for a film, at the end of a series, or after a failure,
+> and it starts nothing once the viewer has declined it or left.
+
+**What does not change.** Every non-goal in §2 stands, no permission is added, nothing is sent
+anywhere, and the phone player is untouched — it gets the same controls after the television
+build has been watched on a panel, which is why the new preference is offered on the television's
+settings screen only. A setting shown on an app it does not affect is the hollow-feature shape
+this project has deleted nine of.

@@ -14,6 +14,22 @@
     <string name="destination_settings">Settings</string>
 
     <!-- Profiles -->
+    <!-- First launch (FREEZE.md Amendment 9). The essential text is on the screen; the link
+         is the full version, and nothing depends on the reader following it. -->
+    <string name="consent_what_title">Quiblo</string>
+    <string name="consent_what_body">A player for playlists you already have.
+
+It ships with no channels, no films and no way to find any. If you do not already have a playlist or an IPTV subscription, there is nothing here to watch yet — and this project will not help you find one.</string>
+    <string name="consent_next">Next</string>
+    <string name="consent_terms_title">Before you start</string>
+    <string name="consent_terms_body">You add your own sources, and you are responsible for them — including whether watching them is legal where you live.
+
+Nothing you enter leaves this device except to the servers you name yourself. There is no account, no tracking, and no server of ours.
+
+Quiblo is free software under the GPLv3 and comes with no warranty of any kind.</string>
+    <string name="consent_terms_link">Read the full terms</string>
+    <string name="consent_start">Start watching</string>
+
     <string name="profile_welcome">Welcome to Quiblo</string>
     <string name="profile_who">Who is watching?</string>
     <string name="profile_detail">Favourites and what you have half-watched are kept per person. Playlists and settings are shared.</string>

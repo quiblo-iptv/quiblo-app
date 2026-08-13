@@ -26,6 +26,7 @@ import org.gradle.api.artifacts.component.ModuleComponentSelector
 import org.gradle.api.tasks.testing.Test
 import org.gradle.kotlin.dsl.getByType
 import org.gradle.kotlin.dsl.withType
+import org.jetbrains.kotlin.gradle.tasks.KotlinCompilationTask
 
 /** The single source of truth for dependency versions. See gradle/libs.versions.toml. */
 val Project.libs: VersionCatalog
@@ -51,6 +52,29 @@ const val JVM_TARGET = 17
 fun Project.configureTests() {
     tasks.withType<Test>().configureEach {
         useJUnitPlatform()
+    }
+}
+
+/**
+ * A compiler warning fails the build (`agile/006` gate 6).
+ *
+ * Gate 6 asks for a quality gate against deprecated and superseded technology that CI can fail a
+ * pull request with, rather than a report somebody reads once. For our own code that gate is the
+ * compiler: it already knows which APIs have been deprecated under us, and it already says so —
+ * into a log nobody opens.
+ *
+ * Turned on when the tree had **six warnings, all the same one**, so this is a line held rather
+ * than a backlog declared. Holding it is the point: a warning count that is allowed to grow is a
+ * warning count nobody reads, and the deprecation that matters arrives indistinguishable from
+ * the fifty that do not.
+ *
+ * **When a dependency bump makes this fail**, the answer is to migrate, and if migration is not
+ * possible yet, to suppress that one usage with `@Suppress` and a comment saying why. Both are
+ * decisions. Lowering the gate is not.
+ */
+fun Project.failOnWarnings() {
+    tasks.withType<KotlinCompilationTask<*>>().configureEach {
+        compilerOptions.allWarningsAsErrors.set(true)
     }
 }
 

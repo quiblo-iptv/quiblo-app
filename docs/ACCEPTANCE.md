@@ -113,6 +113,8 @@ except where a criterion names an input method the television does not have.
 | AC-TV-13 | A live source with more than one category can be filtered from the Live list by remote, and filtering never issues a request per category passed over. |
 | AC-TV-14 | A title can be found by name from one screen whichever kind the provider filed it under, and every result is reachable and openable with the D-pad. A term typed on the on-screen keyboard does not put a query to the database per keystroke, and no term returns more rows than a viewer could walk. |
 | AC-TV-15 | Playlists and accounts are reachable from Settings, and back from them returns to Settings rather than to the catalogue. They are not in the tab bar. |
+| AC-TV-16 | Every control the player draws is reachable and operable with the D-pad, and pressing down twice reaches the second row. The remote's own keys continue to drive playback with nothing on screen, and focus returns to the screen when the controls time out. *(Added by `FREEZE.md` Amendment 10.)* |
+| AC-TV-17 | From inside the player, a series moves to the next and previous episode in the order the episodes were made, stopping at the first and the last. When an episode ends the next is offered; the offer is not made for a film, at the end of a series, or after a failure, and it starts nothing once the viewer has declined it or left. *(Added by `FREEZE.md` Amendment 10.)* |
 
 ## AC-META — Film and series information
 
@@ -151,6 +153,10 @@ Added 2026-08-09 by `FREEZE.md` Amendment 6.
 | AC-LEGAL-03 | An in-app "Open Source Licenses" screen lists all third-party dependencies and their licenses. |
 | AC-LEGAL-04 | The repository ships no playlist, no provider URL, no credentials, and no reference to where any of these may be obtained — including in tests, fixtures, issues, and documentation. Test fixtures use synthetic data only. |
 | AC-LEGAL-05 | The README states the app supplies no content and that users are responsible for the legality of sources they configure. |
+| AC-LEGAL-06 | A fresh install shows two screens before anything else: what the app is, then what is being agreed to. Both are readable and both can be got past **with a remote as the only input device**. |
+| AC-LEGAL-07 | The essential terms are on the screen itself, not only behind the link — a television cannot usefully follow one. The link opens the full page where a browser exists. |
+| AC-LEGAL-08 | Acceptance survives a force-stop and a relaunch, is recorded per install rather than per profile, and the Guest profile is never asked again. |
+| AC-LEGAL-09 | An upgrade over an existing install does not show the screens again, unless the terms version has been raised. |
 
 ---
 

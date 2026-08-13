@@ -180,6 +180,9 @@ fun TvPosterRows(
                                 viewModel.channelForHistory(entry)?.let(onResume)
                             }
                         },
+                        // The same repository call the phone's long-press makes, and the same
+                        // series branch inside it — one action, one implementation (INC-F3).
+                        onRemove = viewModel::removeFromHistory,
                     )
                 }
             },

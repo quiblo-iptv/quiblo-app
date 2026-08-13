@@ -67,6 +67,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.quiblo.core.model.Profile
+import dev.quiblo.designsystem.ProfileAvatar
 import dev.quiblo.feature.settings.ProfilesViewModel
 import dev.quiblo.tv.R
 import dev.quiblo.tv.ui.common.TvChip
@@ -176,6 +177,9 @@ private fun Chooser(
             ProfileTile(
                 label = profile.name,
                 icon = Icons.Filled.Person,
+                avatar = profile.avatar,
+                // A guest is a session rather than a person, so it keeps the plain figure.
+                hasAvatar = !profile.isGuest,
                 onClick = { onSelect(profile) },
                 modifier = if (profile == profiles.firstOrNull()) {
                     Modifier.focusRequester(firstTile)
@@ -276,6 +280,14 @@ private fun ProfileTile(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     detail: String? = null,
+    /**
+     * The face this profile chose, when the tile stands for a profile at all.
+     *
+     * Null on Add and on Guest — neither is somebody, and a picture on either would say it
+     * was. They keep [icon], which is what the slot held before anyone could choose.
+     */
+    avatar: String? = null,
+    hasAvatar: Boolean = false,
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val isFocused by interactionSource.collectIsFocusedAsState()
@@ -315,12 +327,18 @@ private fun ProfileTile(
                 ),
             contentAlignment = Alignment.Center,
         ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = null,
-                tint = Color.White.copy(alpha = if (isFocused) 1f else 0.7f),
-                modifier = Modifier.size(48.dp),
-            )
+            if (hasAvatar) {
+                // Fills the slot the frame was built as. The focus border rings it, so a
+                // focused tile still reads as focused with a picture in it (AC-TV-02).
+                ProfileAvatar(name = label, avatar = avatar, size = TILE_SIZE)
+            } else {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = Color.White.copy(alpha = if (isFocused) 1f else 0.7f),
+                    modifier = Modifier.size(48.dp),
+                )
+            }
         }
 
         Spacer(modifier = Modifier.height(12.dp))

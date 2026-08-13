@@ -31,6 +31,10 @@ dependencies {
     implementation(libs.media3.exoplayer.hls)
     implementation(libs.media3.exoplayer.dash)
     implementation(libs.media3.common)
+    // `SubtitleView` and `CaptionStyleCompat` only. Nothing else from media3-ui is used and
+    // nothing may be: this module exists so that the rest of the app never names a Media3 type,
+    // and a player view drawn here would be an engine's idea of controls on somebody's screen.
+    implementation(libs.media3.ui)
     implementation(libs.media3.datasource.okhttp)
     implementation(libs.okhttp)
     implementation(libs.kotlinx.coroutines.core)

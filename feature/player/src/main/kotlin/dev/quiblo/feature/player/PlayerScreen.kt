@@ -77,7 +77,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
@@ -86,12 +85,14 @@ import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.quiblo.core.media.PlaybackState
 import dev.quiblo.core.media.PlaybackStatus
@@ -102,6 +103,10 @@ import kotlinx.coroutines.delay
 import org.koin.androidx.compose.koinViewModel
 
 private const val CONTROLS_TIMEOUT_MILLIS = 3_000L
+
+/** Long enough to read a sentence, short enough not to sit over the film. */
+private const val SUBTITLE_NOTICE_MILLIS = 4_000L
+private val SUBTITLE_NOTICE_BOTTOM_PADDING = 96.dp
 
 /**
  * Full-screen playback.
@@ -132,9 +137,20 @@ fun PlayerScreen(
     // What there is to choose between, if anything. Shared with the television so the two
     // apps cannot disagree about what a stream offers (#023).
     val subtitlesOff = stringResource(R.string.player_subtitles_off)
-    val trackMenu = remember(state.audioTracks, state.textTracks, subtitlesOff) {
-        trackMenu(state, subtitlesOff)
+    val subtitleActions = rememberSubtitleActions(state)
+    val subtitleStyle by viewModel.subtitleStyle.collectAsStateWithLifecycle()
+    val appearance = rememberSubtitleAppearance(subtitleStyle)
+    val trackMenu = remember(state.audioTracks, state.textTracks, subtitlesOff, subtitleActions, appearance) {
+        trackMenu(state, subtitlesOff, subtitleActions, appearance)
     }
+
+    // INC-F10. The picker is remembered here rather than inside the menu, which leaves
+    // composition the moment a choice is made — taking the launcher with it.
+    val subtitleNotice by viewModel.subtitleNotice.collectAsStateWithLifecycle()
+    val pickSubtitleFile = rememberSubtitleFilePicker(
+        onPicked = viewModel::attachSubtitleFile,
+        onNoPicker = { viewModel.showSubtitleNotice(SubtitleNotice.NO_PICKER) },
+    )
 
     // Hoisted out of PlayerControls, which leaves composition every time the controls
     // auto-hide — taking a `remember` inside it with them. The lock forgot itself after
@@ -244,6 +260,8 @@ fun PlayerScreen(
             modifier = Modifier.fillMaxSize(),
         )
 
+        SubtitleOutput(viewModel = viewModel, modifier = Modifier.fillMaxSize())
+
         // While locked the lock button is the only thing on screen, and the only thing that
         // responds. It stays visible rather than auto-hiding, because a lock with no
         // visible way out is indistinguishable from a frozen app.
@@ -310,8 +328,22 @@ fun PlayerScreen(
             gestureFeedback = gestureFeedback,
             trackMenu = trackMenu.takeIf { tracksVisible },
             onSelectTrack = viewModel::selectTrack,
+            onSubtitleAction = subtitleActionHandler(
+                onPick = pickSubtitleFile,
+                onRemove = viewModel::detachSubtitleFile,
+            ),
             onDismissTracks = { tracksVisible = false },
+            subtitleNotice = subtitleNotice,
         )
+
+        // The notice clears itself. It is an acknowledgement, not a dialog, and a viewer who
+        // has gone back to watching should not have to dismiss anything.
+        LaunchedEffect(subtitleNotice) {
+            if (subtitleNotice != null) {
+                delay(SUBTITLE_NOTICE_MILLIS)
+                viewModel.showSubtitleNotice(null)
+            }
+        }
     }
 }
 
@@ -330,12 +362,48 @@ private fun TransientOverlays(
     gestureFeedback: GestureFeedback?,
     trackMenu: TrackMenu?,
     onSelectTrack: (TrackMenuKind, String?) -> Unit,
+    onSubtitleAction: (TrackMenuActionKind) -> Unit,
     onDismissTracks: () -> Unit,
+    subtitleNotice: SubtitleNotice?,
 ) {
     gestureFeedback?.let { GestureIndicator(it) }
 
     trackMenu?.let {
-        TrackMenuSheet(menu = it, onSelect = onSelectTrack, onDismiss = onDismissTracks)
+        TrackMenuSheet(
+            menu = it,
+            onSelect = onSelectTrack,
+            onAction = onSubtitleAction,
+            onDismiss = onDismissTracks,
+        )
+    }
+
+    subtitleNotice?.let { SubtitleNoticeBanner(it) }
+}
+
+/**
+ * What happened to the subtitle file the viewer picked (INC-F10).
+ *
+ * Above the controls rather than where a snackbar would sit, because the controls are what a
+ * viewer is looking at when they get here and this is the answer to what they just did.
+ */
+@Composable
+private fun SubtitleNoticeBanner(notice: SubtitleNotice) {
+    // Its own full-size box so that the alignment travels with the banner rather than with
+    // whoever draws it. The overlays are already stacked; one more layer costs nothing.
+    Box(
+        modifier = Modifier.fillMaxSize(),
+        contentAlignment = Alignment.BottomCenter,
+    ) {
+        Text(
+            text = subtitleNoticeText(notice),
+            color = Color.White,
+            fontSize = 14.sp,
+            textAlign = TextAlign.Center,
+            modifier = Modifier
+                .padding(bottom = SUBTITLE_NOTICE_BOTTOM_PADDING)
+                .background(Color.Black.copy(alpha = 0.75f), RoundedCornerShape(8.dp))
+                .padding(horizontal = 16.dp, vertical = 10.dp),
+        )
     }
 }
 
@@ -435,6 +503,26 @@ private const val PERCENT = 100
  * A [SurfaceView] rather than a `TextureView`: it composites in the display pipeline
  * rather than through the GPU, which matters for battery on long viewing sessions.
  */
+/**
+ * Where the engine draws subtitle cues (INC-F10, INC-F11).
+ *
+ * **Without this nothing shows subtitles at all.** The engine decodes a text track and hands the
+ * cues out; a player drawing into a bare `SurfaceView` — which both apps do, so that no feature
+ * module ever names a Media3 type — has nowhere to put them. Selecting a subtitle and seeing an
+ * unchanged picture was the symptom, on every track the app has ever offered.
+ *
+ * The view comes from the controller already wired up, so this is only where it goes: over the
+ * video, under the controls, so a control bar never sits behind a line of dialogue.
+ */
+@Composable
+private fun SubtitleOutput(viewModel: PlayerViewModel, modifier: Modifier = Modifier) {
+    val controller = remember { viewModel.controllerHandle() }
+    AndroidView(
+        factory = { context -> controller.subtitleOutput(context) },
+        modifier = modifier,
+    )
+}
+
 @Composable
 private fun VideoSurface(
     viewModel: PlayerViewModel,

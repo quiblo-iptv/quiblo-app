@@ -22,15 +22,14 @@ import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -76,6 +75,7 @@ fun SettingsScreen(
     val categoryKind by viewModel.selectedCategoryKind.collectAsStateWithLifecycle()
     val categories by viewModel.categories.collectAsStateWithLifecycle()
     val appearance by viewModel.appearance.collectAsStateWithLifecycle()
+    val hiddenScripts by viewModel.hiddenScripts.collectAsStateWithLifecycle()
     val channelLogosEnabled by viewModel.channelLogosEnabled.collectAsStateWithLifecycle()
     val context = LocalContext.current
 
@@ -106,85 +106,108 @@ fun SettingsScreen(
         }
     }
 
-    Column(
+    // Read through stringResource rather than context.getString so it re-resolves on a
+    // locale or configuration change like every other string on the screen.
+    val defaultFilename = stringResource(R.string.settings_backup_default_filename)
+
+    LazyColumn(
         modifier = modifier
             .fillMaxSize()
-            .verticalScroll(rememberScrollState())
             .padding(16.dp),
     ) {
-        // Read through stringResource rather than context.getString so it re-resolves on a
-        // locale or configuration change like every other string on the screen.
-        val defaultFilename = stringResource(R.string.settings_backup_default_filename)
-
         // No title here: the host screen's app bar already shows one, and repeating it
         // reads as a rendering fault.
-        BackupCard(
-            isWorking = backupState is BackupUiState.Working,
-            onExport = { exportLauncher.launch(defaultFilename) },
-            onImport = { importLauncher.launch(arrayOf(BACKUP_MIME_TYPE, ANY_MIME_TYPE)) },
-        )
+        cardItem {
+            BackupCard(
+                isWorking = backupState is BackupUiState.Working,
+                onExport = { exportLauncher.launch(defaultFilename) },
+                onImport = { importLauncher.launch(arrayOf(BACKUP_MIME_TYPE, ANY_MIME_TYPE)) },
+            )
+        }
 
-        Spacer(modifier = Modifier.height(16.dp))
+        cardItem {
+            AppearanceSettingsCard(
+                appearance = appearance,
+                onThemeMode = viewModel::setThemeMode,
+                onDynamicColor = viewModel::setDynamicColor,
+            )
+        }
 
-        AppearanceSettingsCard(
-            appearance = appearance,
-            onThemeMode = viewModel::setThemeMode,
-            onDynamicColor = viewModel::setDynamicColor,
-        )
+        cardItem {
+            ProfileCard(
+                name = profilesState.active?.name,
+                isGuest = profilesState.active?.isGuest == true,
+                onSwitch = profilesViewModel::switchProfile,
+            )
+        }
 
-        Spacer(modifier = Modifier.height(16.dp))
+        cardItem {
+            PlaybackSettingsCard(
+                settings = playerSettings,
+                onSeekInterval = viewModel::setSeekInterval,
+                onBufferMode = viewModel::setBufferMode,
+                onMaxBitrate = viewModel::setMaxBitrate,
+            )
+        }
 
-        ProfileCard(
-            name = profilesState.active?.name,
-            isGuest = profilesState.active?.isGuest == true,
-            onSwitch = profilesViewModel::switchProfile,
-        )
+        cardItem {
+            ScriptSettingsCard(
+                hidden = hiddenScripts,
+                onSetHidden = viewModel::setScriptHidden,
+                onShowEverything = viewModel::showEveryScript,
+            )
+        }
 
-        Spacer(modifier = Modifier.height(16.dp))
+        cardItem {
+            CategorySettingsCard(
+                selectedKind = categoryKind,
+                categories = categories,
+                onSelectKind = viewModel::selectCategoryKind,
+                onSetHidden = viewModel::setCategoryHidden,
+                onRename = viewModel::renameCategory,
+            )
+        }
 
-        PlaybackSettingsCard(
-            settings = playerSettings,
-            onSeekInterval = viewModel::setSeekInterval,
-            onBufferMode = viewModel::setBufferMode,
-            onMaxBitrate = viewModel::setMaxBitrate,
-        )
+        cardItem {
+            MetadataSettingsCard(
+                savedKey = tmdbKey,
+                check = tmdbCheck,
+                onSave = viewModel::saveTmdbKey,
+                onClear = viewModel::clearTmdbKey,
+                scan = metadataScan,
+                onStartScan = viewModel::startMetadataScan,
+                onCancelScan = viewModel::cancelMetadataScan,
+                onDismissScan = viewModel::dismissMetadataScan,
+            )
+        }
 
-        Spacer(modifier = Modifier.height(16.dp))
+        cardItem {
+            ChannelLogoSettingsCard(
+                isEnabled = channelLogosEnabled,
+                onToggle = viewModel::setChannelLogosEnabled,
+            )
+        }
 
-        CategorySettingsCard(
-            selectedKind = categoryKind,
-            categories = categories,
-            onSelectKind = viewModel::selectCategoryKind,
-            onSetHidden = viewModel::setCategoryHidden,
-            onRename = viewModel::renameCategory,
-        )
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        MetadataSettingsCard(
-            savedKey = tmdbKey,
-            check = tmdbCheck,
-            onSave = viewModel::saveTmdbKey,
-            onClear = viewModel::clearTmdbKey,
-            scan = metadataScan,
-            onStartScan = viewModel::startMetadataScan,
-            onCancelScan = viewModel::cancelMetadataScan,
-            onDismissScan = viewModel::dismissMetadataScan,
-        )
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        ChannelLogoSettingsCard(
-            isEnabled = channelLogosEnabled,
-            onToggle = viewModel::setChannelLogosEnabled,
-        )
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        LicensesCard()
+        cardItem {
+            LicensesCard()
+        }
     }
 
     BackupResultDialog(state = backupState, onDismiss = viewModel::dismiss)
+}
+
+/**
+ * A settings card, with the gap that used to be a Spacer between it and the next one.
+ *
+ * The spacing is per card rather than `verticalArrangement` on the list. It was written when
+ * the category rows were items of this same list and a uniform gap would have spaced several
+ * hundred of them apart; they are back inside their own card now, so the two would agree —
+ * but per-card spacing is still what says "this gap belongs between cards" rather than
+ * "everything in this list is 16dp apart", and the next thing added at the top level will be
+ * glad of the difference.
+ */
+private fun LazyListScope.cardItem(content: @Composable () -> Unit) = item {
+    Box(modifier = Modifier.padding(bottom = 16.dp)) { content() }
 }
 
 @Composable

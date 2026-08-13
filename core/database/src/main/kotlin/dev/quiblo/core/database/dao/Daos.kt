@@ -30,9 +30,11 @@ import dev.quiblo.core.database.entity.CategoryOverrideEntity
 import dev.quiblo.core.database.entity.ChannelEntity
 import dev.quiblo.core.database.entity.ChannelLogoEntity
 import dev.quiblo.core.database.entity.FavoriteEntity
+import dev.quiblo.core.database.entity.PickedSubtitleEntity
 import dev.quiblo.core.database.entity.ProfileEntity
 import dev.quiblo.core.database.entity.ProgrammeEntity
 import dev.quiblo.core.database.entity.ResumePositionEntity
+import dev.quiblo.core.database.entity.SeriesPreferenceEntity
 import dev.quiblo.core.database.entity.SourceEntity
 import dev.quiblo.core.database.entity.TitleMetadataEntity
 import kotlinx.coroutines.flow.Flow
@@ -384,6 +386,28 @@ interface ProgrammeDao {
     )
     fun observeNowPlaying(sourceId: Long, nowEpochMillis: Long): Flow<List<ProgrammeEntity>>
 
+    /**
+     * Every programme on one channel that overlaps a window (INC-F4).
+     *
+     * Overlaps rather than starts inside: the programme a viewer is watching began before the
+     * window did, and a timeline that omitted it would open with a gap where "now" is.
+     */
+    @Query(
+        """
+        SELECT * FROM programmes
+        WHERE sourceId = :sourceId AND channelKey = :channelKey
+          AND endEpochMillis > :fromEpochMillis
+          AND startEpochMillis < :toEpochMillis
+        ORDER BY startEpochMillis ASC
+        """,
+    )
+    fun observeBetween(
+        sourceId: Long,
+        channelKey: String,
+        fromEpochMillis: Long,
+        toEpochMillis: Long,
+    ): Flow<List<ProgrammeEntity>>
+
     @Query("SELECT COUNT(*) FROM programmes WHERE sourceId = :sourceId AND channelKey = :channelKey")
     suspend fun countFor(sourceId: Long, channelKey: String): Int
 
@@ -414,6 +438,8 @@ interface ProgrammeDao {
 data class TitleGenreRow(
     val searchTitle: String,
     val kind: String,
+    /** Part of the key since #024, and read because the join is on the whole key. */
+    val year: Int,
     val genres: String?,
     val isMiss: Boolean,
 )
@@ -429,14 +455,19 @@ data class TitleGenreRow(
 data class CachedTitleKey(
     val searchTitle: String,
     val kind: String,
+    /** Part of the key since #024, and read because the subtraction is on the whole key. */
+    val year: Int,
     val fetchedAtEpochMillis: Long,
 )
 
 @Dao
 interface TitleMetadataDao {
 
-    @Query("SELECT * FROM title_metadata WHERE searchTitle = :searchTitle AND kind = :kind")
-    suspend fun find(searchTitle: String, kind: String): TitleMetadataEntity?
+    @Query(
+        "SELECT * FROM title_metadata " +
+            "WHERE searchTitle = :searchTitle AND kind = :kind AND year = :year",
+    )
+    suspend fun find(searchTitle: String, kind: String, year: Int): TitleMetadataEntity?
 
     /**
      * Every answer the cache holds, misses included.
@@ -446,11 +477,11 @@ interface TitleMetadataDao {
      * asked about; it is known, and pretending otherwise would make the figure creep
      * upward forever without ever arriving.
      */
-    @Query("SELECT searchTitle, kind, genres, isMiss FROM title_metadata")
+    @Query("SELECT searchTitle, kind, year, genres, isMiss FROM title_metadata")
     suspend fun allGenreRows(): List<TitleGenreRow>
 
     /** Every key the cache holds, with its age, for the scan to skip what it already knows. */
-    @Query("SELECT searchTitle, kind, fetchedAtEpochMillis FROM title_metadata")
+    @Query("SELECT searchTitle, kind, year, fetchedAtEpochMillis FROM title_metadata")
     suspend fun allKeys(): List<CachedTitleKey>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
@@ -526,6 +557,9 @@ interface ProfileDao {
     @Insert
     suspend fun insert(profile: ProfileEntity): Long
 
+    @Query("UPDATE profiles SET avatar = :avatar WHERE id = :id")
+    suspend fun setAvatar(id: Long, avatar: String?)
+
     @Query("DELETE FROM profiles WHERE id = :id")
     suspend fun delete(id: Long)
 
@@ -539,4 +573,32 @@ interface ProfileDao {
      */
     @Query("DELETE FROM profiles WHERE isGuest = 1")
     suspend fun deleteGuests()
+}
+
+/** How one viewer reads one series. See [SeriesPreferenceEntity]. */
+@Dao
+interface SeriesPreferenceDao {
+
+    @Query("SELECT * FROM series_preferences WHERE profileId = :profileId AND seriesKey = :seriesKey")
+    fun observe(profileId: Long, seriesKey: String): Flow<SeriesPreferenceEntity?>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsert(preference: SeriesPreferenceEntity)
+}
+
+/** Subtitle files a viewer picked. See [PickedSubtitleEntity]. */
+@Dao
+interface PickedSubtitleDao {
+
+    @Query("SELECT * FROM picked_subtitles WHERE stableKey = :stableKey")
+    suspend fun forTitle(stableKey: String): PickedSubtitleEntity?
+
+    @Query("SELECT * FROM picked_subtitles")
+    suspend fun all(): List<PickedSubtitleEntity>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsert(subtitle: PickedSubtitleEntity)
+
+    @Query("DELETE FROM picked_subtitles WHERE stableKey = :stableKey")
+    suspend fun delete(stableKey: String)
 }

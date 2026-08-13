@@ -21,11 +21,16 @@ package dev.quiblo.feature.series
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dev.quiblo.core.data.ChannelRepository
+import dev.quiblo.core.data.MetadataRefresh
+import dev.quiblo.core.data.SeriesPreference
+import dev.quiblo.core.data.SeriesPreferenceRepository
 import dev.quiblo.core.data.TitleMetadataRepository
 import dev.quiblo.core.data.WatchHistoryRepository
+import dev.quiblo.core.data.arrangedBy
 import dev.quiblo.core.model.Channel
 import dev.quiblo.core.model.Episode
 import dev.quiblo.core.model.MediaKind
+import dev.quiblo.core.model.Season
 import dev.quiblo.core.model.SeriesDetails
 import dev.quiblo.core.model.TitleMetadata
 import dev.quiblo.source.api.SeriesDetailsResult
@@ -60,6 +65,39 @@ sealed interface SeriesDetailUiState {
         /** From TMDB, when the user has enabled it and a match was found. */
         val metadata: TitleMetadata? = null,
         /**
+         * What the last press of refresh did, or null.
+         *
+         * Kept in the state rather than raised as an event because it survives a rotation,
+         * and a message about a request the viewer made is exactly the sort of thing that
+         * should not vanish because the screen turned.
+         */
+        val refreshResult: MetadataRefresh? = null,
+        /**
+         * Whether a metadata key is configured.
+         *
+         * The refresh control is **absent** rather than disabled when it is false. `AC-META-01`
+         * says nothing here issues a request without a key, so a button that cannot work is a
+         * hollow control — and a greyed-out one still invites the press that does nothing.
+         */
+        val canRefreshMetadata: Boolean = false,
+        /**
+         * How this viewer reads this series: merged or by season, newest first or oldest.
+         *
+         * `INC-F6`. Held in the state rather than read by the screen so that the arrangement
+         * and the seasons it produced can never disagree — they are recomputed together.
+         */
+        val preference: SeriesPreference = SeriesPreference(),
+        /**
+         * The seasons as they should be drawn, already arranged.
+         *
+         * Separate from `details.seasons`, which stays the provider's own answer. A screen that
+         * sorted on every recomposition would sort a thousand episodes on every frame, and a
+         * screen that sorted in place would lose the original order it needs to go back to.
+         */
+        val seasons: List<Season> = emptyList(),
+        /** True while a refresh is in flight, so the control can say so. */
+        val isEnriching: Boolean = false,
+        /**
          * Whether this series is favourited.
          *
          * Streamed rather than taken from [channel], which is a snapshot from when the
@@ -75,7 +113,10 @@ class SeriesDetailViewModel(
     private val channelRepository: ChannelRepository,
     private val metadataRepository: TitleMetadataRepository,
     private val historyRepository: WatchHistoryRepository,
+    private val preferences: SeriesPreferenceRepository,
 ) : ViewModel() {
+
+    private var isRefreshing = false
 
     private val _uiState = MutableStateFlow<SeriesDetailUiState>(SeriesDetailUiState.Loading)
     val uiState: StateFlow<SeriesDetailUiState> = _uiState.asStateFlow()
@@ -109,9 +150,13 @@ class SeriesDetailViewModel(
                         resumePositionMillis = watched?.second ?: 0L,
                         firstEpisode = episodes.firstOrNull(),
                         isFavorite = channel.isFavorite,
+                        // The provider's own order until the preference arrives, which is one
+                        // frame later. Leaving it empty would flash an episode-less screen.
+                        seasons = result.details.seasons,
                     )
 
                     observeFavorite(channel)
+                    observePreference(channel.stableKey)
                     enrich(channel)
                 }
             }
@@ -181,7 +226,12 @@ class SeriesDetailViewModel(
             metadataRepository.load()
             val metadata = metadataRepository.forTitle(channel.name, MediaKind.SERIES)
             (_uiState.value as? SeriesDetailUiState.Success)?.let {
-                _uiState.value = it.copy(metadata = metadata)
+                _uiState.value = it.copy(
+                    metadata = metadata,
+                    // Read after load(), which is what fills the key from storage. Reading it
+                    // before would report "no key" on every cold open of this screen.
+                    canRefreshMetadata = metadataRepository.isEnabled,
+                )
             }
         }
     }
@@ -201,6 +251,78 @@ class SeriesDetailViewModel(
                     _uiState.value = it.copy(isFavorite = isFavorite)
                 }
             }
+        }
+    }
+
+    /**
+     * Asks the metadata service about this title again, ignoring what is cached.
+     *
+     * `INC-F7`. The reason the intake asks for it is artwork that never arrived or a plot that
+     * is out of date, so **the outcome has to be visible**: the poster changes, or a message
+     * says what happened. A button whose only feedback is that the screen looks the same is
+     * indistinguishable from a button that does nothing.
+     *
+     * A refusal leaves the existing record alone — that is the repository's promise, and this
+     * reports it rather than blanking the screen.
+     */
+    fun refreshMetadata() {
+        val channel = (_uiState.value as? SeriesDetailUiState.Success)?.channel ?: return
+        if (isRefreshing) return
+        isRefreshing = true
+
+        viewModelScope.launch {
+            update { it.copy(isEnriching = true, refreshResult = null) }
+            val outcome = metadataRepository.refresh(channel.name, MediaKind.SERIES)
+            update {
+                it.copy(
+                    isEnriching = false,
+                    refreshResult = outcome,
+                    metadata = (outcome as? MetadataRefresh.Updated)?.metadata ?: it.metadata,
+                )
+            }
+            isRefreshing = false
+        }
+    }
+
+    /** Dismisses the message the refresh left behind, so it does not outlive the screen. */
+    fun dismissRefreshResult() {
+        update { it.copy(refreshResult = null) }
+    }
+
+    private fun update(block: (SeriesDetailUiState.Success) -> SeriesDetailUiState.Success) {
+        (_uiState.value as? SeriesDetailUiState.Success)?.let { _uiState.value = block(it) }
+    }
+
+    /**
+     * Follows this viewer's arrangement for this series, and re-arranges when it changes.
+     *
+     * Collected for as long as the screen is open rather than read once, because switching
+     * profile while a series is open should show that person's arrangement — the preference is
+     * theirs, not the screen's.
+     */
+    private fun observePreference(seriesKey: String) {
+        viewModelScope.launch {
+            preferences.observe(seriesKey).collect { preference ->
+                (_uiState.value as? SeriesDetailUiState.Success)?.let {
+                    _uiState.value = it.copy(
+                        preference = preference,
+                        seasons = it.details.seasons.arrangedBy(preference),
+                    )
+                }
+            }
+        }
+    }
+
+    /** Merge every season into one list, or put them back. */
+    fun setMerged(isMerged: Boolean) = updatePreference { it.copy(isMerged = isMerged) }
+
+    /** Newest episode first, or oldest. */
+    fun setDescending(isDescending: Boolean) = updatePreference { it.copy(isDescending = isDescending) }
+
+    private fun updatePreference(block: (SeriesPreference) -> SeriesPreference) {
+        val state = _uiState.value as? SeriesDetailUiState.Success ?: return
+        viewModelScope.launch {
+            preferences.set(state.channel.stableKey, block(state.preference))
         }
     }
 }

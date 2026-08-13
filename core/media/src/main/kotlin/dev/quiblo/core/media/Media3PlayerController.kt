@@ -19,8 +19,11 @@
 package dev.quiblo.core.media
 
 import android.content.Context
+import android.graphics.Color
+import android.net.Uri
 import android.os.SystemClock
 import android.view.SurfaceView
+import android.view.View
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
@@ -30,6 +33,8 @@ import androidx.media3.common.TrackSelectionOverride
 import androidx.media3.common.TrackSelectionParameters
 import androidx.media3.common.Tracks
 import androidx.media3.common.VideoSize
+import androidx.media3.common.text.Cue
+import androidx.media3.common.text.CueGroup
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DataSource
 import androidx.media3.datasource.DefaultDataSource
@@ -40,9 +45,13 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.exoplayer.upstream.DefaultLoadErrorHandlingPolicy
 import androidx.media3.exoplayer.upstream.LoadErrorHandlingPolicy
+import androidx.media3.ui.CaptionStyleCompat
+import androidx.media3.ui.SubtitleView
 import dev.quiblo.core.model.BufferMode
 import dev.quiblo.core.model.MaxBitrateCap
 import dev.quiblo.core.model.PlayerSettings
+import dev.quiblo.core.model.SubtitleFile
+import dev.quiblo.core.model.SubtitleStyle
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -126,6 +135,20 @@ class Media3PlayerController(
 
     /** Kept so the surface can be rebound after the engine is rebuilt. */
     private var attachedSurface: SurfaceView? = null
+
+    /** The view cues are drawn into, once something has asked for one. */
+    private var subtitleView: SubtitleView? = null
+
+    /**
+     * The last cues the engine produced.
+     *
+     * Held so that a view built mid-line shows that line rather than waiting for the next one,
+     * and so an engine rebuild does not blank the screen for however long the current cue had
+     * left to run.
+     */
+    private var latestCues: List<Cue> = emptyList()
+
+    private var subtitleStyle = SubtitleStyle()
 
     private var player: ExoPlayer = buildPlayer(builtWith)
 
@@ -226,7 +249,7 @@ class Media3PlayerController(
         _state.value = PlaybackState(status = PlaybackStatus.BUFFERING, item = item)
         startWatchdog()
 
-        player.setMediaItem(MediaItem.fromUri(item.url))
+        player.setMediaItem(item.toMediaItem())
         if (!item.isLive && item.startPositionMillis > 0L) {
             player.seekTo(item.startPositionMillis)
         }
@@ -276,7 +299,63 @@ class Media3PlayerController(
         player.clearVideoSurface()
     }
 
+    /**
+     * The view cues are drawn into.
+     *
+     * Built once and kept, because it holds the current cue: rebuilding it on a recomposition
+     * would blank the line a viewer is reading. It is re-registered on every engine rebuild —
+     * [rebuildIfNeeded] releases the player the listener was attached to — which is why the
+     * listener is added in [buildPlayer] and not here.
+     */
+    override fun subtitleOutput(context: Context): View =
+        subtitleView ?: SubtitleView(context).also {
+            it.setStyle(captionStyle)
+            it.setFractionalTextSize(fractionalTextSize)
+            it.setCues(latestCues)
+            subtitleView = it
+        }
+
+    /**
+     * Starts from the system's own caption style and overrides it only when asked.
+     *
+     * `setUserDefaultStyle` and `setUserDefaultTextSize` read what the person set in Android's
+     * accessibility settings. Someone who enlarged captions there has already answered this, and
+     * quietly ignoring that is the kind of decision an app should not make on their behalf.
+     */
+    override fun applySubtitleStyle(style: SubtitleStyle) {
+        subtitleStyle = style
+        subtitleView?.let { view ->
+            if (style.matchSystem) {
+                view.setUserDefaultStyle()
+                view.setUserDefaultTextSize()
+            } else {
+                view.setStyle(captionStyle)
+                view.setFractionalTextSize(fractionalTextSize)
+            }
+        }
+    }
+
+    private val captionStyle: CaptionStyleCompat
+        get() = subtitleStyle.let { style ->
+            CaptionStyleCompat(
+                style.textColor.argb,
+                // The alpha is the viewer's, the hue is the viewer's, and they are set
+                // separately because "black box" and "how solid" are two questions people
+                // answer differently.
+                style.background.argb.withAlpha(style.backgroundOpacity.alpha),
+                Color.TRANSPARENT,
+                CaptionStyleCompat.EDGE_TYPE_OUTLINE,
+                Color.BLACK,
+                null,
+            )
+        }
+
+    private val fractionalTextSize: Float get() = subtitleStyle.textSize.fractionOfHeight
+
+    private fun Int.withAlpha(alpha: Int): Int = (this and RGB_MASK) or (alpha shl ALPHA_SHIFT)
+
     override fun release() {
+        subtitleView = null
         retryJob?.cancel()
         progressJob?.cancel()
         watchdogJob?.cancel()
@@ -302,6 +381,26 @@ class Media3PlayerController(
         }
         player.trackSelectionParameters = parameters.build()
     }
+
+    /**
+     * The stream, plus any sidecar subtitles (INC-F10).
+     *
+     * `DefaultMediaSourceFactory` merges each configuration in as its own text track, so
+     * everything downstream — [selectTextTrack], the track list, the menu — is the code that
+     * already existed. Nothing is flagged default or forced: a file the viewer attached is one
+     * they still have to switch on, which is the same rule the container's own tracks follow.
+     */
+    private fun PlayableItem.toMediaItem(): MediaItem = MediaItem.Builder()
+        .setUri(url)
+        .setSubtitleConfigurations(subtitles.map { it.toSubtitleConfiguration() })
+        .build()
+
+    private fun SubtitleFile.toSubtitleConfiguration(): MediaItem.SubtitleConfiguration =
+        MediaItem.SubtitleConfiguration.Builder(Uri.parse(uri))
+            .setMimeType(mimeType)
+            .setLanguage(language)
+            .setLabel(label)
+            .build()
 
     private fun groupId(group: Tracks.Group): String =
         "${group.type}:${group.mediaTrackGroup.id}:${group.getTrackFormat(0).language ?: "und"}"
@@ -386,6 +485,19 @@ class Media3PlayerController(
     }
 
     inner class PlayerListener : Player.Listener {
+
+        /**
+         * The cues for this instant, pushed straight at the view (INC-F10).
+         *
+         * Without this nothing draws subtitles at all. The engine decodes the text track and
+         * reports it here, and a player built on a bare `SurfaceView` — which this one is,
+         * deliberately, to keep Media3's views out of the feature modules — has nowhere for it
+         * to land. Selecting a subtitle track and seeing nothing was the whole symptom.
+         */
+        override fun onCues(cueGroup: CueGroup) {
+            latestCues = cueGroup.cues
+            subtitleView?.setCues(latestCues)
+        }
 
         override fun onPlaybackStateChanged(playbackState: Int) {
             val current = _state.value
@@ -496,6 +608,10 @@ class Media3PlayerController(
          * VOD deliberately keeps the engine default — see [loadErrorPolicy].
          */
         const val LIVE_ENGINE_LOAD_RETRIES = 1
+
+        /** Where the alpha byte sits in an ARGB colour, and what is left when it is dropped. */
+        const val ALPHA_SHIFT = 24
+        const val RGB_MASK = 0x00FFFFFF
 
         /**
          * Sent on stream requests, matching what the API client already sends. Some panels

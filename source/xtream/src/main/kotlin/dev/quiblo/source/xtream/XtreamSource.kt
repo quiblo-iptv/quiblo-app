@@ -18,6 +18,9 @@
 
 package dev.quiblo.source.xtream
 
+import dev.quiblo.core.common.SubtitleFormat
+import dev.quiblo.core.common.languageCodeOf
+import dev.quiblo.core.common.subtitleFormatOfName
 import dev.quiblo.core.model.Category
 import dev.quiblo.core.model.Channel
 import dev.quiblo.core.model.Episode
@@ -26,6 +29,8 @@ import dev.quiblo.core.model.Programme
 import dev.quiblo.core.model.Season
 import dev.quiblo.core.model.SeriesDetails
 import dev.quiblo.core.model.SourceKind
+import dev.quiblo.core.model.SubtitleFile
+import dev.quiblo.core.model.SubtitleOrigin
 import dev.quiblo.core.model.VodDetails
 import dev.quiblo.source.api.CredentialStore
 import dev.quiblo.source.api.Credentials
@@ -45,6 +50,7 @@ import dev.quiblo.source.xtream.dto.AuthResponse
 import dev.quiblo.source.xtream.dto.CategoryDto
 import dev.quiblo.source.xtream.dto.EpgListingDto
 import dev.quiblo.source.xtream.dto.SeriesInfoResponse
+import dev.quiblo.source.xtream.dto.XtreamSubtitle
 import io.ktor.client.HttpClient
 import java.util.Base64
 
@@ -349,6 +355,27 @@ class XtreamSource internal constructor(
         }
     }
 
+    override suspend fun fullGuideFor(
+        request: SourceRequest,
+        channelKey: String,
+        providerStreamId: String,
+    ): GuideResult {
+        if (isBlocked()) return GuideResult.Failure(SourceError.ProviderBlocked)
+
+        val base = XtreamUrl.normalize(request.location)
+            ?: return GuideResult.Failure(SourceError.UnreachableHost)
+        val credentials = credentialStore.credentials(request.sourceId)
+            ?: return GuideResult.Failure(SourceError.Unauthorized)
+
+        return when (val result = client.fullEpg(base, credentials, providerStreamId)) {
+            is ApiResult.Err -> noteBlocked(result.error, GuideResult::Failure)
+
+            is ApiResult.Ok -> GuideResult.Success(
+                result.value.listings.mapNotNull { it.toProgramme(request.sourceId, channelKey) },
+            )
+        }
+    }
+
     override suspend fun seriesDetails(
         request: SourceRequest,
         seriesId: String,
@@ -391,6 +418,9 @@ class XtreamSource internal constructor(
                     genre = result.value.info?.genre,
                     rating = result.value.info?.rating,
                     durationSeconds = result.value.info?.durationSeconds,
+                    subtitles = result.value.info?.subtitles
+                        .orEmpty()
+                        .map { it.toSubtitleFile(base) },
                 ),
             )
         }
@@ -540,4 +570,33 @@ class XtreamSource internal constructor(
         /** Distinguishes "no block recorded" from "the stored deadline has not been read". */
         const val NOT_YET_READ = -1L
     }
+}
+
+/**
+ * One panel-supplied subtitle entry, as something the player can load (INC-F10).
+ *
+ * **The format is a guess when the URL does not carry an extension, and the guess is SubRip.**
+ * Panels routinely serve a subtitle from a path like `/subtitle/12345` with no hint of what is
+ * behind it, and refusing those would drop most of the few subtitles panels actually supply.
+ * SubRip is what nearly all of them are. A wrong guess costs a text track that renders nothing,
+ * which is visible and recoverable; refusing costs a subtitle that existed and was never offered.
+ *
+ * A relative path is resolved against the panel, which is where it came from.
+ */
+private fun XtreamSubtitle.toSubtitleFile(base: String): SubtitleFile {
+    val absolute = if (url.startsWith("http://", ignoreCase = true) ||
+        url.startsWith("https://", ignoreCase = true)
+    ) {
+        url
+    } else {
+        base.trimEnd('/') + "/" + url.trimStart('/')
+    }
+
+    return SubtitleFile(
+        uri = absolute,
+        label = label,
+        mimeType = (subtitleFormatOfName(absolute) ?: SubtitleFormat.SubRip).mimeType,
+        language = language?.let(::languageCodeOf),
+        origin = SubtitleOrigin.PROVIDER,
+    )
 }

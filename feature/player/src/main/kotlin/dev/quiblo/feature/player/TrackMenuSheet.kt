@@ -59,6 +59,7 @@ import androidx.compose.ui.window.Dialog
 internal fun TrackMenuSheet(
     menu: TrackMenu,
     onSelect: (TrackMenuKind, String?) -> Unit,
+    onAction: (TrackMenuActionKind) -> Unit,
     onDismiss: () -> Unit,
 ) {
     Dialog(onDismissRequest = onDismiss) {
@@ -79,10 +80,7 @@ internal fun TrackMenuSheet(
                 menu.sections.forEachIndexed { index, section ->
                     Text(
                         text = stringResource(
-                            when (section.kind) {
-                                TrackMenuKind.AUDIO -> R.string.player_audio
-                                TrackMenuKind.SUBTITLES -> R.string.player_subtitles
-                            },
+                            section.kind.headingRes(),
                         ),
                         color = Color.White.copy(alpha = 0.55f),
                         fontSize = 13.sp,
@@ -97,9 +95,23 @@ internal fun TrackMenuSheet(
 
                     section.entries.forEach { entry ->
                         TrackRow(
-                            entry = entry,
+                            label = entry.label,
+                            isSelected = entry.isSelected,
                             onClick = {
                                 onSelect(section.kind, entry.trackId)
+                                onDismiss()
+                            },
+                        )
+                    }
+
+                    // Below the choices, never among them: an action is not a track, and a tick
+                    // beside "Add a subtitle file" is not a state it can be in.
+                    section.actions.forEach { action ->
+                        TrackRow(
+                            label = action.label,
+                            isSelected = false,
+                            onClick = {
+                                onAction(action.kind)
                                 onDismiss()
                             },
                         )
@@ -111,7 +123,7 @@ internal fun TrackMenuSheet(
 }
 
 @Composable
-private fun TrackRow(entry: TrackMenuEntry, onClick: () -> Unit) {
+private fun TrackRow(label: String, isSelected: Boolean, onClick: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -122,16 +134,16 @@ private fun TrackRow(entry: TrackMenuEntry, onClick: () -> Unit) {
     ) {
         // A tick, so what is playing is legible without relying on colour alone.
         Text(
-            text = if (entry.isSelected) SELECTED_MARK else " ",
+            text = if (isSelected) SELECTED_MARK else " ",
             color = Color.White,
             fontSize = 15.sp,
         )
 
         Text(
-            text = entry.label,
-            color = Color.White.copy(alpha = if (entry.isSelected) 1f else 0.85f),
+            text = label,
+            color = Color.White.copy(alpha = if (isSelected) 1f else 0.85f),
             fontSize = 15.sp,
-            fontWeight = if (entry.isSelected) FontWeight.SemiBold else FontWeight.Normal,
+            fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )
@@ -140,3 +152,12 @@ private fun TrackRow(entry: TrackMenuEntry, onClick: () -> Unit) {
 
 private val SHEET_MAX_WIDTH = 360.dp
 private const val SELECTED_MARK = "✓"
+
+/** One heading per section, so neither app has to hold its own copy of the mapping. */
+internal fun TrackMenuKind.headingRes(): Int = when (this) {
+    TrackMenuKind.AUDIO -> R.string.player_audio
+    TrackMenuKind.SUBTITLES -> R.string.player_subtitles
+    TrackMenuKind.SUBTITLE_SIZE -> R.string.player_subtitles_size
+    TrackMenuKind.SUBTITLE_TEXT_COLOUR -> R.string.player_subtitles_text_colour
+    TrackMenuKind.SUBTITLE_BACKGROUND -> R.string.player_subtitles_background
+}

@@ -20,8 +20,10 @@ package dev.quiblo.feature.player
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import dev.quiblo.core.data.AttachResult
 import dev.quiblo.core.data.ChannelRepository
 import dev.quiblo.core.data.PlayerSettingsRepository
+import dev.quiblo.core.data.SubtitleRepository
 import dev.quiblo.core.data.WatchHistoryRepository
 import dev.quiblo.core.media.PlayableItem
 import dev.quiblo.core.media.PlaybackState
@@ -30,6 +32,10 @@ import dev.quiblo.core.model.AspectRatioMode
 import dev.quiblo.core.model.HistoryEntry
 import dev.quiblo.core.model.MediaKind
 import dev.quiblo.core.model.PlayerSettings
+import dev.quiblo.core.model.SubtitleFile
+import dev.quiblo.core.model.SubtitleOrigin
+import dev.quiblo.core.model.SubtitleStyle
+import dev.quiblo.source.api.VodDetailsResult
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -51,7 +57,8 @@ class PlayerViewModel(
     private val controller: PlayerController,
     private val channelRepository: ChannelRepository,
     private val historyRepository: WatchHistoryRepository,
-    settingsRepository: PlayerSettingsRepository,
+    private val subtitleRepository: SubtitleRepository,
+    private val settingsRepository: PlayerSettingsRepository,
 ) : ViewModel() {
 
     val state: StateFlow<PlaybackState> = controller.state
@@ -78,6 +85,22 @@ class PlayerViewModel(
     val aspectRatioMode: StateFlow<AspectRatioMode> = _aspectRatioMode.asStateFlow()
 
     private var loadedChannelId: Long? = null
+
+    /**
+     * What was last handed to the engine.
+     *
+     * Kept because attaching a subtitle file means preparing the same item again with one more
+     * track on it, and the alternative — reconstructing it from the arguments [load] was called
+     * with — is a second copy of that construction waiting to drift from the first.
+     */
+    private var prepared: PlayableItem? = null
+
+    /**
+     * The outcome of the last attempt to attach a subtitle file, for the screen to say something
+     * about. Null once it has been said.
+     */
+    private val _subtitleNotice = MutableStateFlow<SubtitleNotice?>(null)
+    val subtitleNotice: StateFlow<SubtitleNotice?> = _subtitleNotice.asStateFlow()
 
     /**
      * What is playing, in the terms history is recorded in.
@@ -156,9 +179,10 @@ class PlayerViewModel(
                 seasonNumber = seasonNumber.takeIf { isEpisode },
                 episodeNumber = episodeNumber.takeIf { isEpisode },
             )
-            controller.prepare(
+            val playbackKey = customUrl ?: channel.stableKey
+            prepare(
                 PlayableItem(
-                    id = customUrl ?: channel.stableKey,
+                    id = playbackKey,
                     title = playTitle,
                     url = playUrl,
                     isLive = channel.kind == MediaKind.LIVE,
@@ -168,11 +192,105 @@ class PlayerViewModel(
                     startPositionMillis = when {
                         channel.kind == MediaKind.LIVE -> 0L
                         startPositionMillis != null -> startPositionMillis
-                        else -> historyRepository.resumePosition(customUrl ?: channel.stableKey)
+                        else -> historyRepository.resumePosition(playbackKey)
                     },
+                    subtitles = subtitlesFor(channel.kind, channelId, playbackKey),
                 ),
             )
         }
+    }
+
+    /**
+     * Every sidecar subtitle this title has: the panel's, then the viewer's own (INC-F10).
+     *
+     * **The details call is made for a film and for nothing else.** It is one request, on an
+     * explicit press of play rather than on a scroll, and it is usually already cached by the
+     * screen the viewer pressed play from. Live has no details call at all, and an episode's
+     * subtitles are not something `get_series_info` carries.
+     */
+    private suspend fun subtitlesFor(
+        kind: MediaKind,
+        channelId: Long,
+        playbackKey: String,
+    ): List<SubtitleFile> {
+        val fromPanel = if (kind == MediaKind.VOD) {
+            (channelRepository.getVodDetails(channelId) as? VodDetailsResult.Success)
+                ?.details
+                ?.subtitles
+                .orEmpty()
+        } else {
+            emptyList()
+        }
+        return fromPanel + subtitleRepository.forTitle(playbackKey)
+    }
+
+    /**
+     * Copies the file at [pickedUri] into the app and restarts this item with it loaded.
+     *
+     * A restart, because a subtitle track cannot be added to something already playing: the
+     * engine takes them as part of the media item. It resumes at the position it was at, so what
+     * a viewer sees is a moment of buffering rather than a film starting again.
+     */
+    fun attachSubtitleFile(pickedUri: String) {
+        val item = prepared ?: return
+        viewModelScope.launch {
+            when (val result = subtitleRepository.attach(item.id, pickedUri)) {
+                is AttachResult.Attached -> {
+                    prepare(
+                        item.copy(
+                            subtitles = item.subtitles.filterNot { it.origin == SubtitleOrigin.PICKED } +
+                                result.subtitle,
+                            startPositionMillis = state.value.positionMillis,
+                        ),
+                    )
+                    _subtitleNotice.value = SubtitleNotice.ATTACHED
+                }
+
+                AttachResult.NotSubtitles -> _subtitleNotice.value = SubtitleNotice.NOT_SUBTITLES
+                AttachResult.TooLarge -> _subtitleNotice.value = SubtitleNotice.TOO_LARGE
+                AttachResult.Unreadable -> _subtitleNotice.value = SubtitleNotice.UNREADABLE
+            }
+        }
+    }
+
+    /** Forgets the picked file and restarts without it. The panel's own subtitles stay. */
+    fun detachSubtitleFile() {
+        val item = prepared ?: return
+        viewModelScope.launch {
+            subtitleRepository.detach(item.id)
+            prepare(
+                item.copy(
+                    subtitles = item.subtitles.filterNot { it.origin == SubtitleOrigin.PICKED },
+                    startPositionMillis = state.value.positionMillis,
+                ),
+            )
+        }
+    }
+
+    /**
+     * Says something about subtitles, or stops saying it.
+     *
+     * One method for both because the screen does both from the same place: it shows what came
+     * back, waits, and clears it. [SubtitleNotice.NO_PICKER] is set from the screen rather than
+     * from here, because the absence of a file picker is something only the screen can discover.
+     */
+    fun showSubtitleNotice(notice: SubtitleNotice?) {
+        _subtitleNotice.value = notice
+    }
+
+    /**
+     * How subtitles are drawn, pushed at the renderer as it changes (INC-F11).
+     *
+     * Eager, and separate from [settings], because this one has to reach the view the moment it
+     * is edited — the viewer is looking at the effect while they choose it.
+     */
+    val subtitleStyle: StateFlow<SubtitleStyle> = settingsRepository.subtitleStyle
+        .onEach(controller::applySubtitleStyle)
+        .stateIn(viewModelScope, SharingStarted.Eagerly, SubtitleStyle())
+
+    private fun prepare(item: PlayableItem) {
+        prepared = item
+        controller.prepare(item)
     }
 
     fun togglePlayPause() {
@@ -183,21 +301,35 @@ class PlayerViewModel(
 
     fun retry() = controller.retry()
 
-    fun selectAudioTrack(trackId: String?) = controller.selectAudioTrack(trackId)
-
     /**
      * Selects whichever kind the menu asked for.
      *
      * One entry point rather than a `when` at each call site: both apps draw the same menu and
      * would otherwise each write the same two-branch mapping, which is how the two frontends
-     * come to disagree about a thing neither of them decided.
+     * come to disagree about a thing neither of them decided. It is also the only entry point —
+     * the per-kind methods this replaced had no caller outside it.
      */
-    fun selectTrack(kind: TrackMenuKind, trackId: String?) = when (kind) {
-        TrackMenuKind.AUDIO -> selectAudioTrack(trackId)
-        TrackMenuKind.SUBTITLES -> selectTextTrack(trackId)
+    fun selectTrack(kind: TrackMenuKind, trackId: String?) {
+        when (kind) {
+            TrackMenuKind.AUDIO -> controller.selectAudioTrack(trackId)
+            TrackMenuKind.SUBTITLES -> controller.selectTextTrack(trackId)
+            TrackMenuKind.SUBTITLE_SIZE,
+            TrackMenuKind.SUBTITLE_TEXT_COLOUR,
+            TrackMenuKind.SUBTITLE_BACKGROUND,
+            -> changeSubtitleStyle(kind, trackId)
+        }
     }
 
-    fun selectTextTrack(trackId: String?) = controller.selectTextTrack(trackId)
+    /**
+     * Applies one appearance choice (INC-F11).
+     *
+     * The mapping itself is [withChoice] — a plain function, tested as one, because which row
+     * changes what is the whole of this feature's behaviour and none of it needs a player.
+     */
+    private fun changeSubtitleStyle(kind: TrackMenuKind, id: String?) {
+        val next = subtitleStyle.value.withChoice(kind, id) ?: return
+        viewModelScope.launch { settingsRepository.setSubtitleStyle(next) }
+    }
 
     fun controllerHandle(): PlayerController = controller
 

@@ -207,15 +207,20 @@ fun BrowseScreen(
             listState = listState,
             onItemClick = onItemClick,
             onHistoryClick = openHistory,
+            onHistoryRemove = viewModel::removeFromHistory,
             onToggleFavorite = viewModel::toggleFavorite,
             onShowGuide = { guideFor = it },
         )
     }
 
     guideFor?.let { channel ->
+        // Remembered against the channel, not rebuilt per recomposition: a fresh Flow instance
+        // restarts collection, and a restarted collection empties the sheet for a frame.
         GuideSheet(
             channel = channel,
-            nowNext = viewModel.nowNextFor(channel),
+            nowNext = remember(channel.stableKey) { viewModel.nowNextFor(channel) },
+            schedule = remember(channel.stableKey) { viewModel.scheduleFor(channel) },
+            onOpen = { viewModel.requestFullGuide(channel) },
             onDismiss = { guideFor = null },
         )
     }
@@ -249,6 +254,7 @@ private fun BrowseCatalogue(
     listState: LazyListState,
     onItemClick: (Channel) -> Unit,
     onHistoryClick: (HistoryEntry) -> Unit,
+    onHistoryRemove: (HistoryEntry) -> Unit,
     onToggleFavorite: (Channel) -> Unit,
     onShowGuide: (Channel) -> Unit,
 ) {
@@ -263,6 +269,7 @@ private fun BrowseCatalogue(
                 entries = history,
                 posters = state.posters,
                 onClick = onHistoryClick,
+                onRemove = onHistoryRemove,
                 modifier = Modifier.padding(top = 4.dp, bottom = 12.dp),
             )
             CentredMessage(emptyMessage)
@@ -285,6 +292,7 @@ private fun BrowseCatalogue(
                         entries = history,
                         posters = state.posters,
                         onClick = onHistoryClick,
+                        onRemove = onHistoryRemove,
                         modifier = Modifier.padding(bottom = 12.dp),
                     )
                 }
@@ -321,6 +329,7 @@ private fun BrowseCatalogue(
                         entries = history,
                         posters = state.posters,
                         onClick = onHistoryClick,
+                        onRemove = onHistoryRemove,
                         modifier = Modifier.padding(top = 4.dp, bottom = 12.dp),
                     )
                 }

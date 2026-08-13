@@ -14,7 +14,7 @@ This file records what has been verified so far, how, and what is left. It is th
 tagging v1.0.0 — do not tag while anything in §5, §6 or §7 is unchecked.
 
 **Last updated:** 2026-08-10, after the round-3 faults in
-[`agile/012`](../agile/012%20Bug%20Round%20of%20Quiblo%20—%20Round%203.md).
+[`agile/012`](../agile/012_Bug_Round_of_Quiblo_—_Round_3.md).
 
 > **The sweep has begun informally, and it is failing.** Twelve defects reported on 2026-08-10
 > from ordinary use of the two builds land on seven criteria this file records as never run —
@@ -149,7 +149,7 @@ breakage would show — scoped storage, SAF, and the permission model all change
 | AC-DATA (export) | **Pass** | SAF create-document opens, defaults to `quiblo-backup.json` in Downloads, writes valid JSON with `schema_version: 1` and snake_case keys |
 | AC-DATA (import, valid) | **Pass** | Re-importing the app's own export is idempotent: "Nothing to restore — everything in that file is already set up" |
 | AC-DATA (import, rejection) | **Pass** | A hand-edited `schema_version: 99` file is refused with "That backup was written by a newer version of Quiblo (format 99, this build reads 1). Update the app and try again" — it names both versions rather than failing vaguely |
-| AC-LEGAL-03 | **Pass** | Settings carries an "Open source licenses" section with a Show licenses screen |
+| AC-LEGAL-03 | **Pass on the phone; the television had no licences screen at all until 2026-08-11** | Phone Settings carries an "Open source licenses" section with a Show licenses control. The row above recorded a pass for a criterion that was true of one of the two apps this project ships — the television links the same Apache-2.0 components and displayed none of their notices. Built 2026-08-11 under **About** in TV Settings, with the version beside it; **owed the panel** |
 
 The backup copy states, on screen, that "Passwords are never written to the file — you will
 re-enter them after importing", and the exported JSON contains no credential field. That is
@@ -280,7 +280,7 @@ Amendment 7 (2026-08-10).** The criterion read *"Back from any screen returns to
 bar"*. It was written for a television frontend with two levels; Amendment 4 added detail
 screens the following day and did not re-read it. So the app obeying AC-TV-03 was the app
 throwing away a step of the viewer's journey every time back was pressed — reported as **#020**
-in [`agile/012`](../agile/012%20Bug%20Round%20of%20Quiblo%20—%20Round%203.md).
+in [`agile/012`](../agile/012_Bug_Round_of_Quiblo_—_Round_3.md).
 
 It now reads *"Back pops exactly one step of the journey the viewer took, and never strands
 them. No step is discarded on the way. From a top-level screen, back exits"* — which keeps the

@@ -144,6 +144,14 @@ class BrowseViewModel(
     /** Caps concurrent guide requests so scrolling cannot stampede a panel. */
     private val guideLimiter = Semaphore(MAX_CONCURRENT_GUIDE_FETCHES)
 
+    /**
+     * Channels whose *full* listing has been asked for this session.
+     *
+     * Kept apart from [guideRequested]: a channel whose now/next is already cached still has
+     * a day of listings nobody has fetched, so one set cannot answer both questions.
+     */
+    private val fullGuideRequested = ConcurrentHashMap.newKeySet<String>()
+
     /** The same two guards for the metadata service, which rate-limits per key. */
     private val ratingRequested = ConcurrentHashMap.newKeySet<String>()
     private val ratingLimiter = Semaphore(MAX_CONCURRENT_RATING_FETCHES)
@@ -406,6 +414,40 @@ class BrowseViewModel(
     /** Now and next for one channel, for the detail sheet (AC-EPG-02). */
     fun nowNextFor(channel: Channel) = guideRepository.observeNowNext(channel.sourceId, channel.stableKey)
 
+    /**
+     * Everything stored for one channel across the window a timeline draws (INC-F4).
+     *
+     * Read from storage, so the timeline opens on whatever was last cached and fills in when
+     * [requestFullGuide] answers. With no connection it draws the cache and nothing waits.
+     */
+    fun scheduleFor(channel: Channel): Flow<List<Programme>> {
+        val window = guideWindow(System.currentTimeMillis())
+        return guideRepository.observeSchedule(
+            sourceId = channel.sourceId,
+            channelKey = channel.stableKey,
+            fromEpochMillis = window.first,
+            toEpochMillis = window.last,
+        )
+    }
+
+    /**
+     * Asks the panel for the whole listing, on an explicit request from the viewer (INC-F4).
+     *
+     * Deliberately not folded into [onRowVisible]: this is the heavier `get_simple_data_table`
+     * call, and a list makes that request per row it passes. Long-pressing one channel is a
+     * viewer asking once, which is the only shape this call is safe in (AC-TV-05).
+     *
+     * Requested once per channel per session, on the same reasoning as the now/next prefetch —
+     * a sheet reopened while scrolling should not ask the panel again for a listing it has.
+     */
+    fun requestFullGuide(channel: Channel) {
+        if (channel.kind != MediaKind.LIVE) return
+        if (channel.providerStreamId == null) return
+        if (!fullGuideRequested.add(channel.stableKey)) return
+
+        viewModelScope.launch { guideRepository.refreshFullGuideFor(channel) }
+    }
+
     fun selectCategory(groupTitle: String?) {
         selectedCategory.value = groupTitle
     }
@@ -416,6 +458,20 @@ class BrowseViewModel(
 
     fun toggleFavorite(channel: Channel) {
         viewModelScope.launch { channelRepository.toggleFavorite(channel) }
+    }
+
+    fun removeFromHistory(entry: HistoryEntry) {
+        viewModelScope.launch {
+            val seriesStableKey = entry.seriesStableKey
+            if (seriesStableKey != null) {
+                // A series tile represents the whole programme collapsed to the episode last watched.
+                // Removing only that episode leaves the row showing the episode before it, which reads
+                // to a viewer as the action failing. So we remove the whole series.
+                historyRepository.removeSeriesFromHistory(seriesStableKey)
+            } else {
+                historyRepository.removeFromHistory(entry.stableKey)
+            }
+        }
     }
 
     private companion object {

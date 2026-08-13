@@ -1,0 +1,559 @@
+**Bug Round of Quiblo — Round 3**
+
+Eleven faults reported from `docs/INC_AGILE.md`, found by using the television and phone
+builds against the real account rather than by reading the code — plus a twelfth found while
+triaging them, which the intake had filed as a feature.
+
+**Created:** 2026-08-10, against commit `b7bcba4` on `main`.
+**Ships as:** part of `1.0.0-beta.1`. This is defect work, not scope — no `FREEZE.md`
+amendment is required for any of it, with the single exception called out under **#020**.
+
+**Executed before [`013`](013_Increment_Round_of_Quiblo_—_the_catalogue_a_viewer_actually_uses.md)
+and [`014`](014_One_Entry_Per_Title_of_Quiblo_—_duplicates,_qualities_and_languages.md),
+in full.** The reason is in "Why this comes first" below.
+
+---
+
+| Bug | Platform | Criterion | Wave | Description |
+| :---- | :---- | :---- | :---- | :---- |
+| #012 | TV | AC-TV-02 | 3 | The first tile of the continue-watching row is clipped by its own container |
+| #013 | TV | AC-PLAY-01 | 3 | Switching shows leaves the previous stream's last frame on screen until the new one loads |
+| #014 | TV | AC-TV-11/12 | 2 | "Add to favourites" is trimmed, and there is no remove-from-history control |
+| #015 | TV | AC-TV-11/12 | 1 | The detail screen opens already scrolled: artwork cropped from the top, title off screen |
+| #016 | Both | AC-PROF-01 | 1 | The app does not ask who is watching; the chooser is square-avatared and off-centre |
+| #017 | Both | AC-NFR-08 | 2 | Favourites are titled `VOD` and `SERIES` — enum names, on screen |
+| #018 | TV | — | 3 | Advanced search takes a visible pause to produce its genres, with nothing shown meanwhile |
+| #019 | TV | AC-TV-14 | 2 | Advanced search: no Series heading, cropped titles when focused, films called "Films" |
+| #020 | TV | **AC-TV-03** | 1 | Back from a title returns to the catalogue rather than to the title's own screen |
+| #021 | TV | AC-TV-10 | 1 | Opening the API-key field makes the settings screen shake |
+| #022 | TV | AC-TV-09 | 2 | The API-key field is not aligned with the controls above and below it |
+| #023 | Both | AC-PLAY-04 | 2 | Audio tracks cannot be selected from either player, though the engine exposes them |
+| **#025** | Both | AC-PROF-01 | — | **Found on the panel 2026-08-12.** The chooser is skipped when the app resumes; it only asks after a force-stop |
+| **#026** | TV | AC-TV-01 | — | **Found on the panel 2026-08-12.** The settings button is hard to focus with the remote |
+
+## Why this document exists
+
+**Five of these are failures of criteria that `ACCEPTANCE-SWEEP.md` §7 records as "Not
+run".** AC-TV-03, 10, 11, 12 and 14 have never been swept, and the first person to drive
+those screens with a remote found faults in all of them. That is the sweep beginning to
+happen informally, and its early result is that the television is not yet sweepable.
+
+**One of them is not a defect.** #020 describes behaviour that AC-TV-03 currently *demands*.
+The criterion and the viewer disagree, and the disagreement has to be settled in writing
+before a line is changed, because a fix either way makes one of the two wrong.
+
+**Two have precise mechanisms already**, found while triaging rather than while fixing, and
+both are one-line changes: #012 and #015. They are in wave 3 and wave 1 respectively, which
+is a statement about consequence rather than about effort.
+
+## Why this comes first
+
+Everything in `013` and `014` lands on the screens listed above. Autocomplete goes in the
+search field that #019 mislabels; the merge-seasons and sort controls go on the detail screen
+that #015 opens cropped; avatars go in the chooser that #016 never shows. **Building a
+feature onto a broken screen means fixing the screen twice** — once now and once around the
+new control — and the second fix is the expensive one because it has more to not break.
+
+`006` gate 5 makes the same argument for the sweep: it must run on a finished tree, or it
+runs twice. These eleven are the newest entries on that gate's list.
+
+## Decisions taken
+
+| Question | Chosen |
+| :---- | :---- |
+| Sequencing against features | All eleven close before any item in `013` or `014` starts |
+| Sequencing within the round | By consequence, not by cost — see the waves below |
+| Who is watching (#016) | **Ask at every launch.** The stored choice becomes session state |
+| Back behaviour (#020) | Blocked on an acceptance decision. Recommendation below, to be dated as an amendment |
+| Naming (#017, #019) | One vocabulary across both apps: **Live**, **Movies**, **Series**. No enum names, no caps, no "Films", no "VOD" |
+
+---
+
+## Wave 1 — the ones that lose the viewer
+
+**Built 2026-08-10.** All four are fixed in code and the local gate is green on them. What
+each still owes a device is stated under it, and none of them is closed until the television
+says so — a fix that has only ever run on the JVM is a fix with a good argument, which this
+project has learned is not the same thing.
+
+| # | In code | Owed on the Haier |
+| :---- | :---- | :---- |
+| #020 | Navigation is a stack; the cursor comes back with it | Back from an episode reaches the series with that episode focused; a second back reaches the catalogue |
+| #016 | Session cleared at startup on both apps; chooser centred, avatars circular | AC-PROF-01 after a force-stop, on a phone and on the television |
+| #015 | Rebuilt 2026-08-11: one open sequence for both screens, and the lazy one holds its top | A film and a multi-season series both open showing title and artwork — **swept 2026-08-11: REJECTED; rebuilt and owed the panel again** |
+| #021 | `adjustNothing`, measured into it rather than guessed | The field opened with the remote, and the list watched for a full second — **swept 2026-08-11: REJECTED** |
+
+### #020 — back does not return to where the viewer was
+
+**Reported:** pressing back from a film or an episode lands on the Movies or Series home
+screen instead of on the title's own detail screen, and a series forgets which episode was
+being watched.
+
+**This contradicts an acceptance criterion, and that is the finding.** AC-TV-03 reads: *Back
+from any screen returns to the category bar; back from the bar exits the app.* Written for a
+frontend that had no detail screens — Amendment 4 added those the following day — it now
+describes a back button that throws away a step every time it is pressed. Amendment 4 added
+AC-TV-11 and 12 without re-reading AC-TV-03 against them.
+
+**Decided 2026-08-10, and dated first — `FREEZE.md` Amendment 7.** AC-TV-03 now reads: *Back
+pops exactly one step of the journey the viewer took, and never strands them. No step is
+discarded on the way. From a top-level screen, back exits.* The property AC-TV-03 exists to
+protect — no screen that back cannot leave — is kept; the "returns to the category bar" clause
+was a description of a two-level app and is not worth preserving now that the app is three
+levels deep.
+
+**What it made true in the code.** Navigation was one current screen that each new screen
+*replaced*, and that shape was the bug: a replace keeps no memory of what it replaced, so back
+could only ever reach the shell. It is a stack now. Sources also stops naming Settings as its
+own back destination — it had to, and that special case was the only reason any two-step
+journey worked anywhere in the app.
+
+**The episode cursor needs no new storage.** The last episode a viewer started for a given
+series is already recorded, per profile, in watch history — the same record that draws the
+continue-watching row. Restoring the cursor is a query, not a table. Anything stored
+separately would be a second source of truth for one fact and would drift from the row on
+the home screen.
+
+**Exit criterion.** From a playing episode, back reaches that series' detail screen with
+focus on the episode just watched, and a second back reaches Series. The same holds for a
+film in two presses. Nothing on any screen becomes unreachable by back, and no screen
+requires two presses to leave.
+
+### #016 — the app never asks who is watching
+
+**Reported:** the chooser appears once and never again. It should ask at every launch, offer
+create-profile and Guest, use circular avatars, and sit in the middle of the screen.
+
+**Mechanism, confirmed.** `ProfileRepository.activeProfile` is `null` only when the stored id
+matches no row, and `ProfileStore` keeps that id across process death. So the chooser is
+shown exactly once per install, plus whenever a guest session is cleaned up at startup —
+which is why guest appears to behave correctly and named profiles appear not to. Nothing here
+is broken; the app is doing what it was built to do, and what it was built to do is wrong for
+a television in a household, which is the case profiles were introduced for.
+
+**Fix.** Clear the stored active id at startup, in the same place `endGuestSessions()` already
+runs, so the choice is session state on both apps. No "remember me": a switch that defaults to
+skipping the question reintroduces the bug for whoever leaves it on, and the question costs
+one D-pad press.
+
+**Build the chooser once.** `INC-F0` in `013` puts avatars on this screen and a profile
+control beside the settings gear. The circular avatar asked for here *is* that feature's
+groundwork, so give the tile an artwork slot now and fill it there rather than laying out the
+screen twice.
+
+**Exit criterion.** AC-PROF-01 passes after a force-stop and reopen, not only on a fresh
+install. The chooser is centred, its avatars are circular, and creating a profile or choosing
+Guest from it takes no more presses than it does today.
+
+### #015 — the detail screen opens already scrolled
+
+**Reported:** on a series especially, the poster is cut off at the top and the title is not on
+screen at all, because focus lands on the first button and drags the scroll down with it.
+
+**Mechanism, confirmed.** `TvMovieScreen.kt:110` requests focus on the first action button;
+that button is inside the `verticalScroll` column started at line 119. A focus request brings
+its target into view, and Compose satisfies that by scrolling the column — before the viewer
+has pressed anything. The report's own explanation is correct.
+
+**Fix.** Two candidates, and the first is preferred:
+
+1. **Do not let the initial focus scroll anything.** Request focus on the first action without
+   the bring-into-view that accompanies it, so the screen opens at its top with the button
+   focused. Focus and scroll position are separate facts and only the second is wrong here.
+2. Bound the scrolling region so the header cannot leave the screen, as the report suggests.
+   This is a layout change with a knock-on for long plots and multi-season series, and it is
+   the fallback if (1) turns out to fight the focus machinery.
+
+Round 2 already established that this panel has 444dp of usable height after overscan. Any fix
+is judged at that geometry, not at the emulator's.
+
+**Exit criterion.** Opening any film or series shows its title and the top of its artwork with
+no input, with focus already on the first action, on the 960x540dp panel.
+
+**Swept on the Haier 2026-08-11 against v0.2.6 — REJECTED.** A series detail screen still
+loses a strip off the top of its poster. The exit criterion above is not met and #015 is open
+again.
+
+The fix that shipped removed the *scroll* that focus was causing. What is left is smaller and
+is not the same thing: the screen is no longer scrolled down, but the artwork is still clipped
+at its top edge. That points at the header's own layout rather than at the scroll position —
+a fixed height or an `aspectRatio` on the cover that resolves taller than the space it is
+given, so the crop happens inside the image rather than in the column. **Read the header
+composable's sizing before touching focus again**, and confirm which of the two is cropping by
+measuring the cover's drawn bounds against the 444dp of usable height, not by eye.
+
+Open question for whoever picks this up: **films were not re-checked in this sweep**, only a
+series. If the header is shared, both are affected; if only the series header sets a height,
+that narrows it immediately.
+
+**Second attempt, 2026-08-11 — the open question answered it.** Films were re-checked on the
+panel, and they are not affected. The two screens share a header, so the paragraph above is
+wrong about where to look: the header cannot be cropping one screen and not the other. What
+the panel reports is
+
+| Screen | Artwork bounds | Viewport starts at |
+| :---- | :---- | :---- |
+| Film | `[96,96][416,576]` | 96 — a whole 240dp poster, flush |
+| Series | `[96,74][416,554]` | 96 — 22px above it, and clipped |
+
+Same size, same header, twenty-two pixels of difference in position. The crop is the viewport
+cutting the artwork, not the image being drawn short, and the only thing that differs between
+the two screens is the **container**: the film scrolls a `ScrollState` and the series a
+`LazyListState`.
+
+**That is the mechanism.** A `ScrollState` can answer a bring-into-view inside the frame the
+focus request is made, so a `scrollTo(0)` placed after it is the last word — which is why the
+film screen has been correct all along. A lazy list has to compose and measure items before it
+knows where the focused one is, so its bring-into-view lands a frame or more later and
+overwrites the reset. The first fix ordered the two calls on the assumption that the later one
+wins. They are not both calls, and no ordering of them can work.
+
+**Fix, built.** Both screens now open through one `openDetailScreen` in
+`app-tv/.../ui/detail/TvDetailOpen.kt`, because two copies of this logic in two files is how
+the same fault came back on one screen after being fixed on the other. The lazy overload
+re-asserts the top until the list has been still for four frames, with a ceiling of thirty so
+this can never become a screen that refuses to scroll. The cost is stated rather than hidden: a
+viewer pressing down within those few frames is pulled back to the top once.
+
+**#020 is protected by name.** Returning from an episode still scrolls to that episode — the
+cursor path is taken before any of the above, and it has its own test.
+
+**What the harness proves, and what it does not.** `TvDetailOpensAtTopTest` runs the series
+shape at the panel's real 864x444dp and watches the scroll position for sixty frames. It
+passes — but it also passes against the shipped code the panel rejected, so it is a guard on
+the property, not a reproduction of the fault. The likely reason is recorded in the test:
+asking a node for focus skips the focus *search*, and inside a lazy list that search is itself
+the scroll. **What establishes this fix is the panel**, and #015 stays open until a series and
+a film both open whole on it.
+
+### #021 — the settings screen shakes when the API-key field is opened
+
+**Reported:** opening the API-key entry makes the screen shake continuously. The report names
+a focus race, which matches what the symptom looks like.
+
+**This is the #008 family, and it is the fourth appearance.** Every member of it has the same
+shape: something reports bounds that change every frame, and a scrollable container chases
+them. In #008 it was a focusable inside an animating scale. Here the suspect is the IME
+opening and resizing the window while a focus request or a bring-into-view is still resolving,
+so the field is scrolled toward a target that moves as it is approached.
+
+**Do not argue this one — measure it.** `TvBrowseScrollStabilityTest` is the pattern:
+Robolectric, the panel's real geometry, the scroll position read frame by frame, and an
+assertion of the property. Four wrong answers were argued rather than measured last time this
+species appeared, and the harness that ended it exists and can be pointed at another screen.
+
+**Measured, 2026-08-10** — `TvSettingsFieldStabilityTest`, and the result moved the diagnosis:
+
+- With the viewport held still, **focus arriving and characters being entered are both flat on
+  every frame.** There is no loop inside Compose. The suspected IME-versus-bring-into-view race
+  is not one, at least not on the Compose side of it.
+- With the viewport **shrinking** under the focused field — which is all an on-screen keyboard
+  amounts to as far as a layout is concerned — the list runs **four items** past where the
+  viewer left it, and takes about a dozen frames after the resize ends to stop. It converges,
+  so it is an excursion rather than an oscillation. On a panel watched from three metres, an
+  excursion of four items is what gets reported as a shake.
+- **The activity declared no `windowSoftInputMode` at all**, so the system chose one. That is
+  the finding worth keeping on its own terms: a behaviour nobody chose is a behaviour that
+  differs between devices, and this one did — the emulator was fine and the Haier was not.
+
+**Fixed by declaring it: `adjustNothing`.** The window then never resizes, so the excursion
+cannot start; the harness's flat traces are what the screen actually does. A leanback keyboard
+is a full-screen overlay with its own view of what is being typed, so the app window making
+room for it buys nothing. AC-TV-10 is untouched — leaving a field with the keyboard up goes
+through the IME's action key, not the window's size.
+
+**Exit criterion.** With the on-screen keyboard up, the settings list reports the same scroll
+offset on every frame for a full second, in the harness and on the Haier. **The harness half is
+done; the Haier half is owed.** AC-TV-10 is re-run after it, since the same field is what that
+criterion tests.
+
+**Swept on the Haier 2026-08-11 against v0.2.6 — REJECTED.** The text input still shakes. The
+exit criterion is not met and #021 is open again.
+
+**Do not re-try `adjustNothing`, and do not re-argue the window resize.** Two frames captured
+on the panel that day — the settings screen with the keyboard down, then the same screen with
+the keyboard up and the key typed — put every row above the keyboard at an identical vertical
+position: the artwork rows, the API-key box, the Save/Clear row, the categories heading and the
+first category all land on the same pixels in both. The window is no longer moving the list.
+That was the whole of the 2026-08-10 diagnosis, and it holds.
+
+**What those two frames cannot show is a transient.** The measured excursion converged in about
+a dozen frames; two still captures taken seconds apart would not catch it, and would not catch
+an oscillation that starts and stops with a keypress either. So the resize is excluded as a
+*steady-state* cause only. The shake that is left is either a transient the frames straddled, or
+a fifth member of the #008 family with a different source.
+
+**Where to look next, in order:**
+
+1. **Capture it as video, not as frames.** `screenrecord` on the panel while the field is
+   focused and typed into, then compare it frame by frame. An
+   oscillation and an excursion look identical in prose and completely different in a trace, and
+   this bug has already cost four argued answers.
+2. **Establish which field.** This sweep saw the settings API-key field. The first-run profile
+   name field is also a text input on this app and was on screen the same day. If both shake,
+   the cause is in the shared field composable and not in the settings list at all — which
+   would move this bug off `TvSettingsScreen` entirely.
+3. **Only then re-point the harness.** `TvSettingsFieldStabilityTest` asserts the property that
+   is now confirmed on the device. A harness that already passes is not going to find this; it
+   needs a new property to assert, and (1) is what tells us which one.
+
+**The lesson from the fourth appearance repeats itself at the fifth:** the measurement was right
+about the mechanism it measured and the screen still shakes, which means the measurement was
+aimed at one of several causes rather than at the cause. Measuring the wrong thing precisely is
+its own failure mode, and it is the one to watch for here.
+
+---
+
+## Wave 2 — the words on the screen
+
+**Built 2026-08-10**, after wave 1, with the local gate green. Same rule as wave 1: fixed in
+code is not closed, and what each still owes a device is below.
+
+| # | In code | Owed on the Haier |
+| :---- | :---- | :---- |
+| #017 | One vocabulary in `:feature:browse`, and CI greps the UI modules for an enum used as a label | Favourites headed Live / Movies / Series |
+| #019 | "Films" gone with the strings that held it; the results row measured back inside the panel | Advanced search: a heading on screen and a title whole while focused |
+| #014 | The action row wraps; remove-from-history added where the phone has always had it | The label whole at every title length, and a title leaving the continue row |
+| #022 | The key field carries the same column gap as every other row | The right-hand column read straight down with the remote |
+| #023 | A shared track model, a panel on the television and a sheet on the phone | **AC-PLAY-04, run for the first time**, on a file with two audio tracks |
+
+**Two of the five turned out to be the same shape as each other and as #023**: working code
+with no path to it. `removeFromHistory` exists on both detail ViewModels and on the repository,
+and the phone has offered it since its detail screens were built — only the television never
+did. That is three in one round, against nine of the opposite shape deleted in `001`. The test
+for a feature existing has to run in both directions.
+
+
+These are cheap, they are all visible within seconds of opening a screen, and they are the
+first thing a stranger installing the beta will judge. Grouped because they want one decision
+made once: **the app has one vocabulary — Live, Movies, Series — and every screen uses it.**
+
+### #017 — favourites are labelled with enum names
+
+**Mechanism, confirmed.** `TvPosterRows.kt:257` uses `channel.kind.name` as the row title when
+showing favourites. `ChannelKind.VOD` prints as `VOD`, `SERIES` as `SERIES`. It is a domain
+enum reaching the screen unaccompanied by a string resource, which also makes it untranslatable
+— AC-NFR-08 forbids user-facing strings outside `strings.xml`, and this is one.
+
+**Fix.** A `stringResource` per kind, shared by both apps, and a rule that no `kind.name`
+reaches a composable. Worth a lint or a test: this is the third label defect in this round and
+the mechanism behind two of them is a domain value used as display text.
+
+### #019 — advanced search says the wrong things and crops the right ones
+
+Three faults in one screen, one of which is confirmed: `app-tv/src/main/res/values/strings.xml:67`
+declares `tv_search_movies` as **"Films"**. Everywhere else in the app the same catalogue is
+"Movies". The remaining two — a missing Series heading, and series titles cropped when focused —
+are reported and undiagnosed; the crop is likely the same headroom problem as #012 and should be
+checked against that fix before being investigated separately.
+
+### #014 — a trimmed button and a missing one
+
+"Add to favourites" does not fit its button, and there is no way to remove an entry from watch
+history from the detail screen. The label is a sizing fix; the history control is a small piece
+of new work on a screen wave 1 is already touching, which is why it sits here rather than in
+`013`. `INC-F3` in `013` adds the same action by long-press on the continue-watching row —
+**build the repository call once and give both screens the same one.**
+
+### #022 — the API-key field is not aligned with its neighbours
+
+The field sits out of line with the controls above and below it in the right-hand column. Cosmetic,
+adjacent to #021, and worth doing in the same pass because both are the same widget in the same
+screen — but it is not the same defect and closing #021 does not close it.
+
+### #023 — audio tracks are unreachable, and that is an unmet criterion
+
+**Found while triaging, not reported.** `docs/INC_AGILE.md` files multi-audio support as feature
+12, on the assumption that it is new work. It is not.
+
+`Media3PlayerController` has exposed `audioTracks`, `textTracks`, `selectAudioTrack` and
+`selectTextTrack` since the player was built, and reads them off `onTracksChanged` for whatever
+the container declares. What is missing is the way in: the phone cycles *text* tracks from one
+button (`PlayerScreen.kt:293`) and offers nothing at all for audio, and the television player
+offers neither.
+
+**AC-PLAY-04 says a viewer can switch between multiple audio or subtitle tracks.** It has not
+been run. It does not pass. That makes this `1.0.0` work rather than increment work, and it is a
+defect of a shape this project has met before in reverse: not a control that does nothing, but a
+capability with no control.
+
+**Fix.** A track menu in both players — audio and subtitles in one list, with the current
+selection marked and "off" available for subtitles. On the television it opens from the same
+controls overlay AC-TV-06 governs, so it must not pause playback. `013` INC-F11 later styles
+subtitles from that same menu, and `014` adds a version switcher to it, so put it where both can
+extend it.
+
+**Exit criterion.** On a file carrying two audio tracks, both players list both, name them by
+language where the container declares one, and switch between them without restarting playback.
+AC-PLAY-04 is then run for the first time, on both apps.
+
+---
+
+## Wave 3 — clipping, stale frames, and waiting
+
+**Built 2026-08-10.** All twelve of the round are now written; none is closed.
+
+| # | In code | Owed on the Haier |
+| :---- | :---- | :---- |
+| #012 | The growth moved inside the tile, both axes, as `Poster` carries it | The first tile whole, focused and unfocused |
+| #013 | `hasRenderedFirstFrame` on the shared state; both players hold a shutter | No frame of the previous stream after a switch |
+| #018 | A bar under the field while the index is read, and a hint that says so | The wait explained, and then measured against a scanned catalogue |
+
+
+### #012 — the first continue-watching tile is clipped
+
+**Mechanism, confirmed, and the fix is one line.** Round 2 fixed the identical fault in the
+poster rows by moving the room a focused card grows into *inside* each poster
+(`TvPosterRows.kt:299–304`: "No content padding… Both used to live here; both now live inside
+the poster"). `TvContinueWatchingRow.kt:99` still carries
+`contentPadding = PaddingValues(vertical = FOCUS_GROWTH)` — **vertical only**. So the first
+tile has no horizontal room, and a `LazyRow` clips to its own bounds, which cuts its scaled
+left edge flat.
+
+Give the tile its horizontal growth the way `Poster` has it. The lesson is the one Round 2
+already recorded and this bug proves was only half applied: a fix that lives in one row
+implementation is not applied to the other by being written down near it.
+
+### #013 — the previous stream's last frame survives the switch
+
+Media3 keeps the last decoded frame on the surface until the next one arrives, so zapping
+shows the old picture over the new audio's loading. Clear the surface when the media item
+changes and hold a shutter until `onRenderedFirstFrame`, rather than relying on the buffering
+spinner, which draws *over* whatever is already there instead of replacing it. The player's
+error state has a branch (`#011`); its transitional state does not.
+
+**Exit criterion.** Between two channels, no frame belonging to the previous stream is on
+screen after the switch is requested. AC-PLAY-01's 3-second bound is unaffected — this changes
+what is shown while waiting, not how long the wait is.
+
+### #018 — the genre chips take a visible pause
+
+**Mechanism, confirmed.** `SearchRepository.genreIndex()` reads the whole metadata cache
+(`SELECT searchTitle, kind, genres, isMiss FROM title_metadata`) and splits and dedupes every
+genre string in Kotlin, on demand, each time Advanced is opened. On a scanned 67k-title account
+that is the entire cache walked for a list of about twenty words.
+
+**Fix, in the order to try it.** The report asks for a progress bar under the search bar,
+removed when the chips appear — do that, because a wait that is explained is a different
+experience from a screen that appears broken. Then make the wait shorter: the index is derived
+from a cache that only a scan changes, so it can be computed once and kept, or narrowed to a
+`SELECT DISTINCT` that does the splitting in SQL. **Measure before choosing** — the coverage
+figure quoted beside the chips comes from the same read, and a fix that leaves it stale trades a
+slow screen for a lying one.
+
+---
+
+## What closes this round
+
+| # | Closed when |
+| :---- | :---- |
+| #012 | The first tile of the continue row is whole, focused and unfocused, on the panel — **built; owed the panel** |
+| #013 | No frame of the previous stream is visible after a switch — **built on both apps; owed a zap on the panel** |
+| #014 | The favourites label fits at every supported title length, and history can be removed from the detail screen — **built; owed the panel** |
+| #015 | A detail screen opens showing its title and artwork, unscrolled — **rejected on the panel 2026-08-11; the container was the difference, rebuilt the same day, owed the panel again** |
+| #016 | AC-PROF-01 passes after a force-stop, on both apps, with a centred chooser and circular avatars — **built; owed a force-stop on hardware** |
+| #017 | No `kind.name` reaches a composable in either app — **built, and CI now fails on one** |
+| #018 | A progress indicator covers the wait, and the wait is measured before and after — **indicator built; the measurement needs a 67k catalogue and is deferred, in writing** |
+| #019 | Films are Movies, Series has its heading, and no title is cropped when focused — **built; measured on the JVM, owed the panel** |
+| #020 | The amendment is dated **and** back pops one step, with the episode cursor restored from history — **both built; owed the remote** |
+| #021 | The settings list measures zero movement for a second with the keyboard up, in the harness and on the device — **swept 2026-08-11 and REJECTED; the field still shakes on the panel** |
+| #022 | The field is aligned with the column it is in — **built; owed a look** |
+| #023 | Two audio tracks are listed and switchable in both players, and AC-PLAY-04 is run — **built; the criterion is still unrun** |
+
+**Then, and only then, `013` starts.** The device sweep in `006` gate 1 runs after both.
+
+**All twelve are built as of 2026-08-10. None is closed.** Closing one means the Haier saying
+so, and the whole argument for doing this round before the sweep was that rediscovering known
+faults across three devices spends them for nothing. The tree is now the finished tree `006`
+gate 5 asks the sweep to run against.
+
+**2026-08-11 — the Haier answered on two of them, and said no to both.** The television took
+the real-key `v0.2.6` that day, and the first screens driven on it rejected **#015** and
+**#021**. Neither is closed and neither is still "owed a device": they have had their device and
+they failed it. They go back into the build queue, and the notes under each say what the next
+attempt should and should not do.
+
+**The other ten remain owed a device.** Nothing here says anything about them, and the two
+verdicts we do have argue for getting the rest swept before more code is written — a fix
+rejected on the panel is cheap to learn about now and expensive to learn about after `013` has
+been built on top of it, which is the same argument that put this round before `013` in the
+first place.
+
+**Both rejections have the same shape, and it is worth naming.** Each fix targeted a real
+mechanism, measured it, and corrected it — and the reported symptom survived. #015 removed the
+scroll and the clipping stayed; #021 stopped the window resizing and the shake stayed. In both
+cases the mechanism was one contributor to the symptom, and the work stopped when the mechanism
+was fixed rather than when the symptom was gone. **The exit criteria in this document are
+written against the symptom for exactly this reason**, and both were checked on the JVM and
+signed off before the panel had seen them.
+
+## 2026-08-12 — the panel answered nine more, and found two new ones
+
+The first sweep run in one sitting. Full record in
+[`docs/SWEEP-RESULTS-2026-08-12.md`](../docs/SWEEP-RESULTS-2026-08-12.md); what it means for this
+round is here.
+
+**Closed — the panel said yes:** #012, #013, #014, #017, #020, #022. Six of the ten that had never
+been seen on a device. Each was watched on the Haier against `v0.5.0`.
+
+**Rejected again:**
+
+| # | What the panel said | What changes |
+| :---- | :---- | :---- |
+| **#015** | Opens correctly, then **clips when focus moves to Play/Resume** | **A third mechanism, not a third attempt at the second one.** The open sequence is fixed and this is a *later* focus move dragging the container. `TvDetailOpensAtTopTest` watches the opening frames and would not see this — the harness needs the focus move in it |
+| **#019** | Series titles still cropped, about half a line | Measured on the JVM and passed there. That measurement was of the wrong thing |
+| **#016** | The chooser only appears after a force-stop | Not closed. See **#025** — it is the same criterion and a different mechanism |
+
+**#018 passes and is worse than it looks.** The indicator does its job, and the wait it explains
+is **8 to 10 seconds**. That is the number this round deferred the SQL fix waiting for, and it now
+exists — so the deferral has run out rather than being extended.
+
+**#021 remains unfixed and unfilmed.** The tester cannot film it; a wireless debugging session is
+being opened instead so it can be captured over `adb`.
+
+**#023 is still unrun** — it needs a file with two audio tracks and there is not one.
+
+### #025 — the chooser is skipped when the app resumes
+
+**Reported:** *"sometimes it appears and some other times the app is not closed so it opens my
+profile directly then i have to force close it to get who's watching screen again."*
+
+**Mechanism, confirmed by reading, not guessed.** `beginSession()` is called from
+`QuibloApplication.onCreate` and `QuibloTvApplication.onCreate` — **process start, not app
+launch.** Android keeps the process alive when a viewer leaves with Back or Home, so returning to
+the app re-enters a process that already has an active profile, and nothing asks again.
+
+`012` decided *"the app asks at every launch"* and built *"clear the stored id at startup"*. Those
+are the same sentence only when startup and launch are the same event, and on Android they are
+not. **This is the decision being right and the implementation answering a different question.**
+
+**Fix.** Clear the active profile when the app comes to the foreground after having left it, not
+when the process is created — a `ProcessLifecycleOwner` observer on `ON_START`, with the first one
+after process creation not double-clearing. **The trap to avoid: `ON_START` also fires when a
+viewer returns from the player**, which must not throw them back to the chooser mid-film. The
+event wanted is the app becoming visible again after being *fully* backgrounded.
+
+**Exit criterion.** Leave the app with Back or Home, return to it from the launcher, and the
+chooser appears. Return from the player to the catalogue and it does **not**.
+
+### #026 — the settings button is hard to focus
+
+**Reported:** *"all work but with focus issue on settings button it's hard to select."* `AC-TV-01`
+fails on it: every control must be reachable and operable with the D-pad.
+
+`TvApp.kt:447` records why the gear is a position along the tab bar rather than a focusable of its
+own, and that comment is about this exact class of fault. Something about reaching that position
+is still wrong. **Measure it before changing it** — this is the fifth screen in this app where
+focus behaviour was argued rather than measured, and four of the previous four arguments were
+wrong.
+
+**This is also what `STOPPERS.md` S11 was waiting to hear.** S11 plans to add the avatar at
+`lastIndex + 2`, *after* the gear. Adding a position beyond a position that is already hard to
+reach would build on a broken edge, so **#026 closes before S11 starts.**
+
+---
+
+**One item is deliberately part-done and says so: #018.** The indicator the report asked for is
+built; making the read itself faster is not. That choice needs a 67k catalogue to measure
+against, because the coverage figure beside the chips comes from the same read and an
+optimisation that leaves it stale trades a slow screen for a lying one.

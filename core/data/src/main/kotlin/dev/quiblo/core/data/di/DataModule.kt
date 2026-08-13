@@ -19,6 +19,7 @@
 package dev.quiblo.core.data.di
 
 import android.content.Context
+import dev.quiblo.core.data.AndroidPickedSubtitleFiles
 import dev.quiblo.core.data.CategoryRepository
 import dev.quiblo.core.data.ChannelLogoRepository
 import dev.quiblo.core.data.ChannelRepository
@@ -26,8 +27,11 @@ import dev.quiblo.core.data.GuideRepository
 import dev.quiblo.core.data.LocalFileContentFetcher
 import dev.quiblo.core.data.PlayerSettingsRepository
 import dev.quiblo.core.data.ProfileRepository
+import dev.quiblo.core.data.ScriptFilterRepository
 import dev.quiblo.core.data.SearchRepository
+import dev.quiblo.core.data.SeriesPreferenceRepository
 import dev.quiblo.core.data.SourceRepository
+import dev.quiblo.core.data.SubtitleRepository
 import dev.quiblo.core.data.TitleMetadataRepository
 import dev.quiblo.core.data.TitleMetadataScanner
 import dev.quiblo.core.data.WatchHistoryRepository
@@ -71,6 +75,7 @@ val dataModule: Module = module {
 
     single { SourceRepository(get(), get(), get(), get()) }
     single { ProfileRepository(profileDao = get(), profileStore = get()) }
+    single { SeriesPreferenceRepository(dao = get(), profiles = get()) }
     // Named, and deliberately so. This class takes three collaborators followed by four
     // parameters that carry defaults — a clock and a dispatcher among them — and a positional
     // list cannot tell the two groups apart. Inserting `profiles` in the middle and appending
@@ -84,17 +89,31 @@ val dataModule: Module = module {
             profiles = get(),
             sourceDao = get(),
             mediaSources = get(),
+            hiddenScripts = get<ScriptFilterRepository>().hiddenScripts,
         )
     }
+    single { ScriptFilterRepository(get()) }
     single { WatchHistoryRepository(get(), get()) }
     single { CategoryRepository(get(), get()) }
-    single { SearchRepository(get(), get(), get(), get()) }
+    // Named, unlike the four positional `get()`s this replaced: the fifth argument is a
+    // dispatcher with a default, and appending one more `get()` would have handed Koin's
+    // answer for `Flow<Set<TitleScript>>` to `matchDispatcher`.
+    single {
+        SearchRepository(
+            channelDao = get(),
+            profiles = get(),
+            titleMetadataDao = get(),
+            metadataRepository = get(),
+            hiddenScripts = get<ScriptFilterRepository>().hiddenScripts,
+        )
+    }
     // A singleton because its scope is the application's: a scan started in settings has to
     // outlive the screen that started it, and an hour of lookups outlives several.
     single { TitleMetadataScanner(channelDao = get(), metadataRepository = get()) }
     single { GuideRepository(get(), get(), get()) }
     single { BackupRepository(get(), get(), get()) }
     single { PlayerSettingsRepository(get()) }
+    single { SubtitleRepository(dao = get(), files = AndroidPickedSubtitleFiles(get<Context>())) }
     single { TmdbClient(get<HttpClient>()) }
     single { TitleMetadataRepository(get(), get(), get()) }
     single { IptvOrgClient(get<HttpClient>()) }

@@ -19,6 +19,7 @@
 import com.android.build.api.dsl.ApplicationExtension
 import dev.quiblo.buildlogic.catalogInt
 import dev.quiblo.buildlogic.configureTests
+import dev.quiblo.buildlogic.failOnWarnings
 import dev.quiblo.buildlogic.libs
 
 plugins {
@@ -72,3 +73,39 @@ dependencies {
 }
 
 configureTests()
+
+/*
+ * What this application actually ships, listed for the attribution check.
+ *
+ * Here rather than in the root build file because a configuration belongs to the project that
+ * owns it: reading `:app`'s release classpath from the root is cross-project resolution, which
+ * Gradle refuses outright. So each application answers for itself and the root aggregates —
+ * which is also why this lives in the convention plugin both applications already apply, rather
+ * than as two copies in two build files that could drift apart the way #015's did.
+ */
+tasks.register("licenceModules") {
+    group = "verification"
+    description = "Lists every external module on this application's release runtime classpath."
+
+    val classpath = configurations.named("releaseRuntimeClasspath")
+    val output = layout.buildDirectory.file("reports/licences/modules.txt")
+    outputs.file(output)
+
+    doLast {
+        val modules = classpath.get()
+            .incoming
+            .resolutionResult
+            .allComponents
+            .mapNotNull { it.id as? ModuleComponentIdentifier }
+            .map { "${it.moduleIdentifier.group}:${it.moduleIdentifier.name}" }
+            .distinct()
+            .sorted()
+
+        output.get().asFile.apply {
+            parentFile.mkdirs()
+            writeText(modules.joinToString(separator = "\n", postfix = "\n"))
+        }
+    }
+}
+
+failOnWarnings()

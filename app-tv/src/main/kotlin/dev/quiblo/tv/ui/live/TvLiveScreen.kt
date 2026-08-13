@@ -21,7 +21,7 @@ package dev.quiblo.tv.ui.live
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.Arrangement
@@ -100,6 +100,9 @@ fun TvLiveScreen(
      */
     var focusedChannel: Channel? by remember { mutableStateOf(null) }
 
+    /** The channel whose full listing is open, or null when the panel is shut (INC-F4). */
+    var guideFor: Channel? by remember { mutableStateOf(null) }
+
     LaunchedEffect(focusedChannel) {
         val channel = focusedChannel ?: return@LaunchedEffect
         delay(FOCUS_SETTLE_MILLIS)
@@ -113,55 +116,70 @@ fun TvLiveScreen(
         return
     }
 
-    Row(
-        modifier = modifier.fillMaxSize(),
-        horizontalArrangement = Arrangement.spacedBy(24.dp),
-    ) {
-        // Only when there is a choice to make. A source with one category, or an M3U with
-        // none at all, gets the full width for its channels rather than a rail holding a
-        // single row (#002).
-        if (state.categories.size > 1) {
-            TvCategoryRail(
-                categories = state.categories,
-                selectedCategory = state.selectedCategory,
-                onSelect = viewModel::selectCategory,
-            )
-        }
+    Box(modifier = modifier.fillMaxSize()) {
+        Row(
+            modifier = Modifier.fillMaxSize(),
+            horizontalArrangement = Arrangement.spacedBy(24.dp),
+        ) {
+            // Only when there is a choice to make. A source with one category, or an M3U with
+            // none at all, gets the full width for its channels rather than a rail holding a
+            // single row (#002).
+            if (state.categories.size > 1) {
+                TvCategoryRail(
+                    categories = state.categories,
+                    selectedCategory = state.selectedCategory,
+                    onSelect = viewModel::selectCategory,
+                )
+            }
 
-        // A fresh state per category, so the list starts at the top when the filter
-        // changes. Carrying a scroll position into a different set of channels leaves the
-        // viewer somewhere arbitrary in a list they have not seen — and the position is
-        // meaningless anyway, since row 400 of one category is not row 400 of another.
-        val listState = remember(state.selectedCategory) { LazyListState() }
+            // A fresh state per category, so the list starts at the top when the filter
+            // changes. Carrying a scroll position into a different set of channels leaves the
+            // viewer somewhere arbitrary in a list they have not seen — and the position is
+            // meaningless anyway, since row 400 of one category is not row 400 of another.
+            val listState = remember(state.selectedCategory) { LazyListState() }
 
-        when {
-            // "No playlist" and "a playlist with no live channels" are two different things
-            // to be told, and only one of them is the viewer's to fix. Search has drawn the
-            // distinction since it was written; this screen told everyone to import a
-            // playlist they had never added, which reads as a failure rather than as a step
-            // they have not taken yet.
-            !state.hasSource -> Message(stringResource(R.string.tv_no_source))
+            when {
+                // "No playlist" and "a playlist with no live channels" are two different things
+                // to be told, and only one of them is the viewer's to fix. Search has drawn the
+                // distinction since it was written; this screen told everyone to import a
+                // playlist they had never added, which reads as a failure rather than as a step
+                // they have not taken yet.
+                !state.hasSource -> Message(stringResource(R.string.tv_no_source))
 
-            state.items.isEmpty() -> Message(stringResource(R.string.tv_no_channels))
+                state.items.isEmpty() -> Message(stringResource(R.string.tv_no_channels))
 
-            else -> LazyColumn(
-                state = listState,
-                modifier = Modifier.fillMaxSize(),
-                verticalArrangement = Arrangement.spacedBy(4.dp),
-            ) {
-                itemsIndexed(items = state.items, key = { _, item -> item.id }) { index, channel ->
-                    ChannelRow(
-                        // The provider's own ordering is the channel numbering a viewer
-                        // knows; the panel's `num` field is not stored, so position stands
-                        // in for it.
-                        number = index + 1,
-                        channel = channel,
-                        nowPlaying = state.nowPlaying[channel.stableKey],
-                        onFocused = { focusedChannel = channel },
-                        onClick = { onPlay(state.items, index) },
-                    )
+                else -> LazyColumn(
+                    state = listState,
+                    modifier = Modifier.fillMaxSize(),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    itemsIndexed(items = state.items, key = { _, item -> item.id }) { index, channel ->
+                        ChannelRow(
+                            // The provider's own ordering is the channel numbering a viewer
+                            // knows; the panel's `num` field is not stored, so position stands
+                            // in for it.
+                            number = index + 1,
+                            channel = channel,
+                            nowPlaying = state.nowPlaying[channel.stableKey],
+                            onFocused = { focusedChannel = channel },
+                            onClick = { onPlay(state.items, index) },
+                            onLongClick = { guideFor = channel },
+                        )
+                    }
                 }
             }
+        }
+
+        // Over the list rather than instead of it: this app has no dialogs, and the
+        // listing a viewer opened is easier to read with the channel it belongs to still
+        // on screen behind it.
+        guideFor?.let { channel ->
+            TvGuidePanel(
+                channel = channel,
+                schedule = remember(channel.stableKey) { viewModel.scheduleFor(channel) },
+                onOpen = { viewModel.requestFullGuide(channel) },
+                onDismiss = { guideFor = null },
+            )
         }
     }
 }
@@ -191,6 +209,7 @@ private fun ChannelRow(
     nowPlaying: Programme?,
     onFocused: () -> Unit,
     onClick: () -> Unit,
+    onLongClick: () -> Unit,
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val isFocused by interactionSource.collectIsFocusedAsState()
@@ -216,10 +235,15 @@ private fun ChannelRow(
             )
             // clickable rather than focusable: it is focusable too, and it maps the D-pad
             // centre and Enter onto onClick, which is how a remote "presses" a row.
-            .clickable(
+            //
+            // Combined, because holding the centre is the only spare gesture a remote has and
+            // INC-F4 spends it on the full listing. A press still plays, which is what all but
+            // one press in a hundred means.
+            .combinedClickable(
                 interactionSource = interactionSource,
                 indication = null,
                 onClick = onClick,
+                onLongClick = onLongClick,
             )
             .padding(horizontal = 16.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,

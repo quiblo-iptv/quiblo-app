@@ -25,6 +25,7 @@ import dev.quiblo.core.database.dao.TitleGenreRow
 import dev.quiblo.core.database.dao.TitleMetadataDao
 import dev.quiblo.core.database.entity.ChannelEntity
 import dev.quiblo.core.model.MediaKind
+import dev.quiblo.source.tmdb.NO_YEAR
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -95,8 +96,10 @@ class SearchRepositoryTest {
     @DisplayName("a genre finds a film whose title carries a year and a quality tag")
     fun `the genre filter matches through the cleaned title`() = runTest {
         coEvery { titleMetadataDao.allGenreRows() } returns listOf(
-            TitleGenreRow(searchTitle = "fargo", kind = MediaKind.VOD.name, genres = "Crime\nDrama", isMiss = false),
-            TitleGenreRow(searchTitle = "speed", kind = MediaKind.VOD.name, genres = "Action", isMiss = false),
+            // The year is part of the key since #024, and the catalogue row below carries 1996 —
+            // so this pair matching is the whole join under test, not a detail of the fixture.
+            TitleGenreRow("fargo", MediaKind.VOD.name, 1996, "Crime\nDrama", isMiss = false),
+            TitleGenreRow("speed", MediaKind.VOD.name, NO_YEAR, "Action", isMiss = false),
         )
         coEvery { channelDao.titlesForMetadata(SOURCE_ID) } returns listOf(
             // As a panel actually writes them: a year in brackets and a quality marker, none
@@ -119,10 +122,10 @@ class SearchRepositoryTest {
     @DisplayName("a genre a viewer has never looked at is not offered")
     fun `the genre index lists only genres the cache actually holds`() = runTest {
         coEvery { titleMetadataDao.allGenreRows() } returns listOf(
-            TitleGenreRow("fargo", MediaKind.VOD.name, "Crime\nDrama", isMiss = false),
-            TitleGenreRow("speed", MediaKind.VOD.name, "Action\nCrime", isMiss = false),
+            TitleGenreRow("fargo", MediaKind.VOD.name, NO_YEAR, "Crime\nDrama", isMiss = false),
+            TitleGenreRow("speed", MediaKind.VOD.name, NO_YEAR, "Action\nCrime", isMiss = false),
             // A miss carries no genres and must not be mistaken for one.
-            TitleGenreRow("some unfindable title", MediaKind.VOD.name, null, isMiss = true),
+            TitleGenreRow("some unfindable title", MediaKind.VOD.name, NO_YEAR, null, isMiss = true),
         )
         coEvery { channelDao.titlesForMetadata(SOURCE_ID) } returns emptyList()
 
@@ -135,7 +138,7 @@ class SearchRepositoryTest {
     @DisplayName("four copies of one film are one title to look up, not four")
     fun `coverage counts distinct cleaned titles rather than rows`() = runTest {
         coEvery { titleMetadataDao.allGenreRows() } returns listOf(
-            TitleGenreRow("the matrix", MediaKind.VOD.name, "Action", isMiss = false),
+            TitleGenreRow("the matrix", MediaKind.VOD.name, 1999, "Action", isMiss = false),
         )
         coEvery { channelDao.titlesForMetadata(SOURCE_ID) } returns listOf(
             ChannelTitle(id = 1L, name = "The Matrix (1999) [4K]", kind = MediaKind.VOD.name),

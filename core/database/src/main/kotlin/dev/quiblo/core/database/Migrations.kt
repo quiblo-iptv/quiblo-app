@@ -356,3 +356,116 @@ val MIGRATION_10_11 = object : Migration(10, 11) {
         )
     }
 }
+
+/**
+ * #024: the metadata cache key gains the year, and the table gains the service's own id.
+ *
+ * The cache keyed rows on a cleaned search title, and the cleaner strips bracketed groups
+ * whole — including the year, because a provider year is almost always in brackets. So
+ * `Dune (1984)` and `Dune (2021)` were one row. The first fetched won, permanently, and the
+ * other film showed the winner's poster, plot, rating and cast. Nothing was empty and nothing
+ * errored; a viewer saw a catalogue that did not have their film.
+ *
+ * `year` belongs in the primary key, and SQLite cannot add a column to a primary key in place,
+ * so the table is rebuilt — `MIGRATION_10_11`'s shape, which is the model for this.
+ *
+ * **Every existing row is dropped rather than adopted, and that is the opposite of what
+ * `MIGRATION_10_11` does.** The difference is whose data it is. Favourites and resume points
+ * are the viewer's and cannot be recovered by asking anyone; this table is a fortnight-long
+ * cache of somebody else's answers, and `setApiKey` already empties it wholesale when the key
+ * changes. More to the point, **these are the rows we have just established may hold the wrong
+ * film's details** — carrying them across under a key that now claims to be precise would
+ * launder a known-bad row into a trustworthy-looking one. Re-fetching costs a request per
+ * title on next visit, which is what the cache is for.
+ *
+ * The cost is stated rather than hidden: the first browse after this upgrade is as slow as a
+ * first install, and on a scanned catalogue the search screen's coverage figure reads 0% until
+ * a scan is run again.
+ */
+val MIGRATION_11_12 = object : Migration(11, 12) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("DROP TABLE IF EXISTS `title_metadata`")
+        db.execSQL(
+            "CREATE TABLE IF NOT EXISTS `title_metadata` (" +
+                "`searchTitle` TEXT NOT NULL, " +
+                "`kind` TEXT NOT NULL, " +
+                "`year` INTEGER NOT NULL, " +
+                "`tmdbId` INTEGER, " +
+                "`overview` TEXT, " +
+                "`genres` TEXT, " +
+                "`ageRating` TEXT, " +
+                "`rating` REAL, " +
+                "`author` TEXT, " +
+                "`topCast` TEXT, " +
+                "`posterUrl` TEXT, " +
+                "`backdropUrl` TEXT, " +
+                "`fetchedAtEpochMillis` INTEGER NOT NULL, " +
+                "`isMiss` INTEGER NOT NULL, " +
+                "`isPartial` INTEGER NOT NULL, " +
+                "PRIMARY KEY(`searchTitle`, `kind`, `year`))",
+        )
+    }
+}
+
+/**
+ * Profiles gain an avatar.
+ *
+ * One nullable column, and nothing is rebuilt: `avatar` is not part of any key, so SQLite can
+ * add it in place. That makes this the cheapest migration in the file and the one least likely
+ * to lose anything — which matters more than usual here, because `AC-PROF-05` is the criterion
+ * that upgrades a build with profiles in it and it has never been run on a device.
+ *
+ * Null is the value every existing profile gets, and it means "chose no face" rather than
+ * "chose the first one". The chooser draws the viewer's initial on a colour derived from their
+ * name for those, so a profile that predates this column still has a picture — it simply has
+ * one nobody picked.
+ */
+val MIGRATION_12_13 = object : Migration(12, 13) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE `profiles` ADD COLUMN `avatar` TEXT")
+    }
+}
+
+/**
+ * How a viewer likes one series laid out.
+ *
+ * A new table and nothing else — no existing row is read, rewritten or dropped, which makes this
+ * the safest kind of migration there is. Absence of a row means the defaults, so an upgrade
+ * changes nothing anybody sees until they press one of the two new controls.
+ */
+val MIGRATION_13_14 = object : Migration(13, 14) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            "CREATE TABLE IF NOT EXISTS `series_preferences` (" +
+                "`profileId` INTEGER NOT NULL, " +
+                "`seriesKey` TEXT NOT NULL, " +
+                "`isMerged` INTEGER NOT NULL, " +
+                "`isDescending` INTEGER NOT NULL, " +
+                "PRIMARY KEY(`profileId`, `seriesKey`), " +
+                "FOREIGN KEY(`profileId`) REFERENCES `profiles`(`id`) " +
+                "ON UPDATE NO ACTION ON DELETE CASCADE )",
+        )
+    }
+}
+
+/**
+ * Where a picked subtitle file lives, and which title it belongs to.
+ *
+ * A new table and nothing else, the same safe shape as `MIGRATION_13_14`. Nobody has picked a
+ * subtitle before this version, so the table starts empty on every device and the upgrade
+ * changes nothing anyone sees.
+ */
+val MIGRATION_14_15 = object : Migration(14, 15) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            "CREATE TABLE IF NOT EXISTS `picked_subtitles` (" +
+                "`stableKey` TEXT NOT NULL, " +
+                "`storedPath` TEXT NOT NULL, " +
+                "`label` TEXT NOT NULL, " +
+                "`mimeType` TEXT NOT NULL, " +
+                "`language` TEXT, " +
+                "`pickedAt` INTEGER NOT NULL, " +
+                "PRIMARY KEY(`stableKey`) )",
+        )
+    }
+}

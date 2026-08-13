@@ -18,6 +18,7 @@
 
 package dev.quiblo.feature.settings
 
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -46,6 +47,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -61,6 +63,12 @@ import dev.quiblo.core.model.MediaKind
  * turning it back on costs no refresh. Renaming stores a second name alongside the
  * provider's, which stays the key — a refresh reassigns everything else, and an edit keyed
  * to anything but the original title would come unstuck the first time a playlist reloaded.
+ *
+ * The category rows scroll inside a fixed-height inner LazyColumn bounded at 220–420dp.
+ * The box has a visible border so it reads as its own scrolling region rather than as a
+ * clipped list — without the edge a drag inside it is ambiguous, and the viewer cannot tell
+ * whether they are moving the categories or the outer settings screen. 420dp shows roughly
+ * a dozen rows, which is enough to orient without dominating the screen.
  */
 @Composable
 internal fun CategorySettingsCard(
@@ -70,11 +78,15 @@ internal fun CategorySettingsCard(
     onSetHidden: (Category, Boolean) -> Unit,
     onRename: (Category, String?) -> Unit,
 ) {
+    // Rename state lives inside the card: it is category-specific and nothing outside the
+    // card needs to know about it.
     var renaming: Category? by remember { mutableStateOf(null) }
 
     Card(
         modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant,
+        ),
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Text(
@@ -106,22 +118,23 @@ internal fun CategorySettingsCard(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(top = 16.dp),
                 )
-                return@Column
-            }
-
-            // Bounded and scrollable: an Xtream account can carry hundreds of categories,
-            // and an unbounded list would make the rest of Settings unreachable.
-            LazyColumn(
-                modifier = Modifier
-                    .padding(top = 8.dp)
-                    .heightIn(max = LIST_MAX_HEIGHT),
-            ) {
-                items(items = categories, key = { it.title }) { category ->
-                    CategoryRow(
-                        category = category,
-                        onToggle = { onSetHidden(category, !category.isHidden) },
-                        onRename = { renaming = category },
-                    )
+            } else {
+                val shape = MaterialTheme.shapes.medium
+                LazyColumn(
+                    modifier = Modifier
+                        .padding(top = 12.dp)
+                        .fillMaxWidth()
+                        .heightIn(min = 220.dp, max = 420.dp)
+                        .border(1.dp, MaterialTheme.colorScheme.outlineVariant, shape)
+                        .clip(shape),
+                ) {
+                    items(items = categories, key = { it.title }) { category ->
+                        CategoryRow(
+                            category = category,
+                            onToggle = { onSetHidden(category, !category.isHidden) },
+                            onRename = { renaming = category },
+                        )
+                    }
                 }
             }
         }
@@ -144,7 +157,7 @@ private fun CategoryRow(category: Category, onToggle: () -> Unit, onRename: () -
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 4.dp),
+            .padding(horizontal = 12.dp, vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(modifier = Modifier.weight(1f)) {
@@ -182,7 +195,7 @@ private fun CategoryRow(category: Category, onToggle: () -> Unit, onRename: () -
 }
 
 @Composable
-private fun RenameDialog(category: Category, onConfirm: (String?) -> Unit, onDismiss: () -> Unit) {
+internal fun RenameDialog(category: Category, onConfirm: (String?) -> Unit, onDismiss: () -> Unit) {
     var text by remember { mutableStateOf(category.customName ?: category.title) }
 
     AlertDialog(
@@ -228,5 +241,3 @@ private fun MediaKind.labelRes(): Int = when (this) {
     MediaKind.VOD -> R.string.settings_categories_movies
     MediaKind.SERIES -> R.string.settings_categories_series
 }
-
-private val LIST_MAX_HEIGHT = 320.dp

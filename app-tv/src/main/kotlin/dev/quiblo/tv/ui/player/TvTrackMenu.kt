@@ -49,9 +49,11 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.quiblo.feature.player.TrackMenu
+import dev.quiblo.feature.player.TrackMenuActionKind
 import dev.quiblo.feature.player.TrackMenuEntry
 import dev.quiblo.feature.player.TrackMenuKind
 import dev.quiblo.tv.R
+import dev.quiblo.feature.player.R as PlayerR
 
 /**
  * Audio and subtitles, chosen with the remote.
@@ -72,10 +74,30 @@ import dev.quiblo.tv.R
 @Composable
 internal fun TvTrackMenu(
     menu: TrackMenu,
+    /**
+     * Which section the remote lands in.
+     *
+     * The player has a subtitles button and an audio button, and they open this same panel —
+     * two questions a viewer arrives with, one list that answers both. Landing at the top
+     * regardless would make the audio button "open the panel and then scroll", which is the
+     * one control the panel already had.
+     *
+     * Ignored when the panel has no such section, which happens legitimately: a stream with a
+     * single audio track has no Audio heading, and by then the button that named it is not
+     * drawn either.
+     */
+    openAt: TrackMenuKind?,
     onSelect: (TrackMenuKind, String?) -> Unit,
+    onAction: (TrackMenuActionKind) -> Unit,
     onDismiss: () -> Unit,
 ) {
     val firstEntry = remember { FocusRequester() }
+
+    // The section to open in, as an index, or the first one when the asked-for section is not
+    // there. Never null, so the panel always has somewhere to put the remote.
+    val landingSection = remember(menu, openAt) {
+        menu.sections.indexOfFirst { it.kind == openAt }.takeIf { it >= 0 } ?: 0
+    }
 
     // Something must hold focus the moment this appears or the remote looks dead — AC-TV-02,
     // and the failure this project has already had on three screens.
@@ -102,12 +124,7 @@ internal fun TvTrackMenu(
             menu.sections.forEachIndexed { sectionIndex, section ->
                 item(key = "heading-${section.kind}") {
                     Text(
-                        text = stringResource(
-                            when (section.kind) {
-                                TrackMenuKind.AUDIO -> R.string.tv_player_audio
-                                TrackMenuKind.SUBTITLES -> R.string.tv_player_subtitles
-                            },
-                        ),
+                        text = stringResource(section.kind.headingRes()),
                         color = Color.White.copy(alpha = 0.55f),
                         fontSize = 13.sp,
                         fontWeight = FontWeight.SemiBold,
@@ -122,14 +139,38 @@ internal fun TvTrackMenu(
 
                 itemsIndexedEntries(section.entries) { entryIndex, entry ->
                     TrackRow(
-                        entry = entry,
+                        label = entry.label,
+                        isSelected = entry.isSelected,
                         onClick = { onSelect(section.kind, entry.trackId) },
-                        modifier = if (sectionIndex == 0 && entryIndex == 0) {
+                        modifier = if (sectionIndex == landingSection && entryIndex == 0) {
                             Modifier.focusRequester(firstEntry)
                         } else {
                             Modifier
                         },
                     )
+                }
+
+                // Under the choices, and never ticked. A section can be all actions and no
+                // entries — a film with no subtitle track at all is exactly when a viewer
+                // wants to point the player at a file — so the first row of the whole panel
+                // may be one of these, and it has to be able to take the opening focus.
+                section.actions.forEachIndexed { actionIndex, action ->
+                    item(key = "action-${action.kind}") {
+                        TrackRow(
+                            label = action.label,
+                            isSelected = false,
+                            onClick = { onAction(action.kind) },
+                            modifier = if (
+                                sectionIndex == landingSection &&
+                                actionIndex == 0 &&
+                                section.entries.isEmpty()
+                            ) {
+                                Modifier.focusRequester(firstEntry)
+                            } else {
+                                Modifier
+                            },
+                        )
+                    }
                 }
             }
         }
@@ -152,7 +193,12 @@ private fun androidx.compose.foundation.lazy.LazyListScope.itemsIndexedEntries(
 }
 
 @Composable
-private fun TrackRow(entry: TrackMenuEntry, onClick: () -> Unit, modifier: Modifier = Modifier) {
+private fun TrackRow(
+    label: String,
+    isSelected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
     val interactionSource = remember { MutableInteractionSource() }
     val isFocused by interactionSource.collectIsFocusedAsState()
 
@@ -177,16 +223,16 @@ private fun TrackRow(entry: TrackMenuEntry, onClick: () -> Unit, modifier: Modif
         // A tick rather than a highlight, because the focused row is already highlighted and
         // "where the remote is" and "what is playing" are two facts a viewer needs at once.
         Text(
-            text = if (entry.isSelected) SELECTED_MARK else " ",
+            text = if (isSelected) SELECTED_MARK else " ",
             color = if (isFocused) Color.Black else Color.White,
             fontSize = 15.sp,
         )
 
         Text(
-            text = entry.label,
+            text = label,
             color = if (isFocused) Color.Black else Color.White.copy(alpha = 0.85f),
             fontSize = 15.sp,
-            fontWeight = if (entry.isSelected) FontWeight.SemiBold else FontWeight.Normal,
+            fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )
@@ -197,3 +243,18 @@ private fun TrackRow(entry: TrackMenuEntry, onClick: () -> Unit, modifier: Modif
 private val PANEL_WIDTH = 300.dp
 private val PANEL_MARGIN = 32.dp
 private const val SELECTED_MARK = "✓"
+
+/**
+ * One heading per section.
+ *
+ * Audio and Subtitles keep this app's own strings; the three appearance headings borrow the
+ * player feature's. Duplicating "Subtitle size" into a second `strings.xml` would create two
+ * places for one word to be translated, and the television has no reason to say it differently.
+ */
+private fun TrackMenuKind.headingRes(): Int = when (this) {
+    TrackMenuKind.AUDIO -> R.string.tv_player_audio
+    TrackMenuKind.SUBTITLES -> R.string.tv_player_subtitles
+    TrackMenuKind.SUBTITLE_SIZE -> PlayerR.string.player_subtitles_size
+    TrackMenuKind.SUBTITLE_TEXT_COLOUR -> PlayerR.string.player_subtitles_text_colour
+    TrackMenuKind.SUBTITLE_BACKGROUND -> PlayerR.string.player_subtitles_background
+}

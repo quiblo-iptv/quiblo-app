@@ -26,20 +26,25 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusGroup
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -64,9 +69,11 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import dev.quiblo.core.common.TitleScript
 import dev.quiblo.core.data.MetadataScanState
 import dev.quiblo.core.data.ScanRefusal
 import dev.quiblo.core.data.progressFraction
+import dev.quiblo.core.model.AutoNextDelay
 import dev.quiblo.core.model.BufferMode
 import dev.quiblo.core.model.Category
 import dev.quiblo.core.model.MaxBitrateCap
@@ -74,7 +81,10 @@ import dev.quiblo.core.model.MediaKind
 import dev.quiblo.core.model.SeekInterval
 import dev.quiblo.feature.settings.BackupUiState
 import dev.quiblo.feature.settings.SettingsViewModel
+import dev.quiblo.feature.settings.THIRD_PARTY_LICENSES
+import dev.quiblo.feature.settings.ThirdPartyLicense
 import dev.quiblo.feature.settings.TmdbCheck
+import dev.quiblo.tv.BuildConfig
 import dev.quiblo.tv.R
 import dev.quiblo.tv.ui.common.TvChip
 import dev.quiblo.tv.ui.common.TvTextField
@@ -120,6 +130,11 @@ fun TvSettingsScreen(
     val categories by viewModel.categories.collectAsStateWithLifecycle()
     val backupState by viewModel.backupState.collectAsStateWithLifecycle()
     val scanState by viewModel.metadataScan.collectAsStateWithLifecycle()
+    val hiddenScripts by viewModel.hiddenScripts.collectAsStateWithLifecycle()
+
+    // Collapsed by default: twelve components are an obligation to make available, not
+    // twelve rows to walk past on the way to anything else.
+    var licensesShown by remember { mutableStateOf(false) }
 
     BackHandler(onBack = onBack)
 
@@ -204,6 +219,24 @@ fun TvSettingsScreen(
             )
         }
 
+        // Directly under the seek interval, because both answer "what happens without me".
+        item {
+            OptionRow(
+                label = stringResource(R.string.tv_settings_auto_next),
+                description = stringResource(R.string.tv_settings_auto_next_detail),
+                options = AutoNextDelay.entries,
+                selected = playerSettings.autoNextDelay,
+                labelFor = { delay ->
+                    if (delay == AutoNextDelay.OFF) {
+                        stringResource(R.string.tv_settings_off)
+                    } else {
+                        stringResource(R.string.tv_settings_seconds, delay.seconds)
+                    }
+                },
+                onSelect = viewModel::setAutoNextDelay,
+            )
+        }
+
         item {
             OptionRow(
                 label = stringResource(R.string.tv_settings_buffer),
@@ -243,6 +276,21 @@ fun TvSettingsScreen(
             )
         }
 
+        /*
+         * Attribution for the two services, which is a condition of using them rather than a
+         * courtesy — TMDB's terms require this sentence, close to verbatim, wherever their data
+         * appears.
+         *
+         * The phone has carried both since these features were built and the television carried
+         * neither, which is the same fault as the missing licences screen and was found the same
+         * way: by asking what the *other* app shows.
+         *
+         * Shown beside the control that turns each one on, rather than collected somewhere
+         * tidier. A viewer deciding whether to enable a service is the one moment the sentence
+         * is worth reading.
+         */
+        item { Attribution(stringResource(R.string.tv_settings_channel_logos_attribution)) }
+
         item {
             TmdbKeyRow(
                 currentKey = tmdbApiKey,
@@ -251,6 +299,8 @@ fun TvSettingsScreen(
                 onClear = viewModel::clearTmdbKey,
             )
         }
+
+        item { Attribution(stringResource(R.string.tv_settings_tmdb_attribution)) }
 
         // Only with a key, because without one there is nothing to ask and the control would
         // be the sort of button that does nothing this project has already deleted nine of.
@@ -261,6 +311,29 @@ fun TvSettingsScreen(
                     onStart = viewModel::startMetadataScan,
                     onCancel = viewModel::cancelMetadataScan,
                     onDismiss = viewModel::dismissMetadataScan,
+                )
+            }
+        }
+
+        item { SectionHeading(stringResource(R.string.tv_settings_scripts)) }
+
+        item {
+            ScriptRow(
+                hidden = hiddenScripts,
+                onToggle = { script -> viewModel.setScriptHidden(script, script !in hiddenScripts) },
+            )
+        }
+
+        if (hiddenScripts.isNotEmpty()) {
+            item {
+                ActionRow(
+                    label = stringResource(R.string.tv_settings_scripts_show_all),
+                    description = stringResource(
+                        R.string.tv_settings_scripts_hidden_count,
+                        hiddenScripts.size,
+                    ),
+                    action = stringResource(R.string.tv_settings_scripts_show_all_action),
+                    onClick = viewModel::showEveryScript,
                 )
             }
         }
@@ -277,12 +350,41 @@ fun TvSettingsScreen(
             )
         }
 
-        items(items = categories, key = { "${categoryKind.name}-${it.title}" }) { category ->
-            CategoryEditRow(
-                category = category,
-                onToggleHidden = { viewModel.setCategoryHidden(category, !category.isHidden) },
-                onRename = { viewModel.renameCategory(category, it) },
-            )
+        // The categories scroll inside a fixed-height box rather than as items of the outer
+        // list, which is what the panel asked for.
+        //
+        // A scrollable region inside a scrollable screen must hand focus back at its edges or
+        // the remote is stuck inside it forever — the worst failure this app can have, since a
+        // viewer's only way out is to kill it. `focusGroup()` is what does that here.
+        //
+        // **That is measured rather than argued**: `TvCategoryBoxFocusEscapeTest` drives this
+        // exact shape and asserts focus leaves at both ends, including with three hundred
+        // categories where the list has not composed the rows past the viewport. Four previous
+        // television focus questions in this project were answered by confident reasoning and
+        // all four were wrong, and #021 is still open on this very screen.
+        item {
+            val shape = RoundedCornerShape(8.dp)
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 220.dp, max = 420.dp)
+                    .border(1.dp, Color.White.copy(alpha = 0.18f), shape)
+                    .clip(shape)
+                    .focusGroup(),
+            ) {
+                items(
+                    items = categories,
+                    key = { "${categoryKind.name}-${it.title}" },
+                ) { category ->
+                    CategoryEditRow(
+                        category = category,
+                        onToggleHidden = {
+                            viewModel.setCategoryHidden(category, !category.isHidden)
+                        },
+                        onRename = { viewModel.renameCategory(category, it) },
+                    )
+                }
+            }
         }
 
         item { SectionHeading(stringResource(R.string.tv_settings_backup)) }
@@ -294,6 +396,135 @@ fun TvSettingsScreen(
                 onImport = { importLauncher.launch(arrayOf(BACKUP_MIME_TYPE, ANY_MIME_TYPE)) },
             )
         }
+
+        aboutSection(
+            licensesShown = licensesShown,
+            onToggleLicenses = { licensesShown = !licensesShown },
+        )
+    }
+}
+
+/**
+ * Attribution, which is an obligation rather than a nicety — and which build this is.
+ *
+ * Every third-party component here is Apache-2.0, and that licence requires its notices to
+ * travel with the binary. The phone has shown them since it had a settings screen; the
+ * television links the same libraries and showed nothing, so `AC-LEGAL-03` was passing on one
+ * of the two apps this project ships.
+ *
+ * Last on the screen, because nobody comes to settings for this. The version is here for the
+ * opposite reason: it is the first question anybody is asked about a fault, and a television
+ * has no app-info screen worth reaching with a remote.
+ *
+ * A function on the list rather than inline, so the test drives the same rows a viewer does.
+ */
+internal fun LazyListScope.aboutSection(licensesShown: Boolean, onToggleLicenses: () -> Unit) {
+    item { SectionHeading(stringResource(R.string.tv_settings_about)) }
+
+    item { VersionRow() }
+
+    item {
+        ActionRow(
+            label = stringResource(R.string.tv_settings_licenses_label),
+            description = stringResource(R.string.tv_settings_licenses_detail),
+            action = stringResource(
+                if (licensesShown) {
+                    R.string.tv_settings_licenses_hide
+                } else {
+                    R.string.tv_settings_licenses_show
+                },
+            ),
+            onClick = onToggleLicenses,
+        )
+    }
+
+    /*
+     * Expanded into this list rather than pushed onto a screen of its own.
+     *
+     * A second scrolling surface is the shape that traps a remote — a scrollable inside a
+     * scrollable has to hand focus back at its edges, or the viewer cannot get out of it. These
+     * are items of the list that is already here, so the D-pad walks through them and off the
+     * end exactly as it does everything above.
+     *
+     * Keyed by coordinates: without a key, twelve items appearing and disappearing at a fixed
+     * index let the list reuse composables across different entries.
+     */
+    if (licensesShown) {
+        items(THIRD_PARTY_LICENSES, key = { it.coordinates }) { entry ->
+            LicenseRow(entry)
+        }
+    }
+}
+
+/**
+ * Which build this is, in the one place a viewer can reach it with a remote.
+ *
+ * Read from `BuildConfig` rather than from the package manager: it is the same string the
+ * release lane writes into the tag, so an answer to "which version are you on" matches a
+ * release page without anybody translating between the two.
+ */
+@Composable
+private fun VersionRow() {
+    Column(modifier = Modifier.padding(vertical = 10.dp)) {
+        Text(
+            text = stringResource(R.string.tv_settings_version_label),
+            color = Color.White,
+            fontSize = 17.sp,
+            lineHeight = 22.sp,
+        )
+        Text(
+            text = stringResource(R.string.tv_settings_version_detail, BuildConfig.VERSION_NAME),
+            color = Color.White.copy(alpha = 0.55f),
+            fontSize = 13.sp,
+            lineHeight = 18.sp,
+            modifier = Modifier.padding(top = 3.dp),
+        )
+    }
+}
+
+/**
+ * One component's attribution: what it is, what it does here, and where it came from.
+ *
+ * **Focusable, though there is nothing to press.** The first version of this was not, on the
+ * reasoning that a URL cannot be followed on a television so a focus stop buys nothing — and a
+ * test walking the list with a D-pad could not reach the twelfth entry. On a television,
+ * **moving focus is how a list scrolls**: a row that never takes focus is a row the remote
+ * cannot bring on screen, so twelve entries would have been eleven entries and a promise.
+ *
+ * Focus is drawn as a wash rather than the chips' border, because these are text being read
+ * rather than controls being chosen, and a control-shaped highlight on something that does
+ * nothing when pressed is its own small lie.
+ */
+@Composable
+private fun LicenseRow(entry: ThirdPartyLicense) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isFocused by interactionSource.collectIsFocusedAsState()
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(
+                color = if (isFocused) Color.White.copy(alpha = 0.10f) else Color.Transparent,
+                shape = RoundedCornerShape(8.dp),
+            )
+            .focusable(interactionSource = interactionSource)
+            .padding(horizontal = 12.dp, vertical = 8.dp),
+    ) {
+        Text(text = entry.name, color = Color.White, fontSize = 16.sp, lineHeight = 21.sp)
+        Text(
+            text = entry.notes,
+            color = Color.White.copy(alpha = 0.55f),
+            fontSize = 13.sp,
+            lineHeight = 18.sp,
+            modifier = Modifier.padding(top = 2.dp),
+        )
+        Text(
+            text = "${entry.coordinates}\n${entry.license}\n${entry.url}",
+            color = Color.White.copy(alpha = 0.45f),
+            fontSize = 12.sp,
+            lineHeight = 17.sp,
+            modifier = Modifier.padding(top = 4.dp),
+        )
     }
 }
 
@@ -803,6 +1034,74 @@ private fun <T> OptionRow(
 }
 
 /**
+ * The writing systems a viewer does not read (INC-F14).
+ *
+ * Every script on screen at once, like [OptionRow], and for the same reason — but several
+ * can be on rather than one, so these are toggles rather than a choice. They wrap onto a
+ * second line because ten chips do not fit across a television beside a label, and the
+ * D-pad walks the grid the wrapping makes.
+ *
+ * Phrased as a subtraction: nothing is hidden until the viewer hides it, and favourites are
+ * never filtered. A viewer who cannot find something gets one control that undoes all of it.
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun ScriptRow(hidden: Set<TitleScript>, onToggle: (TitleScript) -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 10.dp),
+        verticalAlignment = Alignment.Top,
+    ) {
+        Column(modifier = Modifier.width(LABEL_WIDTH)) {
+            Text(
+                text = stringResource(R.string.tv_settings_scripts),
+                color = Color.White,
+                fontSize = 17.sp,
+                lineHeight = 22.sp,
+            )
+            Text(
+                text = stringResource(R.string.tv_settings_scripts_description),
+                color = Color.White.copy(alpha = 0.55f),
+                fontSize = 13.sp,
+                lineHeight = 18.sp,
+                modifier = Modifier.padding(top = 3.dp),
+            )
+        }
+
+        Spacer(modifier = Modifier.width(COLUMN_GAP))
+
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+            modifier = Modifier.focusGroup(),
+        ) {
+            TitleScript.offered.forEach { script ->
+                TvChip(
+                    label = stringResource(script.labelRes()),
+                    isSelected = script in hidden,
+                    onClick = { onToggle(script) },
+                )
+            }
+        }
+    }
+}
+
+/** Named for what a viewer calls it, not for the Unicode block. */
+private fun TitleScript.labelRes(): Int = when (this) {
+    TitleScript.Latin -> R.string.tv_settings_script_latin
+    TitleScript.Arabic -> R.string.tv_settings_script_arabic
+    TitleScript.Hebrew -> R.string.tv_settings_script_hebrew
+    TitleScript.Cyrillic -> R.string.tv_settings_script_cyrillic
+    TitleScript.Greek -> R.string.tv_settings_script_greek
+    TitleScript.Han -> R.string.tv_settings_script_han
+    TitleScript.Kana -> R.string.tv_settings_script_kana
+    TitleScript.Hangul -> R.string.tv_settings_script_hangul
+    TitleScript.Devanagari -> R.string.tv_settings_script_devanagari
+    TitleScript.Thai -> R.string.tv_settings_script_thai
+}
+
+/**
  * A row that leads somewhere rather than setting a value.
  *
  * Laid out exactly like [OptionRow] — the same names column, the same gap, the same chip — so
@@ -832,6 +1131,26 @@ private fun ActionRow(label: String, description: String, action: String, onClic
 
         TvChip(label = action, isSelected = false, onClick = onClick)
     }
+}
+
+/**
+ * A required sentence about a service, under the control that switches it on.
+ *
+ * Dimmer than a description and not focusable: it is a condition of use rather than something
+ * to act on, and a focus stop on unactionable text costs a press every time somebody walks past
+ * it. That is the opposite call from the licence rows, and for the opposite reason — those are
+ * below the fold and unreachable without focus, and this is a single line that is already on
+ * screen next to what it describes.
+ */
+@Composable
+private fun Attribution(text: String) {
+    Text(
+        text = text,
+        color = Color.White.copy(alpha = 0.45f),
+        fontSize = 12.sp,
+        lineHeight = 17.sp,
+        modifier = Modifier.width(LABEL_WIDTH).padding(bottom = 6.dp),
+    )
 }
 
 /** The names column. Wide enough for a two-line description without crowding it. */

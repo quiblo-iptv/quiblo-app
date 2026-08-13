@@ -115,6 +115,19 @@ data class ProfileEntity(
     val createdAtEpochMillis: Long,
     /** True for the one throwaway profile. At most one exists at a time. */
     val isGuest: Boolean = false,
+    /**
+     * Which of the illustrated faces this profile chose, or null for none.
+     *
+     * A key into a fixed set the app ships, never a path and never image data. Nothing of a
+     * viewer's ends up in this column, so nothing of a viewer's ends up inside an export file
+     * either — `AC-DATA` promises a backup is portable, and a backup carrying somebody's
+     * photograph is a different promise than the one this project made.
+     *
+     * Nullable rather than defaulted, because null means "this profile predates avatars" and
+     * the initial-on-a-colour fallback draws it. A default value would claim that every
+     * profile already on a device had chosen the first face.
+     */
+    val avatar: String? = null,
 )
 
 /**
@@ -251,11 +264,34 @@ data class ProgrammeEntity(
  * series and they are not the same record. With the title alone, whichever tab the user
  * opened first would answer for the other.
  */
-@Entity(tableName = "title_metadata", primaryKeys = ["searchTitle", "kind"])
+@Entity(tableName = "title_metadata", primaryKeys = ["searchTitle", "kind", "year"])
 data class TitleMetadataEntity(
     val searchTitle: String,
     /** A [dev.quiblo.core.model.MediaKind] name — `VOD` or `SERIES`. */
     val kind: String,
+    /**
+     * The release year the provider's title carried, or `0` when it carried none.
+     *
+     * The third of the key, and it was missing until #024. The cleaner that produces
+     * [searchTitle] strips bracketed groups whole because that is what makes a good search
+     * query — and a provider year is almost always bracketed. So `Dune (1984)` and
+     * `Dune (2021)` were one row, the first fetched won, and the other film showed the
+     * winner's poster and plot until the entry expired.
+     *
+     * `0` rather than null because SQLite does not consider two nulls equal, so a nullable
+     * column in a primary key would let every undated title insert a fresh row on each visit
+     * — the cache failing open, which is worse than the fault it replaced.
+     */
+    val year: Int = 0,
+    /**
+     * The service's own id for this title, when the answer carried one.
+     *
+     * Stored but not yet keyed on. It is the only identity in this problem that is not an
+     * inference — [searchTitle] and [year] are both read out of a string a provider typed —
+     * and `014`'s grouping needs an identity it can trust when two rows disagree. Filled now
+     * so grouping does not cost this table a second migration for the same reason.
+     */
+    val tmdbId: Int? = null,
     val overview: String? = null,
     /** Newline-separated. A list table for a handful of short strings is not worth a join. */
     val genres: String? = null,
@@ -318,4 +354,72 @@ data class CategoryOverrideEntity(
     /** Null means "use the provider's name". Absence and a blank rename are the same thing. */
     val customName: String? = null,
     val isHidden: Boolean = false,
+)
+
+/**
+ * How one viewer prefers to read one series: merged or by season, newest first or oldest.
+ *
+ * `INC-F6`. A series with a thousand episodes is unusable if the newest is a thousand rows away,
+ * and a preference that is not remembered is a preference re-entered every evening.
+ *
+ * **Per profile, not global.** One household member reading a long-running series from the end
+ * does not decide how anyone else reads it — the same reasoning that put favourites behind a
+ * profile.
+ *
+ * Keyed by `seriesKey`, which is the series' [ChannelEntity.stableKey], for the reason that key
+ * exists at all: a refresh reassigns every row id, and a preference keyed to one would be lost
+ * the first time a playlist reloaded (`AC-FAV-03`'s lesson, applied before it could bite).
+ *
+ * A row exists only once somebody has changed something. Absence means the defaults, which is
+ * why both columns are non-null with defaults rather than nullable.
+ */
+@Entity(
+    tableName = "series_preferences",
+    primaryKeys = ["profileId", "seriesKey"],
+    foreignKeys = [
+        ForeignKey(
+            entity = ProfileEntity::class,
+            parentColumns = ["id"],
+            childColumns = ["profileId"],
+            onDelete = ForeignKey.CASCADE,
+        ),
+    ],
+)
+data class SeriesPreferenceEntity(
+    val profileId: Long,
+    val seriesKey: String,
+    /** True when every season is shown as one continuous list. */
+    val isMerged: Boolean = false,
+    /** True when the newest episode is first. */
+    val isDescending: Boolean = false,
+)
+
+/**
+ * A subtitle file the viewer picked for one title (INC-F10).
+ *
+ * **The cached copy, not the file they chose.** The picker hands back a `content://` URI whose
+ * read permission belongs to this process and dies with it, so a row holding one would be a row
+ * that works this evening and fails tomorrow. The file is copied into the app's cache — decoded
+ * out of whatever it was written in and rewritten as UTF-8 on the way — and it is that copy this
+ * row points at.
+ *
+ * Keyed by the title's `stableKey`, for the reason that key exists: a refresh reassigns every row
+ * id, and a pick keyed to one would be lost the next time a playlist reloaded. An episode's key
+ * is its stream URL, so a subtitle picked for one episode stays with that episode rather than
+ * following the series.
+ *
+ * One row per title. Picking a second file for the same title replaces the first, because two
+ * files a viewer cannot tell apart in a menu is not a feature.
+ */
+@Entity(tableName = "picked_subtitles")
+data class PickedSubtitleEntity(
+    @PrimaryKey val stableKey: String,
+    /** An absolute path inside this app's own storage. */
+    val storedPath: String,
+    /** What the menu calls it — the picked file's own name. */
+    val label: String,
+    val mimeType: String,
+    /** An ISO 639 code where the filename declared one the platform recognises. */
+    val language: String? = null,
+    val pickedAt: Long,
 )

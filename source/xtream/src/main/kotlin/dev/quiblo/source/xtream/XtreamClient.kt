@@ -84,6 +84,19 @@ internal class XtreamClient(
     suspend fun shortEpg(base: String, credentials: Credentials, streamId: String): ApiResult<EpgResponse> =
         request(base, credentials, "get_short_epg") { parameter("stream_id", streamId) }
 
+    /**
+     * The whole listing a panel holds for one channel, rather than the next few entries (INC-F4).
+     *
+     * `get_short_epg` returns a small window — enough for now and next, which is what a list row
+     * needs. A timeline needs the rest, and this is the call that has it. Same response shape, so
+     * the same DTO reads both.
+     *
+     * Made on an explicit long press and never on a scroll. A full listing per visible row is how
+     * a panel's anti-flood rule trips (AC-TV-05).
+     */
+    suspend fun fullEpg(base: String, credentials: Credentials, streamId: String): ApiResult<EpgResponse> =
+        request(base, credentials, "get_simple_data_table") { parameter("stream_id", streamId) }
+
     /** Details, including the plot, for one film. */
     suspend fun vodInfo(base: String, credentials: Credentials, vodId: String): ApiResult<VodInfoResponse> =
         request(base, credentials, "get_vod_info") { parameter("vod_id", vodId) }

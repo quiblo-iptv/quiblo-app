@@ -23,6 +23,20 @@ plugins {
 
 android {
     namespace = "dev.quiblo.core.database"
+
+    // `MigrationTestHelper` reads the exported schemas out of the assets of whatever context
+    // it is given, so the JSON that KSP writes below has to be reachable from the test build
+    // — and only from the test build. Putting it in `main` would ship a directory of schema
+    // dumps inside both APKs to satisfy a test.
+    testOptions {
+        unitTests {
+            isIncludeAndroidResources = true
+        }
+    }
+}
+
+extensions.configure<com.android.build.api.dsl.LibraryExtension> {
+    sourceSets.named("test") { assets.srcDir("$projectDir/schemas") }
 }
 
 ksp {
@@ -33,7 +47,16 @@ ksp {
 
 dependencies {
     ksp(libs.room.compiler)
+
+    // Room's MigrationTestHelper wants an instrumentation, and this repository has learned
+    // that a migration signed off on reasoning is a migration that empties somebody's
+    // favourites on a device. Robolectric supplies the instrumentation on the JVM, so the
+    // upgrade path is exercised in CI rather than on a sweep day. MigrationTestHelper is a
+    // JUnit 4 rule, hence the vintage engine — the same arrangement `:app-tv` uses.
     testImplementation(libs.room.testing)
+    testImplementation(libs.robolectric)
+    testImplementation(libs.androidx.test.junit)
+    testRuntimeOnly(libs.junit.vintage.engine)
     api(projects.core.model)
     implementation(projects.core.common)
     implementation(libs.room.runtime)

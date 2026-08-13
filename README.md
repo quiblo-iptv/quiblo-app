@@ -65,7 +65,7 @@ step and no setup wizard.
 > export/import and release engineering are all built. What stands between this and v1.0.0
 > is the acceptance sweep on physical devices — not a formality, since the bugs that have
 > mattered most were every one of them found on hardware. The road there is
-> [`agile/006`](agile/006%20First%20Beat%20of%20Quiblo%20—%20the%20road%20to%201.0.0.md).
+> [`agile/006`](agile/006_First_Beat_of_Quiblo_—_the_road_to_1.0.0.md).
 
 ## Quiblo supplies no content
 
@@ -88,7 +88,8 @@ immediate ban — see [`CONTRIBUTING.md`](CONTRIBUTING.md).
 | **Sources** | M3U/M3U8 by URL or local file, and Xtream Codes API |
 | **Content & Series** | Live TV, movies, series with seasons & episode breakdown |
 | **Guide & EPG** | Now/next per channel, fetched on demand and cached |
-| **Player Controls** | Play/pause, seek, configurable skip interval, Start Over, subtitle & audio track selection, screen lock |
+| **Player Controls** | Play/pause, seek, configurable skip interval, Start Over, subtitle & audio track selection, screen lock. On the television these are on-screen buttons the D-pad walks through — play in the middle with the skips either side of it, and subtitles, audio and picture fit in a row underneath — while the remote's own keys keep working with nothing on screen |
+| **Episodes** | On the television, next and previous episode from inside the player, in the order the episodes were made. When one ends the next is offered with a countdown, adjustable from three seconds to fifteen or off entirely |
 | **Picture & Sound** | Fit/Fill/Zoom/Stretch aspect modes, drag for brightness and volume, full-screen playback that keeps the screen awake |
 | **Playback Tuning** | Skip interval, buffering profile and a maximum-bitrate cap, all in Settings |
 | **Movies & Series** | Detail screens with artwork and overview, and Resume or Start from beginning |
@@ -105,7 +106,7 @@ immediate ban — see [`CONTRIBUTING.md`](CONTRIBUTING.md).
 Not yet implemented, in rough priority order: an EPG time-grid, a quick-zap overlay,
 catchup/timeshift, and picture-in-picture. Several are Phase 2 in
 [`docs/PLAN.md`](docs/PLAN.md) §6. Desktop, browser and the other TV platforms are planned
-in [`agile/007`](agile/007%20Version%202%20of%20Quiblo%20—%20the%20platforms%20beyond%20Android.md).
+in [`agile/007`](agile/007_Version_2_of_Quiblo_—_the_platforms_beyond_Android.md).
 
 ## Learn from this repository
 
@@ -125,7 +126,7 @@ honest account is in [`agile/`](agile). It is not a demo of prompting. It is ele
 rounds including the failures, because those are the part worth reading:
 
 - A cache that stored **failures as answers** — every metadata error became "this title
-  matches nothing", cached for a fortnight ([`agile/005`](agile/005%20Feature%20Round%20of%20Quiblo%20—%20Search,%20Scan%20and%20Profiles.md)).
+  matches nothing", cached for a fortnight ([`agile/005`](agile/005_Feature_Round_of_Quiblo_—_Search,_Scan_and_Profiles.md)).
 - A rate limiter that ran at **exactly twice its documented rate** for weeks, with a passing
   test — because the test measured one request's wait instead of the sustained rate.
 - A dependency-injection module that compiled, passed detekt, passed lint, passed every unit

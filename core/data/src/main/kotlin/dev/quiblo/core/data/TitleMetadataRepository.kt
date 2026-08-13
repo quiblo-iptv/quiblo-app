@@ -24,12 +24,13 @@ import dev.quiblo.core.datastore.TmdbKeyStore
 import dev.quiblo.core.model.AuthorLabel
 import dev.quiblo.core.model.MediaKind
 import dev.quiblo.core.model.TitleMetadata
+import dev.quiblo.source.tmdb.NO_YEAR
+import dev.quiblo.source.tmdb.TitleIdentity
 import dev.quiblo.source.tmdb.TmdbAnswer
 import dev.quiblo.source.tmdb.TmdbClient
 import dev.quiblo.source.tmdb.TmdbKind
-import dev.quiblo.source.tmdb.cleanedForSearch
 import dev.quiblo.source.tmdb.metadataOrNull
-import dev.quiblo.source.tmdb.yearInTitle
+import dev.quiblo.source.tmdb.titleIdentity
 import kotlinx.coroutines.flow.StateFlow
 
 /**
@@ -88,6 +89,49 @@ class TitleMetadataRepository(
     suspend fun previewFor(title: String, kind: MediaKind): TitleMetadata? =
         cachedOrFetched(title, kind, acceptPartial = true)
 
+    /**
+     * Asks the service about [title] again, ignoring whatever is cached.
+     *
+     * `INC-F7`. The intake asks for this because artwork is sometimes missing or a plot is
+     * sometimes out of date, and a viewer looking at a wrong-looking screen has no other way
+     * to say "ask again" — the cached answer otherwise stands for a fortnight.
+     *
+     * **Three properties, and two of them were bought with defects in `005`:**
+     *
+     * - **A refusal is never cached.** A rate limit or a rejected key leaves the existing row
+     *   exactly as it was. That is [fetchAndCache]'s existing behaviour and this inherits it
+     *   rather than reimplementing it — the whole reason this goes through the same path.
+     * - **It spends the same rate limit as everything else.** A button a viewer can press
+     *   repeatedly is a request source like any other, and this project has had an account
+     *   blocked twice.
+     * - **It returns the outcome rather than the metadata**, so the screen can tell "the
+     *   service has nothing about this title" from "the service would not answer". Those look
+     *   identical in a null and must not look identical on screen.
+     *
+     * Returns [MetadataRefresh.NoMatch] without asking when the feature is off, which is also
+     * what the button's absence should already have prevented.
+     */
+    suspend fun refresh(title: String, kind: MediaKind): MetadataRefresh {
+        val key = keyStore.apiKey.value?.takeIf { it.isNotBlank() }
+        val tmdbKind = kind.toTmdbKind()
+        val identity = title.titleIdentity().takeIf { it.searchTitle.isNotBlank() }
+        if (key == null || tmdbKind == null || identity == null) return MetadataRefresh.NoMatch
+
+        // Straight to the fetch. Going through resolve() would find the fresh row this call
+        // exists to disbelieve and return it without asking anyone.
+        return fetchAndCache(
+            apiKey = key,
+            title = title,
+            kind = kind,
+            tmdbKind = tmdbKind,
+            identity = identity,
+            // The full record, never the cheap half: a viewer pressing refresh on a detail
+            // screen is looking at the plot and the cast, and a partial row would overwrite a
+            // complete one with less than it had.
+            partial = false,
+        ).toMetadataRefresh()
+    }
+
     /** Just the score. Kept for callers that render a badge and nothing else. */
     suspend fun ratingFor(title: String, kind: MediaKind): Double? = previewFor(title, kind)?.rating
 
@@ -111,14 +155,14 @@ class TitleMetadataRepository(
     ): TmdbAnswer {
         val key = keyStore.apiKey.value?.takeIf { it.isNotBlank() }
         val tmdbKind = kind.toTmdbKind()
-        val cacheKey = title.cleanedForSearch().lowercase().takeIf { it.isNotBlank() }
+        val identity = title.titleIdentity().takeIf { it.searchTitle.isNotBlank() }
 
         // Three ways there is nothing to look up: the feature is off, the item is a live
         // channel, or the title cleaned down to nothing worth searching for. None of them is
         // a failure, and none of them is worth asking about twice.
-        if (key == null || tmdbKind == null || cacheKey == null) return TmdbAnswer.NoMatch
+        if (key == null || tmdbKind == null || identity == null) return TmdbAnswer.NoMatch
 
-        return resolve(key, tmdbKind, title, kind, cacheKey, acceptPartial)
+        return resolve(key, tmdbKind, title, kind, identity, acceptPartial)
     }
 
     @Suppress("LongParameterList")
@@ -127,10 +171,10 @@ class TitleMetadataRepository(
         tmdbKind: TmdbKind,
         title: String,
         kind: MediaKind,
-        cacheKey: String,
+        identity: TitleIdentity,
         acceptPartial: Boolean,
     ): TmdbAnswer {
-        val fresh = dao.find(cacheKey, kind.name)
+        val fresh = dao.find(identity.searchTitle, kind.name, identity.year)
             ?.takeIf { now() - it.fetchedAtEpochMillis < CACHE_TTL_MILLIS }
 
         if (fresh != null && fresh.answers(acceptPartial)) {
@@ -142,7 +186,7 @@ class TitleMetadataRepository(
             title = title,
             kind = kind,
             tmdbKind = tmdbKind,
-            cacheKey = cacheKey,
+            identity = identity,
             partial = acceptPartial,
         )
     }
@@ -161,12 +205,13 @@ class TitleMetadataRepository(
         title: String,
         kind: MediaKind,
         tmdbKind: TmdbKind,
-        cacheKey: String,
+        identity: TitleIdentity,
         partial: Boolean,
     ): TmdbAnswer {
-        // The year narrows a search that would otherwise match a remake. Provider titles
-        // carry it often enough to be worth reading.
-        val year = title.yearInTitle()
+        // The year narrows a search that would otherwise match a remake. The identity has
+        // already read it off the raw title, so it is not read a second time here — two
+        // places reading one fact out of one string is how they come to disagree.
+        val year = identity.year.takeIf { it != NO_YEAR }
         val answer = if (partial) {
             client.summary(apiKey = apiKey, title = title, kind = tmdbKind, year = year)
         } else {
@@ -174,13 +219,14 @@ class TitleMetadataRepository(
         }
 
         when (answer) {
-            is TmdbAnswer.Found -> dao.upsert(answer.metadata.toEntity(cacheKey, kind.name, now()))
+            is TmdbAnswer.Found -> dao.upsert(answer.metadata.toEntity(identity, kind.name, now()))
 
             // A miss is recorded rather than forgotten, so the next visit costs nothing.
             TmdbAnswer.NoMatch -> dao.upsert(
                 TitleMetadataEntity(
-                    searchTitle = cacheKey,
+                    searchTitle = identity.searchTitle,
                     kind = kind.name,
+                    year = identity.year,
                     fetchedAtEpochMillis = now(),
                     isMiss = true,
                 ),
@@ -204,12 +250,12 @@ class TitleMetadataRepository(
      * has not done. The freshness rule lives here rather than at the caller because the TTL
      * is this class's business and two copies of it would drift.
      */
-    internal suspend fun freshlyCachedKeys(): Set<Pair<String, String>> {
+    internal suspend fun freshlyCachedKeys(): Set<CacheIdentity> {
         val horizon = now() - CACHE_TTL_MILLIS
         return dao.allKeys()
             .asSequence()
             .filter { it.fetchedAtEpochMillis > horizon }
-            .mapTo(HashSet()) { it.searchTitle to it.kind }
+            .mapTo(HashSet()) { CacheIdentity(TitleIdentity(it.searchTitle, it.year), it.kind) }
     }
 
     suspend fun setApiKey(apiKey: String?) {
@@ -234,6 +280,64 @@ class TitleMetadataRepository(
         const val CACHE_TTL_MILLIS = 14L * 24 * 60 * 60 * 1000
     }
 }
+
+/**
+ * What pressing refresh did.
+ *
+ * Named for the metadata rather than for the gesture because `RefreshOutcome` is already taken
+ * by [SourceRepository], where refreshing means reloading a whole playlist. Two different things
+ * called Refresh is the sort of collision that reads fine until somebody imports the wrong one.
+ *
+ * A restatement of `TmdbAnswer` rather than a reuse of it, on the same rule as `ScanRefusal`:
+ * `docs/PLAN.md` §2 says features talk to `:core:data` and nothing else, and a detail screen
+ * importing `:source:tmdb` to render a message would be the first crack in it.
+ *
+ * Three cases rather than a nullable, because all three need different words on screen and two
+ * of them look identical in a null.
+ */
+sealed interface MetadataRefresh {
+
+    /** The service answered, and this is what it now knows. The screen redraws. */
+    data class Updated(val metadata: TitleMetadata) : MetadataRefresh
+
+    /** The service was asked and holds nothing about this title. Not a failure. */
+    data object NoMatch : MetadataRefresh
+
+    /** The service would not answer. **Nothing was overwritten**, and saying so matters. */
+    data class Refused(val reason: ScanRefusal) : MetadataRefresh
+}
+
+private fun TmdbAnswer.toMetadataRefresh(): MetadataRefresh = when (this) {
+    is TmdbAnswer.Found -> MetadataRefresh.Updated(metadata)
+    TmdbAnswer.NoMatch -> MetadataRefresh.NoMatch
+    is TmdbAnswer.Refused -> MetadataRefresh.Refused(reason.toScanRefusal())
+}
+
+/**
+ * Which row of the metadata cache a title belongs to: its identity, and which catalogue.
+ *
+ * [kind] is half the key rather than a column, because "Fargo" is a film and "Fargo" is a
+ * series and they are not the same record.
+ *
+ * This type exists because **three places have to agree on it exactly** — the repository that
+ * writes the row, the scanner that subtracts what is already cached from its work list, and
+ * the search screen's genre index that joins the catalogue back onto the cache. They used to
+ * agree by each spelling the key out, with a comment in `SearchRepository` explaining that
+ * they must agree and were therefore written separately. That reasoning is backwards, and
+ * #024 is what it cost: the moment the key changed, two of the three would have gone on
+ * building the old one and the genre filter would have quietly returned nothing.
+ */
+data class CacheIdentity(val title: TitleIdentity, val kind: String)
+
+/**
+ * Where this provider title is filed in the metadata cache, or null if it is filed nowhere.
+ *
+ * Null means the title cleaned away to nothing — a name written entirely in a non-Latin
+ * script, or a bare language tag. It is never looked up and never cached, and callers must
+ * keep skipping it rather than filing a hundred such titles under one empty key.
+ */
+internal fun String.cacheIdentity(kind: String): CacheIdentity? =
+    titleIdentity().takeIf { it.searchTitle.isNotBlank() }?.let { CacheIdentity(it, kind) }
 
 /**
  * Which TMDB catalogue, if any, describes this kind of item.
@@ -274,9 +378,10 @@ private fun TitleMetadataEntity.toMetadata() = TitleMetadata(
     isPartial = isPartial,
 )
 
-private fun TitleMetadata.toEntity(searchTitle: String, kind: String, fetchedAt: Long) = TitleMetadataEntity(
-    searchTitle = searchTitle,
+private fun TitleMetadata.toEntity(identity: TitleIdentity, kind: String, fetchedAt: Long) = TitleMetadataEntity(
+    searchTitle = identity.searchTitle,
     kind = kind,
+    year = identity.year,
     overview = overview,
     genres = genres.joinToString(LIST_SEPARATOR).takeIf { it.isNotBlank() },
     ageRating = ageRating,

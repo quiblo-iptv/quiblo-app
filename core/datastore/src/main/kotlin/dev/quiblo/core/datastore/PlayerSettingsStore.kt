@@ -24,12 +24,19 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import dev.quiblo.core.common.TitleScript
 import dev.quiblo.core.model.Appearance
+import dev.quiblo.core.model.AutoNextDelay
 import dev.quiblo.core.model.BufferMode
 import dev.quiblo.core.model.MaxBitrateCap
 import dev.quiblo.core.model.PlayerSettings
 import dev.quiblo.core.model.SeekInterval
+import dev.quiblo.core.model.SubtitleColor
+import dev.quiblo.core.model.SubtitleOpacity
+import dev.quiblo.core.model.SubtitleStyle
+import dev.quiblo.core.model.SubtitleTextSize
 import dev.quiblo.core.model.ThemeMode
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -58,10 +65,17 @@ class PlayerSettingsStore(context: Context) {
             seekInterval = preferences.readEnum(SEEK_INTERVAL, SeekInterval.entries, PlayerSettings().seekInterval),
             bufferMode = preferences.readEnum(BUFFER_MODE, BufferMode.entries, PlayerSettings().bufferMode),
             maxBitrate = preferences.readEnum(MAX_BITRATE, MaxBitrateCap.entries, PlayerSettings().maxBitrate),
+            autoNextDelay = preferences.readEnum(
+                AUTO_NEXT_DELAY,
+                AutoNextDelay.entries,
+                PlayerSettings().autoNextDelay,
+            ),
         )
     }
 
     suspend fun setSeekInterval(value: SeekInterval) = put(SEEK_INTERVAL, value.name)
+
+    suspend fun setAutoNextDelay(value: AutoNextDelay) = put(AUTO_NEXT_DELAY, value.name)
 
     suspend fun setBufferMode(value: BufferMode) = put(BUFFER_MODE, value.name)
 
@@ -86,6 +100,71 @@ class PlayerSettingsStore(context: Context) {
         dataStore.edit { it[DYNAMIC_COLOR] = enabled }
     }
 
+    /**
+     * Writing systems the viewer has said they do not read (INC-F14).
+     *
+     * App-wide rather than per profile, so that two people looking at the same catalogue on the
+     * same television are never shown different numbers of titles with no way to tell why.
+     *
+     * Stored by name for the reason at the top of this file, and a stored name that no longer
+     * maps to an entry is dropped rather than defaulted — the safe reading of "hide this" that
+     * this code no longer understands is to hide nothing.
+     */
+    val hiddenScripts: Flow<Set<TitleScript>> = dataStore.data.map { preferences ->
+        preferences[HIDDEN_SCRIPTS]
+            .orEmpty()
+            .mapNotNullTo(mutableSetOf()) { stored ->
+                TitleScript.entries.firstOrNull { it.name == stored }
+            }
+    }
+
+    suspend fun setHiddenScripts(value: Set<TitleScript>) {
+        dataStore.edit { preferences ->
+            preferences[HIDDEN_SCRIPTS] = value.mapTo(mutableSetOf()) { it.name }
+        }
+    }
+
+    /**
+     * How subtitles are drawn (INC-F11).
+     *
+     * Separate from [settings] rather than folded into it. `PlayerSettings` is engine tuning that
+     * the controller is handed on every change, and a caption colour is not tuning — pushing one
+     * through that path would rebuild nothing and mean nothing. They persist in the same file
+     * because they are the same kind of preference; they travel separately because they are read
+     * by different code.
+     */
+    val subtitleStyle: Flow<SubtitleStyle> = dataStore.data.map { preferences ->
+        val defaults = SubtitleStyle()
+        SubtitleStyle(
+            matchSystem = preferences[SUBTITLE_MATCH_SYSTEM] ?: defaults.matchSystem,
+            textSize = preferences.readEnum(SUBTITLE_SIZE, SubtitleTextSize.entries, defaults.textSize),
+            textColor = preferences.readEnum(SUBTITLE_TEXT_COLOR, SubtitleColor.entries, defaults.textColor),
+            background = preferences.readEnum(SUBTITLE_BACKGROUND, SubtitleColor.entries, defaults.background),
+            backgroundOpacity = preferences.readEnum(
+                SUBTITLE_OPACITY,
+                SubtitleOpacity.entries,
+                defaults.backgroundOpacity,
+            ),
+        )
+    }
+
+    /**
+     * Writes the whole style in one edit.
+     *
+     * One write rather than a setter per property, because every change also clears
+     * [SubtitleStyle.matchSystem], and two edits would leave a moment where the stored style says
+     * it is following the system and carries an explicit size.
+     */
+    suspend fun setSubtitleStyle(value: SubtitleStyle) {
+        dataStore.edit { preferences ->
+            preferences[SUBTITLE_MATCH_SYSTEM] = value.matchSystem
+            preferences[SUBTITLE_SIZE] = value.textSize.name
+            preferences[SUBTITLE_TEXT_COLOR] = value.textColor.name
+            preferences[SUBTITLE_BACKGROUND] = value.background.name
+            preferences[SUBTITLE_OPACITY] = value.backgroundOpacity.name
+        }
+    }
+
     private suspend fun put(key: Preferences.Key<String>, value: String) {
         dataStore.edit { it[key] = value }
     }
@@ -103,7 +182,14 @@ class PlayerSettingsStore(context: Context) {
         val SEEK_INTERVAL = stringPreferencesKey("seek_interval")
         val BUFFER_MODE = stringPreferencesKey("buffer_mode")
         val MAX_BITRATE = stringPreferencesKey("max_bitrate")
+        val AUTO_NEXT_DELAY = stringPreferencesKey("auto_next_delay")
         val THEME_MODE = stringPreferencesKey("theme_mode")
         val DYNAMIC_COLOR = booleanPreferencesKey("dynamic_color")
+        val HIDDEN_SCRIPTS = stringSetPreferencesKey("hidden_scripts")
+        val SUBTITLE_MATCH_SYSTEM = booleanPreferencesKey("subtitle_match_system")
+        val SUBTITLE_SIZE = stringPreferencesKey("subtitle_size")
+        val SUBTITLE_TEXT_COLOR = stringPreferencesKey("subtitle_text_color")
+        val SUBTITLE_BACKGROUND = stringPreferencesKey("subtitle_background")
+        val SUBTITLE_OPACITY = stringPreferencesKey("subtitle_opacity")
     }
 }

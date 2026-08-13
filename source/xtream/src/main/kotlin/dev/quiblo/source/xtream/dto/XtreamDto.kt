@@ -355,6 +355,14 @@ internal data class VodInfoDto(
     @SerialName("duration_secs")
     @Serializable(FlexibleIntSerializer::class)
     val durationSeconds: Int? = null,
+    /**
+     * Sidecar subtitle files the panel says it has for this film (INC-F10).
+     *
+     * Absent on most panels and empty on most of the rest. Read anyway, because when it is
+     * populated it is the one subtitle a viewer gets without going to find a file themselves.
+     */
+    @Serializable(FlexibleSubtitleListSerializer::class)
+    val subtitles: List<XtreamSubtitle> = emptyList(),
 ) {
     /** Panels use either key for the same field, and some send both with one blank. */
     val effectivePlot: String? get() = plot?.takeIf { it.isNotBlank() }

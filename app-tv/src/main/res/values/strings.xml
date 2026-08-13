@@ -14,6 +14,16 @@
     <string name="tv_tab_favourites">Favourites</string>
     <string name="tv_settings">Settings</string>
 
+    <!-- First launch (FREEZE.md Amendment 9). The essential text is here rather than only
+         behind the link, because a television has no browser worth using. -->
+    <string name="tv_consent_what_title">Quiblo</string>
+    <string name="tv_consent_what_body">A player for playlists you already have.\n\nIt ships with no channels, no films and no way to find any. If you do not already have a playlist or an IPTV subscription, there is nothing here to watch yet — and this project will not help you find one.</string>
+    <string name="tv_consent_next">Next</string>
+    <string name="tv_consent_terms_title">Before you start</string>
+    <string name="tv_consent_terms_body">You add your own sources, and you are responsible for them — including whether watching them is legal where you live.\n\nNothing you enter leaves this device except to the servers you name yourself. There is no account, no tracking, and no server of ours.\n\nQuiblo is free software under the GPLv3 and comes with no warranty of any kind.</string>
+    <string name="tv_consent_terms_link">The full terms are at quiblo-iptv.github.io/quiblo-wiki/wiki/terms</string>
+    <string name="tv_consent_start">Start watching</string>
+
     <!-- Profiles -->
     <string name="tv_profile_welcome">Welcome to Quiblo</string>
     <string name="tv_profile_who">Who is watching?</string>
@@ -29,6 +39,9 @@
     <string name="tv_settings_profile_switch">Switch</string>
 
     <string name="tv_placeholder">%1$s content appears here.</string>
+    <string name="tv_guide_none">No listings for this channel.</string>
+    <string name="tv_guide_on_now">On now</string>
+    <string name="tv_guide_time">%1$s – %2$s</string>
     <string name="tv_no_channels">No channels yet. Add a playlist on your phone and import it here.</string>
     <!-- Shown wherever a catalogue is empty because nothing has been configured at all. One
          string for every such screen: "no playlist" is the same fact on Live as on Search,
@@ -61,6 +74,7 @@
     <string name="tv_search_field">Search</string>
     <string name="tv_search_prompt">Search live channels, films and series at once.</string>
     <string name="tv_search_empty">Nothing matched that.</string>
+    <string name="tv_search_suggestions">Did you mean</string>
     <string name="tv_search_clear">Clear</string>
     <string name="tv_search_advanced">Advanced</string>
     <!-- Row headings come from feature:browse now, so both apps say the same words. -->
@@ -77,6 +91,8 @@
     <string name="tv_settings_playback">Playback</string>
     <string name="tv_settings_artwork">Artwork</string>
     <string name="tv_settings_seek_interval">Skip forward and back by</string>
+    <string name="tv_settings_auto_next">Start the next episode after</string>
+    <string name="tv_settings_auto_next_detail">When an episode ends, the next one is offered. Off waits for you to choose it.</string>
     <string name="tv_settings_buffer">Buffering</string>
     <string name="tv_settings_bitrate">Maximum quality</string>
     <string name="tv_settings_channel_logos">Fill in missing channel logos</string>
@@ -87,6 +103,21 @@
     <string name="tv_settings_on">On</string>
     <string name="tv_settings_off">Off</string>
 
+    <string name="tv_settings_scripts">Writing systems</string>
+    <string name="tv_settings_scripts_description">Hide titles written in a script you do not read. Nothing is hidden until you pick one, and your favourites are never hidden.</string>
+    <string name="tv_settings_scripts_show_all">Show everything again</string>
+    <string name="tv_settings_scripts_show_all_action">Show all</string>
+    <string name="tv_settings_scripts_hidden_count">%1$d hidden</string>
+    <string name="tv_settings_script_latin">Latin</string>
+    <string name="tv_settings_script_arabic">Arabic</string>
+    <string name="tv_settings_script_hebrew">Hebrew</string>
+    <string name="tv_settings_script_cyrillic">Cyrillic</string>
+    <string name="tv_settings_script_greek">Greek</string>
+    <string name="tv_settings_script_han">Chinese</string>
+    <string name="tv_settings_script_kana">Japanese</string>
+    <string name="tv_settings_script_hangul">Korean</string>
+    <string name="tv_settings_script_devanagari">Devanagari</string>
+    <string name="tv_settings_script_thai">Thai</string>
     <string name="tv_settings_categories">Categories</string>
     <string name="tv_settings_category_kind">Editing categories for</string>
     <string name="tv_settings_rename_field">Rename to</string>
@@ -124,6 +155,19 @@
     <string name="tv_settings_backup_rejected">That backup was written by a newer version of Quiblo (format %1$d, this build reads %2$d). Update the app and try again.</string>
     <string name="tv_settings_backup_failed">That file could not be read.</string>
 
+    <!-- Service attribution. TMDB's terms require this sentence wherever their data appears. -->
+    <string name="tv_settings_tmdb_attribution">This product uses the TMDB API but is not endorsed or certified by TMDB.</string>
+    <string name="tv_settings_channel_logos_attribution">Channel data from the iptv-org project.</string>
+
+    <!-- About and licences (AC-LEGAL-03) -->
+    <string name="tv_settings_about">About</string>
+    <string name="tv_settings_version_label">Quiblo for television</string>
+    <string name="tv_settings_version_detail">Version %1$s</string>
+    <string name="tv_settings_licenses_label">Open source licences</string>
+    <string name="tv_settings_licenses_detail">Quiblo is free software under the GNU General Public License v3.0 or later. It ships the following third-party components.</string>
+    <string name="tv_settings_licenses_show">Show</string>
+    <string name="tv_settings_licenses_hide">Hide</string>
+
     <!-- Categories -->
     <string name="tv_category_all">All channels</string>
     <string name="tv_category_ungrouped">Ungrouped</string>
@@ -139,6 +183,17 @@
     <string name="tv_detail_favourite">Add to favourites</string>
     <string name="tv_detail_unfavourite">Remove from favourites</string>
     <string name="tv_detail_remove_history">Remove from history</string>
+    <string name="tv_continue_remove_confirm">Remove? Press again</string>
+    <string name="tv_detail_refresh">Refresh information</string>
+    <string name="tv_series_all_episodes">All episodes</string>
+    <string name="tv_series_merge_seasons">Merge seasons</string>
+    <string name="tv_series_newest_first">Newest first</string>
+    <string name="tv_detail_refresh_working">Asking…</string>
+    <string name="tv_detail_refresh_updated">Information updated.</string>
+    <string name="tv_detail_refresh_no_match">The metadata service has nothing about this title.</string>
+    <string name="tv_detail_refresh_rate_limited">The metadata service asked us to slow down. Nothing was changed.</string>
+    <string name="tv_detail_refresh_key_rejected">The metadata key was refused. Nothing was changed.</string>
+    <string name="tv_detail_refresh_unavailable">Could not reach the metadata service. Nothing was changed.</string>
 
     <!-- Series -->
     <string name="tv_series_unavailable">That series could not be loaded.</string>
@@ -147,18 +202,30 @@
     <string name="tv_series_episode_number">S%1$d E%2$d</string>
     <string name="tv_series_resume">Continue from season %1$d, episode %2$d</string>
     <string name="tv_player_live">LIVE</string>
-    <string name="tv_player_hint_play">OK to play</string>
-    <string name="tv_player_hint_pause">OK to pause</string>
-    <string name="tv_player_hint_seek">◀ ▶ to skip %1$d s</string>
     <string name="tv_player_hint_zap">▲ to change channel</string>
-    <string name="tv_player_hint_aspect">Menu or up: %1$s</string>
-    <string name="tv_player_hint_tracks">▼ for audio and subtitles</string>
     <string name="tv_player_audio">Audio</string>
     <string name="tv_player_subtitles">Subtitles</string>
     <string name="tv_player_subtitles_off">Off</string>
 
-    <!-- Spoken, not shown. TalkBack runs on Android TV and a spinner is silent to it. -->
+    <!-- The next-episode banner. The count is redrawn every second, so it is its own string. -->
+    <string name="tv_player_next_episode_in">Next episode in %1$d</string>
+    <string name="tv_player_next_episode_ready">Next episode</string>
+    <string name="tv_player_next_episode_play">Play now</string>
+    <string name="tv_player_next_episode_stop">Stop</string>
+
+    <!--
+      Spoken, not shown, except where a control has no label of its own: every button in the
+      player is a circle with an icon in it, and an icon says nothing to TalkBack.
+    -->
     <string name="tv_a11y_buffering">Buffering</string>
+    <string name="tv_a11y_play">Play</string>
+    <string name="tv_a11y_pause">Pause</string>
+    <string name="tv_a11y_rewind">Back %1$d seconds</string>
+    <string name="tv_a11y_forward">Forward %1$d seconds</string>
+    <string name="tv_a11y_next_episode">Next episode</string>
+    <string name="tv_a11y_previous_episode">Previous episode</string>
+    <string name="tv_a11y_tracks">Audio and subtitles</string>
+    <string name="tv_a11y_aspect">Picture fit: %1$s</string>
     <plurals name="tv_series_seasons">
         <item quantity="one">%1$d season</item>
         <item quantity="other">%1$d seasons</item>

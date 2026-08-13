@@ -30,14 +30,103 @@ permissions:
   contents: read
 
 jobs:
-  build:
-    name: Build, test and analyse
+  # What kind of change is this?
+  #
+  # A pull request that only edits prose does not need an Android build to be trusted, and this
+  # repository was spending ten to eighteen minutes proving that a typo compiles. But the obvious
+  # implementation of that idea — a `paths:` filter on the trigger — is a trap: a workflow that is
+  # filtered out never reports its check at all, so a branch rule requiring that check waits for a
+  # run that will never happen, forever. The decision therefore lives *inside* a job, so every
+  # pull request still reports the same checks; some of them just finish in seconds.
+  #
+  # **Allowlist, not denylist.** Anything not named here counts as code. That direction is the
+  # whole safety of this: a new source directory nobody thought about gets the full build by
+  # default, and the failure mode of a wrong guess is a slow pull request rather than an unbuilt
+  # one.
+  scope:
+    name: What changed
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 5
+    outputs:
+      docs_only: ${{ steps.classify.outputs.docs_only }}
 
     steps:
       - name: Check out
         uses: actions/checkout@v4
+        with:
+          # The whole history, because this compares against the base branch rather than the
+          # single commit that triggered the run.
+          fetch-depth: 0
+
+      - name: Classify the change
+        id: classify
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          set -euo pipefail
+
+          # Only a pull request can be docs-only. A push — which is how the release lane calls
+          # this workflow — is decided by the caller, which knows whether it is about to publish
+          # something. A gate that skipped itself on the way to a release would be worse than no
+          # gate: see release-on-main.yml.
+          if [ "${{ github.event_name }}" != "pull_request" ]; then
+            echo "Not a pull request. Everything runs."
+            echo "docs_only=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # core.quotepath=false is not a nicety. Git quotes any path containing a byte
+          # outside ASCII -- the whole path, quotation marks and octal escapes -- and a quoted
+          # path matches no pattern below, so every document in this repository whose name
+          # carries an em dash read as code. Found by the change that renamed those files: the
+          # build ran on a pull request made entirely of prose. It failed *safe*, which is the
+          # allowlist working as designed, and it was still wrong.
+          CHANGED=$(git -c core.quotepath=false diff --name-only "origin/$BASE_REF...HEAD")
+          echo "Changed files:"
+          echo "$CHANGED" | sed 's/^/  /'
+
+          # Prose, and nothing else.
+          #
+          # `docs/LICENSES.md` is deliberately **not** in this list even though it is a markdown
+          # file in docs/. It is generated from the release runtime classpath and `licenceCheck`
+          # compares the two, so editing it by hand is precisely the change that needs the build
+          # that would catch it.
+          #
+          # `.github/**` is not here either. A workflow change is not user-facing and not app
+          # code, and it is the one kind of change whose whole risk is that it does not work —
+          # this file's own history has an entry where a broken block scalar published nothing
+          # and looked like success.
+          ALLOWED='^(docs/(?!LICENSES\.md)[^/]*\.md|agile/.*\.md|[^/]*\.md|LICENSE)$'
+
+          OUTSIDE=$(echo "$CHANGED" | grep -vP "$ALLOWED" || true)
+
+          if [ -z "$OUTSIDE" ]; then
+            echo "::notice::Prose only — the Android build is skipped and the guards still run."
+            echo "docs_only=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "Not prose only. These need the full build:"
+            echo "$OUTSIDE" | sed 's/^/  /'
+            echo "docs_only=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  # The checks that are seconds rather than minutes, and that a prose change can still fail.
+  #
+  # Every one of these is a grep or a parse. They run on every pull request whatever it touched,
+  # because the two that matter most are exactly the ones prose can break: a provider URL or a
+  # credential pasted into a document is the leak `AC-LEGAL-04` exists to prevent, and the
+  # forbidden brand string is as forbidden in a paragraph as in a package name.
+  guards:
+    name: Guards
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      # No JDK, no Android SDK, no Gradle. Every step below is a grep or a parse, and setting up
+      # a toolchain to run them would put two minutes back onto the thing this split exists to
+      # make fast.
 
       # A pull request may not introduce a dependency with a known vulnerability, or one whose
       # licence this project cannot ship. `agile/006` gate 6.
@@ -72,21 +161,6 @@ jobs:
             AGPL-3.0-only,
             AGPL-3.0-or-later,
             SSPL-1.0
-
-      - name: Set up JDK 17
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '17'
-
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
-
-      - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v4
-
-      - name: Validate Gradle wrapper
-        uses: gradle/actions/wrapper-validation@v4
 
       # AC-LEGAL-04: no playlist, provider host or credential may ever enter the repo.
       # Cheap to check here, expensive to remove from history later.
@@ -192,6 +266,34 @@ jobs:
           sys.exit(1 if bad else 0)
           PY
 
+  # Everything that needs an Android toolchain. Ten to eighteen minutes, and skipped when the
+  # pull request is prose.
+  build:
+    name: Build, test and analyse
+    needs: scope
+    if: needs.scope.outputs.docs_only != 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Validate Gradle wrapper
+        uses: gradle/actions/wrapper-validation@v4
+
       - name: Assemble
         run: ./gradlew assemble --stacktrace
 
@@ -242,6 +344,17 @@ jobs:
       - name: Parser coverage (AC-NFR-07)
         run: ./gradlew coverageAll --stacktrace
 
+      # AC-LEGAL-03, against the dependency graph rather than against somebody's memory.
+      #
+      # The in-app licence list is hand-written and was accurate only because people kept it so.
+      # It had no mechanical relationship to what ships, which made its failure mode silent and
+      # permanent: a dependency added in a pull request that nobody remembers to list is
+      # attribution missing from every release after it, and nothing fails. The first run of
+      # this check found 118 shipped modules listed nowhere — including one that is MIT, in a
+      # file whose own comment said everything in it was Apache-2.0.
+      - name: Licence attribution (AC-LEGAL-03)
+        run: ./gradlew licenceCheck --stacktrace
+
       - name: Android Lint
         run: ./gradlew lint --stacktrace
 
@@ -256,3 +369,49 @@ jobs:
             **/build/reports/lint-results-*.html
           retention-days: 14
           if-no-files-found: ignore
+
+  # One name that always reports, whatever the run decided to do.
+  #
+  # This is the job a branch rule should require, and the reason it exists is the trap this whole
+  # file is arranged around: a required check that does not run is not a pass, it is a pull
+  # request that can never be merged. `build` is skipped on a prose change, so requiring `build`
+  # by name would jam exactly the pull requests this was meant to speed up.
+  #
+  # `if: always()` so it reports even when something upstream failed, and then it reads the
+  # results itself — a needed job that failed must fail this, and a needed job that was *skipped*
+  # must not. That distinction is the entire job.
+  gate:
+    name: Gate
+    needs: [scope, guards, build]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Report
+        env:
+          SCOPE: ${{ needs.scope.result }}
+          GUARDS: ${{ needs.guards.result }}
+          BUILD: ${{ needs.build.result }}
+          DOCS_ONLY: ${{ needs.scope.outputs.docs_only }}
+        run: |
+          set -euo pipefail
+          echo "scope=$SCOPE guards=$GUARDS build=$BUILD docs_only=${DOCS_ONLY:-unknown}"
+
+          FAILED=0
+          for result in "$SCOPE" "$GUARDS" "$BUILD"; do
+            case "$result" in
+              success|skipped) ;;
+              *) FAILED=1 ;;
+            esac
+          done
+
+          if [ "$FAILED" -eq 1 ]; then
+            echo "::error::A gate job did not pass."
+            exit 1
+          fi
+
+          if [ "${DOCS_ONLY:-}" = "true" ]; then
+            echo "::notice::Prose only. The guards passed and the Android build was not run — see the scope job for what was read."
+          fi
+          echo "Gate green."

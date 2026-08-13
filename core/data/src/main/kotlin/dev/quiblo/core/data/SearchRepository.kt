@@ -18,14 +18,21 @@
 
 package dev.quiblo.core.data
 
+import dev.quiblo.core.common.TitleScript
+import dev.quiblo.core.common.isInHiddenScript
 import dev.quiblo.core.database.dao.ChannelDao
 import dev.quiblo.core.database.dao.ChannelTitle
+import dev.quiblo.core.database.dao.TitleGenreRow
 import dev.quiblo.core.database.dao.TitleMetadataDao
 import dev.quiblo.core.model.Channel
 import dev.quiblo.core.model.MediaKind
-import dev.quiblo.source.tmdb.cleanedForSearch
+import dev.quiblo.source.tmdb.TitleIdentity
+import dev.quiblo.source.tmdb.titleIdentity
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.withContext
 
 /** What one search returned, kept apart by kind because that is how it is read. */
@@ -36,6 +43,16 @@ data class SearchResults(
 ) {
     val isEmpty: Boolean get() = live.isEmpty() && movies.isEmpty() && series.isEmpty()
     val total: Int get() = live.size + movies.size + series.size
+
+    /** Drops results written in a script the viewer has hidden (INC-F14). */
+    fun hidingUnreadableScripts(hidden: Set<TitleScript>): SearchResults {
+        if (hidden.isEmpty()) return this
+        return SearchResults(
+            live = live.filterNot { it.name.isInHiddenScript(hidden) },
+            movies = movies.filterNot { it.name.isInHiddenScript(hidden) },
+            series = series.filterNot { it.name.isInHiddenScript(hidden) },
+        )
+    }
 }
 
 /**
@@ -80,6 +97,8 @@ class SearchRepository(
      * on a television for the length of the filter.
      */
     private val matchDispatcher: CoroutineDispatcher = Dispatchers.Default,
+    /** The writing systems this viewer has hidden — see [ScriptFilterRepository]. */
+    private val hiddenScripts: Flow<Set<TitleScript>> = flowOf(emptySet()),
 ) {
 
     /**
@@ -98,7 +117,10 @@ class SearchRepository(
         val term = query.trim()
         if (term.isBlank() && genre.isNullOrBlank()) return SearchResults()
 
-        return if (genre.isNullOrBlank()) {
+        // Read once for this search rather than per result list, so all three lists are
+        // filtered against the same answer even if the setting changes mid-query.
+        val hidden = hiddenScripts.first()
+        val results = if (genre.isNullOrBlank()) {
             SearchResults(
                 live = matches(sourceId, MediaKind.LIVE, term, limitPerKind),
                 movies = matches(sourceId, MediaKind.VOD, term, limitPerKind),
@@ -107,6 +129,7 @@ class SearchRepository(
         } else {
             byGenre(sourceId, term, genre, limitPerKind)
         }
+        return results.hidingUnreadableScripts(hidden)
     }
 
     /**
@@ -133,7 +156,7 @@ class SearchRepository(
 
             GenreIndex(
                 genres = genres,
-                coveragePercent = coverage(titles, cached.mapTo(HashSet()) { it.searchTitle to it.kind }),
+                coveragePercent = coverage(titles, cached.mapTo(HashSet()) { it.identity() }),
             )
         }
     }
@@ -150,11 +173,9 @@ class SearchRepository(
      * leaving them in the denominator would cap the figure below 100% permanently and make
      * a complete cache look like a broken one.
      */
-    private fun coverage(titles: List<ChannelTitle>, cachedKeys: Set<Pair<String, String>>): Int {
+    private fun coverage(titles: List<ChannelTitle>, cachedKeys: Set<CacheIdentity>): Int {
         val wanted = titles.asSequence()
-            .mapNotNull { title ->
-                title.name.searchKey()?.let { it to title.kind }
-            }
+            .mapNotNull { it.name.cacheIdentity(it.kind) }
             .toSet()
 
         if (wanted.isEmpty()) return 0
@@ -186,11 +207,11 @@ class SearchRepository(
             val inGenre = cached.asSequence()
                 .filterNot { it.isMiss }
                 .filter { row -> row.genres.orEmpty().splitGenres().any { it.equals(genre, ignoreCase = true) } }
-                .mapTo(HashSet()) { it.searchTitle to it.kind }
+                .mapTo(HashSet()) { it.identity() }
 
             titles.asSequence()
                 .filter { term.isBlank() || it.name.contains(term, ignoreCase = true) }
-                .filter { title -> title.name.searchKey()?.let { (it to title.kind) in inGenre } == true }
+                .filter { title -> title.name.cacheIdentity(title.kind) in inGenre }
                 // Two kinds share one cap so a genre held mostly by series still returns
                 // films, and the split back into columns happens after the rows are read.
                 .take(limit * KINDS_WITH_METADATA)
@@ -251,10 +272,16 @@ private fun String.splitGenres(): Sequence<String> =
     splitToSequence('\n').map { it.trim() }.filter { it.isNotBlank() }
 
 /**
- * The key this title is filed under in the metadata cache, or null if it is not filed at all.
+ * What makes two catalogue titles the same suggestion.
  *
- * The same two steps `TitleMetadataRepository` takes before it writes a row. Written out here
- * rather than shared through a helper because the two must agree exactly, and a mismatch
- * would show as a genre filter that quietly returns nothing.
+ * `INC-F1`. A provider that lists one film in four qualities should offer **one** suggestion, and
+ * the cleaner that already decides that for the metadata cache decides it here too — one cleaner,
+ * one place, which is the rule `014` states and `016` proved the cost of breaking.
+ *
+ * Exposed from `:core:data` rather than letting a feature reach into `:source:tmdb`: `PLAN.md` §2
+ * says features talk to this layer and nothing else.
  */
-private fun String.searchKey(): String? = cleanedForSearch().lowercase().takeIf { it.isNotBlank() }
+fun String.suggestionKey(): String = titleIdentity().searchTitle
+
+/** The cache row this cached projection stands for, so the two sides join on the whole key. */
+private fun TitleGenreRow.identity() = CacheIdentity(TitleIdentity(searchTitle, year), kind)

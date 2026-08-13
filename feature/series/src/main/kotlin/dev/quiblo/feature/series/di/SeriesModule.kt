@@ -24,5 +24,16 @@ import org.koin.core.module.dsl.viewModel
 import org.koin.dsl.module
 
 val seriesModule: Module = module {
-    viewModel { (channelId: Long) -> SeriesDetailViewModel(channelId, get(), get(), get()) }
+    viewModel { (channelId: Long) ->
+        // Named rather than positional: four `get()` calls in a row are four chances to hand a
+        // repository to the wrong parameter, and Koin resolves by type at runtime rather than
+        // failing to compile.
+        SeriesDetailViewModel(
+            channelId = channelId,
+            channelRepository = get(),
+            metadataRepository = get(),
+            historyRepository = get(),
+            preferences = get(),
+        )
+    }
 }

@@ -65,8 +65,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import dev.quiblo.core.data.MERGED_SEASON_NUMBER
+import dev.quiblo.core.data.MetadataRefresh
 import dev.quiblo.core.model.Channel
 import dev.quiblo.core.model.Episode
+import dev.quiblo.core.model.Season
 import dev.quiblo.feature.series.SeriesDetailUiState
 import dev.quiblo.feature.series.SeriesDetailViewModel
 import dev.quiblo.tv.R
@@ -77,6 +80,7 @@ import dev.quiblo.tv.ui.detail.DetailFacts
 import dev.quiblo.tv.ui.detail.DetailOverview
 import dev.quiblo.tv.ui.detail.DetailTitle
 import dev.quiblo.tv.ui.detail.genresOrEmpty
+import dev.quiblo.tv.ui.detail.messageRes
 import dev.quiblo.tv.ui.detail.openDetailScreen
 import org.koin.androidx.compose.koinViewModel
 import org.koin.core.parameter.parametersOf
@@ -97,7 +101,13 @@ import org.koin.core.parameter.parametersOf
 @Composable
 fun TvSeriesScreen(
     channel: Channel,
-    onPlayEpisode: (Episode, Long?) -> Unit,
+    /**
+     * Play this episode, out of this run, from here.
+     *
+     * The run travels with the press rather than being looked up later, because this screen is
+     * the only one that has the episodes at all — see `TvPlaybackRequest.Episode.run`.
+     */
+    onPlayEpisode: (Episode, List<Episode>, Long?) -> Unit,
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
     focusEpisodeId: String? = null,
@@ -135,6 +145,9 @@ fun TvSeriesScreen(
                 onPlayEpisode = onPlayEpisode,
                 onToggleFavorite = viewModel::toggleFavorite,
                 onRemoveFromHistory = viewModel::removeFromHistory,
+                onRefreshMetadata = viewModel::refreshMetadata,
+                onMerged = viewModel::setMerged,
+                onDescending = viewModel::setDescending,
                 focusEpisodeId = focusEpisodeId,
             )
         }
@@ -144,12 +157,24 @@ fun TvSeriesScreen(
 @Composable
 private fun Loaded(
     state: SeriesDetailUiState.Success,
-    onPlayEpisode: (Episode, Long?) -> Unit,
+    onPlayEpisode: (Episode, List<Episode>, Long?) -> Unit,
     onToggleFavorite: () -> Unit,
     onRemoveFromHistory: () -> Unit,
+    onRefreshMetadata: () -> Unit,
+    onMerged: (Boolean) -> Unit,
+    onDescending: (Boolean) -> Unit,
     focusEpisodeId: String?,
 ) {
-    val seasons = state.details.seasons
+    val seasons = state.seasons.ifEmpty { state.details.seasons }
+
+    /*
+     * The run is the same for every press on this screen, so it is bound once here and the
+     * parts below keep the two-argument callback they already had. Threading a third argument
+     * through the header, the actions and the rows would have put the same constant in four
+     * signatures for no reader's benefit.
+     */
+    val run = remember(seasons) { episodeRun(seasons) }
+    val play: (Episode, Long?) -> Unit = { episode, resumeFrom -> onPlayEpisode(episode, run, resumeFrom) }
 
     // Returning to an episode means returning to its season, not to the first one.
     val returningSeason = remember(state.details.seriesId, focusEpisodeId) {
@@ -157,7 +182,11 @@ private fun Loaded(
             seasons.indexOfFirst { season -> season.episodes.any { it.id == id } }.takeIf { it >= 0 }
         }
     }
-    var selectedSeason by remember(state.details.seriesId) { mutableIntStateOf(returningSeason ?: 0) }
+    // Also keyed on the arrangement: merging collapses several seasons into one, so an index
+    // of 4 points at nothing the moment the switch is flipped.
+    var selectedSeason by remember(state.details.seriesId, state.preference) {
+        mutableIntStateOf(returningSeason ?: 0)
+    }
     val episodes = seasons.getOrNull(selectedSeason)?.episodes.orEmpty()
 
     val firstAction = remember { FocusRequester() }
@@ -213,9 +242,10 @@ private fun Loaded(
                 state = state,
                 seasonCount = seasons.size,
                 firstAction = firstAction,
-                onPlayEpisode = onPlayEpisode,
+                onPlayEpisode = play,
                 onToggleFavorite = onToggleFavorite,
                 onRemoveFromHistory = onRemoveFromHistory,
+                onRefreshMetadata = onRefreshMetadata,
             )
         }
 
@@ -231,6 +261,32 @@ private fun Loaded(
             return@LazyColumn
         }
 
+        item(key = "arrangement") {
+            LazyRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                // Its own focus group, so walking along it with the remote does not step into
+                // the season chips below by accident.
+                modifier = Modifier
+                    .padding(top = 6.dp)
+                    .focusGroup(),
+            ) {
+                item {
+                    SeasonChip(
+                        label = stringResource(R.string.tv_series_merge_seasons),
+                        isSelected = state.preference.isMerged,
+                        onClick = { onMerged(!state.preference.isMerged) },
+                    )
+                }
+                item {
+                    SeasonChip(
+                        label = stringResource(R.string.tv_series_newest_first),
+                        isSelected = state.preference.isDescending,
+                        onClick = { onDescending(!state.preference.isDescending) },
+                    )
+                }
+            }
+        }
+
         if (seasons.size > 1) {
             item(key = "seasons") {
                 LazyRow(
@@ -242,8 +298,12 @@ private fun Loaded(
                         key = { _, season -> season.seasonNumber },
                     ) { index, season ->
                         SeasonChip(
-                            label = season.name.ifBlank {
-                                stringResource(R.string.tv_series_season, season.seasonNumber)
+                            label = if (season.seasonNumber == MERGED_SEASON_NUMBER && season.name.isEmpty()) {
+                                stringResource(R.string.tv_series_all_episodes)
+                            } else {
+                                season.name.ifBlank {
+                                    stringResource(R.string.tv_series_season, season.seasonNumber)
+                                }
                             },
                             isSelected = index == selectedSeason,
                             onClick = { selectedSeason = index },
@@ -258,7 +318,7 @@ private fun Loaded(
             EpisodeRow(
                 episode = episode,
                 onClick = {
-                    onPlayEpisode(episode, state.resumePositionMillis.takeIf { isResume })
+                    play(episode, state.resumePositionMillis.takeIf { isResume })
                 },
                 modifier = if (episode.id == focusEpisodeId) {
                     Modifier.focusRequester(episodeCursor)
@@ -285,6 +345,7 @@ private fun SeriesHeader(
     onPlayEpisode: (Episode, Long?) -> Unit,
     onToggleFavorite: () -> Unit,
     onRemoveFromHistory: () -> Unit,
+    onRefreshMetadata: () -> Unit,
 ) {
     Row(horizontalArrangement = Arrangement.spacedBy(DETAIL_COLUMN_GAP)) {
         DetailArtwork(
@@ -323,6 +384,7 @@ private fun SeriesHeader(
                 onPlayEpisode = onPlayEpisode,
                 onToggleFavorite = onToggleFavorite,
                 onRemoveFromHistory = onRemoveFromHistory,
+                onRefreshMetadata = onRefreshMetadata,
             )
         }
     }
@@ -337,6 +399,7 @@ private fun SeriesActions(
     onPlayEpisode: (Episode, Long?) -> Unit,
     onToggleFavorite: () -> Unit,
     onRemoveFromHistory: () -> Unit,
+    onRefreshMetadata: () -> Unit,
 ) {
     val hasResume = state.resumeEpisode != null
 
@@ -402,6 +465,35 @@ private fun SeriesActions(
                 onClick = onRemoveFromHistory,
             )
         }
+
+        // Last, for the same reason as on the film screen: it is the control a viewer reaches
+        // for only when the screen already looks wrong, and it must not sit between Resume and
+        // the favourite on the way there.
+        if (state.canRefreshMetadata) {
+            DetailButton(
+                label = stringResource(
+                    if (state.isEnriching) {
+                        R.string.tv_detail_refresh_working
+                    } else {
+                        R.string.tv_detail_refresh
+                    },
+                ),
+                onClick = onRefreshMetadata,
+            )
+        }
+    }
+
+    state.refreshResult?.let { result ->
+        Text(
+            text = stringResource(result.messageRes()),
+            color = if (result is MetadataRefresh.Refused) {
+                Color(0xFFFF8A80)
+            } else {
+                Color.White.copy(alpha = 0.75f)
+            },
+            fontSize = 14.sp,
+            modifier = Modifier.padding(top = 10.dp),
+        )
     }
 }
 
@@ -479,6 +571,21 @@ private fun EpisodeRow(episode: Episode, onClick: () -> Unit, modifier: Modifier
         )
     }
 }
+
+/**
+ * Every episode of a series, in the order somebody watches them.
+ *
+ * A plain function, and public to its module, because this is the whole definition of what
+ * "next episode" means and it deserves a test rather than a reading. It is deliberately not
+ * derived from what the screen is drawing: the season strip can be reversed and the seasons
+ * can be merged, and neither of those changes which episode follows which.
+ *
+ * Sorting by season and then by number covers both arrangements with one rule. Merging puts
+ * everything in a single season whose own number is a sentinel, but the episodes inside it
+ * keep the season they came from, so they sort back into their real order here.
+ */
+internal fun episodeRun(seasons: List<Season>): List<Episode> =
+    seasons.flatMap { it.episodes }.sortedWith(compareBy({ it.seasonNumber }, { it.episodeNumber }))
 
 @Composable
 private fun Centered(content: @Composable () -> Unit) {

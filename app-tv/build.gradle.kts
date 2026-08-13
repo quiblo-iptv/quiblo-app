@@ -50,8 +50,8 @@ android {
         // A separate application id, not a flavour of the phone app. They are two installs
         // with two databases, and a user may well have both — a phone and a television.
         applicationId = "dev.quiblo.tv"
-        versionCode = 10
-        versionName = "0.2.7"
+        versionCode = 23
+        versionName = "0.13.0"
     }
 
     buildFeatures {
@@ -101,6 +101,10 @@ dependencies {
     implementation(projects.core.network)
     implementation(projects.core.model)
     implementation(projects.core.media)
+
+    // The one feature module whose composables this app does use: the shape scale both
+    // themes read, so a phone and a television cannot round their corners differently.
+    implementation(projects.feature.designsystem)
 
     // For their ViewModels and Koin wiring only. None of their composables are referenced,
     // and R8 strips what is unreachable — worth checking on the first release build rather

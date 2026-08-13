@@ -16,6 +16,31 @@
     <string name="player_audio">Audio</string>
     <string name="player_subtitles">Subtitles</string>
     <string name="player_subtitles_off">Off</string>
+
+    <!-- INC-F10: a subtitle file from the device, for a film whose panel supplies none. -->
+    <string name="player_subtitles_add_file">Add a subtitle file…</string>
+    <string name="player_subtitles_remove_file">Remove the added file</string>
+    <string name="player_subtitles_attached">Subtitle file loaded. Choose it from Subtitles.</string>
+    <string name="player_subtitles_not_subtitles">That file does not look like subtitles.</string>
+    <string name="player_subtitles_unreadable">That file could not be opened.</string>
+    <string name="player_subtitles_too_large">That file is too large to be subtitles.</string>
+    <string name="player_subtitles_no_picker">This device has no app for picking files.</string>
+
+    <!-- INC-F11: how subtitles look, set from inside the player where the effect is visible. -->
+    <string name="player_subtitles_size">Subtitle size</string>
+    <string name="player_subtitles_text_colour">Subtitle colour</string>
+    <string name="player_subtitles_background">Subtitle background</string>
+    <string name="player_subtitles_match_system">Match system</string>
+    <string name="player_subtitles_size_small">Small</string>
+    <string name="player_subtitles_size_medium">Medium</string>
+    <string name="player_subtitles_size_large">Large</string>
+    <string name="player_subtitles_size_extra_large">Extra large</string>
+    <string name="player_subtitles_colour_white">White</string>
+    <string name="player_subtitles_colour_yellow">Yellow</string>
+    <string name="player_subtitles_colour_black">Black</string>
+    <string name="player_subtitles_background_none">None</string>
+    <string name="player_subtitles_background_light">Faint</string>
+    <string name="player_subtitles_background_solid">Solid</string>
     <string name="player_close">Close</string>
     <string name="player_live">LIVE</string>
     <string name="player_reconnecting">Reconnecting… (attempt %1$d of 3)</string>

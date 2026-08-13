@@ -46,15 +46,41 @@ data class TrackMenu(val sections: List<TrackMenuSection>) {
     val isEmpty: Boolean get() = sections.isEmpty()
 }
 
-/** One heading and the choices under it. */
+/**
+ * One heading, the choices under it, and anything a viewer can *do* there.
+ *
+ * Actions are separate from entries because they are a different kind of thing: an entry answers
+ * "which of these", an action answers "and one more". Drawing them from the same list would let a
+ * tick appear beside "Add a subtitle file", which is not a state it can be in.
+ */
 data class TrackMenuSection(
     val kind: TrackMenuKind,
     val entries: List<TrackMenuEntry>,
+    val actions: List<TrackMenuAction> = emptyList(),
 )
 
+/** Something a viewer can do from the menu, rather than something they can choose. */
+data class TrackMenuAction(val kind: TrackMenuActionKind, val label: String)
+
+enum class TrackMenuActionKind {
+    ADD_SUBTITLE_FILE,
+    REMOVE_SUBTITLE_FILE,
+}
+
+/**
+ * The headings the menu can have.
+ *
+ * The three appearance sections are here rather than behind a second panel because INC-F11 is
+ * specific about where this belongs: a size chosen over the film it will sit on is a decision, and
+ * the same size chosen against a settings card is a guess. They are also only offered while a
+ * subtitle is actually showing — see [trackMenu].
+ */
 enum class TrackMenuKind {
     AUDIO,
     SUBTITLES,
+    SUBTITLE_SIZE,
+    SUBTITLE_TEXT_COLOUR,
+    SUBTITLE_BACKGROUND,
 }
 
 /**
@@ -80,27 +106,60 @@ data class TrackMenuEntry(
  * a menu listing a single option a viewer cannot change is furniture. Subtitles appear whenever
  * the container declares any, because "off" is always a real choice there.
  */
-fun trackMenu(state: PlaybackState, offLabel: String): TrackMenu {
+fun trackMenu(
+    state: PlaybackState,
+    offLabel: String,
+    /**
+     * What a viewer can do about subtitles beyond choosing one — attach a file, drop the one they
+     * attached (INC-F10).
+     *
+     * Passed in rather than decided here for the same reason [offLabel] is: these are words, and
+     * this module has no composition to read them from. It is also the screen that knows whether
+     * the device has a file picker at all, which a television often does not.
+     */
+    subtitleActions: List<TrackMenuAction> = emptyList(),
+    /**
+     * The appearance sections, already labelled, or none (INC-F11).
+     *
+     * Built by the screen for the same reason as everything else passed in here — the words are
+     * resources and this module has no composition to read them from.
+     */
+    appearance: List<TrackMenuSection> = emptyList(),
+): TrackMenu {
     val sections = buildList {
         if (state.audioTracks.size > 1) {
             add(TrackMenuSection(TrackMenuKind.AUDIO, state.audioTracks.map { it.toEntry() }))
         }
 
-        if (state.textTracks.isNotEmpty()) {
-            val entries = buildList {
-                add(
-                    TrackMenuEntry(
-                        trackId = null,
-                        label = offLabel,
-                        // Selected when nothing else is: a container can declare subtitles and
-                        // start with none showing, which is the usual case.
-                        isSelected = state.textTracks.none { it.isSelected },
-                    ),
-                )
-                addAll(state.textTracks.map { it.toEntry() })
+        // Subtitles appear when the stream has any *or* when there is something to do about them.
+        // A film with no subtitle track is exactly the case a viewer wants to attach a file to,
+        // so a menu that hides the section until one exists hides it when it is needed most.
+        if (state.textTracks.isNotEmpty() || subtitleActions.isNotEmpty()) {
+            val entries = if (state.textTracks.isEmpty()) {
+                // Nothing to turn off, so no "off" entry. One choice that is already made is
+                // furniture, and the same rule already keeps a lone audio track out of the menu.
+                emptyList()
+            } else {
+                buildList {
+                    add(
+                        TrackMenuEntry(
+                            trackId = null,
+                            label = offLabel,
+                            // Selected when nothing else is: a container can declare subtitles
+                            // and start with none showing, which is the usual case.
+                            isSelected = state.textTracks.none { it.isSelected },
+                        ),
+                    )
+                    addAll(state.textTracks.map { it.toEntry() })
+                }
             }
-            add(TrackMenuSection(TrackMenuKind.SUBTITLES, entries))
+            add(TrackMenuSection(TrackMenuKind.SUBTITLES, entries, subtitleActions))
         }
+
+        // Only while something is actually showing. Offering a caption colour over a film with
+        // no subtitle on it is offering a choice whose effect cannot be seen, which is the one
+        // thing INC-F11 asks this menu not to do.
+        if (state.textTracks.any { it.isSelected }) addAll(appearance)
     }
 
     return TrackMenu(sections)

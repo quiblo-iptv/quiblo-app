@@ -22,6 +22,7 @@ import dev.quiblo.core.database.dao.ProgrammeDao
 import dev.quiblo.core.database.dao.SourceDao
 import dev.quiblo.core.model.Channel
 import dev.quiblo.core.model.Programme
+import dev.quiblo.core.model.Source
 import dev.quiblo.core.model.SourceKind
 import dev.quiblo.source.api.GuideResult
 import dev.quiblo.source.api.GuideSource
@@ -59,6 +60,36 @@ class GuideRepository(
             .map { rows -> rows.associate { it.channelKey to it.toDomain() } }
 
     /**
+     * One channel's listing across a window, straight from the cache (INC-F4).
+     *
+     * Read from storage rather than from the fetch, for the reason everything else here is: with
+     * no connection the timeline still draws whatever was last stored (AC-EPG-05).
+     */
+    fun observeSchedule(
+        sourceId: Long,
+        channelKey: String,
+        fromEpochMillis: Long,
+        toEpochMillis: Long,
+    ): Flow<List<Programme>> =
+        programmeDao.observeBetween(sourceId, channelKey, fromEpochMillis, toEpochMillis)
+            .map { rows -> rows.map { it.toDomain() } }
+
+    /**
+     * Fetches the whole listing for one channel and replaces what is cached (INC-F4).
+     *
+     * The same shape as [refreshGuideFor] and deliberately a separate entry point: this one is
+     * a heavier call and is made on an explicit request from the viewer, never from a scroll.
+     */
+    suspend fun refreshFullGuideFor(channel: Channel): Boolean =
+        refresh(channel) { source, guideSource, streamId ->
+            guideSource.fullGuideFor(
+                request = SourceRequest(channel.sourceId, source.url),
+                channelKey = channel.stableKey,
+                providerStreamId = streamId,
+            )
+        }
+
+    /**
      * Fetches and caches the guide for one channel, if its source can supply one.
      *
      * Silently does nothing for a source with no guide capability, which is how an M3U
@@ -66,19 +97,32 @@ class GuideRepository(
      *
      * @return true when programme data was stored.
      */
-    suspend fun refreshGuideFor(channel: Channel): Boolean {
+    suspend fun refreshGuideFor(channel: Channel): Boolean =
+        refresh(channel) { source, guideSource, streamId ->
+            guideSource.guideFor(
+                request = SourceRequest(channel.sourceId, source.url),
+                channelKey = channel.stableKey,
+                providerStreamId = streamId,
+            )
+        }
+
+    /**
+     * The parts both refreshes share: the guards, the backoff, and the wholesale replace.
+     *
+     * Which call to make is the only difference between them, so it is the only thing passed in.
+     * Duplicating the block handling would give the two paths two chances to disagree about when
+     * a panel has had enough, and the panel does not care which of them asked.
+     */
+    private suspend fun refresh(
+        channel: Channel,
+        fetch: suspend (Source, GuideSource, String) -> GuideResult,
+    ): Boolean {
         val streamId = channel.providerStreamId ?: return false
         if (now() < blockedUntilEpochMillis) return false
         val source = sourceDao.findById(channel.sourceId)?.toDomain() ?: return false
         val guideSource = mediaSources[source.kind] as? GuideSource ?: return false
 
-        val result = guideSource.guideFor(
-            request = SourceRequest(channel.sourceId, source.url),
-            channelKey = channel.stableKey,
-            providerStreamId = streamId,
-        )
-
-        return when (result) {
+        return when (val result = fetch(source, guideSource, streamId)) {
             is GuideResult.Failure -> {
                 // The guide is the one thing the app fetches in bulk, so it is the one
                 // thing that can keep a panel's anti-flood rule tripped. When the panel

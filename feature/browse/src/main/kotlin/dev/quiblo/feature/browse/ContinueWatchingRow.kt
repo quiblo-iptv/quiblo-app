@@ -18,8 +18,9 @@
 
 package dev.quiblo.feature.browse
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -36,11 +37,17 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -70,6 +77,7 @@ internal fun ContinueWatchingRow(
     /** Artwork found for entries whose provider supplied none, keyed by title identity. */
     posters: Map<String, String>,
     onClick: (HistoryEntry) -> Unit,
+    onRemove: (HistoryEntry) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     if (entries.isEmpty()) return
@@ -94,22 +102,30 @@ internal fun ContinueWatchingRow(
                     // gap only when there is one — see [BrowseUiState.posters].
                     artworkUrl = entry.artworkUrl?.takeIf { it.isNotBlank() } ?: posters[entry.titleKey],
                     onClick = { onClick(entry) },
+                    onRemove = { onRemove(entry) },
                 )
             }
         }
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun ContinueWatchingCard(
     entry: HistoryEntry,
     artworkUrl: String?,
     onClick: () -> Unit,
+    onRemove: () -> Unit,
 ) {
+    var menuExpanded by remember { mutableStateOf(false) }
+
     Column(
         modifier = Modifier
             .width(CARD_WIDTH)
-            .clickable(onClick = onClick),
+            .combinedClickable(
+                onClick = onClick,
+                onLongClick = { menuExpanded = true },
+            ),
     ) {
         Box(
             modifier = Modifier
@@ -152,6 +168,19 @@ private fun ContinueWatchingCard(
                         .fillMaxWidth(),
                 )
             }
+        }
+
+        DropdownMenu(
+            expanded = menuExpanded,
+            onDismissRequest = { menuExpanded = false },
+        ) {
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.browse_history_remove)) },
+                onClick = {
+                    menuExpanded = false
+                    onRemove()
+                },
+            )
         }
 
         Text(

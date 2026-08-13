@@ -49,6 +49,21 @@ interface GuideSource {
         channelKey: String,
         providerStreamId: String,
     ): GuideResult
+
+    /**
+     * Everything the provider holds for one channel, for a timeline (INC-F4).
+     *
+     * Defaults to [guideFor], so a provider with only one kind of guide call is complete without
+     * writing anything: it returns the window it has, the timeline draws that window, and the
+     * screen is honest about being short rather than empty.
+     *
+     * Called on an explicit request from the viewer and never while a list is scrolling.
+     */
+    suspend fun fullGuideFor(
+        request: SourceRequest,
+        channelKey: String,
+        providerStreamId: String,
+    ): GuideResult = guideFor(request, channelKey, providerStreamId)
 }
 
 /** The outcome of a guide fetch. */

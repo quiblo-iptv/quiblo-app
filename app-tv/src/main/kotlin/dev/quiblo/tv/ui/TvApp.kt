@@ -67,10 +67,13 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.quiblo.core.data.ProfileRepository
+import dev.quiblo.core.datastore.ConsentStore
 import dev.quiblo.core.model.Channel
 import dev.quiblo.core.model.MediaKind
 import dev.quiblo.tv.R
 import dev.quiblo.tv.ui.browse.TvPosterRows
+import dev.quiblo.tv.ui.common.tryRequestFocus
+import dev.quiblo.tv.ui.consent.TvConsentScreen
 import dev.quiblo.tv.ui.detail.TvMovieScreen
 import dev.quiblo.tv.ui.live.TvLiveScreen
 import dev.quiblo.tv.ui.player.TvPlaybackRequest
@@ -93,6 +96,37 @@ import org.koin.compose.koinInject
  */
 @Composable
 fun TvApp() {
+    TvConsentGate { TvAppBehindConsent() }
+}
+
+/**
+ * What the app is, before it asks who is watching (`FREEZE.md` Amendment 9).
+ *
+ * In front of the profile gate, and in that order deliberately: "who is watching" is a question
+ * about this household, and it should not be the first thing an app says to somebody who has not
+ * yet been told what the app is.
+ *
+ * A wrapper rather than a branch inside [TvApp], which is what the phone does with the same two
+ * gates — one shape for one decision, in both apps.
+ */
+@Composable
+private fun TvConsentGate(content: @Composable () -> Unit) {
+    val consent: ConsentStore = koinInject()
+
+    // `null` is "the store has not answered yet", a frame or two. Nothing is drawn then, because
+    // flashing the terms at somebody who accepted them a year ago is worse than a blank frame.
+    val needsConsent by consent.needsConsent.collectAsStateWithLifecycle(initialValue = null)
+    val scope = rememberCoroutineScope()
+
+    when (needsConsent) {
+        null -> Unit
+        true -> TvConsentScreen(onAccept = { scope.launch { consent.accept() } })
+        else -> content()
+    }
+}
+
+@Composable
+private fun TvAppBehindConsent() {
     // Nobody watches anything until the app knows whose favourites it would be reading. The
     // gate is here rather than inside the shell so that no screen below it ever has to cope
     // with there being no profile — they simply are not composed yet.
@@ -194,6 +228,14 @@ private fun TvOverlayScreen(
                 val live = overlay.request as? TvPlaybackRequest.Live
                 if (live != null) onReplaceTop(TvOverlay.Playing(live.zappedBy(direction)))
             },
+            // The same replace, for the same reason: six episodes into an evening, back
+            // belongs to the series, not to episode five. It also keeps `popRestoringCursor`
+            // honest — the top of the stack is always the episode actually playing, so the
+            // series reopens on that row rather than on whichever one was pressed first.
+            onStepEpisode = { direction ->
+                val episode = (overlay.request as? TvPlaybackRequest.Episode)?.steppedBy(direction)
+                if (episode != null) onReplaceTop(TvOverlay.Playing(episode))
+            },
         )
 
         is TvOverlay.Series -> TvSeriesScreen(
@@ -201,7 +243,7 @@ private fun TvOverlayScreen(
             // Set when the viewer backs out of an episode, so the list reopens on the row
             // they were watching rather than at the top of the season (#020).
             focusEpisodeId = overlay.focusEpisodeId,
-            onPlayEpisode = { episode, resumeFrom ->
+            onPlayEpisode = { episode, run, resumeFrom ->
                 onPush(
                     TvOverlay.Playing(
                         TvPlaybackRequest.Episode(
@@ -212,6 +254,12 @@ private fun TvOverlayScreen(
                             seasonNumber = episode.seasonNumber,
                             episodeNumber = episode.episodeNumber,
                             startPositionMillis = resumeFrom,
+                            run = run,
+                            // Found rather than passed. The screen knows which row was
+                            // pressed and the run is sorted, so the two indices are not the
+                            // same number and handing over the wrong one would put the
+                            // viewer one episode out for the rest of the series.
+                            runIndex = run.indexOfFirst { it.id == episode.id }.coerceAtLeast(0),
                         ),
                     ),
                 )
@@ -614,15 +662,3 @@ private val TAB_LABEL_HEIGHT = 24.dp
 private val TAB_ICON_SIZE = 22.dp
 private const val SELECTED_ALPHA = 0.90f
 private const val IDLE_ALPHA = 0.55f
-
-/**
- * Requests focus, tolerating there being nothing to focus.
- *
- * A content area can legitimately hold no focusable at all — an empty catalogue, a spinner,
- * a line of explanatory text — and [FocusRequester] treats that as a programming error and
- * throws. Here it is an ordinary state, and the right behaviour is to leave focus where it
- * is rather than to bring the app down.
- */
-private fun FocusRequester.tryRequestFocus() {
-    runCatching { requestFocus() }
-}

@@ -28,6 +28,7 @@ dependencies {
     implementation(projects.core.data)
     implementation(projects.core.model)
     implementation(projects.feature.browse)
+    implementation(projects.feature.designsystem)
     implementation(libs.coil.compose)
     implementation(libs.coil.network.okhttp)
 }

@@ -41,6 +41,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Replay
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
@@ -65,8 +66,11 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.compose.SubcomposeAsyncImage
+import dev.quiblo.core.data.MetadataRefresh
+import dev.quiblo.core.data.ScanRefusal
 import dev.quiblo.core.model.Channel
 import dev.quiblo.core.model.VodDetails
+import dev.quiblo.designsystem.AutoDirection
 import dev.quiblo.feature.browse.DetailOverlayActions
 import dev.quiblo.feature.browse.TitleFacts
 import org.koin.androidx.compose.koinViewModel
@@ -119,6 +123,7 @@ fun MovieDetailScreen(
                 state = state,
                 onPlay = onPlay,
                 onRemoveFromHistory = viewModel::removeFromHistory,
+                onRefreshMetadata = viewModel::refreshMetadata,
             )
         }
 
@@ -146,6 +151,7 @@ private fun MovieDetail(
     state: MovieDetailUiState.Ready,
     onPlay: (Channel, Long) -> Unit,
     onRemoveFromHistory: () -> Unit,
+    onRefreshMetadata: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     // TMDB artwork first when it exists: it is a real poster at a known size, where a
@@ -177,15 +183,19 @@ private fun MovieDetail(
                     .weight(1f)
                     .verticalScroll(rememberScrollState()),
             ) {
-                Text(
-                    text = state.channel.name,
-                    style = MaterialTheme.typography.headlineSmall,
-                    fontWeight = FontWeight.Bold,
-                )
+                AutoDirection(state.channel.name) {
+                    Text(
+                        text = state.channel.name,
+                        style = MaterialTheme.typography.headlineSmall,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
                 Details(
                     state = state,
                     onPlay = onPlay,
                     onRemoveFromHistory = onRemoveFromHistory,
+                    onRefreshMetadata = onRefreshMetadata,
                     modifier = Modifier.padding(top = 12.dp),
                 )
             }
@@ -203,6 +213,7 @@ private fun MovieDetail(
             state = state,
             onPlay = onPlay,
             onRemoveFromHistory = onRemoveFromHistory,
+            onRefreshMetadata = onRefreshMetadata,
             modifier = Modifier.padding(16.dp),
         )
     }
@@ -214,6 +225,7 @@ private fun Details(
     state: MovieDetailUiState.Ready,
     onPlay: (Channel, Long) -> Unit,
     onRemoveFromHistory: () -> Unit,
+    onRefreshMetadata: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Column(modifier = modifier) {
@@ -222,33 +234,29 @@ private fun Details(
 
         PlaybackButtons(state = state, onPlay = onPlay, onRemoveFromHistory = onRemoveFromHistory)
 
+        RefreshMetadata(
+            canRefresh = state.canRefreshMetadata,
+            isWorking = state.isEnriching,
+            result = state.refreshResult,
+            onRefresh = onRefreshMetadata,
+        )
+
         // The provider's plot wins when it has one — it describes the file the user will
         // actually play. TMDB fills the very common case where the provider supplies none.
         val overview = state.details?.overview?.takeIf { it.isNotBlank() }
             ?: state.metadata?.overview?.takeIf { it.isNotBlank() }
         if (overview != null) {
-            Text(
-                text = overview,
-                style = MaterialTheme.typography.bodyMedium,
-                modifier = Modifier.padding(top = 20.dp),
-            )
+            AutoDirection(overview) {
+                Text(
+                    text = overview,
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.padding(top = 20.dp),
+                )
+            }
         } else if (state.isEnriching) {
             // Not "there is no description" — we do not know that yet. Saying so before
             // the answer arrives is a wrong statement that corrects itself, which reads
             // worse than a wait.
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.padding(top = 20.dp),
-            ) {
-                CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
-                Text(
-                    text = stringResource(R.string.movie_overview_loading),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(start = 10.dp),
-                )
-            }
-        } else if (state.isEnriching) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier.padding(top = 20.dp),
@@ -451,4 +459,63 @@ private fun Long.asClock(): String {
     val hours = totalMinutes / MINUTES_PER_HOUR
     val minutes = totalMinutes % MINUTES_PER_HOUR
     return if (hours > 0) "%d:%02d".format(hours, minutes) else "%d min".format(minutes)
+}
+
+/**
+ * "Refresh information", and what happened when it was pressed.
+ *
+ * **Absent rather than disabled without a key.** `AC-META-01` says nothing here issues a request
+ * when the feature is off, so the control cannot work — and a greyed-out button still invites the
+ * press that does nothing.
+ *
+ * The outcome is shown because the reason this exists is artwork that never arrived: if the
+ * service has nothing, the screen looks identical afterwards, and a viewer with no message has
+ * learned only that the button appears broken.
+ */
+@Composable
+private fun RefreshMetadata(
+    canRefresh: Boolean,
+    isWorking: Boolean,
+    result: MetadataRefresh?,
+    onRefresh: () -> Unit,
+) {
+    if (!canRefresh) return
+
+    Column(modifier = Modifier.padding(top = 12.dp)) {
+        TextButton(onClick = onRefresh, enabled = !isWorking) {
+            Icon(imageVector = Icons.Filled.Refresh, contentDescription = null)
+            Text(
+                text = stringResource(
+                    if (isWorking) R.string.movie_refresh_working else R.string.movie_refresh_metadata,
+                ),
+                modifier = Modifier.padding(start = 8.dp),
+            )
+        }
+
+        val message = when (result) {
+            is MetadataRefresh.Updated -> R.string.movie_refresh_updated
+            MetadataRefresh.NoMatch -> R.string.movie_refresh_no_match
+            is MetadataRefresh.Refused -> when (result.reason) {
+                ScanRefusal.RATE_LIMITED -> R.string.movie_refresh_rate_limited
+                ScanRefusal.KEY_REJECTED -> R.string.movie_refresh_key_rejected
+                ScanRefusal.UNAVAILABLE -> R.string.movie_refresh_unavailable
+            }
+            null -> null
+        }
+
+        message?.let {
+            Text(
+                text = stringResource(it),
+                style = MaterialTheme.typography.bodySmall,
+                // A refusal changed nothing and is worth the error colour; the other two are
+                // ordinary answers and would be shouting.
+                color = if (result is MetadataRefresh.Refused) {
+                    MaterialTheme.colorScheme.error
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                },
+                modifier = Modifier.padding(start = 12.dp, top = 2.dp),
+            )
+        }
+    }
 }

@@ -18,8 +18,12 @@
 
 package dev.quiblo.core.media
 
+import android.content.Context
 import android.view.SurfaceView
+import android.view.View
 import dev.quiblo.core.model.PlayerSettings
+import dev.quiblo.core.model.SubtitleFile
+import dev.quiblo.core.model.SubtitleStyle
 import kotlinx.coroutines.flow.StateFlow
 
 /**
@@ -69,6 +73,31 @@ interface PlayerController {
 
     fun detachSurface()
 
+    /**
+     * Builds the view subtitles are drawn into, already wired to the engine (INC-F10, INC-F11).
+     *
+     * **The engine does not draw subtitles into the video surface.** Text tracks are decoded and
+     * handed out as cues, and something has to put them on screen; a player built on a bare
+     * `SurfaceView` shows none, however many subtitle tracks it has selected. That is what this
+     * is for, and it is why `selectTextTrack` alone was never enough.
+     *
+     * A view rather than a stream of cues, because a cue is an engine type and the whole point of
+     * this interface is that no feature module names one (docs/FREEZE.md §4.4). The caller puts
+     * the returned view over the video and never looks inside it.
+     *
+     * Returns the same view on every call for the life of this controller.
+     */
+    fun subtitleOutput(context: Context): View
+
+    /**
+     * Applies [style] to whatever [subtitleOutput] returned.
+     *
+     * Takes effect immediately and on the current cue, so a viewer changing the size from inside
+     * the player sees it change under their hand — which is the whole reason INC-F11 puts this
+     * in the player rather than in Settings.
+     */
+    fun applySubtitleStyle(style: SubtitleStyle)
+
     /** Frees the engine. The controller is unusable afterwards. */
     fun release()
 }
@@ -85,6 +114,14 @@ data class PlayableItem(
     val isLive: Boolean,
     /** Where to resume from, for VOD only (AC-PLAY-03). */
     val startPositionMillis: Long = 0L,
+    /**
+     * Subtitle files to load alongside the stream (INC-F10).
+     *
+     * Loaded, not selected. They join the container's own text tracks in the menu and none of
+     * them starts showing on its own — a viewer who attached a file still has to turn it on,
+     * for the same reason a container that declares subtitles starts with them off.
+     */
+    val subtitles: List<SubtitleFile> = emptyList(),
 )
 
 /** A selectable audio or subtitle track. */

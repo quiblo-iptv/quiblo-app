@@ -35,13 +35,20 @@ data class ThirdPartyLicense(
 /**
  * Everything third-party that reaches a release build (AC-LEGAL-03).
  *
- * Maintained by hand and deliberately limited to what actually ships. Build-time and test
- * dependencies — AGP, KSP, detekt, JUnit, MockK, Turbine, Robolectric — are not listed,
- * because they are not distributed to anyone and listing them would imply the opposite.
+ * Written by hand and **checked by machine**: `./gradlew licenceCheck` resolves the release
+ * runtime classpath of both applications and fails when a module that ships is claimed by no
+ * entry here. The wording stays hand-written because saying what a component is *for* takes
+ * judgement; the set does not, and a set kept by memory is a set that quietly stops being true.
+ * The first run of that check found **118 shipped modules listed nowhere** — the entries below
+ * marked as families are what closed it.
  *
- * All of these are Apache 2.0, which is compatible with distributing this app under
- * GPLv3. If a dependency under a different licence is ever added, the compatibility
- * question has to be answered before it lands, not here.
+ * Deliberately limited to what actually ships. Build-time and test dependencies — AGP, KSP,
+ * detekt, JUnit, MockK, Turbine, Robolectric — are not listed, because they are not distributed
+ * to anyone and listing them would imply the opposite.
+ *
+ * **Nearly all of these are Apache 2.0**, which is compatible with distributing this app under
+ * GPLv3. The exception is SLF4J, which is MIT and also compatible. A dependency under a licence
+ * that is neither has to be answered for before it lands, not here.
  */
 val THIRD_PARTY_LICENSES: List<ThirdPartyLicense> = listOf(
     ThirdPartyLicense(
@@ -73,6 +80,23 @@ val THIRD_PARTY_LICENSES: List<ThirdPartyLicense> = listOf(
         notes = "Application scaffolding, screen state and navigation between screens.",
     ),
     ThirdPartyLicense(
+        name = "Compose for TV",
+        coordinates = "androidx.tv:tv-material",
+        license = "Apache License 2.0",
+        url = "https://developer.android.com/tv/compose",
+        notes = "Focus-aware surfaces and lists built for a D-pad. Television build only.",
+    ),
+    ThirdPartyLicense(
+        name = "The rest of AndroidX",
+        coordinates = "androidx",
+        license = "Apache License 2.0",
+        url = "https://developer.android.com/jetpack/androidx",
+        notes = "Roughly sixty further Jetpack libraries that the ones above depend on — " +
+            "annotations, collections, SQLite, saved state, fragments and tracing. Listed as " +
+            "a family because naming each would fill this screen with libraries no part of " +
+            "Quiblo calls directly.",
+    ),
+    ThirdPartyLicense(
         name = "AndroidX Room",
         coordinates = "androidx.room:*",
         license = "Apache License 2.0",
@@ -101,11 +125,12 @@ val THIRD_PARTY_LICENSES: List<ThirdPartyLicense> = listOf(
         notes = "Decodes and plays every stream.",
     ),
     ThirdPartyLicense(
-        name = "Ktor Client",
-        coordinates = "io.ktor:ktor-client-*",
+        name = "Ktor",
+        coordinates = "io.ktor",
         license = "Apache License 2.0",
         url = "https://ktor.io",
-        notes = "HTTP requests to the hosts you configure, and nothing else.",
+        notes = "HTTP requests to the hosts you configure, and nothing else. The client " +
+            "pulls in Ktor's own HTTP, serialisation and networking pieces, which ship with it.",
     ),
     ThirdPartyLicense(
         name = "OkHttp",
@@ -127,5 +152,70 @@ val THIRD_PARTY_LICENSES: List<ThirdPartyLicense> = listOf(
         license = "Apache License 2.0",
         url = "https://coil-kt.github.io/coil/",
         notes = "Loads channel logos and artwork from your provider.",
+    ),
+    ThirdPartyLicense(
+        name = "Okio",
+        coordinates = "com.squareup.okio:*",
+        license = "Apache License 2.0",
+        url = "https://square.github.io/okio/",
+        notes = "Reads and writes the bytes underneath OkHttp and the settings store.",
+    ),
+    ThirdPartyLicense(
+        name = "Compose Multiplatform runtime",
+        coordinates = "org.jetbrains.compose, org.jetbrains.androidx",
+        license = "Apache License 2.0",
+        url = "https://www.jetbrains.com/lp/compose-multiplatform/",
+        notes = "The common half of Compose, which the Android half is built on.",
+    ),
+    ThirdPartyLicense(
+        name = "Tink",
+        coordinates = "com.google.crypto.tink:tink-android",
+        license = "Apache License 2.0",
+        url = "https://developers.google.com/tink",
+        notes = "The cryptography that encrypts your stored Xtream password.",
+    ),
+    ThirdPartyLicense(
+        name = "Gson",
+        coordinates = "com.google.code.gson:gson",
+        license = "Apache License 2.0",
+        url = "https://github.com/google/gson",
+        notes = "Arrives with the encrypted store above. Quiblo's own JSON is kotlinx.",
+    ),
+    ThirdPartyLicense(
+        name = "Guava",
+        coordinates = "com.google.guava",
+        license = "Apache License 2.0",
+        url = "https://github.com/google/guava",
+        notes = "Collections and futures used by libraries above, not by Quiblo directly.",
+    ),
+    ThirdPartyLicense(
+        name = "Accompanist Drawable Painter",
+        coordinates = "com.google.accompanist:accompanist-drawablepainter",
+        license = "Apache License 2.0",
+        url = "https://github.com/google/accompanist",
+        notes = "Lets Coil hand an Android drawable to Compose.",
+    ),
+    ThirdPartyLicense(
+        name = "Stately",
+        coordinates = "co.touchlab",
+        license = "Apache License 2.0",
+        url = "https://github.com/touchlab/Stately",
+        notes = "Thread-safe collections used by the dependency wiring above.",
+    ),
+    ThirdPartyLicense(
+        name = "JetBrains and JSpecify annotations",
+        coordinates = "org.jetbrains:annotations, org.jspecify:jspecify",
+        license = "Apache License 2.0",
+        url = "https://github.com/jspecify/jspecify",
+        notes = "Nullability annotations the compiler reads. They do nothing at runtime.",
+    ),
+    ThirdPartyLicense(
+        name = "SLF4J API",
+        coordinates = "org.slf4j:slf4j-api",
+        license = "MIT License",
+        url = "https://www.slf4j.org",
+        notes = "A logging interface the HTTP client compiles against, with no " +
+            "implementation behind it here — so it writes nothing. The one component in this " +
+            "list that is not Apache 2.0; MIT is equally compatible with GPLv3.",
     ),
 )

@@ -52,7 +52,6 @@ fun rememberSubtitleFilePicker(
             // Wrapped because a television frequently has no document picker installed at all,
             // and an uncaught `ActivityNotFoundException` from a subtitle menu is a crash.
             runCatching { launcher.launch(arrayOf(ANY_TYPE)) }.onFailure { onNoPicker() }
-            Unit
         }
     }
 }

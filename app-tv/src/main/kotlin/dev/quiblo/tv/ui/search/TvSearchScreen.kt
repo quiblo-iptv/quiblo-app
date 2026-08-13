@@ -53,8 +53,12 @@ import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -121,8 +125,18 @@ fun TvSearchScreen(
         searchRows(state, liveTitle, filmsTitle, seriesTitle)
     }
 
-    Column(modifier = modifier.fillMaxSize()) {
+    // How tall the area under the tab bar is, read off the column itself rather than by
+    // wrapping it in something that measures it. See `SearchHeader`'s note on `topSpace`.
+    val density = LocalDensity.current
+    var contentHeight by remember { mutableStateOf(0.dp) }
+
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .onSizeChanged { contentHeight = with(density) { it.height.toDp() } },
+    ) {
         SearchHeader(
+            contentHeight = contentHeight,
             state = state,
             isResting = isResting,
             isAdvanced = isAdvanced,
@@ -186,7 +200,16 @@ fun TvSearchScreen(
  * had to learn once and delete nine features over.
  */
 @Composable
+@Suppress("CyclomaticComplexMethod")
 internal fun ColumnScope.SearchHeader(
+    /**
+     * How tall the area under the tab bar is.
+     *
+     * Passed in because centring the resting block on the *screen* needs to know how much of
+     * the screen sits above this area, and the difference between the window and this box is
+     * exactly that. Centring inside the box alone leaves the block half a tab bar low.
+     */
+    contentHeight: Dp,
     state: SearchUiState,
     isResting: Boolean,
     isAdvanced: Boolean,
@@ -195,8 +218,30 @@ internal fun ColumnScope.SearchHeader(
     onClear: () -> Unit,
     onToggleAdvanced: () -> Unit,
 ) {
+    /*
+     * The gap that puts the resting block on the middle of the *screen*.
+     *
+     * It was a fixed gap under the tab bar, which centres nothing — it puts the block wherever
+     * that constant happens to land, and every change to the mark or the wordmark moved it
+     * again. Twice.
+     *
+     * Nothing here is guessed. **The block's height** is the wordmark's, which is fixed, plus
+     * the field row's, which measures itself — so this stays right through any future change to
+     * either. **The chrome above this screen** is the difference between the window and the box
+     * this is drawn in, less the padding underneath it.
+     */
+    val screenHeight = LocalConfiguration.current.screenHeightDp.dp
+    val fieldDensity = LocalDensity.current
+    var fieldRowHeight by remember { mutableStateOf(0.dp) }
+
     val topSpace by animateDpAsState(
-        targetValue = if (isResting) RESTING_TOP_SPACE else 0.dp,
+        targetValue = if (isResting && fieldRowHeight > 0.dp && contentHeight > 0.dp) {
+            val block = WORDMARK_HEIGHT + fieldRowHeight
+            val above = screenHeight - contentHeight - CONTENT_BOTTOM_PADDING
+            ((screenHeight - block) / 2 - above).coerceAtLeast(0.dp)
+        } else {
+            0.dp
+        },
         label = "searchTopSpace",
     )
     val wordmarkHeight by animateDpAsState(
@@ -246,7 +291,9 @@ internal fun ColumnScope.SearchHeader(
     var isFieldFocused by remember { mutableStateOf(false) }
 
     Row(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .onSizeChanged { fieldRowHeight = with(fieldDensity) { it.height.toDp() } },
         horizontalArrangement = if (isResting) Arrangement.Center else Arrangement.Start,
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -489,7 +536,8 @@ internal fun searchRows(
  */
 // Reduced when the mark joined the wordmark: the block above the field is twice the height it
 // was, and the old spacing pushed the whole composition into the bottom half of the panel.
-private val RESTING_TOP_SPACE = 40.dp
+/** `TvApp` pads the content area by this much underneath. See the note on `topSpace`. */
+private val CONTENT_BOTTOM_PADDING = 48.dp
 
 /*
  * The mark, the name, and the room they need.
@@ -499,9 +547,9 @@ private val RESTING_TOP_SPACE = 40.dp
  * a size chosen against a laptop. On a television the resting screen is three things in the
  * middle of a very large rectangle, so they can afford to be large.
  */
-private val WORDMARK_HEIGHT = 210.dp
-private val LOGO_SIZE = 132.dp
-private val WORDMARK_TEXT_SIZE = 38.sp
+private val WORDMARK_HEIGHT = 128.dp
+private val LOGO_SIZE = 72.dp
+private val WORDMARK_TEXT_SIZE = 34.sp
 
 /** Wider at rest, where it is the only thing on the panel and reads as an invitation. */
 private val RESTING_FIELD_WIDTH = 560.dp

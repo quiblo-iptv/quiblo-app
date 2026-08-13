@@ -66,6 +66,22 @@ fun TvTextField(
     keyboardType: KeyboardType = KeyboardType.Text,
     isPassword: Boolean = false,
     isLast: Boolean = false,
+    /**
+     * Hands Right to whatever sits beside this field, instead of moving the cursor.
+     *
+     * **Off by default, and it has to be** — this is the objection `docs/STOPPERS.md` S10 raised
+     * against putting a control next to a text box: left and right belong to the cursor, so a
+     * neighbour cannot be reached by a remote moving horizontally. That is true of a field
+     * somebody is editing a URL or a password in, where losing the cursor keys would be a real
+     * loss.
+     *
+     * It is not true of the search field. Its text is a few words typed on an on-screen
+     * keyboard, which does its own editing, and nobody has ever walked a search term character
+     * by character with a D-pad. So that one field trades the cursor for a neighbour, and every
+     * other field keeps it. One rule, one opt-in, which is the bar S10 set for this being worth
+     * doing at all.
+     */
+    onExitRight: (() -> Unit)? = null,
 ) {
     val focusManager = LocalFocusManager.current
 
@@ -99,6 +115,13 @@ fun TvTextField(
                     focusManager.moveFocus(FocusDirection.Up)
                     true
                 }
+
+                // Only where a field has asked for it. Unhandled everywhere else, so the
+                // cursor keeps the key on every field that is genuinely edited by hand.
+                Key.DirectionRight -> onExitRight?.let {
+                    it()
+                    true
+                } ?: false
 
                 else -> false
             }

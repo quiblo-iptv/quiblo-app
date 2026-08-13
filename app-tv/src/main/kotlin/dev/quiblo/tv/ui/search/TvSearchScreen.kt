@@ -31,10 +31,12 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -46,7 +48,11 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -63,6 +69,7 @@ import dev.quiblo.tv.ui.browse.TvCategoryRow
 import dev.quiblo.tv.ui.browse.TvRowItem
 import dev.quiblo.tv.ui.common.TvChip
 import dev.quiblo.tv.ui.common.TvTextField
+import dev.quiblo.tv.ui.common.travellingGlow
 import org.koin.androidx.compose.koinViewModel
 
 /**
@@ -205,12 +212,27 @@ internal fun ColumnScope.SearchHeader(
 
     Spacer(modifier = Modifier.height(topSpace))
 
-    Box(
+    /*
+     * The mark, then the name, then the field (`013` INC-E2).
+     *
+     * The app's own launcher icon rather than a drawing of one, so what a viewer sees at rest
+     * is the thing they pressed on the home screen a second earlier. It shares the wordmark's
+     * height and alpha animation rather than owning a second one — S10's note that this is an
+     * element joining a transition that already exists is the whole reason it is cheap.
+     */
+    Column(
         modifier = Modifier
             .fillMaxWidth()
             .height(wordmarkHeight),
-        contentAlignment = Alignment.Center,
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
     ) {
+        Icon(
+            painter = painterResource(R.drawable.ic_launcher_foreground),
+            contentDescription = null,
+            tint = Color.White.copy(alpha = wordmarkAlpha),
+            modifier = Modifier.size(LOGO_SIZE),
+        )
         Text(
             text = stringResource(R.string.tv_app_name),
             color = Color.White.copy(alpha = wordmarkAlpha),
@@ -219,6 +241,9 @@ internal fun ColumnScope.SearchHeader(
             letterSpacing = 1.sp,
         )
     }
+
+    val advancedFocus = remember { FocusRequester() }
+    var isFieldFocused by remember { mutableStateOf(false) }
 
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -233,7 +258,38 @@ internal fun ColumnScope.SearchHeader(
             // keyboard instead of hunting for a next one. Nothing is submitted by it: the
             // answer is already on screen behind the keyboard by then.
             isLast = true,
-            modifier = Modifier.width(fieldWidth),
+            // Right leaves the field for Advanced beside it. See the parameter's own note for
+            // why this one field is allowed to spend the cursor keys and no other is.
+            onExitRight = { runCatching { advancedFocus.requestFocus() } },
+            modifier = Modifier
+                .width(fieldWidth)
+                .onFocusChanged { isFieldFocused = it.isFocused }
+                // Only while the remote is somewhere else. Two moving highlights on a
+                // television is one too many, and the focus ring is the one that must win.
+                .travellingGlow(
+                    isActive = !isFieldFocused,
+                    cornerRadius = FIELD_CORNER,
+                ),
+        )
+
+        /*
+         * Advanced, beside the field rather than under it (`013` INC-E1).
+         *
+         * S10 read this as "probably no", on the grounds that a control next to a text box
+         * cannot be reached with a remote. That was right about the default behaviour and it is
+         * what `onExitRight` above answers — the field hands Right over, so the way in is one
+         * press from where the viewer is already typing, which is the same cost the chip row
+         * had and one row cheaper on a panel with 444dp to spend.
+         *
+         * It stays in the chip row as well. Reaching it by going down is how it has always
+         * worked, and taking that away to add a second way in would be a trade, not a gain.
+         */
+        Spacer(modifier = Modifier.width(COLUMN_GAP))
+        TvChip(
+            label = stringResource(R.string.tv_search_advanced),
+            isSelected = isAdvanced,
+            onClick = onToggleAdvanced,
+            modifier = Modifier.focusRequester(advancedFocus),
         )
 
         // Only alongside the genre chips it explains, and only once there is room for it —
@@ -413,7 +469,12 @@ internal fun searchRows(
  */
 private val RESTING_TOP_SPACE = 96.dp
 
-private val WORDMARK_HEIGHT = 62.dp
+/** Tall enough for the mark and the name together, now that both are there. */
+private val WORDMARK_HEIGHT = 124.dp
+private val LOGO_SIZE = 62.dp
+
+/** Matches the field's own shape, so the glow rides its outline rather than crossing it. */
+private val FIELD_CORNER = 12.dp
 private val WORDMARK_TEXT_SIZE = 40.sp
 
 /** Wider at rest, where it is the only thing on the panel and reads as an invitation. */

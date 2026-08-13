@@ -43,6 +43,7 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -72,6 +73,9 @@ import dev.quiblo.core.model.Channel
 import dev.quiblo.core.model.MediaKind
 import dev.quiblo.tv.R
 import dev.quiblo.tv.ui.browse.TvPosterRows
+import dev.quiblo.tv.ui.common.LocalAmbientSink
+import dev.quiblo.tv.ui.common.ambientBackdrop
+import dev.quiblo.tv.ui.common.rememberAmbient
 import dev.quiblo.tv.ui.common.tryRequestFocus
 import dev.quiblo.tv.ui.consent.TvConsentScreen
 import dev.quiblo.tv.ui.detail.TvMovieScreen
@@ -378,49 +382,67 @@ private fun TvShell(
         barFocusRequester.tryRequestFocus()
     }
 
+    /*
+     * The room the catalogue sits in.
+     *
+     * Black everywhere was the honest default and it reads as bleak: a television fills a dark
+     * room, and three metres of unlit rectangle is a void with posters floating in it rather
+     * than a background. The focused tile says what it is showing through `LocalAmbientSink`
+     * and that picture lights the corners — the same answer Google TV and every set-top box
+     * arrive at, for the same reason.
+     *
+     * The black stays underneath. This is light added to it, never a replacement for it, so a
+     * poster with no usable colour in it leaves the screen exactly as it was.
+     */
+    var ambientArtwork: String? by remember { mutableStateOf(null) }
+    val ambient = rememberAmbient(ambientArtwork)
+
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color.Black),
+            .background(Color.Black)
+            .ambientBackdrop(ambient),
     ) {
-        TvTopBar(
-            selectedTab = selectedTab,
-            onSelect = onSelectTab,
-            focusRequester = barFocusRequester,
-            onEnterContent = { contentFocusRequester.tryRequestFocus() },
-            onOpenSettings = onOpenSettings,
-        )
+        CompositionLocalProvider(LocalAmbientSink provides { ambientArtwork = it }) {
+            TvTopBar(
+                selectedTab = selectedTab,
+                onSelect = onSelectTab,
+                focusRequester = barFocusRequester,
+                onEnterContent = { contentFocusRequester.tryRequestFocus() },
+                onOpenSettings = onOpenSettings,
+            )
 
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(start = SCREEN_PADDING, end = SCREEN_PADDING, bottom = SCREEN_PADDING)
-                .focusRequester(contentFocusRequester)
-                .focusGroup(),
-        ) {
-            when (TvTab.entries[selectedTab]) {
-                TvTab.SEARCH -> TvSearchScreen(onOpen = onOpen)
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(start = SCREEN_PADDING, end = SCREEN_PADDING, bottom = SCREEN_PADDING)
+                    .focusRequester(contentFocusRequester)
+                    .focusGroup(),
+            ) {
+                when (TvTab.entries[selectedTab]) {
+                    TvTab.SEARCH -> TvSearchScreen(onOpen = onOpen)
 
-                TvTab.LIVE -> TvLiveScreen(onPlay = onOpen)
+                    TvTab.LIVE -> TvLiveScreen(onPlay = onOpen)
 
-                TvTab.MOVIES -> TvPosterRows(
-                    kind = MediaKind.VOD,
-                    onPlay = onOpen,
-                    onResume = onOpenChannel,
-                )
+                    TvTab.MOVIES -> TvPosterRows(
+                        kind = MediaKind.VOD,
+                        onPlay = onOpen,
+                        onResume = onOpenChannel,
+                    )
 
-                TvTab.SERIES -> TvPosterRows(
-                    kind = MediaKind.SERIES,
-                    onPlay = onOpen,
-                    onResume = onOpenChannel,
-                )
+                    TvTab.SERIES -> TvPosterRows(
+                        kind = MediaKind.SERIES,
+                        onPlay = onOpen,
+                        onResume = onOpenChannel,
+                    )
 
-                TvTab.FAVOURITES -> TvPosterRows(
-                    kind = MediaKind.VOD,
-                    favouritesOnly = true,
-                    onPlay = onOpen,
-                    onResume = onOpenChannel,
-                )
+                    TvTab.FAVOURITES -> TvPosterRows(
+                        kind = MediaKind.VOD,
+                        favouritesOnly = true,
+                        onPlay = onOpen,
+                        onResume = onOpenChannel,
+                    )
+                }
             }
         }
     }

@@ -25,7 +25,9 @@ Formatted after [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and ve
   as far apart as two tab labels and read as two unrelated controls.
 - **Advanced sits under the search field at rest, and the whole resting screen is centred.** It
   was beside the field, balanced by an invisible copy of itself, which centred the field while
-  leaving what a viewer actually sees hanging to the right of the middle.
+  leaving what a viewer actually sees hanging to the right of the middle. The block also sits a
+  little above the half-way line rather than on it, because a block on the true middle of a
+  television reads as low.
 
 ## 0.15.0
 

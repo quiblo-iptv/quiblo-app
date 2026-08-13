@@ -98,24 +98,38 @@ class TvSearchRestingCentreTest {
         )
     }
 
+    /**
+     * Above the half-way line, and not by much.
+     *
+     * The screen deliberately does not sit on the panel's true middle — a block that does reads
+     * as low, because the bar above it is taken for the top edge of the picture and there is
+     * always something below it. So the assertion is a band rather than a point: high enough to
+     * be the deliberate lift, nowhere near high enough to be the old fault of centring on the
+     * container, which put the block a whole bar's height up.
+     *
+     * A range, not the constant, on purpose. Asserting `panel * 0.46` would restate the line
+     * under test and pass for any value somebody typed there; this fails if the lift disappears
+     * and fails if it grows into something a viewer would call top-aligned.
+     */
     @Test
-    fun `the resting block is centred on the panel`() {
+    fun `the resting block sits just above the middle of the panel`() {
         // The invariance above would also be satisfied by a block pinned to the top of the
-        // screen. This is the other half: it has to be pinned to the middle.
+        // screen. This is the other half: it has to be near the middle.
         val bar = mutableStateOf(SHORT_BAR)
         compose.setContent { Harness(bar) }
         compose.waitForIdle()
 
         val top = blockTop()
         val bottom = blockBottom()
-        val panelMiddle = panelHeight() / 2f
-        val blockMiddle = (top + bottom) / 2f
+        val panel = panelHeight()
+        val lift = (panel / 2f) - (top + bottom) / 2f
 
         assertTrue(
-            "The panel's middle is at ${"%.1f".format(panelMiddle)}px and the block runs from " +
-                "${"%.1f".format(top)}px to ${"%.1f".format(bottom)}px, so its own middle is at " +
-                "${"%.1f".format(blockMiddle)}px — off by ${"%.1f".format(abs(blockMiddle - panelMiddle))}px.",
-            abs(blockMiddle - panelMiddle) <= TOLERANCE_PX,
+            "The block runs from ${"%.1f".format(top)}px to ${"%.1f".format(bottom)}px on a " +
+                "${panel}px panel, so its middle sits ${"%.1f".format(lift)}px above the half-way " +
+                "line. That is outside the ${MIN_LIFT * 100}%–${MAX_LIFT * 100}% of the panel " +
+                "height this screen lifts by.",
+            lift in panel * MIN_LIFT..panel * MAX_LIFT,
         )
     }
 
@@ -192,8 +206,17 @@ class TvSearchRestingCentreTest {
         /** Near enough what `TvApp`'s bar measures: its padding, a tab label and an underline. */
         val SHORT_BAR = 90.dp
 
-        /** Deliberately unlike it. Any bar will do — that is the point being asserted. */
-        val TALL_BAR = 140.dp
+        /**
+         * Deliberately unlike it, and deliberately not enormous.
+         *
+         * Any bar the screen can actually be centred under will do, and that is the point being
+         * asserted — but there is a height past which it cannot: the gap is clamped at zero, so
+         * once the bar plus half the block reaches the line the screen centres on, the block
+         * rests at the top of its container instead and stops being independent of the bar. That
+         * clamp is correct — a negative gap would drag the field up under the bar — and it lands
+         * at about 135dp here. This stays under it.
+         */
+        val TALL_BAR = 120.dp
 
         /** Overscan, as `TvApp` applies it. */
         val SCREEN_PADDING = 48.dp
@@ -206,5 +229,11 @@ class TvSearchRestingCentreTest {
          * coming back.
          */
         const val TOLERANCE_PX = 1f
+
+        /** The lift off the half-way line, as a share of the panel. Any real lift counts. */
+        const val MIN_LIFT = 0.01f
+
+        /** And an upper bound: past this the block is not near the middle, it is near the top. */
+        const val MAX_LIFT = 0.10f
     }
 }

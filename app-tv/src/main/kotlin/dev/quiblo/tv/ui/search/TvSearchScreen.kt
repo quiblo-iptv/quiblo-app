@@ -175,6 +175,13 @@ internal fun TvSearchPanel(
      * thing than the surface: it was tried, and it reported 1264px for a panel drawn 1080px tall,
      * which centred the block below the screen's middle by exactly the difference. The root is the
      * rectangle the app is actually painting into, which is the one a viewer is looking at.
+     *
+     * **It is [OPTICAL_CENTRE] of the panel, not half of it**, and the difference is the point.
+     * Geometrically centred, this block reads as sitting low, and it reads that way because it
+     * is: the eye takes a bar across the top as the edge of the picture and centres what is
+     * below it, while a screen has weight underneath — here a line of copy where results will
+     * be. Every craft that sets type on a page moves the block up for the same reason. The
+     * arithmetic is still measured; only the line it is measured against has moved.
      */
     val density = LocalDensity.current
     var centreLine by remember { mutableStateOf(0.dp) }
@@ -185,7 +192,7 @@ internal fun TvSearchPanel(
             .onGloballyPositioned { coordinates ->
                 val panelHeight = coordinates.findRootCoordinates().size.height
                 centreLine = with(density) {
-                    (panelHeight / 2f - coordinates.positionInRoot().y).toDp()
+                    (panelHeight * OPTICAL_CENTRE - coordinates.positionInRoot().y).toDp()
                 }
             },
     ) {
@@ -616,6 +623,19 @@ private val COLUMN_GAP = 40.dp
 
 /** Between the resting field and Advanced under it. Close enough to read as one control's row. */
 private val RESTING_ADVANCED_GAP = 20.dp
+
+/**
+ * Where the middle of the panel is *to a viewer*, as a fraction of its height.
+ *
+ * 0.46, not 0.50. A block on the true half-way line looks low on a television, and the two
+ * reasons are both real: the bar across the top reads as the top edge of the picture, so the eye
+ * centres what is under it; and there is always something below the block — the results, or the
+ * line of copy standing in for them — while above it there is nothing.
+ *
+ * Roughly 43px up on a 1080 panel, and it scales with the screen rather than being a fixed
+ * nudge, which is what stops it becoming wrong on the next size of television.
+ */
+private const val OPTICAL_CENTRE = 0.46f
 
 /**
  * Air above and below the chip strip, and it is load-bearing rather than taste.

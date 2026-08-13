@@ -54,7 +54,7 @@ jobs:
 
     steps:
       - name: Check out main
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           ref: ${{ github.ref_name }}
           # Tags are needed to tell an already-released version from a new one, and to find
@@ -234,7 +234,7 @@ jobs:
 
     steps:
       - name: Check out main
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           # The branch, not the commit that triggered this. A detached HEAD has nothing to
           # push the bump back onto.

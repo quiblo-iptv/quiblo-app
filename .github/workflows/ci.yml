@@ -52,7 +52,7 @@ jobs:
 
     steps:
       - name: Check out
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           # The whole history, because this compares against the base branch rather than the
           # single commit that triggered the run.
@@ -122,7 +122,7 @@ jobs:
 
     steps:
       - name: Check out
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       # No JDK, no Android SDK, no Gradle. Every step below is a grep or a parse, and setting up
       # a toolchain to run them would put two minutes back onto the thing this split exists to
@@ -262,7 +262,7 @@ jobs:
       # cannot do its job must say so by not running rather than by passing.
       - name: Dependency review
         if: github.event_name == 'pull_request'
-        uses: actions/dependency-review-action@v4
+        uses: actions/dependency-review-action@v5
         with:
           # Moderate rather than high. This is a media player that connects to servers a viewer
           # names, parses what they return, and holds their panel credentials — the parsing and
@@ -286,22 +286,22 @@ jobs:
 
     steps:
       - name: Check out
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up JDK 17
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '17'
 
       - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
+        uses: android-actions/setup-android@v4
 
       - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v4
+        uses: gradle/actions/setup-gradle@v6
 
       - name: Validate Gradle wrapper
-        uses: gradle/actions/wrapper-validation@v4
+        uses: gradle/actions/wrapper-validation@v6
 
       - name: Assemble
         run: ./gradlew assemble --stacktrace
@@ -369,7 +369,7 @@ jobs:
 
       - name: Upload reports
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: reports
           path: |

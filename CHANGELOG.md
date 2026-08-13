@@ -15,6 +15,17 @@ Formatted after [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and ve
 
 ## Unreleased
 
+### Fixed
+
+- **Search only offers Advanced once now.** It was on screen twice — beside the field and again
+  in the row under it — which on a television reads as two controls rather than as one with two
+  ways in. Press right from the search box to reach it.
+- **The search box sits on the middle of the screen again.** Putting Advanced next to it had
+  pushed it left of the mark and the name above it.
+- **The search box's highlight is visible from a sofa.** It was a hairline drawn just inside the
+  outline, which from across a room looked like a smudge beside the field rather than the field
+  lighting up. It now traces the outline itself and carries a soft halo.
+
 ## 0.14.0
 
 ### Added

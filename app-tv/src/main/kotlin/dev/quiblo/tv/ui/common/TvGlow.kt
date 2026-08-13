@@ -18,7 +18,7 @@
 
 package dev.quiblo.tv.ui.common
 
-import android.graphics.Matrix
+import android.graphics.PathMeasure
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -30,10 +30,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.CornerRadius
-import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.RoundRect
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.ShaderBrush
-import androidx.compose.ui.graphics.SweepGradientShader
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.asAndroidPath
+import androidx.compose.ui.graphics.asComposePath
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -90,53 +92,59 @@ fun Modifier.travellingGlow(
     drawBehind {
         if (!isActive) return@drawBehind
 
-        val centre = Offset(size.width / 2f, size.height / 2f)
+        /*
+         * The light is a segment of the outline, moved along it — not a gradient rotated
+         * behind it.
+         *
+         * **A sweep gradient was the first attempt and it is the wrong instrument for this
+         * shape.** A sweep distributes colour evenly by *angle*, and the search field is ten
+         * times wider than it is tall: most of the angular range points at the two short ends,
+         * so the light crawls down the sides and leaps across the top. On the panel it read as
+         * a blob appearing and vanishing rather than as anything travelling.
+         *
+         * Measuring the path and cutting a piece out of it moves at a constant speed in
+         * pixels, which is what "travels along the edge" means to somebody watching it.
+         */
+        val outline = Path().apply {
+            addRoundRect(
+                RoundRect(
+                    left = width.toPx() / 2f,
+                    top = width.toPx() / 2f,
+                    right = size.width - width.toPx() / 2f,
+                    bottom = size.height - width.toPx() / 2f,
+                    cornerRadius = CornerRadius(cornerRadius.toPx()),
+                ),
+            )
+        }
+
+        val measure = PathMeasure(outline.asAndroidPath(), false)
+        val total = measure.length
+        if (total <= 0f) return@drawBehind
+
+        val lit = total * ARC_FRACTION
+        val head = (angle / FULL_CIRCLE) * total
 
         /*
-         * Mostly nothing, with one bright arc in it, drawn three times.
-         *
-         * The stops matter more than the colours: the lit part is a sixth of the circuit, so
-         * what travels reads as a single light rather than as a rotating rainbow. The first and
-         * last stop are the same value because a sweep gradient wraps, and a seam is visible
-         * from three metres when nothing else on the screen is moving.
-         *
-         * Three passes, widest and faintest first.
-         *
-         * **A single hairline is invisible on a fifty-inch panel, which is what the first
-         * version of this was.** There is no blur to reach for — `Modifier.blur` wants API 31
-         * and this app supports 30 — so the bloom is built by stroking the same outline three
-         * times, each wider and fainter than the last. The eye reads the stack as one light
-         * with a halo, which is what a glow is, and it costs three draw calls.
+         * Cut once, or twice where the segment runs off the end and wraps to the start. Without
+         * the second cut the light disappears for a fraction of every circuit at the same
+         * corner — the seam a viewer notices precisely because nothing else is moving.
          */
-        BLOOM.forEach { (multiplier, alpha) ->
-            val shader = SweepGradientShader(
-                center = centre,
-                colors = listOf(
-                    colour.copy(alpha = 0f),
-                    colour.copy(alpha = 0f),
-                    colour.copy(alpha = alpha * intensity),
-                    colour.copy(alpha = 0f),
-                    colour.copy(alpha = 0f),
-                ),
-                colorStops = listOf(0f, ARC_START, ARC_PEAK, ARC_END, 1f),
-            )
-            shader.setLocalMatrix(Matrix().apply { setRotate(angle, centre.x, centre.y) })
+        val pieces = if (head + lit <= total) {
+            listOf(head to head + lit)
+        } else {
+            listOf(head to total, 0f to (head + lit - total))
+        }
 
-            /*
-             * Drawn on the node's own edge, not inside it.
-             *
-             * The first version inset the rectangle by half the stroke, which put the light a
-             * couple of pixels in from the field's outline — close enough to look like a
-             * mistake rather than a highlight. Straddling the border is what makes it read as
-             * the field lighting up instead of as something drawn near it.
-             */
-            drawRoundRect(
-                brush = ShaderBrush(shader),
-                topLeft = Offset.Zero,
-                size = size,
-                cornerRadius = CornerRadius(cornerRadius.toPx()),
-                style = Stroke(width = width.toPx() * multiplier),
-            )
+        BLOOM.forEach { (multiplier, alpha) ->
+            pieces.forEach { (from, to) ->
+                val piece = android.graphics.Path()
+                measure.getSegment(from, to, piece, true)
+                drawPath(
+                    path = piece.asComposePath(),
+                    color = colour.copy(alpha = alpha * intensity),
+                    style = Stroke(width = width.toPx() * multiplier, cap = StrokeCap.Round),
+                )
+            }
         }
     }
 }
@@ -144,25 +152,26 @@ fun Modifier.travellingGlow(
 /**
  * The bloom, as stroke width against brightness.
  *
- * Widest first so the sharp core lands on top of its own halo. The numbers are tuned for a
- * television across a room: the outer pass is nearly invisible up close and is the whole reason
- * the light reads at all from a sofa.
+ * Widest first so the core lands on top of its own halo. **Softened after seeing the hard
+ * version on screen**: a solid white segment at full alpha reads as a loading bar somebody
+ * forgot to remove, not as light. Just over half brightness on the core, with two wide faint
+ * passes under it, gives the same travel without the bar.
  */
 private val BLOOM = listOf(
-    4.5f to 0.10f,
-    2.4f to 0.26f,
-    1.0f to 1.0f,
+    5.5f to 0.06f,
+    3.0f to 0.13f,
+    1.0f to 0.55f,
 )
 
-/*
- * Where the lit arc begins, peaks and ends, round a circuit measured from 0 to 1.
+/**
+ * How much of the outline is lit at once.
  *
- * A sixth of the ring, centred. Wider and it stops reading as one travelling light; narrower
- * and it is invisible from a sofa.
+ * A fifth. Longer and it stops reading as one light and starts reading as a border that is
+ * partly on; shorter and it is a dot crossing a very long box.
  */
-private const val ARC_START = 0.42f
-private const val ARC_PEAK = 0.5f
-private const val ARC_END = 0.58f
+private const val ARC_FRACTION = 0.28f
+
+private const val FULL_CIRCLE = 360f
 
 /** Slow enough to read as breathing. A fast circuit is a control asking to be pressed. */
 private const val CIRCUIT_MILLIS = 6_000

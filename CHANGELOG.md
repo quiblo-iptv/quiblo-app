@@ -16,6 +16,19 @@ Formatted after [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and ve
 ## Unreleased
 
 ## 0.14.2
+### Fixed
+
+- **The mark on the search screen is the size it says it is.** It was drawn from the launcher
+  icon, which reserves its outer third as margin for a launcher to crop — so asking for a large
+  logo produced one filling about sixty per cent of its space, and it looked small beside its own
+  wordmark. It now fills the box, and the word under it is smaller than it is.
+- **The search field sits on the middle of the screen.** The invisible spacer balancing Advanced
+  was a copy of its text and not of the control, so it was short by the button's padding and the
+  field sat thirty pixels left of the mark above it.
+- **The travelling highlight travels.** It was a gradient rotated behind the box, which spreads
+  colour evenly by angle — on a field ten times wider than it is tall the light crawled the short
+  ends and leapt across the long ones. It now moves along the outline itself at a constant speed,
+  and it is softer than the first attempt, which read as a loading bar rather than as light.
 
 ### Changed
 

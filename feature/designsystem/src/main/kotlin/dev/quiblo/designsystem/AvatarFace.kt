@@ -99,6 +99,11 @@ fun avatarFaceFor(key: String?): AvatarFace? = key?.let { k -> AvatarFaces.first
  * **A null [avatar] is not a blank circle.** It draws the viewer's initial on a colour derived
  * from their name, so a profile created before this feature existed — or one whose owner never
  * opened the picker — still has something a household recognises at a glance across a room.
+ *
+ * Three kinds of key reach this function and it is the one place that knows all three: a
+ * generated avatar, an illustrated face, and nothing at all. Every screen that draws a profile
+ * calls this, so a profile chosen on the television draws identically in the phone's chooser
+ * without either screen knowing which kind it is looking at.
  */
 @Composable
 fun ProfileAvatar(
@@ -107,6 +112,13 @@ fun ProfileAvatar(
     size: Dp,
     modifier: Modifier = Modifier,
 ) {
+    // Asked first, because it is the kind a new profile gets. A generated key matches no entry
+    // in `AvatarFaces` and would otherwise fall all the way through to the initial.
+    generatedAvatarSeed(avatar)?.let { seed ->
+        BoringAvatar(seed = seed, size = size, modifier = modifier)
+        return
+    }
+
     val face = avatarFaceFor(avatar)
 
     Box(

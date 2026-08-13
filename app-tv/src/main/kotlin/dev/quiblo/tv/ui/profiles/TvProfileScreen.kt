@@ -67,7 +67,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.quiblo.core.model.Profile
+import dev.quiblo.designsystem.BoringAvatar
 import dev.quiblo.designsystem.ProfileAvatar
+import dev.quiblo.designsystem.generatedAvatarKey
 import dev.quiblo.feature.settings.ProfilesViewModel
 import dev.quiblo.tv.R
 import dev.quiblo.tv.ui.common.TvChip
@@ -127,8 +129,8 @@ fun TvProfileScreen(
 
         if (isAdding) {
             AddProfile(
-                onAdd = { name ->
-                    viewModel.addAndSelect(name)
+                onAdd = { name, avatar ->
+                    viewModel.addAndSelect(name, avatar)
                     isAdding = false
                 },
                 onCancel = { isAdding = false },
@@ -229,9 +231,26 @@ private fun LaunchedFocus(requester: FocusRequester, enabled: Boolean) {
     }
 }
 
+/**
+ * Naming yourself, and choosing the face that goes with it.
+ *
+ * **One screen, not two steps.** A television has the room, and a picker behind a "choose avatar"
+ * button is a picker most people creating a profile never open — which would leave the feature
+ * technically present and actually unused, the exact shape `docs/HOLLOW.md` exists to catch.
+ *
+ * The order down the screen is the order of the decisions: the name first, because it is the one
+ * that is required and the one the on-screen keyboard is already open for, then the faces it
+ * generates, then what to do about it. Every step is reachable by pressing Down, which is the
+ * only direction a remote has here — the field spends Left and Right on its own cursor.
+ */
 @Composable
-private fun AddProfile(onAdd: (String) -> Unit, onCancel: () -> Unit) {
+private fun AddProfile(onAdd: (String, String?) -> Unit, onCancel: () -> Unit) {
     var name by remember { mutableStateOf("") }
+
+    // The candidate the viewer is on, not the key it will become. Kept as a position so it
+    // survives the name changing underneath it: the pictures redraw as somebody types, and the
+    // one they had chosen stays the one that is chosen.
+    var chosen by remember { mutableStateOf(0) }
     val field = remember { FocusRequester() }
 
     androidx.compose.runtime.LaunchedEffect(Unit) { runCatching { field.requestFocus() } }
@@ -247,6 +266,19 @@ private fun AddProfile(onAdd: (String) -> Unit, onCancel: () -> Unit) {
                 .focusRequester(field),
         )
 
+        Text(
+            text = stringResource(R.string.tv_profile_pick_avatar),
+            color = Color.White.copy(alpha = 0.55f),
+            fontSize = 13.sp,
+            modifier = Modifier.padding(top = 18.dp, bottom = 10.dp),
+        )
+
+        AvatarPicker(
+            seedBase = name,
+            chosen = chosen,
+            onChoose = { chosen = it },
+        )
+
         Row(
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             modifier = Modifier.padding(top = 16.dp),
@@ -254,7 +286,7 @@ private fun AddProfile(onAdd: (String) -> Unit, onCancel: () -> Unit) {
             TvChip(
                 label = stringResource(R.string.tv_profile_save),
                 isSelected = false,
-                onClick = { if (name.isNotBlank()) onAdd(name) },
+                onClick = { if (name.isNotBlank()) onAdd(name, generatedAvatarKey(avatarSeed(name, chosen))) },
             )
             TvChip(
                 label = stringResource(R.string.tv_profile_cancel),
@@ -264,6 +296,88 @@ private fun AddProfile(onAdd: (String) -> Unit, onCancel: () -> Unit) {
         }
     }
 }
+
+/**
+ * The faces on offer: the same generator, run on a dozen salted seeds.
+ *
+ * **Not a fixed set of pictures.** The seed carries the name being typed, so two people in one
+ * household are offered two different dozens rather than the same eight symbols everybody else
+ * on every other device also picked from. That is the whole reason for generating them.
+ *
+ * Selection is separate from focus, and both are drawn. A remote walking this row changes what is
+ * highlighted without changing what is chosen — pressing Centre is what chooses — because a row
+ * where merely passing over a tile selected it would leave the viewer's choice decided by
+ * whichever tile they happened to stop on while on their way to Save.
+ */
+@Composable
+private fun AvatarPicker(
+    seedBase: String,
+    chosen: Int,
+    onChoose: (Int) -> Unit,
+) {
+    LazyRow(
+        horizontalArrangement = Arrangement.spacedBy(14.dp, Alignment.CenterHorizontally),
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .fillMaxWidth()
+            .focusGroup(),
+    ) {
+        items(count = AVATAR_CHOICES, key = { it }) { index ->
+            AvatarChoice(
+                seed = avatarSeed(seedBase, index),
+                isChosen = index == chosen,
+                onClick = { onChoose(index) },
+            )
+        }
+    }
+}
+
+/** One candidate face. */
+@Composable
+private fun AvatarChoice(seed: String, isChosen: Boolean, onClick: () -> Unit) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isFocused by interactionSource.collectIsFocusedAsState()
+    val scale by animateFloatAsState(if (isFocused) FOCUSED_SCALE else 1f, label = "avatarScale")
+
+    Box(
+        contentAlignment = Alignment.Center,
+        // The focusable sits outside the animating scale, as every other focusable in this app
+        // does: a focus node whose bounds change every frame makes the row above it chase them,
+        // which is #008 and is not being rediscovered here.
+        modifier = Modifier
+            .clickable(interactionSource = interactionSource, indication = null, onClick = onClick)
+            .focusable(interactionSource = interactionSource)
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+            }
+            // Chosen is a ring, focused is a brighter one. Two states, one affordance, so a
+            // viewer can see what they picked from across the room while still knowing where
+            // the remote is.
+            .border(
+                width = if (isFocused || isChosen) 3.dp else 0.dp,
+                color = when {
+                    isFocused -> Color.White
+                    isChosen -> Color.White.copy(alpha = 0.6f)
+                    else -> Color.Transparent
+                },
+                shape = CircleShape,
+            )
+            .padding(4.dp),
+    ) {
+        BoringAvatar(seed = seed, size = CHOICE_SIZE)
+    }
+}
+
+/**
+ * The seed behind the [index]th face offered for [name].
+ *
+ * A blank name still has to generate something — the picker is on screen before anybody has
+ * typed — so it falls back to the app's own name rather than hashing an empty string, which
+ * would give every unnamed profile on every device the identical dozen.
+ */
+private fun avatarSeed(name: String, index: Int): String =
+    "${name.trim().ifEmpty { SEED_FALLBACK }}#$index"
 
 /**
  * One tile.
@@ -370,3 +484,18 @@ private val FIELD_WIDTH = 420.dp
 private const val FOCUSED_SCALE = 1.08f
 private const val ADD_KEY = "__add__"
 private const val GUEST_KEY = "__guest__"
+
+/**
+ * How many faces to offer.
+ *
+ * Twelve fits the panel's width at [CHOICE_SIZE] without the row needing to scroll, which matters
+ * more here than choice does: a viewer who has to walk a scrolling row to see the options cannot
+ * compare them, and this is a decision worth about four seconds.
+ */
+private const val AVATAR_CHOICES = 12
+
+/** Small enough that twelve sit on one line, big enough to tell apart from a sofa. */
+private val CHOICE_SIZE = 56.dp
+
+/** Used when nothing has been typed yet, so an unnamed profile is still offered real faces. */
+private const val SEED_FALLBACK = "quiblo"

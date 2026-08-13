@@ -32,6 +32,8 @@
     <string name="tv_profile_guest">Guest</string>
     <string name="tv_profile_guest_detail">Nothing is kept</string>
     <string name="tv_profile_name">Name</string>
+    <string name="tv_profile_pick_avatar">Pick a face</string>
+    <string name="tv_profile_switch">Switch profile</string>
     <string name="tv_profile_save">Save</string>
     <string name="tv_profile_cancel">Cancel</string>
     <string name="tv_settings_profile">Who is watching</string>

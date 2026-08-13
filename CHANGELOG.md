@@ -15,6 +15,21 @@ Formatted after [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and ve
 
 ## Unreleased
 
+### Added
+
+- **Pick a face for a profile on the television.** Creating a profile offers a row of generated
+  pictures rather than the fixed set of drawn faces, so a household of five is not choosing
+  between five things that look alike from the sofa. A profile made before this still shows its
+  initial, and one made on the television draws the same on the phone.
+- **The profile icon is on the top bar**, to the right of the gear, and it does the one thing a
+  household reaches for: hand the remote to somebody else. Right from the gear reaches it, Left
+  goes back.
+
+### Fixed
+
+- **The resting search screen is centred on the panel, and stays centred if the bar above it
+  grows.** It is measured from both ends now instead of from the name in the middle of it.
+
 ## 0.14.3
 
 ### Fixed

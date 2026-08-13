@@ -218,4 +218,18 @@ val THIRD_PARTY_LICENSES: List<ThirdPartyLicense> = listOf(
             "implementation behind it here — so it writes nothing. The one component in this " +
             "list that is not Apache 2.0; MIT is equally compatible with GPLv3.",
     ),
+    ThirdPartyLicense(
+        name = "boring-avatars",
+        // Deliberately not a Maven coordinate, because there is no artefact. `licenceCheck`
+        // resolves the shipped dependency graph and would never ask about this entry — which is
+        // precisely why it is written down by hand: the obligation is real and the machine
+        // cannot see it.
+        coordinates = "(ported source, no artefact)",
+        license = "MIT License",
+        url = "https://github.com/boringdesigners/boring-avatars",
+        notes = "The generated profile pictures. Their \"bauhaus\" design is ported into " +
+            "Compose rather than depended on, because the original is a React component — so " +
+            "no code of theirs ships, but the arithmetic that makes each face is theirs. MIT " +
+            "permits this and is compatible with GPLv3 in this direction.",
+    ),
 )

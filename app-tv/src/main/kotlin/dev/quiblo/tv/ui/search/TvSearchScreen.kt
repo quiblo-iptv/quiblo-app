@@ -36,7 +36,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -50,10 +49,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -69,6 +68,7 @@ import dev.quiblo.tv.ui.browse.TvCategoryList
 import dev.quiblo.tv.ui.browse.TvCategoryRow
 import dev.quiblo.tv.ui.browse.TvRowItem
 import dev.quiblo.tv.ui.common.FIELD_CORNER
+import dev.quiblo.tv.ui.common.QuibloMark
 import dev.quiblo.tv.ui.common.TvChip
 import dev.quiblo.tv.ui.common.TvTextField
 import dev.quiblo.tv.ui.common.travellingGlow
@@ -229,10 +229,8 @@ internal fun ColumnScope.SearchHeader(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
-        Icon(
-            painter = painterResource(R.drawable.ic_launcher_foreground),
-            contentDescription = null,
-            tint = Color.White.copy(alpha = wordmarkAlpha),
+        QuibloMark(
+            colour = Color.White.copy(alpha = wordmarkAlpha),
             modifier = Modifier.size(LOGO_SIZE),
         )
         Text(
@@ -260,15 +258,22 @@ internal fun ColumnScope.SearchHeader(
          * three things that should share an axis and did not. Measured on a 50-inch panel,
          * which is where it is obvious and on a laptop is not.
          *
-         * A copy of the same text at zero alpha takes exactly the same width as the real one,
-         * so the field lands on the true centre without anything having to be measured. It is
-         * invisible, it is not focusable, and it exists only while the row is centred at all.
+         * **The mirror is the same composable, not a copy of its text.** It was a bare `Text`
+         * at first and the field still sat 30-odd pixels left of the mark above it: a chip is
+         * its label *plus its padding*, so matching only the label matches only part of it.
+         * Rendering the real control at zero alpha cannot be wrong about its own width.
+         *
+         * Invisible and unfocusable, so a remote walking the row never lands on it, and only
+         * present while the row is centred at all.
          */
         if (isResting) {
-            Text(
-                text = stringResource(R.string.tv_search_advanced),
-                fontSize = CHIP_TEXT_SIZE,
-                modifier = Modifier.alpha(0f),
+            TvChip(
+                label = stringResource(R.string.tv_search_advanced),
+                isSelected = false,
+                onClick = {},
+                modifier = Modifier
+                    .alpha(0f)
+                    .focusProperties { canFocus = false },
             )
             Spacer(modifier = Modifier.width(COLUMN_GAP))
         }
@@ -482,7 +487,9 @@ internal fun searchRows(
  * the tab bar are taken off it, without measuring: the three things above the results come to
  * about 150dp, and this is half of what is left.
  */
-private val RESTING_TOP_SPACE = 96.dp
+// Reduced when the mark joined the wordmark: the block above the field is twice the height it
+// was, and the old spacing pushed the whole composition into the bottom half of the panel.
+private val RESTING_TOP_SPACE = 40.dp
 
 /*
  * The mark, the name, and the room they need.
@@ -492,12 +499,9 @@ private val RESTING_TOP_SPACE = 96.dp
  * a size chosen against a laptop. On a television the resting screen is three things in the
  * middle of a very large rectangle, so they can afford to be large.
  */
-private val WORDMARK_HEIGHT = 190.dp
-private val LOGO_SIZE = 108.dp
-
-/** `TvChip`'s own size, so the invisible mirror beside the field is exactly as wide as it. */
-private val CHIP_TEXT_SIZE = 15.sp
-private val WORDMARK_TEXT_SIZE = 46.sp
+private val WORDMARK_HEIGHT = 210.dp
+private val LOGO_SIZE = 132.dp
+private val WORDMARK_TEXT_SIZE = 38.sp
 
 /** Wider at rest, where it is the only thing on the panel and reads as an invitation. */
 private val RESTING_FIELD_WIDTH = 560.dp

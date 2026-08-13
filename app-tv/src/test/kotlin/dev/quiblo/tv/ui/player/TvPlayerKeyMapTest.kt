@@ -39,12 +39,14 @@ class TvPlayerKeyMapTest {
     private var controlsShown = 0
     private var aspectCycles = 0
     private var tracksOpened = 0
+    private var episodeSteps = 0
 
     private val actions = KeyActions(
         showControls = { controlsShown++ },
         playPause = { playPauses++ },
         skip = { skipped += it },
         zap = { zapped += it },
+        stepEpisode = { episodeSteps += it },
         cycleAspect = { aspectCycles++ },
         openTracks = { tracksOpened++ },
     )
@@ -136,12 +138,15 @@ class TvPlayerKeyMapTest {
         assertEquals(0, aspectCycles)
     }
 
+    @Suppress("LongParameterList")
     private fun press(
         key: Key,
         isSeekable: Boolean,
         canZap: Boolean,
         hasFailed: Boolean = false,
         areControlsVisible: Boolean = false,
+        isOfferingNextEpisode: Boolean = false,
+        canStepEpisode: Boolean = false,
     ) = handleKey(
         key = key,
         context = KeyContext(
@@ -149,30 +154,92 @@ class TvPlayerKeyMapTest {
             canZap = canZap,
             hasFailed = hasFailed,
             areControlsVisible = areControlsVisible,
+            isOfferingNextEpisode = isOfferingNextEpisode,
+            canStepEpisode = canStepEpisode,
         ),
         actions = actions,
     )
-
-    /** Down shows the controls; down again asks for audio and subtitles. */
-    @Test
-    fun `down opens the track menu once the controls are up`() {
-        assertTrue(press(Key.DirectionDown, isSeekable = true, canZap = false))
-        assertEquals(1, controlsShown)
-        assertEquals(0, tracksOpened)
-
-        assertTrue(
-            press(Key.DirectionDown, isSeekable = true, canZap = false, areControlsVisible = true),
-        )
-        assertEquals(1, tracksOpened)
-
-        // Playback is untouched by either press. AC-TV-06 requires the controls to appear
-        // without pausing, and a menu over them is no different.
-        assertEquals(0, playPauses)
-    }
 
     @Test
     fun `a remote with a subtitle key reaches the menu in one press`() {
         assertTrue(press(Key.Captions, isSeekable = true, canZap = false))
         assertEquals(1, tracksOpened)
+    }
+
+    /**
+     * The rule the focusable controls stand on.
+     *
+     * A key consumed here is a key Compose's focus traversal never sees, so if this map kept
+     * claiming the arrows once the controls were up, every button on them would be drawn and
+     * unreachable — the hollow-feature shape, arrived at from the opposite direction. The
+     * licence list reached that state for real by being unfocusable, and a D-pad walk is what
+     * caught it; this is the same check made where it costs nothing.
+     */
+    @Test
+    fun `the arrows belong to the controls while the controls are up`() {
+        assertFalse(press(Key.DirectionDown, isSeekable = true, canZap = false, areControlsVisible = true))
+        assertFalse(press(Key.DirectionUp, isSeekable = true, canZap = false, areControlsVisible = true))
+        assertFalse(press(Key.DirectionLeft, isSeekable = true, canZap = false, areControlsVisible = true))
+        assertFalse(press(Key.DirectionRight, isSeekable = true, canZap = false, areControlsVisible = true))
+
+        // And nothing happened. An arrow that both moved focus and seeked would jump the film
+        // ten seconds every time a viewer stepped from Rewind to Play.
+        assertEquals(0, skipped)
+        assertEquals(0, zapped)
+        assertEquals(0, aspectCycles)
+        assertEquals(0, controlsShown)
+    }
+
+    /**
+     * The keys that are not arrows keep working in both states.
+     *
+     * A remote's play key means one thing wherever the viewer is looking, and taking it away
+     * while the controls happen to be on screen would make the controls appearing — which is
+     * something Down does by itself — change what the play key does.
+     */
+    @Test
+    fun `the media keys work whether or not the controls are up`() {
+        assertTrue(press(Key.MediaPlayPause, isSeekable = true, canZap = false, areControlsVisible = true))
+        assertTrue(press(Key.MediaRewind, isSeekable = true, canZap = false, areControlsVisible = true))
+        assertTrue(press(Key.ChannelUp, isSeekable = false, canZap = true, areControlsVisible = true))
+
+        assertEquals(1, playPauses)
+        assertEquals(-1, skipped)
+        assertEquals(-1, zapped)
+    }
+
+    @Test
+    fun `the episode keys step a series and are left alone on anything else`() {
+        assertTrue(press(Key.MediaNext, isSeekable = true, canZap = false, canStepEpisode = true))
+        assertEquals(1, episodeSteps)
+
+        assertTrue(press(Key.MediaPrevious, isSeekable = true, canZap = false, canStepEpisode = true))
+        assertEquals(0, episodeSteps)
+
+        // A film and a channel have no episodes, so the keys are left unhandled rather than
+        // silently doing nothing — the same rule seeking follows on a live stream.
+        assertFalse(press(Key.MediaNext, isSeekable = true, canZap = false, canStepEpisode = false))
+        assertFalse(press(Key.MediaPrevious, isSeekable = false, canZap = true, canStepEpisode = false))
+        assertEquals(0, episodeSteps)
+    }
+
+    /**
+     * The end of an episode belongs to the banner, the way a dead stream belongs to Try again.
+     *
+     * The dangerous one is the play key: an episode has finished, so pressing it does nothing
+     * a viewer can see, and if this map answered it the press would never reach Play now.
+     */
+    @Test
+    fun `the offer of a next episode answers no key at all`() {
+        assertFalse(press(Key.DirectionCenter, isSeekable = true, canZap = false, isOfferingNextEpisode = true))
+        assertFalse(press(Key.DirectionLeft, isSeekable = true, canZap = false, isOfferingNextEpisode = true))
+        assertFalse(press(Key.DirectionDown, isSeekable = true, canZap = false, isOfferingNextEpisode = true))
+        assertFalse(press(Key.MediaPlayPause, isSeekable = true, canZap = false, isOfferingNextEpisode = true))
+        assertFalse(press(Key.Menu, isSeekable = true, canZap = false, isOfferingNextEpisode = true))
+
+        assertEquals(0, playPauses)
+        assertEquals(0, skipped)
+        assertEquals(0, controlsShown)
+        assertEquals(0, aspectCycles)
     }
 }

@@ -15,6 +15,33 @@ Formatted after [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and ve
 
 ## Unreleased
 
+### Added
+
+- **Next and previous episode, on the television.** A series now travels with the player, so the
+  buttons either side of the transport move along it — in the order the episodes were made,
+  whichever order the list happens to be sorted in. They stop at the first and last episode
+  rather than wrapping round; a series is a thing that finishes.
+- **The next episode starts on its own.** When one ends, a banner slides in at the top right
+  counting down, with Stop and Play now under it. The count is set under Settings → Playback →
+  "Start the next episode after", from three seconds to fifteen, or Off — off still offers the
+  next episode and waits for you to choose it. Back cancels it on the way out.
+- **The television player has real controls now.** Play and pause sit in the middle of the screen
+  with the two skips either side of them and the episode steps outside those, and subtitles,
+  audio and picture fit are a row underneath. Press down for them, down again to reach the second
+  row, and the D-pad walks between them. Subtitles and audio open the same panel at their own
+  heading rather than at the top of it.
+- Every button says what it is to TalkBack, which an icon on its own does not.
+
+### Changed
+
+- The remote's own keys still do everything they did with nothing on screen — play, skip, change
+  channel — so the fast way to pause has not moved. What changed is that the arrows belong to the
+  controls while the controls are up, which is what makes them reachable at all.
+- The controls stay up for six seconds rather than four, counted from the last press rather than
+  from when they opened. They are something to navigate now, not something to read.
+- Picture fit no longer has to be reached through the Menu key or a spare press of Up. Those still
+  work; there is a button for it now, which is what that pairing was always standing in for.
+
 ## 0.12.0
 
 ### Added

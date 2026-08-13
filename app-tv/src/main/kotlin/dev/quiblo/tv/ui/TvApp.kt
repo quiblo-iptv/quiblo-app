@@ -570,32 +570,43 @@ private fun TvTopBar(
 
         Spacer(modifier = Modifier.weight(1f))
 
-        BarIcon(
-            icon = Icons.Filled.Settings,
-            contentDescription = stringResource(R.string.tv_settings),
-            isHighlighted = spot == TvBarSpot.GEAR && isFocused,
-        )
-
-        Spacer(modifier = Modifier.width(BAR_ICON_GAP))
-
         /*
-         * Who is watching, on the right of the gear.
+         * The gear and the face, as one group.
          *
-         * **Their own face rather than a generic figure**, which is the whole point of it being
-         * here: the one thing this control has to answer from across a room is "is this still
-         * mine", and a person-shaped outline answers that for nobody. It is the same
-         * `ProfileAvatar` the chooser draws, at a corner-control size, so the picture somebody
-         * picked when they made the profile is the picture they see in the bar afterwards.
-         *
-         * Last along the bar, so it is one press further than Settings. Settings is where a
-         * viewer goes on purpose; this is where they go when the remote changes hands, which is
-         * rarer and is the one press nobody minds.
+         * Their own row, because the bar spaces its children 28dp apart to separate five tab
+         * labels — and a gap sized for words between two icons at the end of it left them
+         * looking like two unrelated controls that happened to land near each other. Nested,
+         * they are one child of that row and space themselves.
          */
-        BarProfile(
-            name = activeProfileName,
-            avatar = activeProfileAvatar,
-            isHighlighted = spot == TvBarSpot.PROFILE && isFocused,
-        )
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(BAR_ICON_GAP),
+        ) {
+            BarIcon(
+                icon = Icons.Filled.Settings,
+                contentDescription = stringResource(R.string.tv_settings),
+                isHighlighted = spot == TvBarSpot.GEAR && isFocused,
+            )
+
+            /*
+             * Who is watching, on the right of the gear.
+             *
+             * **Their own face rather than a generic figure**, which is the whole point of it
+             * being here: the one thing this control has to answer from across a room is "is
+             * this still mine", and a person-shaped outline answers that for nobody. It is the
+             * same `ProfileAvatar` the chooser draws, at a corner-control size, so the picture
+             * somebody picked when they made the profile is the one they see in the bar.
+             *
+             * Last along the bar, so it is one press further than Settings. Settings is where a
+             * viewer goes on purpose; this is where they go when the remote changes hands,
+             * which is rarer and is the one press nobody minds.
+             */
+            BarProfile(
+                name = activeProfileName,
+                avatar = activeProfileAvatar,
+                isHighlighted = spot == TvBarSpot.PROFILE && isFocused,
+            )
+        }
     }
 }
 

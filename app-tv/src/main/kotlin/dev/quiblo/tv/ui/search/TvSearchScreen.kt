@@ -47,9 +47,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
@@ -177,6 +175,13 @@ internal fun TvSearchPanel(
      * thing than the surface: it was tried, and it reported 1264px for a panel drawn 1080px tall,
      * which centred the block below the screen's middle by exactly the difference. The root is the
      * rectangle the app is actually painting into, which is the one a viewer is looking at.
+     *
+     * **It is [OPTICAL_CENTRE] of the panel, not half of it**, and the difference is the point.
+     * Geometrically centred, this block reads as sitting low, and it reads that way because it
+     * is: the eye takes a bar across the top as the edge of the picture and centres what is
+     * below it, while a screen has weight underneath — here a line of copy where results will
+     * be. Every craft that sets type on a page moves the block up for the same reason. The
+     * arithmetic is still measured; only the line it is measured against has moved.
      */
     val density = LocalDensity.current
     var centreLine by remember { mutableStateOf(0.dp) }
@@ -187,7 +192,7 @@ internal fun TvSearchPanel(
             .onGloballyPositioned { coordinates ->
                 val panelHeight = coordinates.findRootCoordinates().size.height
                 centreLine = with(density) {
-                    (panelHeight / 2f - coordinates.positionInRoot().y).toDp()
+                    (panelHeight * OPTICAL_CENTRE - coordinates.positionInRoot().y).toDp()
                 }
             },
     ) {
@@ -349,99 +354,94 @@ internal fun ColumnScope.SearchHeader(
     val advancedFocus = remember { FocusRequester() }
     var isFieldFocused by remember { mutableStateOf(false) }
 
-    Row(
+    /*
+     * The field, and Advanced — beside it while there is an answer on screen, under it at rest.
+     *
+     * **At rest all four things share one axis**: the mark, the name, the field and Advanced.
+     * Advanced used to sit beside the field there too, balanced by an invisible copy of itself
+     * on the left. That put the *field* on the middle of the panel and left the composition a
+     * viewer actually sees — field plus one visible chip — hanging to the right of it. Balanced
+     * by measurement and lopsided by eye, on the screen it was drawn for.
+     *
+     * Under the field it costs a row on a screen that has nothing else on it, and the way in is
+     * still one press: down, out of a text field, which is the only direction a text field
+     * leaves free. Beside the field is right once results are up, where a row is expensive and
+     * the field has stopped being the whole screen.
+     *
+     * Both rows are measured together, because the gap above them is half of what they measure.
+     */
+    Column(
         modifier = Modifier
             .fillMaxWidth()
             .testTag(FIELD_ROW_TAG)
             .onSizeChanged { fieldRowHeight = with(fieldDensity) { it.height.toDp() } },
-        horizontalArrangement = if (isResting) Arrangement.Center else Arrangement.Start,
-        verticalAlignment = Alignment.CenterVertically,
+        horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        /*
-         * A mirror of Advanced, on the left, invisible.
-         *
-         * Centring a row centres the *row*, so putting Advanced beside the field pushed the
-         * field left of the screen's middle while the mark and the name above it stayed on it —
-         * three things that should share an axis and did not. Measured on a 50-inch panel,
-         * which is where it is obvious and on a laptop is not.
-         *
-         * **The mirror is the same composable, not a copy of its text.** It was a bare `Text`
-         * at first and the field still sat 30-odd pixels left of the mark above it: a chip is
-         * its label *plus its padding*, so matching only the label matches only part of it.
-         * Rendering the real control at zero alpha cannot be wrong about its own width.
-         *
-         * Invisible and unfocusable, so a remote walking the row never lands on it, and only
-         * present while the row is centred at all.
-         */
-        if (isResting) {
-            TvChip(
-                label = stringResource(R.string.tv_search_advanced),
-                isSelected = false,
-                onClick = {},
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = if (isResting) Arrangement.Center else Arrangement.Start,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            TvTextField(
+                value = state.query,
+                onValueChange = onQueryChange,
+                label = stringResource(R.string.tv_search_field),
+                // The last field on the screen, so the keyboard's action key dismisses the
+                // keyboard instead of hunting for a next one. Nothing is submitted by it: the
+                // answer is already on screen behind the keyboard by then.
+                isLast = true,
+                // Right leaves the field for Advanced *when Advanced is beside it*. At rest it
+                // is underneath, where Down finds it without the field having to spend a key.
+                onExitRight = if (isResting) {
+                    null
+                } else {
+                    { runCatching { advancedFocus.requestFocus() } }
+                },
                 modifier = Modifier
-                    .alpha(0f)
-                    .focusProperties { canFocus = false },
+                    .width(fieldWidth)
+                    .onFocusChanged { isFieldFocused = it.isFocused }
+                    // Only while the remote is somewhere else. Two moving highlights on a
+                    // television is one too many, and the focus ring is the one that must win.
+                    .travellingGlow(
+                        isActive = !isFieldFocused,
+                        cornerRadius = FIELD_CORNER,
+                    ),
             )
-            Spacer(modifier = Modifier.width(COLUMN_GAP))
+
+            if (!isResting) {
+                Spacer(modifier = Modifier.width(COLUMN_GAP))
+                TvChip(
+                    label = stringResource(R.string.tv_search_advanced),
+                    isSelected = isAdvanced,
+                    onClick = onToggleAdvanced,
+                    modifier = Modifier.focusRequester(advancedFocus),
+                )
+
+                // Only alongside the genre chips it explains, and only once there is room for
+                // it — at rest it would be a paragraph beside a box nobody has used yet.
+                if (isAdvanced) {
+                    Spacer(modifier = Modifier.width(COLUMN_GAP))
+                    genreHint(state)?.let {
+                        Text(
+                            text = it,
+                            color = Color.White.copy(alpha = 0.55f),
+                            fontSize = 13.sp,
+                            lineHeight = 18.sp,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    }
+                }
+            }
         }
 
-        TvTextField(
-            value = state.query,
-            onValueChange = onQueryChange,
-            label = stringResource(R.string.tv_search_field),
-            // The last field on the screen, so the keyboard's action key dismisses the
-            // keyboard instead of hunting for a next one. Nothing is submitted by it: the
-            // answer is already on screen behind the keyboard by then.
-            isLast = true,
-            // Right leaves the field for Advanced beside it. See the parameter's own note for
-            // why this one field is allowed to spend the cursor keys and no other is.
-            onExitRight = { runCatching { advancedFocus.requestFocus() } },
-            modifier = Modifier
-                .width(fieldWidth)
-                .onFocusChanged { isFieldFocused = it.isFocused }
-                // Only while the remote is somewhere else. Two moving highlights on a
-                // television is one too many, and the focus ring is the one that must win.
-                .travellingGlow(
-                    isActive = !isFieldFocused,
-                    cornerRadius = FIELD_CORNER,
-                ),
-        )
-
-        /*
-         * Advanced, beside the field rather than under it (`013` INC-E1).
-         *
-         * S10 read this as "probably no", on the grounds that a control next to a text box
-         * cannot be reached with a remote. That was right about the default behaviour and it is
-         * what `onExitRight` above answers — the field hands Right over, so the way in is one
-         * press from where the viewer is already typing, which is the same cost the chip row
-         * had and one row cheaper on a panel with 444dp to spend.
-         *
-         * **It is no longer in the chip row.** Keeping both was meant to preserve the old way
-         * in, and on the panel it read as exactly what it was: the same control twice, one
-         * above the other, on a screen that has almost nothing else on it. One control, one
-         * place.
-         */
-        Spacer(modifier = Modifier.width(COLUMN_GAP))
-        TvChip(
-            label = stringResource(R.string.tv_search_advanced),
-            isSelected = isAdvanced,
-            onClick = onToggleAdvanced,
-            modifier = Modifier.focusRequester(advancedFocus),
-        )
-
-        // Only alongside the genre chips it explains, and only once there is room for it —
-        // at rest it would be a paragraph beside a search box nobody has used yet.
-        if (isAdvanced) {
-            Spacer(modifier = Modifier.width(COLUMN_GAP))
-            genreHint(state)?.let {
-                Text(
-                    text = it,
-                    color = Color.White.copy(alpha = 0.55f),
-                    fontSize = 13.sp,
-                    lineHeight = 18.sp,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-            }
+        if (isResting) {
+            Spacer(modifier = Modifier.height(RESTING_ADVANCED_GAP))
+            TvChip(
+                label = stringResource(R.string.tv_search_advanced),
+                isSelected = isAdvanced,
+                onClick = onToggleAdvanced,
+                modifier = Modifier.focusRequester(advancedFocus),
+            )
         }
     }
 
@@ -620,6 +620,22 @@ private val FIELD_WIDTH = 420.dp
 
 /** Air between the field and the sentence beside it, matching the settings screen. */
 private val COLUMN_GAP = 40.dp
+
+/** Between the resting field and Advanced under it. Close enough to read as one control's row. */
+private val RESTING_ADVANCED_GAP = 20.dp
+
+/**
+ * Where the middle of the panel is *to a viewer*, as a fraction of its height.
+ *
+ * 0.46, not 0.50. A block on the true half-way line looks low on a television, and the two
+ * reasons are both real: the bar across the top reads as the top edge of the picture, so the eye
+ * centres what is under it; and there is always something below the block — the results, or the
+ * line of copy standing in for them — while above it there is nothing.
+ *
+ * Roughly 43px up on a 1080 panel, and it scales with the screen rather than being a fixed
+ * nudge, which is what stops it becoming wrong on the next size of television.
+ */
+private const val OPTICAL_CENTRE = 0.46f
 
 /**
  * Air above and below the chip strip, and it is load-bearing rather than taste.

@@ -29,15 +29,23 @@ import dev.quiblo.source.xtream.dto.SeriesInfoResponse
 import dev.quiblo.source.xtream.dto.VodInfoResponse
 import dev.quiblo.source.xtream.dto.VodStreamDto
 import io.ktor.client.HttpClient
+import io.ktor.client.network.sockets.ConnectTimeoutException
+import io.ktor.client.network.sockets.SocketTimeoutException
+import io.ktor.client.plugins.HttpRequestTimeoutException
 import io.ktor.client.request.get
 import io.ktor.client.request.parameter
 import io.ktor.client.statement.bodyAsChannel
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.isSuccess
 import io.ktor.utils.io.jvm.javaio.toInputStream
+import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.ExperimentalSerializationApi
+import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.decodeFromStream
+import java.io.IOException
+import java.net.UnknownHostException
+import java.nio.channels.UnresolvedAddressException
 
 /** A typed result carrying either a value or a [SourceError]. */
 internal sealed interface ApiResult<out T> {
@@ -190,22 +198,49 @@ internal class XtreamClient(
  *
  * The caught detail is limited to an exception class name so that no host, username or
  * password can reach a log or a crash trace through this path (AC-XT-04).
+ *
+ * `CancellationException` is rethrown rather than mapped, on the same reasoning
+ * `TmdbClient.fetch` already records: it is not a failure of the request, it is this
+ * coroutine being told to stop. Swallowing it turned every cancelled refresh into a
+ * `SourceError.Unknown("JobCancellationException")` reported to the user as a load failure,
+ * and left the caller running past the point it was cancelled — the rate limiter's own
+ * `delay` is one of the places that throws it.
  */
 @Suppress("TooGenericExceptionCaught")
 internal inline fun <T> runCatchingApi(block: () -> ApiResult<T>): ApiResult<T> = try {
     block()
+} catch (cancellation: CancellationException) {
+    throw cancellation
 } catch (error: Exception) {
     ApiResult.Err(mapThrowable(error))
 }
 
-internal fun mapThrowable(error: Throwable): SourceError = when {
-    error is kotlinx.serialization.SerializationException -> SourceError.NotAPlaylist
-    else -> when (error::class.simpleName) {
-        "HttpRequestTimeoutException", "SocketTimeoutException", "ConnectTimeoutException" -> SourceError.Timeout
-        "UnresolvedAddressException", "UnknownHostException" -> SourceError.UnreachableHost
-        "SerializationException", "JsonConvertException",
-        "IllegalArgumentException", "JsonDecodingException",
-        -> SourceError.NotAPlaylist
-        else -> SourceError.Unknown(error::class.simpleName)
-    }
+/**
+ * Maps a transport failure to something the UI can say a sentence about.
+ *
+ * **Matched on type, never on `simpleName`.** Both applications ship with `isMinifyEnabled`,
+ * and every class named here except the `java.*` ones is on the program classpath, so R8
+ * renames it — which quietly turned every timeout in a release build into
+ * `SourceError.Unknown("a")` while the debug build mapped it correctly. A `when (type)` is
+ * checked by the compiler and survives minification; a string comparison is neither.
+ */
+internal fun mapThrowable(error: Throwable): SourceError = when (error) {
+    is HttpRequestTimeoutException,
+    is ConnectTimeoutException,
+    is SocketTimeoutException,
+    -> SourceError.Timeout
+
+    is UnresolvedAddressException,
+    is UnknownHostException,
+    -> SourceError.UnreachableHost
+
+    is SerializationException,
+    is IllegalArgumentException,
+    -> SourceError.NotAPlaylist
+
+    // Everything else the transport can raise: a refused connection, a reset, a broken
+    // pipe. The host is the honest thing to blame and the only thing the user can act on.
+    is IOException -> SourceError.UnreachableHost
+
+    else -> SourceError.Unknown(error::class.simpleName)
 }

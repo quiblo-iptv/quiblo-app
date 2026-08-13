@@ -175,14 +175,19 @@ class TitleMetadataScanner(
      * between clearing the key and pressing it is not worth a message.
      */
     fun start(sourceId: Long) {
-        if (isRunning || !metadataRepository.isEnabled) return
-        refusal = null
-        job = scope.launch { scan(sourceId) }
+        // Synchronised because the check and the launch are two steps, and this is a singleton
+        // both frontends can reach: two presses close together each saw "not running" and each
+        // started a scan, so the same catalogue was walked twice against one rate limit.
+        synchronized(this) {
+            if (isRunning || !metadataRepository.isEnabled) return
+            refusal = null
+            job = scope.launch { scan(sourceId) }
+        }
     }
 
     /** Stops the scan. What has already been written down stays written down. */
     fun cancel() {
-        job?.cancel()
+        synchronized(this) { job }?.cancel()
     }
 
     /** Returns the reported state to [MetadataScanState.Idle] once the viewer has seen it. */

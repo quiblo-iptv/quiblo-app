@@ -252,14 +252,30 @@ private fun BannerButton(
  * [PlaybackStatus.ENDED] is the only status that means it. An error is not an ending: a stream
  * that failed halfway has its own screen with a Try again on it, and skipping to the next
  * episode instead would quietly lose the second half of the one being watched.
+ *
+ * **[playingId] is what stops the offer chasing its own tail.** Stepping to the next episode
+ * replaces the request the instant the button is pressed, and the engine is still reporting the
+ * *previous* episode's ending until the new one has been read out of the database and prepared —
+ * a gap of one database read. For that gap the request is already the next episode, `hasNext` is
+ * true of it, and the dismissal has been reset by the new request, so every other condition here
+ * says yes and the banner slides straight back in for an episode that has not started. It is
+ * short enough never to reach zero and long enough to see, and on a series watched through it
+ * happens between every pair of episodes.
+ *
+ * So the ending has to belong to the episode being asked about. An episode's playback key is its
+ * stream URL — see `PlayerViewModel.load` — which is exactly what [PlaybackState.item] carries
+ * back.
  */
 internal fun shouldOfferNextEpisode(
     request: TvPlaybackRequest,
     status: PlaybackStatus,
+    /** The id of whatever the engine currently holds, from `PlaybackState.item`. */
+    playingId: String?,
     isDismissed: Boolean,
 ): Boolean {
     if (isDismissed || status != PlaybackStatus.ENDED) return false
-    return (request as? TvPlaybackRequest.Episode)?.hasNext == true
+    val episode = request as? TvPlaybackRequest.Episode ?: return false
+    return playingId == episode.streamUrl && episode.hasNext
 }
 
 private const val ONE_SECOND_MILLIS = 1_000L

@@ -130,14 +130,14 @@ class TvEpisodeRunTest {
 
     @Test
     fun `the offer only appears at the end of an episode that has one after it`() {
-        assertTrue(shouldOfferNextEpisode(request(index = 0), PlaybackStatus.ENDED, isDismissed = false))
+        assertTrue(offerFor(request(index = 0)))
 
         // The finale. There is nothing to offer, so the banner would be a control pointing at
         // an episode that does not exist.
-        assertFalse(shouldOfferNextEpisode(request(index = 2), PlaybackStatus.ENDED, isDismissed = false))
+        assertFalse(offerFor(request(index = 2)))
 
         // Said no. It stays no until the request changes, which is a new episode.
-        assertFalse(shouldOfferNextEpisode(request(index = 0), PlaybackStatus.ENDED, isDismissed = true))
+        assertFalse(offerFor(request(index = 0), isDismissed = true))
     }
 
     @Test
@@ -152,7 +152,7 @@ class TvEpisodeRunTest {
             PlaybackStatus.ERROR,
         ).forEach { status ->
             assertFalse(
-                shouldOfferNextEpisode(request(index = 0), status, isDismissed = false),
+                offerFor(request(index = 0), status = status),
                 "$status must not offer the next episode",
             )
         }
@@ -162,8 +162,56 @@ class TvEpisodeRunTest {
     fun `a film never offers a next episode`() {
         val film = TvPlaybackRequest.Film(channel)
 
-        assertFalse(shouldOfferNextEpisode(film, PlaybackStatus.ENDED, isDismissed = false))
+        assertFalse(shouldOfferNextEpisode(film, PlaybackStatus.ENDED, playingId = null, isDismissed = false))
     }
+
+    /**
+     * The gap between pressing next and the next episode starting.
+     *
+     * Stepping replaces the request the instant the button is pressed, and the engine goes on
+     * reporting the previous episode's ending until the new one has been read out of the
+     * database and prepared. For that gap every other condition says yes — the request is an
+     * episode, it has one after it, and the dismissal was reset by the new request — so without
+     * this the banner slides straight back in for an episode that has not started, between every
+     * pair of episodes of a series watched through.
+     *
+     * **This is the offer chasing its own tail**, and it is what the engine's own id settles: an
+     * ending only means something for the episode it belongs to.
+     */
+    @Test
+    fun `the offer waits for the engine to catch up with a step`() {
+        val finished = request(index = 0)
+        val stepped = finished.steppedBy(1)!!
+
+        // The moment after the press: the request has moved, the engine has not.
+        assertFalse(
+            shouldOfferNextEpisode(stepped, PlaybackStatus.ENDED, playingId = finished.streamUrl, isDismissed = false),
+        )
+
+        // And the episode that actually ended still offers its successor, which is the case
+        // above with only the request put back — so this is a guard and not an off switch.
+        assertTrue(
+            shouldOfferNextEpisode(
+                finished,
+                PlaybackStatus.ENDED,
+                playingId = finished.streamUrl,
+                isDismissed = false,
+            ),
+        )
+    }
+
+    @Test
+    fun `an episode nothing has loaded yet offers nothing`() {
+        // Before the first prepare, and after a load that found no channel row at all.
+        assertFalse(offerFor(request(index = 0), playingId = null))
+    }
+
+    private fun offerFor(
+        request: TvPlaybackRequest.Episode,
+        status: PlaybackStatus = PlaybackStatus.ENDED,
+        playingId: String? = request.streamUrl,
+        isDismissed: Boolean = false,
+    ) = shouldOfferNextEpisode(request, status, playingId, isDismissed)
 
     private val channel = Channel(
         id = 7L,

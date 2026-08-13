@@ -84,7 +84,33 @@ class PlayerViewModel(
     private val _aspectRatioMode = MutableStateFlow(AspectRatioMode.FIT)
     val aspectRatioMode: StateFlow<AspectRatioMode> = _aspectRatioMode.asStateFlow()
 
-    private var loadedChannelId: Long? = null
+    /**
+     * The playback key of whatever [load] last accepted.
+     *
+     * The identity of *what is playing*, not of the row it came from. The guard used to be a
+     * channel id plus "and no custom URL", which meant it stopped guarding for the one case
+     * that needs it most: an episode is always played with a custom URL, so re-entering the
+     * screen — a configuration change the activity does not declare, a restore after process
+     * death, navigating back into the player — re-ran [load] and restarted the episode from
+     * the position it originally opened at, discarding both the viewer's progress and any
+     * subtitle they had attached. A key covers both cases, because a plain channel's key is
+     * its stable key and an episode's is its URL.
+     */
+    private var loadedRequest: LoadRequest? = null
+
+    /**
+     * What identifies one request to play something.
+     *
+     * All three parts matter. The channel is the row; the custom URL is which episode of it, if
+     * any; and the start position is what separates "Resume" from "Start from beginning" for the
+     * same item. Every one of them is a navigation argument, so this value is stable across a
+     * screen being recreated and different whenever the viewer actually asked for something else.
+     */
+    private data class LoadRequest(
+        val channelId: Long,
+        val customUrl: String?,
+        val startPositionMillis: Long?,
+    )
 
     /**
      * What was last handed to the engine.
@@ -142,7 +168,8 @@ class PlayerViewModel(
      * Loads the channel with [channelId] if it is not already loaded, or prepares custom stream details.
      *
      * Guarded so a recomposition, or a rotation that re-runs the effect, does not restart
-     * a stream that is already playing (AC-PLAY-07).
+     * a stream that is already playing (AC-PLAY-07). The guard is on the whole request — see
+     * [LoadRequest] — because guarding on the channel id alone silently exempted every episode.
      */
     @Suppress("LongParameterList")
     fun load(
@@ -160,8 +187,9 @@ class PlayerViewModel(
         seasonNumber: Int? = null,
         episodeNumber: Int? = null,
     ) {
-        if (loadedChannelId == channelId && customUrl == null) return
-        loadedChannelId = channelId
+        val request = LoadRequest(channelId, customUrl, startPositionMillis)
+        if (loadedRequest == request) return
+        loadedRequest = request
 
         viewModelScope.launch {
             val channel = channelRepository.findById(channelId) ?: return@launch

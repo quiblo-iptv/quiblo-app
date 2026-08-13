@@ -18,6 +18,11 @@
 
 package dev.quiblo.source.api
 
+import java.io.BufferedReader
+import java.io.InputStream
+import java.io.InputStreamReader
+import java.nio.charset.Charset
+
 /**
  * Retrieves the raw bytes behind a location, whatever the transport.
  *
@@ -35,24 +40,54 @@ interface ContentFetcher {
     fun handles(location: String): Boolean
 
     /**
-     * Retrieves [location] in full.
+     * Retrieves [location] and hands the open body to [read].
      *
-     * The body is read into memory. At the 20,000-entry scale this project targets
-     * (AC-PL-05) a playlist is a few megabytes of text, which is cheaper to hold briefly
-     * than the complexity of keeping a streaming HTTP response open across the parse.
+     * **The body is a stream, and that is the whole shape of this method.** It used to be
+     * returned as a `String`, which undid the one property `M3uParser` is built around: the
+     * parser reads line by line so a large playlist never exists twice in memory, but by the
+     * time it was handed a `StringReader` the entire playlist was already on the heap as a
+     * Java `String` — UTF-16, so roughly twice the bytes that came off the wire. Against the
+     * 67,567-channel account this project is tested on, that is tens of megabytes allocated to
+     * feed a parser written specifically not to need them.
+     *
+     * Passing a block rather than returning the stream is what lets the transport close the
+     * response afterwards, which matters more here than usual: leaving a connection open to a
+     * panel is exactly the sort of thing that gets an account noticed.
+     *
+     * [read] is called at most once, and only on success.
      */
-    suspend fun fetch(location: String): FetchResult
+    suspend fun <T> fetch(location: String, read: suspend (FetchedBody) -> T): FetchResult<T>
+}
+
+/**
+ * An open playlist body, plus whatever the transport was willing to say about it.
+ *
+ * Valid only inside the [ContentFetcher.fetch] block that supplied it; the underlying stream
+ * is closed on the way out.
+ *
+ * @property contentType the declared MIME type, when the transport supplies one. Used to
+ *   detect a provider serving an HTML page in place of a playlist (AC-PL-07).
+ */
+class FetchedBody(
+    val contentType: String?,
+    private val stream: InputStream,
+    private val charset: Charset = Charsets.UTF_8,
+) {
+    /**
+     * The body as characters, buffered.
+     *
+     * Buffered because the caller needs `mark`/`reset` to sniff the first few characters
+     * before committing to a parse, and because reading a stream a character at a time across
+     * a network socket is its own kind of slow.
+     */
+    fun reader(): BufferedReader = BufferedReader(InputStreamReader(stream, charset))
 }
 
 /** The outcome of a [ContentFetcher.fetch]. */
-sealed interface FetchResult {
+sealed interface FetchResult<out T> {
 
-    /**
-     * @param body the retrieved text.
-     * @param contentType the declared MIME type, when the transport supplies one. Used
-     *   to detect a provider serving an HTML page in place of a playlist (AC-PL-07).
-     */
-    data class Success(val body: String, val contentType: String? = null) : FetchResult
+    /** @property value whatever the caller's block made of the body. */
+    data class Success<T>(val value: T) : FetchResult<T>
 
-    data class Failure(val error: SourceError) : FetchResult
+    data class Failure(val error: SourceError) : FetchResult<Nothing>
 }

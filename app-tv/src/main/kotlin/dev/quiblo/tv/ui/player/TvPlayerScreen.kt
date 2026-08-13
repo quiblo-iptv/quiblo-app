@@ -178,7 +178,12 @@ fun TvPlayerScreen(
     }
 
     val episode = request as? TvPlaybackRequest.Episode
-    val isOfferingNextEpisode = shouldOfferNextEpisode(request, state.status, nextEpisodeDismissed)
+    val isOfferingNextEpisode = shouldOfferNextEpisode(
+        request = request,
+        status = state.status,
+        playingId = state.item?.id,
+        isDismissed = nextEpisodeDismissed,
+    )
 
     /*
      * Where the remote is, in every state this screen has.

@@ -15,6 +15,8 @@ Formatted after [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and ve
 
 ## Unreleased
 
+## 0.14.2
+
 ### Changed
 
 - **The television's text boxes are plain boxes now.** They were Material's outlined fields,

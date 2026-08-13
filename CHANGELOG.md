@@ -51,6 +51,11 @@ Formatted after [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and ve
 
 - **A large playlist is parsed off the screen's thread and read as it arrives** rather than held
   in memory whole. A 67,000-entry playlist was parsed on the frame you were looking at.
+- **The next-episode banner no longer flickers back on after starting the next episode.** Pressing
+  next, or letting the countdown run out, replaced the episode straight away while the player was
+  still reporting the previous one as finished — so for the moment in between, the banner slid
+  back in offering the episode that had just started. It never got far enough to do anything; it
+  looked wrong, and it happened between every pair of episodes of a series watched through.
 
 ## 0.13.0
 

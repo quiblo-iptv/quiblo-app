@@ -1,8 +1,8 @@
 [versions]
 # Build
 agp = "9.3.1"
-kotlin = "2.3.21"
-ksp = "2.3.10"
+kotlin = "2.4.10"
+ksp = "2.3.11"
 compileSdk = "37"
 targetSdk = "37"
 minSdk = "30"

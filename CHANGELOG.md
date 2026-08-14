@@ -24,6 +24,8 @@ Formatted after [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and ve
   tab says so instead of showing a list ordered by nothing. It costs no extra request to the
   provider: the dates arrive inside the film and series lists the app already fetches.
 
+## 0.15.1
+
 ### Fixed
 
 - **The television's launcher tile is a banner rather than a cropped icon.** It was the square

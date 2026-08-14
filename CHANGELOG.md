@@ -15,6 +15,8 @@ Formatted after [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and ve
 
 ## Unreleased
 
+## 0.16.0
+
 ### Added
 
 - **A Recently Added tab on the television**, between Live and Movies, holding the newest films

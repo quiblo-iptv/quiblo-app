@@ -286,6 +286,7 @@ class XtreamSource internal constructor(
                     logoUrl = dto.streamIcon,
                     groupTitle = categories.titleFor(dto.categoryId),
                     categoryIndex = categories.indexFor(dto.categoryId),
+                    addedAtEpochMillis = dto.addedEpochSeconds?.toEpochMillis(),
                 )
             }
         }
@@ -318,6 +319,7 @@ class XtreamSource internal constructor(
                     groupTitle = categories.titleFor(dto.categoryId),
                     categoryIndex = categories.indexFor(dto.categoryId),
                     providerStreamId = id,
+                    addedAtEpochMillis = dto.effectiveAddedEpochSeconds?.toEpochMillis(),
                 )
             }
         }
@@ -549,6 +551,16 @@ class XtreamSource internal constructor(
      */
     private fun List<CategoryDto>.indexFor(categoryId: String?): Int? =
         indexOfFirst { it.categoryId == categoryId }.takeIf { it >= 0 }
+
+    /**
+     * A panel's unix seconds as this app's epoch millis, or null when the value is unusable.
+     *
+     * Zero and negatives are rejected rather than carried: a panel that sends `"added": "0"`
+     * — or an empty string, which the flexible serializer reads as zero — means "I do not
+     * know", and the difference between that and "added on 1 January 1970" is the difference
+     * between a title being absent from a newest-first row and being pinned to the end of it.
+     */
+    private fun Long.toEpochMillis(): Long? = takeIf { it > 0L }?.times(MILLIS_PER_SECOND)
 
     private fun List<CategoryDto>.titleFor(categoryId: String?): String =
         firstOrNull { it.categoryId == categoryId }

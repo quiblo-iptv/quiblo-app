@@ -56,6 +56,9 @@ dependencies {
     testImplementation(libs.room.testing)
     testImplementation(libs.robolectric)
     testImplementation(libs.androidx.test.junit)
+    // The queries themselves are SQL, so the only thing that can prove one orders and filters
+    // as claimed is SQLite running it. An in-memory Room database on Robolectric is that.
+    testImplementation(libs.kotlinx.coroutines.test)
     testRuntimeOnly(libs.junit.vintage.engine)
     api(projects.core.model)
     implementation(projects.core.common)

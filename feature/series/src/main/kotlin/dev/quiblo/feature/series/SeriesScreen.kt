@@ -41,7 +41,7 @@ fun SeriesScreen(
 ) {
     val viewModel: BrowseViewModel = koinViewModel(
         key = "series",
-        parameters = { browseParams(MediaKind.SERIES, favoritesOnly = false) },
+        parameters = { browseParams(MediaKind.SERIES) },
     )
     BrowseScreen(
         viewModel = viewModel,

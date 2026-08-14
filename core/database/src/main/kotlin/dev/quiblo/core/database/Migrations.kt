@@ -469,3 +469,27 @@ val MIGRATION_14_15 = object : Migration(14, 15) {
         )
     }
 }
+
+/**
+ * When the provider added each film and series, and the index the newest-first row reads.
+ *
+ * **Nothing backfills the column, and nothing needs to.** `ChannelDao.replaceForSource` deletes
+ * every row for a source and rewrites it on each refresh, so the nulls this migration leaves
+ * behind survive exactly until the viewer next refreshes their playlist — at which point the
+ * dates arrive from the same `get_vod_streams` and `get_series` responses the app was already
+ * making. A migration that tried to invent dates for existing rows would be inventing the one
+ * thing the screen above it promises is true.
+ *
+ * The column is added rather than the table rebuilt, which `MIGRATION_10_11` had to do: adding
+ * a nullable column with no default is the one schema change SQLite performs in place, so no
+ * channel row is copied and nobody's catalogue is at risk during the upgrade.
+ */
+val MIGRATION_15_16 = object : Migration(15, 16) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE `channels` ADD COLUMN `addedAtEpochMillis` INTEGER")
+        db.execSQL(
+            "CREATE INDEX IF NOT EXISTS `index_channels_sourceId_kind_addedAtEpochMillis` " +
+                "ON `channels` (`sourceId`, `kind`, `addedAtEpochMillis`)",
+        )
+    }
+}

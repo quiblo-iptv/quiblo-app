@@ -239,6 +239,42 @@ class XtreamSourceTest {
     }
 
     @Test
+    fun `films and series carry the date the panel added them, in millis`() = runTest {
+        val result = sourceServing(
+            mapOf(
+                null to authOk,
+                "get_live_streams" to "[]",
+                "get_vod_streams" to """[{"stream_id":"7","name":"A Movie","added":"1700000000"}]""",
+                "get_series" to """[{"series_id":9,"name":"A Series","last_modified":1700003600}]""",
+            ),
+        ).load(request)
+
+        val channels = assertInstanceOf(SourceResult.Success::class.java, result).channels
+        assertEquals(1_700_000_000_000L, channels.first { it.kind == MediaKind.VOD }.addedAtEpochMillis)
+        assertEquals(1_700_003_600_000L, channels.first { it.kind == MediaKind.SERIES }.addedAtEpochMillis)
+    }
+
+    @Test
+    fun `a panel that gives no date leaves it null rather than 1970`() = runTest {
+        val result = sourceServing(
+            mapOf(
+                null to authOk,
+                "get_live_streams" to "[]",
+                // No field at all, and the zero a panel sends when it has nothing to say. Both
+                // must reach the catalogue as "unknown": a zero would sort as a real date and
+                // pin these titles to the end of the newest-first row instead of leaving them
+                // out of it.
+                "get_vod_streams" to """[{"stream_id":"7","name":"A Movie"}]""",
+                "get_series" to """[{"series_id":9,"name":"A Series","added":"0"}]""",
+            ),
+        ).load(request)
+
+        val channels = assertInstanceOf(SourceResult.Success::class.java, result).channels
+        assertNull(channels.first { it.kind == MediaKind.VOD }.addedAtEpochMillis)
+        assertNull(channels.first { it.kind == MediaKind.SERIES }.addedAtEpochMillis)
+    }
+
+    @Test
     @DisplayName("AC-XT-04 — credentials never appear in an error value")
     fun `errors carry no credential material`() = runTest {
         val result = sourceServing(mapOf(null to "{ this is not json"), status = HttpStatusCode.OK).load(request)

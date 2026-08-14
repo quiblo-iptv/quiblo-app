@@ -132,6 +132,26 @@ class ChannelRepository(
             .hidingUnreadableScripts(hiddenScripts) { it.name }
             .flowOn(browseDispatcher)
 
+    /**
+     * The newest films and series a provider has added, in one list.
+     *
+     * The script filter applies, exactly as it does to browse: this is a catalogue feed, and a
+     * viewer who has hidden a writing system did so to stop meeting titles in it. Favourites
+     * are the one feed that ignores the filter, because those are titles chosen by hand.
+     *
+     * @param limit how many to keep. The caller's cap, not a page size — nothing pages this.
+     */
+    fun observeRecentlyAdded(sourceId: Long, limit: Int): Flow<List<Channel>> =
+        profiles.activeProfile.flatMapLatest { profile ->
+            channelDao.observeRecentlyAdded(
+                profileId = profile?.id ?: Profile.NONE_ID,
+                sourceId = sourceId,
+                limit = limit,
+            )
+        }.map { rows -> rows.map { it.channel.toDomain(isFavorite = it.isFavorite) } }
+            .hidingUnreadableScripts(hiddenScripts) { it.name }
+            .flowOn(browseDispatcher)
+
     // Favourites are not filtered, and that is the point — see [hidingUnreadableScripts].
     /** Favourites across every content type (AC-FAV-01). */
     fun observeFavorites(sourceId: Long, query: String = ""): Flow<List<Channel>> =

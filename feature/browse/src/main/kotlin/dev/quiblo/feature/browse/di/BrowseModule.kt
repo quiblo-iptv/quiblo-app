@@ -20,6 +20,7 @@ package dev.quiblo.feature.browse.di
 
 import dev.quiblo.core.model.MediaKind
 import dev.quiblo.feature.browse.BrowseFeed
+import dev.quiblo.feature.browse.BrowseScope
 import dev.quiblo.feature.browse.BrowseViewModel
 import dev.quiblo.feature.browse.SearchViewModel
 import org.koin.core.module.Module
@@ -30,8 +31,8 @@ import org.koin.dsl.module
 /**
  * Wiring owned by `:feature:browse`.
  *
- * One ViewModel definition serves four screens; the caller supplies the content kind and
- * whether to restrict to favourites.
+ * One ViewModel definition serves five screens; the caller supplies the content kind and
+ * which feed of it to show.
  */
 val browseModule: Module = module {
     viewModel { (feed: BrowseFeed) ->
@@ -57,5 +58,15 @@ val browseModule: Module = module {
 }
 
 /** Koin parameters for a browse screen. */
-fun browseParams(kind: MediaKind, favoritesOnly: Boolean = false) =
-    parametersOf(BrowseFeed(kind = kind, favoritesOnly = favoritesOnly))
+fun browseParams(kind: MediaKind, scope: BrowseScope = BrowseScope.CATALOGUE) =
+    parametersOf(BrowseFeed(kind = kind, scope = scope))
+
+/**
+ * Koin parameters for the newest-first feed.
+ *
+ * Its own function because [BrowseFeed.kind] means nothing in this scope — the feed spans films
+ * and series at once — and every branch that reads `kind` is already excluded by the scope. The
+ * value below is a placeholder, and this is the one place it exists rather than a puzzle at each
+ * call site about why a "recently added" screen declares itself as films.
+ */
+fun recentlyAddedParams() = browseParams(MediaKind.VOD, BrowseScope.RECENTLY_ADDED)

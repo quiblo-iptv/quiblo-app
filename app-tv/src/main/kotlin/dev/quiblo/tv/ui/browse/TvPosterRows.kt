@@ -64,6 +64,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.compose.SubcomposeAsyncImage
 import dev.quiblo.core.model.Channel
 import dev.quiblo.core.model.MediaKind
+import dev.quiblo.feature.browse.BrowseScope
 import dev.quiblo.feature.browse.BrowseViewModel
 import dev.quiblo.feature.browse.RatingBadge
 import dev.quiblo.feature.browse.di.browseParams
@@ -104,7 +105,12 @@ fun TvPosterRows(
         // rather than sharing one and fighting over the filter.
         // not display text: a Koin scope key, never rendered.
         key = if (favouritesOnly) "tv-favourites" else "tv-${kind.name}",
-        parameters = { browseParams(kind, favoritesOnly = favouritesOnly) },
+        // A boolean here rather than the scope enum: this composable draws a catalogue or a
+        // favourites list and has no third rendering, so taking the wider type would let a
+        // caller ask it for a feed it cannot draw.
+        parameters = {
+            browseParams(kind, if (favouritesOnly) BrowseScope.FAVOURITES else BrowseScope.CATALOGUE)
+        },
     )
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val scope = rememberCoroutineScope()

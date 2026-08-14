@@ -298,6 +298,49 @@ class XtreamDtoTest {
         }
 
         @Test
+        fun `reads the date a film was added, however the panel typed it`() {
+            // A string on most panels, a number on some. Both are the same fact.
+            assertEquals(
+                1_700_000_000L,
+                json.decodeFromString<VodStreamDto>("""{"added":"1700000000"}""").addedEpochSeconds,
+            )
+            assertEquals(
+                1_700_000_000L,
+                json.decodeFromString<VodStreamDto>("""{"added":1700000000}""").addedEpochSeconds,
+            )
+        }
+
+        @Test
+        fun `a film with no usable date reads as null, never as a number`() {
+            // Absent, empty and nonsense all mean "this panel does not say". None of them may
+            // become a zero here: downstream a zero is 1 January 1970, which sorts as a real
+            // date into a list that promises to be ordered by one.
+            assertNull(json.decodeFromString<VodStreamDto>("""{"name":"Film"}""").addedEpochSeconds)
+            assertNull(json.decodeFromString<VodStreamDto>("""{"added":"not a date"}""").addedEpochSeconds)
+        }
+
+        @Test
+        fun `a series prefers added over last_modified`() {
+            // `last_modified` moves when a cover is re-scraped or a category renamed, which is
+            // not a new episode. `added` is set deliberately, so it wins where both are sent.
+            val both = json.decodeFromString<SeriesDto>(
+                """{"series_id":"3","added":"1700000000","last_modified":"1800000000"}""",
+            )
+
+            assertEquals(1_700_000_000L, both.effectiveAddedEpochSeconds)
+        }
+
+        @Test
+        fun `a series falls back to last_modified, and to nothing at all`() {
+            val modifiedOnly = json.decodeFromString<SeriesDto>(
+                """{"series_id":"3","last_modified":1800000000}""",
+            )
+
+            assertEquals(1_800_000_000L, modifiedOnly.effectiveAddedEpochSeconds)
+            assertNull(json.decodeFromString<SeriesDto>("""{"series_id":"3"}""").effectiveAddedEpochSeconds)
+        }
+
+        @Test
         fun `parses episode info`() {
             val parsed = json.decodeFromString<EpisodeDto>(
                 """{"id":"5","title":"Ep","info":{"movie_image":"still.invalid/a.png"}}""",

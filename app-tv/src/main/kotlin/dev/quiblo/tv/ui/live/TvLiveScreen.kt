@@ -86,7 +86,7 @@ fun TvLiveScreen(
     modifier: Modifier = Modifier,
     viewModel: BrowseViewModel = koinViewModel(
         key = "tv-live",
-        parameters = { browseParams(MediaKind.LIVE, favoritesOnly = false) },
+        parameters = { browseParams(MediaKind.LIVE) },
     ),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()

@@ -22,13 +22,17 @@ import app.cash.turbine.test
 import dev.quiblo.core.data.CategoryRepository
 import dev.quiblo.core.data.ChannelLogoRepository
 import dev.quiblo.core.data.ChannelRepository
+import dev.quiblo.core.data.GuideOutcome
 import dev.quiblo.core.data.GuideRepository
 import dev.quiblo.core.data.SourceRepository
 import dev.quiblo.core.data.TitleMetadataRepository
 import dev.quiblo.core.data.WatchHistoryRepository
+import dev.quiblo.core.model.Channel
 import dev.quiblo.core.model.MediaKind
 import dev.quiblo.core.model.Source
 import dev.quiblo.core.model.SourceKind
+import io.mockk.coEvery
+import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
@@ -41,6 +45,7 @@ import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.jupiter.api.AfterEach
+import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 
@@ -121,6 +126,84 @@ class BrowseViewModelTest {
         viewModel.uiState.drain()
 
         verify { guideRepository.observeNowPlaying(SOURCE.id) }
+    }
+
+    @Test
+    fun `a fresh live list asks for the top of itself without anything being focused`() = runTest {
+        // The reported defect. On the television nothing has focus when Live opens, and the
+        // guide was fetched only for a row focus had rested on — so every row drew blank,
+        // indefinitely, for anybody who did not happen to stop on one.
+        every { channelRepository.observeBrowse(any(), any(), any(), any(), any()) } returns
+            flowOf(liveChannels(count = 30))
+
+        viewModelFor(BrowseFeed(MediaKind.LIVE)).uiState.drain()
+
+        coVerify(exactly = 10) { guideRepository.refreshGuideFor(any()) }
+    }
+
+    @Test
+    fun `the prefetch is bounded and does not repeat for a list it has already seen`() = runTest {
+        // The bound is the reason this is safe to do at all: "per visible row" against a
+        // 20,000-channel account is how this project's provider blocked it, twice. A list that
+        // re-emits — a write to the table, a keystroke, a category change — must cost nothing.
+        every { channelRepository.observeBrowse(any(), any(), any(), any(), any()) } returns
+            flowOf(liveChannels(count = 500), liveChannels(count = 500))
+
+        viewModelFor(BrowseFeed(MediaKind.LIVE)).uiState.drain()
+
+        coVerify(exactly = 10) { guideRepository.refreshGuideFor(any()) }
+    }
+
+    @Test
+    fun `the films feed prefetches nothing, because a poster has nowhere to put a programme`() = runTest {
+        every { channelRepository.observeBrowse(any(), any(), any(), any(), any()) } returns
+            flowOf(liveChannels(count = 30).map { it.copy(kind = MediaKind.VOD) })
+
+        viewModelFor(BrowseFeed(MediaKind.VOD)).uiState.drain()
+
+        coVerify(exactly = 0) { guideRepository.refreshGuideFor(any()) }
+    }
+
+    @Test
+    fun `a refusing panel reaches the screen instead of looking like an empty guide`() = runTest {
+        every { channelRepository.observeBrowse(any(), any(), any(), any(), any()) } returns
+            flowOf(liveChannels(count = 3))
+        coEvery { guideRepository.refreshGuideFor(any()) } returns GuideOutcome.BLOCKED
+
+        val state = viewModelFor(BrowseFeed(MediaKind.LIVE)).uiState
+        state.drain()
+
+        assertEquals(GuideOutcome.BLOCKED, state.value.guideOutcome)
+    }
+
+    @Test
+    fun `one channel with listings is enough to stop reporting trouble`() = runTest {
+        // Most channels on a large account have no listing, and a guide that reported itself
+        // broken on meeting the first of them would be wrong about every working account.
+        every { channelRepository.observeBrowse(any(), any(), any(), any(), any()) } returns
+            flowOf(liveChannels(count = 3))
+        coEvery { guideRepository.refreshGuideFor(any()) } returnsMany listOf(
+            GuideOutcome.EMPTY,
+            GuideOutcome.STORED,
+            GuideOutcome.EMPTY,
+        )
+
+        val state = viewModelFor(BrowseFeed(MediaKind.LIVE)).uiState
+        state.drain()
+
+        assertEquals(GuideOutcome.STORED, state.value.guideOutcome)
+    }
+
+    private fun liveChannels(count: Int) = (1..count).map { index ->
+        Channel(
+            id = index.toLong(),
+            sourceId = SOURCE.id,
+            name = "Channel $index",
+            streamUrl = "http://host.invalid/$index",
+            kind = MediaKind.LIVE,
+            tvgId = "key-$index",
+            providerStreamId = index.toString(),
+        )
     }
 
     /**

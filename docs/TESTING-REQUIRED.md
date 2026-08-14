@@ -348,6 +348,48 @@ row below is a question about how the screen reads and not about whether the con
 
 ---
 
+## A9 — the live guide, from [`017`](../agile/017_Recently_Added_and_the_Live_Guide_of_Quiblo.md) Part B
+
+**Where:** the television. Reported as "EPG not working for live channels", on an Xtream panel.
+The fetch and parse path was not the fault and is unchanged; what changed is *when* it is asked
+and *what is said when it comes back empty*. **None of it has been seen against a real panel** —
+`STOPPERS.md` S2.
+
+### A9.1 — the list answers itself
+
+| | |
+| :---- | :---- |
+| **What to look at** | Open Live and put the remote down. Do not press anything |
+| **Passes if** | The top ten or so channels grow a programme line within a second or two, unprompted |
+| **Fails if** | Every row is still blank after a few seconds — that is the reported defect, unfixed |
+| **Why it is here** | The guide was fetched only for a row focus had rested on for 450ms, and nothing has focus when the screen opens |
+
+### A9.2 — the request count, which is the reason it was not done this way before
+
+| | |
+| :---- | :---- |
+| **What to look at** | Open Live, leave it, come back. Then hold Down and fly through the list. Then use the rest of the app |
+| **Passes if** | Nothing slows, series details still open, and the account is not refused |
+| **Fails if** | The provider starts refusing — the bound is ten per list per session, and a block traced here means the dedupe is not holding |
+| **Why it is here** | This is the failure this project has already had **twice**. It outranks the feature |
+
+### A9.3 — the two sentences
+
+| | |
+| :---- | :---- |
+| **What to look at** | The bottom of the Live screen when no programmes appear |
+| **Passes if** | A refusing provider produces the "not answering guide requests" line, and a provider with no listings produces the "no programme listings" line |
+| **Fails if** | Either says nothing, or an M3U playlist shows one of them — a playlist has never carried listings and saying so every visit is nagging |
+| **Why it is here** | Every one of these used to be a blank line, which reads as the app being broken and is what got reported |
+
+### A9.4 — what has *not* been built, so nobody looks for it
+
+**There is still no guide of any kind for an M3U playlist**, and no amount of this work changes
+that: `M3uSource` implements no guide interface and nothing in the repository parses XMLTV. If a
+guide is wanted for a playlist, that is `url-tvg`, gunzip, a parser and a cache — its own round.
+
+---
+
 ## B — Owed from `012`, still owed
 
 `012` built twelve defect fixes on 2026-08-10. **Two were swept and rejected. Ten have never

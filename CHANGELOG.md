@@ -17,6 +17,17 @@ Formatted after [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and ve
 
 ### Fixed
 
+- **The television's channel list shows what is on now without being prodded.** The guide was
+  fetched only for the row the remote had come to rest on, and nothing has focus when Live opens
+  — so the whole list drew with no programme against any channel until you happened to stop on
+  one. The top of a fresh list is now asked about straight away. It is a fixed ten channels and
+  no more, because "fetch for every visible row" against a large account is what gets a provider
+  to start refusing an app.
+- **A guide that is not arriving says why.** A provider refusing guide requests, and a provider
+  that simply has no listings for your channels, both used to look exactly like a blank line —
+  which reads as Quiblo being broken. They are now two different sentences, and one of them is
+  worth taking to your provider.
+
 - **The television's launcher tile is a banner rather than a cropped icon.** It was the square
   app icon dropped into a 16:9 frame, which left a dark bar down each side and a mark stretched
   to the top and bottom edges. It is now drawn at 320x180 with the name beside the mark, which

@@ -42,6 +42,11 @@
 
     <string name="tv_placeholder">%1$s content appears here.</string>
     <string name="tv_guide_none">No listings for this channel.</string>
+    <!-- The two guide failures a viewer can act on, and the reason they are worded as
+         statements about the provider rather than about the app: both used to render as a
+         blank line, which reads as Quiblo being broken and is the thing that got reported. -->
+    <string name="tv_guide_blocked">Your provider is not answering guide requests at the moment. It usually starts again on its own within a quarter of an hour.</string>
+    <string name="tv_guide_none_from_provider">Your provider has no programme listings for these channels.</string>
     <string name="tv_guide_on_now">On now</string>
     <string name="tv_guide_time">%1$s – %2$s</string>
     <string name="tv_no_channels">No channels yet. Add a playlist on your phone and import it here.</string>

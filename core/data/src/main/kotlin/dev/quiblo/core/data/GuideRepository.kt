@@ -37,6 +37,33 @@ import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
 
 /**
+ * What came of asking a panel for one channel's guide.
+ *
+ * **This was a `Boolean` and that was the defect.** Five different things produced `false` —
+ * the source cannot supply a guide at all, the panel is refusing this app, the panel answered
+ * with nothing, the request failed, and the channel carries no stream id — and every screen
+ * above rendered all five as a blank line. A viewer looking at that blank line cannot tell
+ * whether to wait, to change something, or to telephone their provider, and neither could
+ * anybody reading a bug report about it.
+ */
+enum class GuideOutcome {
+    /** Listings came back and are cached. The guide works. */
+    STORED,
+
+    /** The panel answered and had nothing for this channel — usually no `epg_channel_id`. */
+    EMPTY,
+
+    /** The panel is refusing us, or we are inside the backoff from the last time it did. */
+    BLOCKED,
+
+    /** This source has no guide to give. An M3U playlist is always this. */
+    UNSUPPORTED,
+
+    /** Asked, and it did not work for some other reason. */
+    FAILED,
+}
+
+/**
  * The electronic programme guide.
  *
  * Guide data is fetched per channel, on demand, and cached. An account with 20,000
@@ -115,7 +142,7 @@ class GuideRepository(
      * The same shape as [refreshGuideFor] and deliberately a separate entry point: this one is
      * a heavier call and is made on an explicit request from the viewer, never from a scroll.
      */
-    suspend fun refreshFullGuideFor(channel: Channel): Boolean =
+    suspend fun refreshFullGuideFor(channel: Channel): GuideOutcome =
         refresh(channel) { source, guideSource, streamId ->
             guideSource.fullGuideFor(
                 request = SourceRequest(channel.sourceId, source.url),
@@ -127,12 +154,13 @@ class GuideRepository(
     /**
      * Fetches and caches the guide for one channel, if its source can supply one.
      *
-     * Silently does nothing for a source with no guide capability, which is how an M3U
-     * source ends up with no guide UI rather than an empty placeholder (AC-EPG-04).
+     * Does nothing for a source with no guide capability, which is how an M3U source ends up
+     * with no guide UI rather than an empty placeholder (AC-EPG-04).
      *
-     * @return true when programme data was stored.
+     * @return which of the several different nothings happened. It used to return `false` for
+     *   all of them, and a screen cannot tell a viewer anything useful from that.
      */
-    suspend fun refreshGuideFor(channel: Channel): Boolean =
+    suspend fun refreshGuideFor(channel: Channel): GuideOutcome =
         refresh(channel) { source, guideSource, streamId ->
             guideSource.guideFor(
                 request = SourceRequest(channel.sourceId, source.url),
@@ -151,11 +179,13 @@ class GuideRepository(
     private suspend fun refresh(
         channel: Channel,
         fetch: suspend (Source, GuideSource, String) -> GuideResult,
-    ): Boolean {
-        val streamId = channel.providerStreamId ?: return false
-        if (now() < blockedUntilEpochMillis) return false
-        val source = sourceDao.findById(channel.sourceId)?.toDomain() ?: return false
-        val guideSource = mediaSources[source.kind] as? GuideSource ?: return false
+    ): GuideOutcome {
+        // A channel the provider gave no stream id for, and a source that has no guide to
+        // give, are both "there was never going to be a guide here" rather than a failure.
+        val streamId = channel.providerStreamId ?: return GuideOutcome.UNSUPPORTED
+        if (now() < blockedUntilEpochMillis) return GuideOutcome.BLOCKED
+        val source = sourceDao.findById(channel.sourceId)?.toDomain() ?: return GuideOutcome.FAILED
+        val guideSource = mediaSources[source.kind] as? GuideSource ?: return GuideOutcome.UNSUPPORTED
 
         return when (val result = fetch(source, guideSource, streamId)) {
             is GuideResult.Failure -> {
@@ -165,8 +195,10 @@ class GuideRepository(
                 // fire a request per visible row and extending the block.
                 if (result.error == SourceError.ProviderBlocked) {
                     blockedUntilEpochMillis = now() + BLOCK_BACKOFF_MILLIS
+                    GuideOutcome.BLOCKED
+                } else {
+                    GuideOutcome.FAILED
                 }
-                false
             }
 
             is GuideResult.Success -> {
@@ -177,7 +209,7 @@ class GuideRepository(
                     channelKey = channel.stableKey,
                     programmes = result.programmes.map { it.toEntity() },
                 )
-                result.programmes.isNotEmpty()
+                if (result.programmes.isEmpty()) GuideOutcome.EMPTY else GuideOutcome.STORED
             }
         }
     }

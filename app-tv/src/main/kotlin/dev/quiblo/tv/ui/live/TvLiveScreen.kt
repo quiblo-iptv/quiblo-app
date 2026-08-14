@@ -18,6 +18,7 @@
 
 package dev.quiblo.tv.ui.live
 
+import androidx.annotation.StringRes
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -62,6 +63,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.compose.SubcomposeAsyncImage
+import dev.quiblo.core.data.GuideOutcome
 import dev.quiblo.core.model.Channel
 import dev.quiblo.core.model.MediaKind
 import dev.quiblo.core.model.Programme
@@ -170,6 +172,20 @@ fun TvLiveScreen(
             }
         }
 
+        // Along the bottom, under the list rather than in place of it. A guide that is not
+        // arriving does not stop anyone watching television, so it is a footnote and never a
+        // screen of its own — and this app has no dialogs to put it in either.
+        guideTrouble(state.guideOutcome)?.let { message ->
+            Text(
+                text = stringResource(message),
+                color = Color.White.copy(alpha = 0.55f),
+                style = MaterialTheme.typography.bodyMedium,
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .padding(top = 12.dp),
+            )
+        }
+
         // Over the list rather than instead of it: this app has no dialogs, and the
         // listing a viewer opened is easier to read with the channel it belongs to still
         // on screen behind it.
@@ -182,6 +198,28 @@ fun TvLiveScreen(
             )
         }
     }
+}
+
+/**
+ * What to say about a guide that is not arriving, or null when there is nothing to say.
+ *
+ * **Only two of the five outcomes get a sentence, and that is the design.** `STORED` means the
+ * guide works. `UNSUPPORTED` is every M3U playlist and is not news — a playlist has never
+ * carried listings and telling somebody so on every visit is nagging, not information.
+ * `FAILED` is a network that is already visibly failing at everything else.
+ *
+ * The two that are left are the two a viewer can act on: their provider is refusing this app,
+ * or their provider has no listings for these channels. Those are different conversations to
+ * have with a provider, and until now both looked exactly like the guide being broken.
+ *
+ * A separate function rather than a `when` inside the layout so the mapping can be read — and
+ * argued with — without reading Compose.
+ */
+@StringRes
+private fun guideTrouble(outcome: GuideOutcome?): Int? = when (outcome) {
+    GuideOutcome.BLOCKED -> R.string.tv_guide_blocked
+    GuideOutcome.EMPTY -> R.string.tv_guide_none_from_provider
+    GuideOutcome.STORED, GuideOutcome.UNSUPPORTED, GuideOutcome.FAILED, null -> null
 }
 
 /** Whatever this screen has to say when it has no list to draw. */

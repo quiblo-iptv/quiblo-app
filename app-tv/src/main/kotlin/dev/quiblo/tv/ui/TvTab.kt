@@ -36,6 +36,16 @@ import dev.quiblo.tv.R
 internal enum class TvTab(@param:StringRes val labelRes: Int, val isIconOnly: Boolean = false) {
     SEARCH(R.string.tv_tab_search, isIconOnly = true),
     LIVE(R.string.tv_tab_live),
+
+    /**
+     * What the provider put on the service most recently, films and series together.
+     *
+     * Ahead of the catalogues rather than after them, because it is the only tab whose
+     * contents change between one evening and the next: Movies and Series are the same
+     * thousands of titles in the same provider order every time they are opened, and a viewer
+     * with nothing particular in mind has no reason to walk past this one to reach them.
+     */
+    RECENTLY_ADDED(R.string.tv_tab_recently_added),
     MOVIES(R.string.tv_tab_movies),
     SERIES(R.string.tv_tab_series),
     FAVOURITES(R.string.tv_tab_favourites),

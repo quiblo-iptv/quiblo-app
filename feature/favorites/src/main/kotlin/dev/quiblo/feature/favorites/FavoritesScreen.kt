@@ -23,6 +23,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import dev.quiblo.core.model.Channel
 import dev.quiblo.core.model.MediaKind
+import dev.quiblo.feature.browse.BrowseScope
 import dev.quiblo.feature.browse.BrowseScreen
 import dev.quiblo.feature.browse.BrowseViewModel
 import dev.quiblo.feature.browse.di.browseParams
@@ -41,7 +42,7 @@ fun FavoritesScreen(
 ) {
     val viewModel: BrowseViewModel = koinViewModel(
         key = "favorites",
-        parameters = { browseParams(MediaKind.LIVE, favoritesOnly = true) },
+        parameters = { browseParams(MediaKind.LIVE, BrowseScope.FAVOURITES) },
     )
     BrowseScreen(
         viewModel = viewModel,

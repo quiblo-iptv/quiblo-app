@@ -61,6 +61,7 @@ internal fun ChannelEntity.toDomain(isFavorite: Boolean = false): Channel = Chan
     categoryIndex = categoryIndex,
     isFavorite = isFavorite,
     providerStreamId = providerStreamId,
+    addedAtEpochMillis = addedAtEpochMillis,
 )
 
 /**
@@ -80,6 +81,7 @@ internal fun Channel.toEntity(sortIndex: Int): ChannelEntity = ChannelEntity(
     sortIndex = sortIndex,
     categoryIndex = categoryIndex,
     providerStreamId = providerStreamId,
+    addedAtEpochMillis = addedAtEpochMillis,
 )
 
 internal fun ResumePositionEntity.toDomain(): HistoryEntry = HistoryEntry(

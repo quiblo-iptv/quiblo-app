@@ -41,7 +41,7 @@ fun VodScreen(
 ) {
     val viewModel: BrowseViewModel = koinViewModel(
         key = "vod",
-        parameters = { browseParams(MediaKind.VOD, favoritesOnly = false) },
+        parameters = { browseParams(MediaKind.VOD) },
     )
     BrowseScreen(
         viewModel = viewModel,

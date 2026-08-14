@@ -222,6 +222,33 @@ interface ChannelDao {
     ): List<ChannelWithFavorite>
 
     /**
+     * The films and series a provider added most recently, newest first.
+     *
+     * Films and series in one list rather than a query each: "what is new on this service"
+     * is one question, and answering it twice and interleaving the answers in Kotlin would
+     * mean fetching twice the cap to be sure of the top of it.
+     *
+     * `addedAtEpochMillis IS NOT NULL` is the load-bearing clause. An M3U playlist carries no
+     * dates at all and every one of its rows is null here, so this returns nothing for one —
+     * which is what lets the screen say "this playlist carries no dates" instead of showing a
+     * list ordered by nothing and calling it recent.
+     */
+    @Query(
+        """
+        SELECT c.*, (f.stableKey IS NOT NULL) AS isFavorite
+        FROM channels c
+        LEFT JOIN favorites f ON f.sourceId = c.sourceId AND f.stableKey = c.stableKey
+              AND f.profileId = :profileId
+        WHERE c.sourceId = :sourceId
+          AND c.kind IN ('VOD', 'SERIES')
+          AND c.addedAtEpochMillis IS NOT NULL
+        ORDER BY c.addedAtEpochMillis DESC, c.sortIndex ASC
+        LIMIT :limit
+        """,
+    )
+    fun observeRecentlyAdded(profileId: Long, sourceId: Long, limit: Int): Flow<List<ChannelWithFavorite>>
+
+    /**
      * Every film and series title a source carries, as strings.
      *
      * For the genre filter, which matches a channel against the metadata cache by cleaned

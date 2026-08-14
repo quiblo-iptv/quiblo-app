@@ -348,6 +348,56 @@ row below is a question about how the screen reads and not about whether the con
 
 ---
 
+## A8 — Recently Added, from [`017`](../agile/017_Recently_Added_and_the_Live_Guide_of_Quiblo.md)
+
+**Where:** the television. **Nothing here has been seen on a device**, and half of it cannot be
+without a working panel — `STOPPERS.md` S2. The dates come from `get_vod_streams` and
+`get_series`, which no test account has ever been asked for.
+
+### A8.1 — the tab is where it was asked to be
+
+| | |
+| :---- | :---- |
+| **What to look at** | Walk the tab bar left and right from Search |
+| **Passes if** | Recently Added sits after Live and before Movies, its label is legible from the sofa, and Back from it returns to Search like every other tab |
+| **Fails if** | It sits anywhere else, or the bar's Left and Right skip it — the bar is index arithmetic and a new position repoints all of it |
+
+### A8.2 — the row against the account
+
+| | |
+| :---- | :---- |
+| **What to look at** | The row on an Xtream account, next to what the provider says is new |
+| **Passes if** | Films and series are interleaved, newest first, and the first few are titles the provider genuinely added most recently |
+| **Fails if** | It is alphabetical, or grouped by kind, or the newest titles are at the far right — that is a sort applied after the cap rather than before it |
+| **Why it is here** | The order is the only claim this tab makes, and the only thing that can check it is somebody who knows what their provider added this week |
+
+### A8.3 — the two empty states, which are different facts
+
+| | |
+| :---- | :---- |
+| **What to look at** | The tab on an M3U playlist, and then on an account with no playlist at all |
+| **Passes if** | The M3U case says the playlist carries no dates and names Xtream as what does; the no-source case says to add a playlist under Settings |
+| **Fails if** | Either shows "Nothing here yet", or the M3U case shows a list — a playlist has no dates, so anything drawn there is ordered by nothing |
+
+### A8.4 — the upgrade, which is the part that can lose something
+
+| | |
+| :---- | :---- |
+| **What to look at** | Install over an existing build without clearing data. Favourites, continue watching, the catalogue |
+| **Passes if** | Everything is where it was, Recently Added is empty until the first refresh, and it fills after one |
+| **Fails if** | Anything is missing, or the row appears full immediately — nothing backfills the dates and nothing should |
+| **Why it is here** | Schema 16. `AC-DATA-04`, and the most expensive place in this project to be wrong |
+
+### A8.5 — the request count, which is the standing risk
+
+| | |
+| :---- | :---- |
+| **What to look at** | Open the tab several times, then use the rest of the app |
+| **Passes if** | Nothing slows down, no screen starts reporting the provider as unavailable, and series details still open |
+| **Fails if** | The account starts being refused — see `docs/` on provider blocks. The dates ride inside lists the app already fetches, so this tab should cost **zero** additional requests, and a block traced to it means something is asking per row |
+
+---
+
 ## B — Owed from `012`, still owed
 
 `012` built twelve defect fixes on 2026-08-10. **Two were swept and rejected. Ten have never

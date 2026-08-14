@@ -15,6 +15,15 @@ Formatted after [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and ve
 
 ## Unreleased
 
+### Added
+
+- **A Recently Added tab on the television**, between Live and Movies, holding the newest films
+  and series on the service in one row rather than one row each — somebody wondering what is new
+  is not also choosing between two formats. Xtream accounts fill it, because a panel says when it
+  added each title and the app now keeps that date; M3U playlists carry no dates at all and the
+  tab says so instead of showing a list ordered by nothing. It costs no extra request to the
+  provider: the dates arrive inside the film and series lists the app already fetches.
+
 ## 0.15.1
 
 ### Fixed

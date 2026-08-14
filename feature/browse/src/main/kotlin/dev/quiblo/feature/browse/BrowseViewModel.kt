@@ -139,6 +139,31 @@ internal class RecentKeys(private val capacity: Int = DEFAULT_CAPACITY) {
 }
 
 /**
+ * What a browse screen is a list *of*, as opposed to what kind of thing is in it.
+ *
+ * **This was a boolean until Recently Added arrived**, and a second boolean beside it would
+ * have made "favourites and recently added at once" a state the type allowed and every reader
+ * downstream had to be trusted never to produce. An enum cannot express it, so nothing has to
+ * check. `TvBarSpot` in the television app is the same decision for the same reason.
+ */
+enum class BrowseScope {
+    /** The provider's catalogue for one [MediaKind], grouped by its categories. */
+    CATALOGUE,
+
+    /** Titles this viewer marked, across every kind. Ignores the script filter, by design. */
+    FAVOURITES,
+
+    /**
+     * The newest films and series on the service, merged and newest first.
+     *
+     * The one scope [BrowseFeed.kind] says nothing about: it spans films and series together,
+     * which is what "what is new" means to somebody looking at a service rather than at a
+     * catalogue.
+     */
+    RECENTLY_ADDED,
+}
+
+/**
  * Which feed a browse screen is showing.
  *
  * The two travel together everywhere — a screen is Movies, or it is Favourites — so they
@@ -146,13 +171,25 @@ internal class RecentKeys(private val capacity: Int = DEFAULT_CAPACITY) {
  */
 data class BrowseFeed(
     val kind: MediaKind,
-    val favoritesOnly: Boolean = false,
-)
+    val scope: BrowseScope = BrowseScope.CATALOGUE,
+) {
+    /**
+     * How many titles [BrowseScope.RECENTLY_ADDED] keeps.
+     *
+     * A cap rather than a page: the row is walked with a D-pad, and nobody presses right forty
+     * times. Reading more would cost a query nobody scrolls to the end of.
+     */
+    val recentLimit: Int get() = RECENT_LIMIT
+
+    private companion object {
+        const val RECENT_LIMIT = 40
+    }
+}
 
 /**
- * Drives Live, Movies, Series and Favourites.
+ * Drives Live, Movies, Series, Favourites and Recently Added.
  *
- * One implementation rather than four, parameterised by [feed]. The screens differ in what
+ * One implementation rather than five, parameterised by [feed]. The screens differ in what
  * they show, not in how they behave.
  */
 @OptIn(ExperimentalCoroutinesApi::class, FlowPreview::class)
@@ -246,7 +283,7 @@ class BrowseViewModel(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS), BrowseUiState())
 
     private fun feedFor(sourceId: Long) = combine(
-        categoryRepository.observeCategories(sourceId, feed.kind),
+        categoriesFor(sourceId),
         selectedCategory,
         // Debounced so a fast typist does not issue a query per keystroke. Short enough
         // to stay well inside the 200ms budget in AC-FAV-05.
@@ -254,10 +291,13 @@ class BrowseViewModel(
     ) { categories, selected, searchText ->
         Triple(categories, selected, searchText)
     }.flatMapLatest { (categories, selected, searchText) ->
-        val items = if (feed.favoritesOnly) {
-            channelRepository.observeFavorites(sourceId, searchText)
-        } else {
-            channelRepository.observeBrowse(sourceId, feed.kind, selected, searchText)
+        val items = when (feed.scope) {
+            BrowseScope.FAVOURITES -> channelRepository.observeFavorites(sourceId, searchText)
+            // No search term: this feed has no field to type one into, and applying the one
+            // left over from another screen would silently filter a list the viewer never
+            // asked to filter.
+            BrowseScope.RECENTLY_ADDED -> channelRepository.observeRecentlyAdded(sourceId, feed.recentLimit)
+            BrowseScope.CATALOGUE -> channelRepository.observeBrowse(sourceId, feed.kind, selected, searchText)
         }
         combine(
             items,
@@ -269,7 +309,7 @@ class BrowseViewModel(
             BrowseUiState(
                 isLoading = false,
                 hasSource = true,
-                categories = if (feed.favoritesOnly) emptyList() else categories,
+                categories = categories,
                 selectedCategory = selected,
                 items = list,
                 query = searchText,
@@ -280,6 +320,21 @@ class BrowseViewModel(
             )
         }
     }
+
+    /**
+     * The provider's categories, for the one feed that groups by them.
+     *
+     * Favourites and Recently Added are single lists with no rail, and both were subscribing
+     * to a query whose every answer they threw away at the state boundary. The same reasoning
+     * as [guideFor] and [historyFor]: a feed subscribes to what it can display, and to nothing
+     * else.
+     */
+    private fun categoriesFor(sourceId: Long): Flow<List<Category>> =
+        if (feed.scope == BrowseScope.CATALOGUE) {
+            categoryRepository.observeCategories(sourceId, feed.kind)
+        } else {
+            flowOf(emptyList())
+        }
 
     /**
      * What is on now, for the feeds that can actually show it.
@@ -309,13 +364,15 @@ class BrowseViewModel(
      * Nothing for Live, which records no position, and nothing for Favourites, which is a
      * list the user curated rather than one derived from what they watched — putting
      * history there would mix two different meanings of "things I care about" into one
-     * screen.
+     * screen. Nothing for Recently Added either, for the third meaning: it answers what the
+     * provider has just put on, and what the viewer was halfway through is the opposite of
+     * new.
      *
      * Artwork is requested for entries the provider gave none for, which is the same
      * request the poster grid makes and therefore usually already answered from the cache.
      */
     private fun historyFor(sourceId: Long): Flow<List<HistoryEntry>> =
-        if (feed.favoritesOnly || feed.kind == MediaKind.LIVE) {
+        if (feed.scope != BrowseScope.CATALOGUE || feed.kind == MediaKind.LIVE) {
             flowOf(emptyList())
         } else {
             historyRepository.observeHistory(sourceId, feed.kind)

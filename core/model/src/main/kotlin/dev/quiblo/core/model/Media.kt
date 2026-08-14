@@ -136,6 +136,18 @@ data class Channel(
      * an M3U invents groups from `group-title` as it reads.
      */
     val categoryIndex: Int? = null,
+    /**
+     * When the provider put this title on the service, or null when it does not say.
+     *
+     * Only Xtream supplies it — `added` on a film, `added` or `last_modified` on a series —
+     * and it arrives inside the stream lists the app already fetches, so it costs no extra
+     * request. An M3U playlist carries no equivalent and every entry from one is null here,
+     * which is why the screen built on this has an empty state rather than a fabricated
+     * order.
+     *
+     * Meaningless for [MediaKind.LIVE]: a channel is not something a provider adds this week.
+     */
+    val addedAtEpochMillis: Long? = null,
 ) {
     /**
      * The identity used to match this item across refreshes.

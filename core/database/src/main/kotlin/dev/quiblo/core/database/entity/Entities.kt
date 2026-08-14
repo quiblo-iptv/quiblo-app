@@ -75,6 +75,15 @@ data class SourceEntity(
          * sort tens of thousands of rows by hand.
          */
         Index("sourceId", "kind", "sortIndex"),
+        /**
+         * The newest-first query, for the same reason and in the same shape.
+         *
+         * `observeRecentlyAdded` filters on `sourceId` and `kind` and sorts by
+         * `addedAtEpochMillis` descending. The index above stops at `sortIndex`, so that sort
+         * would have been a temporary B-tree over every film and series in the account — the
+         * exact cost `Index("sourceId", "kind", "sortIndex")` exists to have removed once.
+         */
+        Index("sourceId", "kind", "addedAtEpochMillis"),
     ],
 )
 data class ChannelEntity(
@@ -94,6 +103,14 @@ data class ChannelEntity(
     val providerStreamId: String? = null,
     /** Where this item's category sat in the provider's category list, when it supplies one. */
     val categoryIndex: Int? = null,
+    /**
+     * When the provider added this title, when it says. Null for every M3U entry.
+     *
+     * Indexed with `kind`, because the one query that reads it — newest films and series
+     * first — filters on the kind and orders on this, and a catalogue is tens of thousands of
+     * rows deep.
+     */
+    val addedAtEpochMillis: Long? = null,
 )
 
 /**

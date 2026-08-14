@@ -9,6 +9,7 @@
 
     <string name="tv_tab_search">Search</string>
     <string name="tv_tab_live">Live</string>
+    <string name="tv_tab_recently_added">Recently Added</string>
     <string name="tv_tab_movies">Movies</string>
     <string name="tv_tab_series">Series</string>
     <string name="tv_tab_favourites">Favourites</string>
@@ -69,6 +70,13 @@
     <string name="tv_sources_form_hint">Leave the username and password empty for an M3U playlist.</string>
 
     <string name="tv_no_content">Nothing here yet.</string>
+
+    <!-- Recently Added. The empty message says which of the two reasons it is, because only one
+         of them is anything the viewer can act on: an Xtream panel supplies a date per title and
+         an M3U playlist supplies none at all, and "nothing here" would read as a fault in both
+         cases. -->
+    <string name="tv_row_recently_added">Recently added</string>
+    <string name="tv_recently_added_none">This playlist does not say when anything was added. Xtream accounts do; M3U playlists carry no dates.</string>
 
     <string name="tv_sources_incomplete">Fill in the address, and either both the username and password or neither.</string>
 

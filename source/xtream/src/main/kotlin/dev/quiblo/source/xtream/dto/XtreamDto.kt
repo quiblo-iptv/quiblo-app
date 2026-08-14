@@ -127,6 +127,16 @@ internal data class VodStreamDto(
     @SerialName("category_id")
     @Serializable(FlexibleStringSerializer::class)
     val categoryId: String? = null,
+    /**
+     * When the panel added this film to the service. Unix seconds.
+     *
+     * Null on a panel that omits it, and that stays null all the way to the screen rather
+     * than becoming a zero — a zero sorts as 1970 and would park every dateless title at the
+     * bottom of a list that claims to be ordered by date.
+     */
+    @SerialName("added")
+    @Serializable(FlexibleLongSerializer::class)
+    val addedEpochSeconds: Long? = null,
 )
 
 @Serializable
@@ -152,6 +162,20 @@ internal data class SeriesDto(
     @SerialName("category_id")
     @Serializable(FlexibleStringSerializer::class)
     val categoryId: String? = null,
+    /** Unix seconds. Sent by the panels that treat a series the way they treat a film. */
+    @SerialName("added")
+    @Serializable(FlexibleLongSerializer::class)
+    val addedEpochSeconds: Long? = null,
+    /**
+     * Unix seconds, and the field most panels actually send for a series.
+     *
+     * It means "the last time this series changed", which for a series is when an episode
+     * landed — the thing a viewer looking for what is new wants to know about a series, and
+     * closer to it than the date the container was first created.
+     */
+    @SerialName("last_modified")
+    @Serializable(FlexibleLongSerializer::class)
+    val lastModifiedEpochSeconds: Long? = null,
 ) {
     val effectiveId: String? get() = seriesId?.takeIf { it.isNotBlank() }
         ?: id?.takeIf { it.isNotBlank() }
@@ -162,6 +186,16 @@ internal data class SeriesDto(
 
     val effectiveCover: String? get() = cover?.takeIf { it.isNotBlank() }
         ?: streamIcon?.takeIf { it.isNotBlank() }
+
+    /**
+     * When this series last changed, whichever field the panel chose to say it in.
+     *
+     * `added` wins where both are present: it is the field a panel sets deliberately, and
+     * `last_modified` is touched by edits that are not new episodes — a renamed category or
+     * a re-scraped cover would otherwise push an unchanged series to the front of a row
+     * that promises new arrivals.
+     */
+    val effectiveAddedEpochSeconds: Long? get() = addedEpochSeconds ?: lastModifiedEpochSeconds
 }
 
 @Serializable

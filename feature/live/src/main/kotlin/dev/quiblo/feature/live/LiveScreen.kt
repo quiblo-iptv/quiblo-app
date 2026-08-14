@@ -41,7 +41,7 @@ fun LiveScreen(
 ) {
     val viewModel: BrowseViewModel = koinViewModel(
         key = "live",
-        parameters = { browseParams(MediaKind.LIVE, favoritesOnly = false) },
+        parameters = { browseParams(MediaKind.LIVE) },
     )
     BrowseScreen(
         viewModel = viewModel,

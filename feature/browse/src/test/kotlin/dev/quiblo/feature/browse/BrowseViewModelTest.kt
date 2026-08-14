@@ -76,6 +76,7 @@ class BrowseViewModelTest {
         every { channelRepository.observeBrowse(any(), any(), any(), any(), any()) } returns
             flowOf(emptyList())
         every { channelRepository.observeFavorites(any(), any()) } returns flowOf(emptyList())
+        every { channelRepository.observeRecentlyAdded(any(), any()) } returns flowOf(emptyList())
         every { historyRepository.observeHistory(any(), any()) } returns flowOf(emptyList())
     }
 
@@ -116,11 +117,50 @@ class BrowseViewModelTest {
         // Favourites is built with MediaKind.LIVE and renders a programme line for the live
         // channels in it, so it keeps the guide. This is the case a narrower condition
         // would have broken silently.
-        val viewModel = viewModelFor(BrowseFeed(MediaKind.LIVE, favoritesOnly = true))
+        val viewModel = viewModelFor(BrowseFeed(MediaKind.LIVE, BrowseScope.FAVOURITES))
 
         viewModel.uiState.drain()
 
         verify { guideRepository.observeNowPlaying(SOURCE.id) }
+    }
+
+    @Test
+    fun `the newest-first feed reads the newest-first query and nothing else`() = runTest {
+        val viewModel = viewModelFor(BrowseFeed(MediaKind.VOD, BrowseScope.RECENTLY_ADDED))
+
+        viewModel.uiState.drain()
+
+        verify { channelRepository.observeRecentlyAdded(SOURCE.id, RECENT_LIMIT) }
+        // The catalogue query is the one whose absence matters: it returns tens of thousands
+        // of rows for a kind this feed does not restrict itself to, and running both would
+        // mean the screen paid for a list it never draws.
+        verify(exactly = 0) { channelRepository.observeBrowse(any(), any(), any(), any(), any()) }
+        verify(exactly = 0) { channelRepository.observeFavorites(any(), any()) }
+    }
+
+    @Test
+    fun `the newest-first feed subscribes to no guide, no history and no categories`() = runTest {
+        val viewModel = viewModelFor(BrowseFeed(MediaKind.VOD, BrowseScope.RECENTLY_ADDED))
+
+        viewModel.uiState.drain()
+
+        // Three queries a single merged row has nowhere to put an answer from. Categories is
+        // the one that was already being asked for and discarded on Favourites before this
+        // feed existed; asserting it here is what stops it coming back.
+        verify(exactly = 0) { guideRepository.observeNowPlaying(any()) }
+        verify(exactly = 0) { historyRepository.observeHistory(any(), any()) }
+        verify(exactly = 0) { categoryRepository.observeCategories(any(), any()) }
+    }
+
+    @Test
+    fun `the catalogue feed still asks for its categories`() = runTest {
+        // The other half of the assertion above: skipping the query for the feeds that cannot
+        // draw a rail must not skip it for the one that can.
+        val viewModel = viewModelFor(BrowseFeed(MediaKind.VOD))
+
+        viewModel.uiState.drain()
+
+        verify { categoryRepository.observeCategories(SOURCE.id, MediaKind.VOD) }
     }
 
     /**
@@ -148,6 +188,9 @@ class BrowseViewModelTest {
     )
 
     private companion object {
+        /** What [BrowseFeed.recentLimit] is, asserted rather than assumed. */
+        val RECENT_LIMIT = BrowseFeed(MediaKind.VOD, BrowseScope.RECENTLY_ADDED).recentLimit
+
         val SOURCE = Source(
             id = 3L,
             name = "Test",

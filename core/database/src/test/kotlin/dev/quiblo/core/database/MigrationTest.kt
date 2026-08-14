@@ -36,7 +36,7 @@ import org.robolectric.annotation.Config
  * Deliberately not `compileSdk`: nothing under test here is sensitive to the platform version.
  * It is SQLite and Room's own migration machinery.
  */
-private const val ROBOLECTRIC_SDK = 34
+internal const val ROBOLECTRIC_SDK = 34
 
 private const val DB_NAME = "migration-test.db"
 
@@ -171,6 +171,34 @@ class MigrationTest {
         db.query("SELECT COUNT(*) FROM series_preferences").use { cursor ->
             assertTrue(cursor.moveToFirst())
             assertEquals(0, cursor.getInt(0))
+        }
+    }
+
+    @Test
+    fun `15 to 16 keeps every channel and dates none of them`() {
+        helper.createDatabase(DB_NAME, 15).use { old ->
+            old.execSQL(
+                "INSERT INTO `sources` (`id`, `name`, `kind`, `url`, `createdAtEpochMillis`) " +
+                    "VALUES (1, 'A panel', 'XTREAM', 'https://example.invalid', 0)",
+            )
+            old.execSQL(
+                "INSERT INTO `channels` (`id`, `sourceId`, `name`, `streamUrl`, `kind`, " +
+                    "`groupTitle`, `stableKey`, `sortIndex`) " +
+                    "VALUES (1, 1, 'A film', 'https://example.invalid/1.mkv', 'VOD', 'Films', 'k-1', 0)",
+            )
+        }
+
+        val db = helper.runMigrationsAndValidate(DB_NAME, 16, true, MIGRATION_15_16)
+
+        // The row survives and its date is null, not zero. Nothing backfills it and nothing
+        // should: a zero would be 1 January 1970 and would sort into a row that claims to be
+        // ordered by when the provider added things. The real dates arrive on the next
+        // refresh, which rewrites every channel row for the source anyway.
+        db.query("SELECT `name`, `addedAtEpochMillis` FROM `channels`").use { cursor ->
+            assertTrue("the channel did not survive the upgrade", cursor.moveToFirst())
+            assertEquals("A film", cursor.getString(0))
+            assertTrue("a date was invented for an existing channel", cursor.isNull(1))
+            assertFalse("an extra channel appeared", cursor.moveToNext())
         }
     }
 

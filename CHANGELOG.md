@@ -24,6 +24,16 @@ Formatted after [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and ve
   tab says so instead of showing a list ordered by nothing. It costs no extra request to the
   provider: the dates arrive inside the film and series lists the app already fetches.
 
+- **A film says what year it is from and how long it runs**, beside its score and certificate.
+  Both come from the playlist where the panel supplies them and from The Movie Database where it
+  does not, so the line fills in for an M3U playlist too. The year replaces the full release date
+  the television used to print: nobody choosing a film needs the day of the month.
+- **A series says what year it began**, on both apps, and it says so whether or not a metadata
+  key is configured — the year is usually the panel's own.
+- **Every episode says how long it is.** Read from either field panels use for it, including the
+  written `00:47:15` form, and omitted rather than shown as zero where a provider does not time
+  its episodes.
+
 ### Fixed
 
 - **The television's channel list shows what is on now without being prodded.** The guide was

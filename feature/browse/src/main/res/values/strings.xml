@@ -36,6 +36,12 @@
 
     <string name="detail_back">Back</string>
     <string name="title_facts_rating">★ %1$.1f</string>
+
+    <!-- Lengths. Written the way a listings page writes them rather than as a clock, because
+         "1h 52m" is read at a glance and "01:52:00" is read twice. -->
+    <string name="runtime_hours_minutes">%1$dh %2$dm</string>
+    <string name="runtime_hours">%1$dh</string>
+    <string name="runtime_minutes">%1$dm</string>
     <string name="title_facts_director">Director: %1$s</string>
     <string name="title_facts_creator">Created by: %1$s</string>
     <string name="title_facts_cast">Cast: %1$s</string>

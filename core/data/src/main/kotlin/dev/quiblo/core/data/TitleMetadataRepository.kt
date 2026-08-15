@@ -375,6 +375,8 @@ private fun TitleMetadataEntity.toMetadata() = TitleMetadata(
     topCast = topCast?.split(LIST_SEPARATOR).orEmpty().filter { it.isNotBlank() },
     posterUrl = posterUrl,
     backdropUrl = backdropUrl,
+    releaseYear = releaseYear,
+    runtimeMinutes = runtimeMinutes,
     isPartial = isPartial,
 )
 
@@ -390,6 +392,8 @@ private fun TitleMetadata.toEntity(identity: TitleIdentity, kind: String, fetche
     topCast = topCast.joinToString(LIST_SEPARATOR).takeIf { it.isNotBlank() },
     posterUrl = posterUrl,
     backdropUrl = backdropUrl,
+    releaseYear = releaseYear,
+    runtimeMinutes = runtimeMinutes,
     fetchedAtEpochMillis = fetchedAt,
     isMiss = false,
     isPartial = isPartial,

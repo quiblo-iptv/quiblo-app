@@ -50,6 +50,21 @@ data class TitleMetadata(
     val posterUrl: String? = null,
     val backdropUrl: String? = null,
     /**
+     * The year of release, or of a series' first broadcast. Null when the service has none.
+     *
+     * The fallback for a provider that supplies no dates of its own. A panel's own year always
+     * wins where there is one, on the same rule as artwork: the panel is describing the thing
+     * it is serving, and this describes whatever title matched its name.
+     */
+    val releaseYear: Int? = null,
+    /**
+     * How long a film runs, in whole minutes. Null for anything the service does not time.
+     *
+     * Films only. A series has no single length, and the average episode length TMDB offers
+     * is not a fact worth putting on a screen as though it were one.
+     */
+    val runtimeMinutes: Int? = null,
+    /**
      * True when only the cheap half was fetched — a score and artwork, no cast or plot.
      *
      * A poster tile needs a number and nothing else, and fetching a full record per tile

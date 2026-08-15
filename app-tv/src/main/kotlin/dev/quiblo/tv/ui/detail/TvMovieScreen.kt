@@ -47,6 +47,9 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.quiblo.core.data.MetadataRefresh
 import dev.quiblo.core.data.ScanRefusal
 import dev.quiblo.core.model.Channel
+import dev.quiblo.core.model.releaseYearIn
+import dev.quiblo.feature.browse.runtimeLabel
+import dev.quiblo.feature.browse.runtimeLabelFromMinutes
 import dev.quiblo.feature.vod.MovieDetailUiState
 import dev.quiblo.feature.vod.MovieDetailViewModel
 import dev.quiblo.tv.R
@@ -165,7 +168,15 @@ private fun Loaded(
                     ageRating = state.metadata?.ageRating,
                     genres = state.metadata.genresOrEmpty()
                         .ifEmpty { listOfNotNull(state.details?.genre?.takeIf { it.isNotBlank() }) },
-                    extra = state.details?.releaseDate?.takeIf { it.isNotBlank() },
+                    // The year rather than the whole date the panel sends. "2021-10-22" is a
+                    // record from a database; a viewer choosing a film wants the year, and the
+                    // day of the month costs the line width that the length now uses.
+                    year = releaseYearIn(state.details?.releaseDate) ?: state.metadata?.releaseYear,
+                    // The panel's own length first, on the same rule as its artwork and its
+                    // plot: it is timing the file it is about to serve, where the service is
+                    // timing whichever cut it holds.
+                    runtime = runtimeLabel(state.details?.durationSeconds)
+                        ?: runtimeLabelFromMinutes(state.metadata?.runtimeMinutes),
                 )
 
                 DetailOverview(

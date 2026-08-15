@@ -493,3 +493,25 @@ val MIGRATION_15_16 = object : Migration(15, 16) {
         )
     }
 }
+
+/**
+ * The metadata cache learns a year and a running time.
+ *
+ * **Two columns added in place, and not one row rewritten.** `MIGRATION_11_12` rebuilt this table
+ * and dropped everything in it, which was defensible then and is the last thing this table needs
+ * now: an upgrade that empties it costs an hour of somebody's scanning and their rate limit to
+ * earn back, and that is exactly the complaint this round of work started from. A nullable column
+ * with no default is the one schema change SQLite makes without copying anything.
+ *
+ * Existing rows keep every fact they hold and gain these two as null, which reads on screen as a
+ * film that does not say how long it is — the same as before this migration. They fill in when the
+ * row is next fetched, which the panel's own fields make unnecessary for most catalogues anyway:
+ * an Xtream account supplies both a release date and a length of its own, and those are preferred
+ * over the service's wherever they exist.
+ */
+val MIGRATION_16_17 = object : Migration(16, 17) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE `title_metadata` ADD COLUMN `releaseYear` INTEGER")
+        db.execSQL("ALTER TABLE `title_metadata` ADD COLUMN `runtimeMinutes` INTEGER")
+    }
+}

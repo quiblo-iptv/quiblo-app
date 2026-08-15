@@ -42,11 +42,24 @@ import dev.quiblo.core.model.TitleMetadata
  * field is added, and only one of them would get fixed.
  */
 @Composable
-fun TitleFacts(metadata: TitleMetadata, modifier: Modifier = Modifier) {
-    if (metadata.isEmpty) return
+fun TitleFacts(
+    metadata: TitleMetadata,
+    modifier: Modifier = Modifier,
+    /**
+     * The year, when the screen has one worth showing and nowhere else to put it.
+     *
+     * Passed in rather than read off [metadata] because the provider's own year wins wherever
+     * there is one, and only the caller knows whether the panel supplied it. Left null by
+     * screens that already print a year on a line of their own — a fact stated twice reads as
+     * two facts.
+     */
+    year: Int? = null,
+) {
+    if (metadata.isEmpty && year == null) return
 
     Column(modifier = modifier) {
         val chips = listOfNotNull(
+            year?.toString(),
             metadata.ageRating?.takeIf { it.isNotBlank() },
             metadata.rating?.let { stringResource(R.string.title_facts_rating, it) },
             metadata.genres.takeIf { it.isNotEmpty() }?.joinToString(", "),

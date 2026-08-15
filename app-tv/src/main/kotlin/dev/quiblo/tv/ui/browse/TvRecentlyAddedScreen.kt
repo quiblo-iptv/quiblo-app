@@ -66,7 +66,13 @@ fun TvRecentlyAddedScreen(
         parameters = { recentlyAddedParams() },
     )
     val state by viewModel.uiState.collectAsStateWithLifecycle()
-    val rowTitle = stringResource(R.string.tv_row_recently_added)
+
+    // Two different rows, and the heading is the difference. A provider that dates its catalogue
+    // gives a genuine "recently added"; a playlist that dates nothing gives the end of its own
+    // list, which is the latest thing in it and is not a claim about when anything arrived.
+    val rowTitle = stringResource(
+        if (state.orderedByDate) R.string.tv_row_recently_added else R.string.tv_row_latest_in_playlist,
+    )
 
     // No grouping pass, unlike the catalogue screens: the query returns the row already
     // ordered and capped, so there is nothing to group and nothing worth moving off the main
@@ -96,7 +102,15 @@ fun TvRecentlyAddedScreen(
         // has added nothing this month.
         !state.hasSource -> Message(stringResource(R.string.tv_no_source))
 
-        rows.isEmpty() -> Message(stringResource(R.string.tv_recently_added_none))
+        rows.isEmpty() -> Message(
+            stringResource(
+                if (state.orderedByDate) {
+                    R.string.tv_recently_added_none
+                } else {
+                    R.string.tv_no_films_or_series
+                },
+            ),
+        )
 
         else -> TvCategoryList(
             rows = rows,
@@ -107,6 +121,9 @@ fun TvRecentlyAddedScreen(
             onItemClick = { item -> onPlay(state.items, item.flatIndex) },
             modifier = modifier,
             posters = state.posters,
+            // The one row in the app that mixes films and series, so the one row where a tile
+            // has to say which it is.
+            showKindBadge = true,
         )
     }
 }

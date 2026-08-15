@@ -24,6 +24,17 @@ Formatted after [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and ve
   tab says so instead of showing a list ordered by nothing. It costs no extra request to the
   provider: the dates arrive inside the film and series lists the app already fetches.
 
+- **Recently Added says what each poster is.** A row that mixes films and series is the one row
+  in the app where the screen cannot already say which is which, so each tile carries a Movie or
+  Series label in the corner opposite its score.
+- **Recently Added covers the last thirty days**, rather than the newest forty titles whenever
+  they arrived. A service that added nothing this month now says so instead of showing last
+  spring.
+- **A playlist that carries no dates gets the end of its own list** — the latest films and series
+  in the order the provider lists them, interleaved so neither crowds the other out. The row is
+  headed "Latest in your playlist" rather than "Recently added", because where something sits in
+  a playlist is not a date and the screen does not pretend otherwise.
+
 ### Fixed
 
 - **The television's channel list shows what is on now without being prodded.** The guide was

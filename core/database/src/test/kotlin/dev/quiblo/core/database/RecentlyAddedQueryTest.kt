@@ -78,7 +78,7 @@ class RecentlyAddedQueryTest {
             ),
         )
 
-        val rows = db.channelDao().observeRecentlyAdded(profileId = 1L, sourceId = SOURCE_ID, limit = 40).first()
+        val rows = recents(limit = 40)
 
         assertEquals(
             listOf("New series", "Middle film", "Old film"),
@@ -93,7 +93,7 @@ class RecentlyAddedQueryTest {
             (1..5).map { channel(id = it.toLong(), name = "Film $it", kind = "VOD", addedAt = it * 100L) },
         )
 
-        val rows = db.channelDao().observeRecentlyAdded(profileId = 1L, sourceId = SOURCE_ID, limit = 2).first()
+        val rows = recents(limit = 2)
 
         // The cap takes the top of the list, not an arbitrary two of it. A LIMIT applied
         // before the ORDER BY would still return two rows and would still look reasonable.
@@ -110,12 +110,71 @@ class RecentlyAddedQueryTest {
             ),
         )
 
-        val rows = db.channelDao().observeRecentlyAdded(profileId = 1L, sourceId = SOURCE_ID, limit = 40).first()
+        val rows = recents(limit = 40)
 
-        // Empty is the honest answer for an M3U playlist, and it is what lets the screen above
-        // say so rather than draw a list ordered by nothing.
+        // Empty from this query, and `observeHasAddedDates` is what tells the layer above to
+        // ask the other one rather than to believe this emptiness.
         assertEquals(emptyList<String>(), rows.map { it.channel.name })
+        assertEquals(false, db.channelDao().observeHasAddedDates(SOURCE_ID).first())
     }
+
+    @Test
+    fun `the window excludes anything older than it, however new the catalogue is otherwise`() = runTest {
+        seedSource()
+        db.channelDao().insertAll(
+            listOf(
+                channel(id = 1, name = "Last week", kind = "VOD", addedAt = NOW - 7L * DAY),
+                channel(id = 2, name = "Last year", kind = "VOD", addedAt = NOW - 400L * DAY),
+                channel(id = 3, name = "Yesterday", kind = "SERIES", addedAt = NOW - DAY),
+            ),
+        )
+
+        val rows = recents(limit = 40, since = NOW - 30L * DAY)
+
+        // A service that added forty films last March is not a service with forty new films.
+        assertEquals(listOf("Yesterday", "Last week"), rows.map { it.channel.name })
+    }
+
+    @Test
+    fun `one dated row is enough to make a source a dated source`() = runTest {
+        seedSource()
+        db.channelDao().insertAll(
+            listOf(
+                channel(id = 1, name = "Undated", kind = "VOD", addedAt = null),
+                channel(id = 2, name = "Dated", kind = "VOD", addedAt = NOW),
+            ),
+        )
+
+        // Panels omit the field on individual rows. That is not the same as a playlist which
+        // carries no dates at all, and only the second should fall back to list order.
+        assertEquals(true, db.channelDao().observeHasAddedDates(SOURCE_ID).first())
+    }
+
+    @Test
+    fun `the fallback takes the end of the provider's own list, one kind at a time`() = runTest {
+        seedSource()
+        db.channelDao().insertAll(
+            (1..4).map { channel(id = it.toLong(), name = "Film $it", kind = "VOD", addedAt = null) } +
+                (5..8).map { channel(id = it.toLong(), name = "Series $it", kind = "SERIES", addedAt = null) },
+        )
+
+        val films = db.channelDao()
+            .observeLastInListOrder(profileId = 1L, sourceId = SOURCE_ID, kind = "VOD", limit = 2)
+            .first()
+        val series = db.channelDao()
+            .observeLastInListOrder(profileId = 1L, sourceId = SOURCE_ID, kind = "SERIES", limit = 2)
+            .first()
+
+        // The end of the list first, and per kind — a single query across both would return
+        // four series and no films on this catalogue, which is every catalogue that lists its
+        // films first.
+        assertEquals(listOf("Film 4", "Film 3"), films.map { it.channel.name })
+        assertEquals(listOf("Series 8", "Series 7"), series.map { it.channel.name })
+    }
+
+    private suspend fun recents(limit: Int, since: Long = 0L) = db.channelDao()
+        .observeRecentlyAdded(profileId = 1L, sourceId = SOURCE_ID, sinceEpochMillis = since, limit = limit)
+        .first()
 
     private suspend fun seedSource() {
         db.sourceDao().insert(
@@ -143,5 +202,7 @@ class RecentlyAddedQueryTest {
 
     private companion object {
         const val SOURCE_ID = 1L
+        const val DAY = 24L * 60 * 60 * 1000
+        const val NOW = 1_700_000_000_000L
     }
 }

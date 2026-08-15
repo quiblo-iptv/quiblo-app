@@ -24,6 +24,7 @@ import dev.quiblo.core.data.ChannelLogoRepository
 import dev.quiblo.core.data.ChannelRepository
 import dev.quiblo.core.data.GuideOutcome
 import dev.quiblo.core.data.GuideRepository
+import dev.quiblo.core.data.RecentlyAddedFeed
 import dev.quiblo.core.data.SourceRepository
 import dev.quiblo.core.data.TitleMetadataRepository
 import dev.quiblo.core.data.WatchHistoryRepository
@@ -81,7 +82,8 @@ class BrowseViewModelTest {
         every { channelRepository.observeBrowse(any(), any(), any(), any(), any()) } returns
             flowOf(emptyList())
         every { channelRepository.observeFavorites(any(), any()) } returns flowOf(emptyList())
-        every { channelRepository.observeRecentlyAdded(any(), any()) } returns flowOf(emptyList())
+        every { channelRepository.observeRecentlyAdded(any(), any(), any()) } returns
+            flowOf(RecentlyAddedFeed())
         every { historyRepository.observeHistory(any(), any()) } returns flowOf(emptyList())
     }
 
@@ -213,7 +215,11 @@ class BrowseViewModelTest {
 
         viewModel.uiState.drain()
 
-        verify { channelRepository.observeRecentlyAdded(SOURCE.id, RECENT_LIMIT) }
+        // Thirty days back, and the window is asserted rather than assumed: a tab answering
+        // "what is new" with a film added last March is answering something else.
+        verify {
+            channelRepository.observeRecentlyAdded(SOURCE.id, RECENT_LIMIT, FIXED_NOW - THIRTY_DAYS_MILLIS)
+        }
         // The catalogue query is the one whose absence matters: it returns tens of thousands
         // of rows for a kind this feed does not restrict itself to, and running both would
         // mean the screen paid for a list it never draws.
@@ -261,6 +267,7 @@ class BrowseViewModelTest {
 
     private fun viewModelFor(feed: BrowseFeed) = BrowseViewModel(
         feed = feed,
+        now = { FIXED_NOW },
         sourceRepository = sourceRepository,
         channelRepository = channelRepository,
         categoryRepository = categoryRepository,
@@ -271,6 +278,9 @@ class BrowseViewModelTest {
     )
 
     private companion object {
+        const val FIXED_NOW = 1_700_000_000_000L
+        const val THIRTY_DAYS_MILLIS = 30L * 24 * 60 * 60 * 1000
+
         /** What [BrowseFeed.recentLimit] is, asserted rather than assumed. */
         val RECENT_LIMIT = BrowseFeed(MediaKind.VOD, BrowseScope.RECENTLY_ADDED).recentLimit
 

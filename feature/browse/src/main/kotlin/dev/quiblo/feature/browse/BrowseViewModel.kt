@@ -67,6 +67,14 @@ data class BrowseUiState(
     val categories: List<Category> = emptyList(),
     val selectedCategory: String? = null,
     val items: List<Channel> = emptyList(),
+    /**
+     * Whether [items] are in the order the provider dated them, or in the order it listed them.
+     *
+     * Only [BrowseScope.RECENTLY_ADDED] ever sets this false, and it is not decoration: a row
+     * built from the end of a playlist is "the latest entries in your playlist" and titling it
+     * "Recently Added" would be a claim about dates that nobody made.
+     */
+    val orderedByDate: Boolean = true,
     val query: String = "",
     /** What is airing now, keyed by channel identity. Empty for sources with no guide. */
     val nowPlaying: Map<String, Programme> = emptyMap(),
@@ -302,16 +310,24 @@ class BrowseViewModel(
         Triple(categories, selected, searchText)
     }.flatMapLatest { (categories, selected, searchText) ->
         val rows = when (feed.scope) {
-            BrowseScope.FAVOURITES -> channelRepository.observeFavorites(sourceId, searchText)
+            BrowseScope.FAVOURITES ->
+                channelRepository.observeFavorites(sourceId, searchText).map(::BrowseRows)
             // No search term: this feed has no field to type one into, and applying the one
             // left over from another screen would silently filter a list the viewer never
             // asked to filter.
-            BrowseScope.RECENTLY_ADDED -> channelRepository.observeRecentlyAdded(sourceId, feed.recentLimit)
-            BrowseScope.CATALOGUE -> channelRepository.observeBrowse(sourceId, feed.kind, selected, searchText)
+            BrowseScope.RECENTLY_ADDED ->
+                channelRepository.observeRecentlyAdded(
+                    sourceId = sourceId,
+                    limit = feed.recentLimit,
+                    sinceEpochMillis = now() - RECENT_WINDOW_MILLIS,
+                ).map { BrowseRows(it.items, orderedByDate = it.orderedByDate) }
+
+            BrowseScope.CATALOGUE ->
+                channelRepository.observeBrowse(sourceId, feed.kind, selected, searchText).map(::BrowseRows)
         }
         // A live list asks for the top of itself the moment it exists, rather than waiting for
         // the remote to come to rest on a row that may never be reached. See prefetchGuides.
-        val items = if (feed.kind == MediaKind.LIVE) rows.onEach(::prefetchGuides) else rows
+        val items = if (feed.kind == MediaKind.LIVE) rows.onEach { prefetchGuides(it.items) } else rows
         combine(
             items,
             guideFor(sourceId),
@@ -324,7 +340,8 @@ class BrowseViewModel(
                 hasSource = true,
                 categories = categories,
                 selectedCategory = selected,
-                items = list,
+                items = list.items,
+                orderedByDate = list.orderedByDate,
                 query = searchText,
                 nowPlaying = guide.nowPlaying,
                 guideOutcome = guide.outcome,
@@ -334,6 +351,15 @@ class BrowseViewModel(
             )
         }
     }
+
+    /**
+     * One feed's rows, and whether their order is the provider's dates or its list.
+     *
+     * Only Recently Added can answer the second with "no", but it travels with the rows rather
+     * than beside them: the two are read in the same breath at the state boundary, and a
+     * separate flow for one boolean would be a second thing to keep in step with the first.
+     */
+    private data class BrowseRows(val items: List<Channel>, val orderedByDate: Boolean = true)
 
     /**
      * The provider's categories, for the one feed that groups by them.
@@ -657,6 +683,15 @@ class BrowseViewModel(
     private companion object {
         const val STOP_TIMEOUT_MILLIS = 5_000L
         const val SEARCH_DEBOUNCE_MILLIS = 120L
+
+        /**
+         * How far back "recently added" reaches: thirty days.
+         *
+         * A cap on age rather than only on count. Without it a service that added forty films
+         * last March fills the row with them forever, and a tab that answers "what is new"
+         * with last spring is answering a question nobody asked.
+         */
+        const val RECENT_WINDOW_MILLIS = 30L * 24 * 60 * 60 * 1000
         const val MAX_CONCURRENT_GUIDE_FETCHES = 3
 
         /**

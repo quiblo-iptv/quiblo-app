@@ -37,7 +37,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
-import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.LiveTv
@@ -62,6 +62,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.paging.LoadState
+import androidx.paging.compose.collectAsLazyPagingItems
+import androidx.paging.compose.itemKey
 import coil3.compose.SubcomposeAsyncImage
 import dev.quiblo.core.data.GuideOutcome
 import dev.quiblo.core.model.Channel
@@ -90,6 +93,32 @@ fun TvLiveScreen(
     ),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+
+    /**
+     * The channels, a page at a time.
+     *
+     * A live list is the whole of a kind — twenty thousand rows on a real account — and this
+     * screen draws about a dozen of them at once. It used to read every one, allocate a domain
+     * object per row and hand the lot to a `LazyColumn`, on every emission.
+     */
+    val channels = viewModel.pagedItems.collectAsLazyPagingItems()
+
+    /**
+     * The top of a fresh list, asked about without anything being focused.
+     *
+     * **This is `017`'s fix, moved rather than dropped.** Nothing has focus when Live opens, and
+     * the guide is otherwise fetched only for the row focus rests on — so the whole list drew
+     * with no programme against any channel, indefinitely, for anybody who did not happen to stop
+     * on one. It used to live in the ViewModel, which could see the list; with the list paged, the
+     * screen is what knows which rows exist.
+     *
+     * Bounded to a fixed ten and deduplicated by the ViewModel, because the restraint it replaces
+     * was right about the danger: "fetch for every visible row" against a twenty-thousand-channel
+     * account is how this project's provider account was blocked, twice.
+     */
+    LaunchedEffect(channels.itemSnapshotList.items.firstOrNull()?.id) {
+        channels.itemSnapshotList.items.take(GUIDE_PREFETCH_ROWS).forEach(viewModel::onRowVisible)
+    }
 
     /**
      * The row the remote is currently resting on.
@@ -148,14 +177,23 @@ fun TvLiveScreen(
                 // they have not taken yet.
                 !state.hasSource -> Message(stringResource(R.string.tv_no_source))
 
-                state.items.isEmpty() -> Message(stringResource(R.string.tv_no_channels))
+                // `itemCount` and not a loaded snapshot: a list still fetching its first page
+                // has no items and is not empty, and telling a viewer their provider carries no
+                // channels while it is still being asked is worse than a moment of nothing.
+                channels.loadState.refresh !is LoadState.Loading && channels.itemCount == 0 ->
+                    Message(stringResource(R.string.tv_no_channels))
 
                 else -> LazyColumn(
                     state = listState,
                     modifier = Modifier.fillMaxSize(),
                     verticalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
-                    itemsIndexed(items = state.items, key = { _, item -> item.id }) { index, channel ->
+                    items(count = channels.itemCount, key = channels.itemKey { it.id }) { index ->
+                        // Null while the page holding this row is still arriving. With
+                        // placeholders off that is only ever transient, and drawing nothing for a
+                        // frame is the honest answer — a skeleton row would be a second thing to
+                        // keep in step with the real one.
+                        val channel = channels[index] ?: return@items
                         ChannelRow(
                             // The provider's own ordering is the channel numbering a viewer
                             // knows; the panel's `num` field is not stored, so position stands
@@ -164,7 +202,10 @@ fun TvLiveScreen(
                             channel = channel,
                             nowPlaying = state.nowPlaying[channel.stableKey],
                             onFocused = { focusedChannel = channel },
-                            onClick = { onPlay(state.items, index) },
+                            // The pages loaded so far, which is what zapping can honestly walk.
+                            // It used to be the whole catalogue, and it was only whole because
+                            // the screen was paying to read all of it.
+                            onClick = { onPlay(channels.itemSnapshotList.items, index) },
                             onLongClick = { guideFor = channel },
                         )
                     }
@@ -399,6 +440,15 @@ private fun NowPlaying(programme: Programme?, alpha: Float, modifier: Modifier =
  * feels immediate.
  */
 private const val FOCUS_SETTLE_MILLIS = 450L
+
+/**
+ * How many rows of a fresh list are asked about without being focused.
+ *
+ * About a screenful, which is what makes the list look answered rather than empty. A fixed
+ * number and not a fraction of the account: "per visible row" against a twenty-thousand-channel
+ * account is how this project's provider blocked it, twice.
+ */
+private const val GUIDE_PREFETCH_ROWS = 10
 private const val IDLE_ALPHA = 0.6f
 private const val PROGRESS_WIDTH_FRACTION = 0.5f
 private val CHANNEL_NAME_WIDTH = 320.dp

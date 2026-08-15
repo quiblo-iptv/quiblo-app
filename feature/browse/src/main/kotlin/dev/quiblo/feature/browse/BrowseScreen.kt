@@ -83,6 +83,10 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.paging.LoadState
+import androidx.paging.compose.LazyPagingItems
+import androidx.paging.compose.collectAsLazyPagingItems
+import androidx.paging.compose.itemKey
 import coil3.compose.SubcomposeAsyncImage
 import dev.quiblo.core.model.Category
 import dev.quiblo.core.model.Channel
@@ -119,6 +123,17 @@ fun BrowseScreen(
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val query by viewModel.currentQuery.collectAsStateWithLifecycle()
+
+    /**
+     * The catalogue, a page at a time.
+     *
+     * The grid used to be handed every row of a kind — tens of thousands on a real account,
+     * mapped to domain objects and re-emitted on every write to the table — to draw about a
+     * dozen cards. `PagingData` is a stream of loads rather than a value, which is why it is
+     * collected here and not read off [BrowseUiState].
+     */
+    val items = viewModel.pagedItems.collectAsLazyPagingItems()
+    val loaded = items.itemSnapshotList.items
     var guideFor: Channel? by remember { mutableStateOf(null) }
     var showCategorySheet by remember { mutableStateOf(false) }
     // Grid by default: artwork is the point of a catalogue, and the list view remains one
@@ -148,7 +163,7 @@ fun BrowseScreen(
     PrefetchWhenSettled(
         isScrolling = { gridState.isScrollInProgress },
         visibleIndices = { gridState.layoutInfo.visibleItemsInfo.map { it.index } },
-        items = state.items,
+        items = loaded,
         indexOffset = headerCount,
         // On for every grid, not only the poster ones. A live grid shows no score, but it
         // does show a logo, and a channel whose playlist supplied none has nothing in the
@@ -159,7 +174,7 @@ fun BrowseScreen(
     PrefetchWhenSettled(
         isScrolling = { listState.isScrollInProgress },
         visibleIndices = { listState.layoutInfo.visibleItemsInfo.map { it.index } },
-        items = state.items,
+        items = loaded,
         indexOffset = headerCount,
         enabled = true,
         onVisible = viewModel::onRowVisible,
@@ -198,6 +213,7 @@ fun BrowseScreen(
 
         BrowseCatalogue(
             state = state,
+            items = items,
             history = history,
             query = query,
             emptyMessage = emptyMessage,
@@ -243,8 +259,11 @@ fun BrowseScreen(
  * decisions, where each of them is simple on its own.
  */
 @Composable
+@Suppress("LongParameterList")
 private fun BrowseCatalogue(
     state: BrowseUiState,
+    /** The catalogue itself. Not on [state]: `PagingData` is a stream of loads, not a value. */
+    items: LazyPagingItems<Channel>,
     history: List<HistoryEntry>,
     query: String,
     emptyMessage: String,
@@ -258,13 +277,17 @@ private fun BrowseCatalogue(
     onToggleFavorite: (Channel) -> Unit,
     onShowGuide: (Channel) -> Unit,
 ) {
+    // A page still arriving is not an empty catalogue, and saying so is the difference between
+    // "nothing matched" and a screen that has not been answered yet.
+    val isEmpty = items.loadState.refresh !is LoadState.Loading && items.itemCount == 0
+
     when {
-        state.items.isEmpty() && query.isNotBlank() ->
+        isEmpty && query.isNotBlank() ->
             CentredMessage(stringResource(R.string.browse_no_results))
 
         // The strip is still shown above an empty catalogue: a category filter that matches
         // nothing does not mean the things the user was watching stopped existing.
-        state.items.isEmpty() -> Column {
+        isEmpty -> Column {
             ContinueWatchingRow(
                 entries = history,
                 posters = state.posters,
@@ -302,7 +325,10 @@ private fun BrowseCatalogue(
             // fits several times more items on screen than a list. Fetching for each one is
             // a burst of requests whose results nothing renders. The score a poster *does*
             // show is prefetched on scroll settling — see [PrefetchWhenSettled].
-            items(items = state.items, key = { it.id }) { item ->
+            items(count = items.itemCount, key = items.itemKey { it.id }) { index ->
+                // Null while the page holding this card is still arriving. Placeholders are off,
+                // so this is only ever transient and drawing nothing for a frame is honest.
+                val item = items[index] ?: return@items
                 if (showArtworkCards) {
                     ChannelArtCard(
                         channel = item,
@@ -335,7 +361,8 @@ private fun BrowseCatalogue(
                 }
             }
 
-            items(items = state.items, key = { it.id }) { item ->
+            items(count = items.itemCount, key = items.itemKey { it.id }) { index ->
+                val item = items[index] ?: return@items
                 ChannelRow(
                     channel = item,
                     fallbackLogoUrl = state.posters[item.stableKey],

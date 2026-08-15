@@ -15,6 +15,37 @@ Formatted after [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and ve
 
 ## Unreleased
 
+### Changed
+
+- **Advanced search answers a genre instead of thinking about it.** Filtering by a genre used to
+  read every film and series on your account and re-clean all of their titles from scratch — fifty
+  thousand of them on a large provider, every single time you pressed a genre, with nothing kept
+  between presses. It looked like the app had hung; it was working, extremely hard, on a question
+  it had already answered once. Each title's cleaned name is now worked out when your playlist is
+  loaded and remembered, so a genre is one indexed lookup.
+- **Hiding a writing system no longer costs anything to read.** The same change underneath: which
+  scripts a title is written in is worked out once and stored, rather than re-read letter by letter
+  for every row of every screen, every time the screen changes. Movies, Series and Live all draw
+  sooner for it, and a title you have hidden is no longer fetched from the database only to be
+  thrown away.
+- **The "how much of your catalogue is described" figure is counted rather than derived**, which
+  was the third thing making the search screen slow to open.
+- **Movies, Series and Live load a screenful rather than a catalogue.** Opening a tab used to read
+  every single title of that kind out of the database — tens of thousands of rows on a large
+  account — build an object for each, and hand the lot to a list that draws about a dozen. It now
+  loads pages as you scroll. On the television the poster grid asks for the first forty titles of
+  each category, which is what a row can show anyway: nobody presses right forty times.
+- **The channel list on the television pages too**, and still asks for the guide of the first ten
+  channels the moment it opens, so the list is not blank until you rest on a row.
+
+One consequence worth knowing: pressing a title now hands the player the titles loaded so far to
+zap along, rather than every title in the catalogue. The old list was only complete because the
+screen was paying to load all of it.
+
+Upgrading keeps your catalogue exactly as it is. The new information is filled in quietly after the
+app starts, and until it is, hiding works exactly as it did before — nothing appears or disappears
+in the meantime.
+
 ### Fixed
 
 - **Now popular no longer goes missing on the television.** The row is fetched with your Movie

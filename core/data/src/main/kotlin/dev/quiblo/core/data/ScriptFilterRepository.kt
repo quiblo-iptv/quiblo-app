@@ -18,6 +18,7 @@
 
 package dev.quiblo.core.data
 
+import dev.quiblo.core.common.SCRIPT_MASK_UNKNOWN
 import dev.quiblo.core.common.TitleScript
 import dev.quiblo.core.common.isInHiddenScript
 import dev.quiblo.core.datastore.PlayerSettingsStore
@@ -67,4 +68,26 @@ fun <T> Flow<List<T>>.hidingUnreadableScripts(
     nameOf: (T) -> String,
 ): Flow<List<T>> = combine(hiddenScripts) { items, hidden ->
     if (hidden.isEmpty()) items else items.filterNot { nameOf(it).isInHiddenScript(hidden) }
+}
+
+/**
+ * The same filter, for the rows a query could not decide about on its own.
+ *
+ * A catalogue written before schema 19 carries [SCRIPT_MASK_UNKNOWN] where its scripts should be,
+ * and the browse and search queries deliberately let those rows through rather than guess: an
+ * unknown mask has every bit set, so filtering on it would hide the entire catalogue, and an
+ * empty one would hide none of it. Neither is what the viewer asked for.
+ *
+ * So the rows that have a mask are decided in SQL — which is the whole point of the column — and
+ * the ones that do not are decided here, exactly as every row was before. `CatalogueIdentityBackfill`
+ * empties this branch in the background; on a fresh install it is empty from the start, and once
+ * a catalogue is filled this walks a list and touches nothing.
+ */
+internal fun <T> List<T>.hidingUncomputedScripts(
+    hidden: Set<TitleScript>,
+    maskOf: (T) -> Int,
+    nameOf: (T) -> String,
+): List<T> {
+    if (hidden.isEmpty()) return this
+    return filterNot { maskOf(it) == SCRIPT_MASK_UNKNOWN && nameOf(it).isInHiddenScript(hidden) }
 }

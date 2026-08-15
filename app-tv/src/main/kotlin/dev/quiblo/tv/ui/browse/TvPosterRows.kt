@@ -71,6 +71,7 @@ import dev.quiblo.feature.browse.BrowseScope
 import dev.quiblo.feature.browse.BrowseViewModel
 import dev.quiblo.feature.browse.RatingBadge
 import dev.quiblo.feature.browse.di.browseParams
+import dev.quiblo.feature.browse.di.categoryRowsParams
 import dev.quiblo.feature.browse.labelRes
 import dev.quiblo.tv.R
 import dev.quiblo.tv.ui.common.LocalAmbientSink
@@ -111,8 +112,13 @@ fun TvPosterRows(
         // A boolean here rather than the scope enum: this composable draws a catalogue or a
         // favourites list and has no third rendering, so taking the wider type would let a
         // caller ask it for a feed it cannot draw.
+        //
+        // Favourites is a list somebody built by hand and is as long as they made it. A
+        // catalogue is not: `CATEGORY_ROWS` caps each category in SQL at what a row can show,
+        // so this screen now reads about as many rows as it draws rather than every row of a
+        // kind — thirty thousand of them on a real account, to fill rows forty tiles wide.
         parameters = {
-            browseParams(kind, if (favouritesOnly) BrowseScope.FAVOURITES else BrowseScope.CATALOGUE)
+            if (favouritesOnly) browseParams(kind, BrowseScope.FAVOURITES) else categoryRowsParams(kind)
         },
     )
     val state by viewModel.uiState.collectAsStateWithLifecycle()

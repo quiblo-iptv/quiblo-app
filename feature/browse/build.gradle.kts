@@ -27,6 +27,7 @@ android {
 dependencies {
     implementation(projects.core.data)
     implementation(projects.core.model)
+    implementation(libs.paging.compose)
     implementation(libs.coil.compose)
     implementation(libs.coil.network.okhttp)
 }

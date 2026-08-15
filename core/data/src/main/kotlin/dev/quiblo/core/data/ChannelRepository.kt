@@ -18,7 +18,15 @@
 
 package dev.quiblo.core.data
 
+import androidx.paging.Pager
+import androidx.paging.PagingConfig
+import androidx.paging.PagingData
+import androidx.paging.filter
+import androidx.paging.map
+import dev.quiblo.core.common.SCRIPT_MASK_UNKNOWN
 import dev.quiblo.core.common.TitleScript
+import dev.quiblo.core.common.isInHiddenScript
+import dev.quiblo.core.common.toMask
 import dev.quiblo.core.database.dao.ChannelDao
 import dev.quiblo.core.database.dao.FavoriteDao
 import dev.quiblo.core.database.dao.SourceDao
@@ -71,7 +79,13 @@ import java.util.concurrent.ConcurrentHashMap
 // Seven collaborators, and each is a different question this repository answers: two DAOs,
 // whose data it is, where sources come from, how to fetch them, the clock, and the thread to
 // map on. Bundling them behind a holder would rename the list rather than shorten it.
-@Suppress("LongParameterList")
+//
+// Fifteen functions, which is one over the threshold, and the fifteenth is `pagedBrowse` — the
+// same feed as `observeBrowse` in the shape a flat grid needs. Both have to exist: the
+// television's poster grid groups its whole answer into rows and cannot take a paged list, and
+// a phone grid must not read a catalogue to draw a screenful. Splitting them across two classes
+// would put one table's reads behind two names and leave the count where it is.
+@Suppress("LongParameterList", "TooManyFunctions")
 @OptIn(ExperimentalCoroutinesApi::class)
 class ChannelRepository(
     private val channelDao: ChannelDao,
@@ -119,19 +133,119 @@ class ChannelRepository(
     ): Flow<List<Channel>> =
         // Re-queried when the profile changes, so switching redraws the hearts rather than
         // leaving the previous viewer's on screen until something else invalidates them.
-        profiles.activeProfile.flatMapLatest { profile ->
-            channelDao.observeBrowse(
-                profileId = profile?.id ?: Profile.NONE_ID,
-                sourceId = sourceId,
-                kind = kind.name,
-                groupTitle = groupTitle,
-                // Escaped so a viewer typing % or _ searches for those characters rather than
-                // handing SQL a wildcard. See escapeForLike.
-                query = escapeForLike(query.trim()),
-                favoritesOnly = if (favoritesOnly) 1 else 0,
-            )
-        }.map { rows -> rows.map { it.channel.toDomain(isFavorite = it.isFavorite) } }
-            .hidingUnreadableScripts(hiddenScripts) { it.name }
+        //
+        // Re-queried on the hidden scripts too, and that is the change `021` made: the filter
+        // used to run in Kotlin over every row of every emission, and it is now a bitmask
+        // predicate the query itself applies. A row that will be hidden is no longer read, no
+        // longer mapped, and no longer walked character by character to decide.
+        combine(profiles.activeProfile, hiddenScripts) { profile, hidden -> profile to hidden }
+            .flatMapLatest { (profile, hidden) ->
+                channelDao.observeBrowse(
+                    profileId = profile?.id ?: Profile.NONE_ID,
+                    sourceId = sourceId,
+                    kind = kind.name,
+                    groupTitle = groupTitle,
+                    // Escaped so a viewer typing % or _ searches for those characters rather than
+                    // handing SQL a wildcard. See escapeForLike.
+                    query = escapeForLike(query.trim()),
+                    favoritesOnly = if (favoritesOnly) 1 else 0,
+                    hiddenMask = hidden.toMask(),
+                    unknownMask = SCRIPT_MASK_UNKNOWN,
+                ).map { rows ->
+                    rows.hidingUncomputedScripts(hidden, { it.channel.scriptMask }, { it.channel.name })
+                }
+            }
+            .map { rows -> rows.map { it.channel.toDomain(isFavorite = it.isFavorite) } }
+            .flowOn(browseDispatcher)
+
+    /**
+     * The same feed, a page at a time.
+     *
+     * **What this replaces is a screen that read its whole catalogue to draw one screenful.**
+     * `observeBrowse` has no `LIMIT` and nothing paged it, so opening Movies on a large account
+     * materialised thirty thousand rows, allocated a domain object for each, and handed the lot to
+     * a lazy grid that would draw about twelve of them. The rows after the first page were paid
+     * for on every emission and looked at by nobody.
+     *
+     * The predicates are the paged query's, not this layer's — including the writing-system mask,
+     * which is why a hidden title costs nothing here rather than costing a page's worth of
+     * overscan. Rows written before schema 19 carry no mask and are still decided in Kotlin, on
+     * the page they arrive in.
+     *
+     * `PagingData` is not a list and deliberately does not become one. The screens that need the
+     * whole answer at once — the television's poster grid, which groups into category rows — use
+     * [observeCategoryRows] instead, which caps each category in SQL.
+     */
+    fun pagedBrowse(
+        sourceId: Long,
+        kind: MediaKind,
+        groupTitle: String? = null,
+        query: String = "",
+        favoritesOnly: Boolean = false,
+    ): Flow<PagingData<Channel>> =
+        combine(profiles.activeProfile, hiddenScripts) { profile, hidden -> profile to hidden }
+            .flatMapLatest { (profile, hidden) ->
+                Pager(
+                    config = PagingConfig(
+                        pageSize = PAGE_SIZE,
+                        // Two screenfuls ahead of the last visible row on the largest layout, so
+                        // a page is fetched before it is looked at rather than after.
+                        prefetchDistance = PAGE_SIZE,
+                        // Off. The whole point is not to hold the catalogue in memory; a
+                        // placeholder per unloaded row is a smaller version of the same mistake,
+                        // and a television grid has no scrollbar for them to make meaningful.
+                        enablePlaceholders = false,
+                        initialLoadSize = PAGE_SIZE * INITIAL_PAGES,
+                    ),
+                ) {
+                    channelDao.pagedBrowse(
+                        profileId = profile?.id ?: Profile.NONE_ID,
+                        sourceId = sourceId,
+                        kind = kind.name,
+                        groupTitle = groupTitle,
+                        query = escapeForLike(query.trim()),
+                        favoritesOnly = if (favoritesOnly) 1 else 0,
+                        hiddenMask = hidden.toMask(),
+                        unknownMask = SCRIPT_MASK_UNKNOWN,
+                    )
+                }.flow.map { page ->
+                    page.filter { row ->
+                        row.channel.scriptMask != SCRIPT_MASK_UNKNOWN ||
+                            !row.channel.name.isInHiddenScript(hidden)
+                    }.map { it.channel.toDomain(isFavorite = it.isFavorite) }
+                }
+            }
+            .flowOn(browseDispatcher)
+
+    /**
+     * The first [perCategory] items of every category, for a screen that draws a row each.
+     *
+     * The television's poster grid, and it is the one browse screen Paging is wrong for: it
+     * groups its whole answer into rows, and a paged list has no whole to group. What it was
+     * doing wrong is simpler than paging — it read every row of a kind to draw about forty tiles
+     * per row. The cap is applied in SQL, so the answer is the size of what is drawn.
+     */
+    fun observeCategoryRows(
+        sourceId: Long,
+        kind: MediaKind,
+        query: String = "",
+        perCategory: Int = DEFAULT_PER_CATEGORY,
+    ): Flow<List<Channel>> =
+        combine(profiles.activeProfile, hiddenScripts) { profile, hidden -> profile to hidden }
+            .flatMapLatest { (profile, hidden) ->
+                channelDao.observeCategoryRows(
+                    profileId = profile?.id ?: Profile.NONE_ID,
+                    sourceId = sourceId,
+                    kind = kind.name,
+                    query = escapeForLike(query.trim()),
+                    perCategory = perCategory,
+                    hiddenMask = hidden.toMask(),
+                    unknownMask = SCRIPT_MASK_UNKNOWN,
+                ).map { rows ->
+                    rows.hidingUncomputedScripts(hidden, { it.channel.scriptMask }, { it.channel.name })
+                }
+            }
+            .map { rows -> rows.map { it.channel.toDomain(isFavorite = it.isFavorite) } }
             .flowOn(browseDispatcher)
 
     /**
@@ -339,6 +453,35 @@ class ChannelRepository(
      */
     private val seriesCache = ConcurrentHashMap<String, SeriesDetails>()
     private val vodCache = ConcurrentHashMap<String, VodDetails>()
+
+    private companion object {
+        /**
+         * How many rows a page holds.
+         *
+         * Several screenfuls of the largest layout, which is a television grid. Small enough that
+         * the first page arrives immediately whatever the catalogue's size — the whole point —
+         * and large enough that scrolling does not issue a query every few tiles.
+         */
+        const val PAGE_SIZE = 60
+
+        /**
+         * How many pages the first load asks for.
+         *
+         * Paging's own advice, and it is about scroll restoration rather than speed: a screen
+         * returned to has to be able to redraw the position it was left at, and a single first
+         * page cannot if the viewer had scrolled past it.
+         */
+        const val INITIAL_PAGES = 3
+
+        /**
+         * How many tiles a television category row holds.
+         *
+         * The same forty [BrowseFeed.recentLimit] uses, for the same reason: a row is walked with
+         * a D-pad, and nobody presses right forty times. Reading more is reading rows nobody
+         * reaches.
+         */
+        const val DEFAULT_PER_CATEGORY = 40
+    }
 }
 
 /**

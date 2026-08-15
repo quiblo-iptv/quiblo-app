@@ -84,8 +84,6 @@ device until there is a reason to give that layer logging properly.
 
 ## 2 and 3. One root: the catalogue is re-cleaned on every question
 
-*Not yet implemented — this section is the diagnosis the next two branches are built from.*
-
 **Advanced search spins.** `SearchRepository.byGenre` reads `channelDao.titlesForMetadata(...)` —
 every film and series on the account, ~50,000 rows here — and calls `cacheIdentity()` on each.
 That is `titleIdentity()`: eight regex passes, a `lowercase()`, and a year strip. Roughly 400,000
@@ -109,21 +107,93 @@ only to pay for a Kotlin-side filter — `SCRIPT_OVERSCAN`, `LIVE_OVERSCAN` — 
 `titleIdentity()` and `isInHiddenScript` are unchanged; they are still the definition, they simply
 move to import time.
 
-**Paging, and the one place it does not fit.** The phone's browse grid and the television's Live
-list are flat `items(...)` calls and take Paging 3 cleanly. The television's Movies and Series
-grid does not: `groupIntoRows` buckets the whole flat list into per-category rows in Kotlin, and a
-paged list has no whole to group. That screen instead takes the shape it already implies — the
-category list is a cheap query, so each row becomes its own bounded query of about forty items,
-fetched as the row scrolls into view. Nobody walks three thousand tiles along one row with a
-D-pad, which is the reasoning `BrowseFeed.recentLimit` already uses.
+### What `BUG-022` actually did
 
-*Consequence to accept:* `onPlay(state.items, item.flatIndex)` hands the player everything on
-screen to zap along. It becomes the rows loaded so far. That is a real behaviour change and the
-honest one — the old list was only complete because the screen was paying to load the whole
-catalogue.
+Schema `18 → 19`. `MIGRATION_18_19` adds `searchTitle`, `identityYear` and `scriptMask` to
+`channels`, adds the two indexes that make them worth having, and **reads not one row**. Filling
+fifty thousand rows inside a migration is ten to twenty seconds of a television frozen on its own
+splash, because a migration runs on the first access to the database with every screen waiting
+behind it.
 
-*At risk and to be re-run rather than edited around:* `TvBrowseScrollStabilityTest` (defect #008,
-four wrong analyses), `SearchRepositoryTest`, `HiddenCategorySearchTest`, `BrowseViewModelTest`.
+**Unknown is a third value, and that is the load-bearing decision.** Rows arrive carrying
+`SCRIPT_MASK_UNKNOWN`; `CatalogueIdentityBackfill` fills them in the background at app start, in
+batches of five hundred, cancellable at every row; and every query that reads the mask passes an
+unfilled row through to the Kotlin filter that decided every row before schema 19. So a catalogue
+mid-backfill hides exactly what it always hid. Defaulting the column to `0` would have been a
+window in which hiding quietly stopped — which is the defect the release before this one was spent
+fixing — and `-1` filtered naively would have hidden the entire catalogue.
+
+**What moved into SQL.**
+
+| Was | Is |
+| :--- | :--- |
+| Clean 50,000 titles in Kotlin, intersect with cached genres | `searchByGenre`: an indexed join on `(searchTitle, kind, identityYear)`, `LIMIT` per kind |
+| Regex strip + codepoint walk + `Set` alloc per title per emission | `(:hiddenMask & c.scriptMask) = 0` in `observeBrowse` and `search` |
+| Clean the whole catalogue again to compute coverage | `countDistinctTitles` and `countDescribedTitles` |
+
+Three details in the genre join are each one test in `GenreAndScriptQueryTest`, because each of
+them fails as a plausible list of the wrong titles rather than as an error: genres are matched
+newline-wrapped so `Drama` does not match `Crime Drama`; the year is half the key so two films
+called Dune stay two films; and a blank `searchTitle` is excluded, because it is the shared "not
+worth looking up" value and joining on it would file every junk row under one genre.
+
+**Tests.** Ten in `GenreAndScriptQueryTest` against real SQLite — a mocked DAO proves nothing about
+a join. Six in `CatalogueIdentityBackfillTest`, including that a backfilled row gets the same two
+answers `Channel.toEntity` computes at import, so an upgraded catalogue and a re-imported one end
+up identical. `MigrationTest` gains 18→19 and asserts the refusal to read rows. The mocked
+`SearchRepositoryTest` cases that used to assert the Kotlin matching now assert its *absence* —
+that this layer no longer reaches for the catalogue at all.
+
+**Not touched, and worth an item of its own.** `PopularTitlesRepository.popular` and
+`TitleMetadataScanner` both still read `titlesForMetadata` and clean in Kotlin. Neither is on a
+per-press path — the popular row is built at most twice a session and the scanner is explicitly
+started — but both could now join on the stored key instead. Raised rather than absorbed.
+
+### Paging — `BUG-023`, and the one place it does not fit
+
+`observeBrowse` had no `LIMIT` and nothing paged it, so opening Movies read every row of the kind,
+allocated a domain object per row and handed the lot to a lazy grid that draws about twelve. Two
+shapes were needed, not one:
+
+- **Flat lists take Paging 3.** The phone's browse grid and list, and the television's Live list.
+  `pagedBrowse` in the DAO, `Pager` in the repository, `cachedIn(viewModelScope)` on
+  `BrowseViewModel.pagedItems`. It is deliberately *not* a field on `BrowseUiState`: `PagingData`
+  is a stream of loads rather than a value, and putting one inside screen state would hand the
+  grid a fresh pager — and throw away its scroll position and every loaded page — every time a
+  rating arrived or a poster resolved.
+- **The television's poster grid cannot be paged**, because `groupIntoRows` buckets its whole
+  answer into a row per category and a paged list has no whole to group. It gets
+  `BrowseScope.CATEGORY_ROWS` and one window-function query capping each category at forty —
+  `ROW_NUMBER() OVER (PARTITION BY groupTitle …)`, ordered back into the provider's own order by
+  the outer query, because `ROW_NUMBER`'s partition would otherwise hand the screen its categories
+  alphabetically. Forty is `BrowseFeed.recentLimit`'s reasoning: nobody presses right forty times.
+  The screen's grouping and its measured scroll behaviour are untouched; it simply reads about as
+  many rows as it draws.
+
+**The guide prefetch moved rather than being dropped.** `017` fixed a television Live list that
+drew blank until somebody focused a row, by asking for the first ten channels' guides as soon as
+the list existed. That lived in the ViewModel because the ViewModel could see the list. The list
+is paged now, so `TvLiveScreen` calls `onRowVisible` for the first ten loaded rows instead —
+and nothing about the guard moved: the kind check, the stream-id check, the once-per-session
+dedupe and the concurrency limit are all still behind that one door, which is what the rewritten
+`BrowseViewModelTest` cases now assert directly.
+
+**Consequence accepted:** `onPlay(items, index)` handed the player everything on screen to zap
+along. It is now the pages loaded so far. A real behaviour change, and the honest one — the old
+list was only complete because the screen was paying to load the whole catalogue.
+
+**Two copies of one query, and the test that keeps them honest.** Room cannot return both a
+`Flow<List<…>>` and a `PagingSource` from one declaration, so the browse predicates are written
+twice. A predicate added to one and forgotten in the other is not a build failure and not a crash
+— it is one app hiding a writing system the other does not.
+`PagedBrowseMatchesUnpagedTest` asserts the two answers are the same list across category, search,
+favourites, a hidden script and an uncomputed row.
+
+**Not touched:** `TvBrowseScrollStabilityTest` needed no change, because the poster grid's own
+shape did not change — only the size of what it is handed.
+
+New dependencies: `androidx.paging:paging-runtime`, `paging-compose`, `paging-common`,
+`androidx.room:room-paging`. All Apache-2.0, so gate 1 is satisfied.
 
 ---
 
@@ -144,3 +214,36 @@ six pixels of it.
 
 The phone player has no ambient at all and does not get one here — that belongs with the episode
 controls already waiting on the phone.
+
+---
+
+## What a device still has to answer
+
+Ten tickets, `A14.1` to `A14.10`, in
+[`docs/TESTING-REQUIRED.md`](../docs/TESTING-REQUIRED.md). Every one of them is about how long
+something takes or whether a row is there at all, and neither can be answered on a small
+catalogue — which is exactly how three of these four defects reached a release.
+
+Two of them are worth naming here because they are the ones a passing build says least about:
+
+- **`A14.3`** wants a *number*. Three separate changes claim the browse load time between them —
+  the script mask, the per-category cap, and paging — and only a device can say which of them
+  mattered. "Still slow" cannot be acted on.
+- **`A14.8`** is the upgrade, with a writing system hidden. The whole design of `MIGRATION_18_19`
+  is that hiding keeps working while the backfill runs, and there is no way to see that except by
+  installing over 0.18.0 and looking twice, a minute apart.
+
+## What was not measured
+
+**Coverage is not reported for this round, and that is the project's existing rule rather than an
+omission here.** `coverageAll` covers `:source:m3u` and `:source:xtream` only — the parsers, which
+are pure functions over text where a covered line is genuinely an exercised line. Nothing in this
+round touched a parser, so the gate is green and says nothing about this work. The Amendment 10
+floor is written against first-party code generally; this repository narrowed it deliberately and
+wrote the reasoning into `build.gradle.kts`. Recorded as a divergence rather than acted on alone.
+
+What this round has instead is **31 new tests and four rewritten ones**, of which 20 run against
+real SQLite — because the work moved two predicates and a join *into* SQL, and a mocked DAO proves
+nothing about any of them. Two of the four reports have a test that is red against `v0.18.0` and
+green against the fix; the other two are load times, which no test on this machine can settle
+(`A14.3`).

@@ -22,7 +22,7 @@ down at the bottom of `012` is the one this page is built around:
 
 So every row below says **what to look at**, not what was changed.
 
-Last updated: **2026-08-15**.
+Last updated: **2026-08-16**.
 
 ---
 
@@ -753,6 +753,100 @@ use rather than an afternoon.
 | **What to look at** | Install over an existing build |
 | **Passes if** | Every channel, favourite and resume point is where it was, and the tab works |
 | **Why it is here** | Schema 18. The migration adds one empty table and touches nothing, which is exactly the sort of claim that should still be checked once |
+
+---
+
+## A14 — Round `021`: what 0.18.0 broke and what was always slow
+
+**Where:** the television, on the real account. Every row here is about *how long something
+takes* or *whether a row is there at all*, and neither can be answered on a small catalogue —
+which is exactly how the defects in this round reached a release. From
+[`021`](../agile/021_The_Catalogue_Under_Load_of_Quiblo.md).
+
+### A14.1 — For You has all three rows
+
+| | |
+| :---- | :---- |
+| **What to look at** | Kill the app, open it cold with a Movie Database key already configured, and go to For You |
+| **Passes if** | Recently added, Now popular, and — on a profile that has watched something — You may like |
+| **Fails if** | Only Recently added. That is the report, and the fix is about *timing*: the row was built before the encrypted key had been read |
+| **Why it is here** | It must be a **cold** start. Opening the tab a second time in a warm process is the case that always worked |
+
+### A14.2 — a key pasted while the tab is open
+
+| | |
+| :---- | :---- |
+| **What to look at** | With no key configured, open For You, then go to Settings, paste a key, and come back |
+| **Passes if** | Now popular fills in without the app being restarted |
+| **Fails if** | The row stays absent until a relaunch |
+
+### A14.3 — Movies and Series open
+
+| | |
+| :---- | :---- |
+| **What to look at** | From the Live tab, press across to Movies, and time it against the same account in another player |
+| **Passes if** | The first row of posters is there in about the time another player takes |
+| **Fails if** | Seconds of spinner. Say how many — "still slow" cannot be acted on |
+| **Why it is here** | Three separate changes claim this between them, and only a device can say which of them mattered |
+
+### A14.4 — and they hold what they held
+
+| | |
+| :---- | :---- |
+| **What to look at** | Walk right along two or three category rows, to the end of one |
+| **Passes if** | Every row still has its titles, in the provider's order, under the provider's category names in the provider's category order |
+| **Fails if** | A row is short where it was not, categories are alphabetical, or a row ends sooner than it used to |
+| **Why it is here** | Each row is now capped at forty titles in the query. Forty is a deliberate choice, not a bug — but a row that was *shorter* than forty and got shorter still is |
+
+### A14.5 — the channel list, and its guide
+
+| | |
+| :---- | :---- |
+| **What to look at** | Open Live and do not touch the remote |
+| **Passes if** | The list draws quickly, and the first several channels show what is on now without anything being focused |
+| **Fails if** | Every row is blank until you rest on one. That is `017`'s defect returning, and the prefetch it names has moved to this screen |
+
+### A14.6 — scrolling a long list
+
+| | |
+| :---- | :---- |
+| **What to look at** | Hold right/down through a long category or channel list, past a few hundred items |
+| **Passes if** | It keeps up, and nothing flickers or blanks as new pages arrive |
+| **Fails if** | It stalls at regular intervals, or rows appear empty for a moment before filling |
+
+### A14.7 — advanced search answers
+
+| | |
+| :---- | :---- |
+| **What to look at** | Search → Advanced → press Action, with the search box empty. Then press two or three other genres |
+| **Passes if** | Results in about a second, every time, including the second and third press |
+| **Fails if** | A spinner that never resolves. That is the report |
+| **Why it is here** | It needs a **scanned** account. The filter reads the metadata cache, and an unscanned catalogue has nothing to filter by |
+
+### A14.8 — the upgrade, and what hiding does during it
+
+| | |
+| :---- | :---- |
+| **What to look at** | Install over 0.18.0 with a writing system hidden in Settings, then open Movies straight away and again a minute later |
+| **Passes if** | Titles in the hidden script are absent both times, and every channel, favourite and resume point survived |
+| **Fails if** | Hidden titles appear for a while and then vanish, or the catalogue is empty, or nothing is hidden at all |
+| **Why it is here** | Schema 19 adds three columns and fills them in the background afterwards. The whole design of that is that hiding keeps working while it runs, and this is the only way to see it |
+
+### A14.9 — ambient keeps up
+
+| | |
+| :---- | :---- |
+| **What to look at** | Play a 2.35:1 film and watch the black bars through a scene change |
+| **Passes if** | The light in the bars moves with the scene rather than arriving after it |
+| **Fails if** | It still lags visibly, or it flickers on every cut — the second is the risk of making it faster |
+
+### A14.10 — and it has a switch
+
+| | |
+| :---- | :---- |
+| **What to look at** | Settings → Playback → Ambient light. It should read On. Turn it off and play the same film |
+| **Passes if** | The bars are plain black, and the setting is still off after a restart |
+| **Fails if** | The switch reads Off when the screen opens, or turning it off changes nothing |
 
 ---
 

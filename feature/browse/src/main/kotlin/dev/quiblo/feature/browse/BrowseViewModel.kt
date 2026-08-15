@@ -20,6 +20,8 @@ package dev.quiblo.feature.browse
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import androidx.paging.PagingData
+import androidx.paging.cachedIn
 import dev.quiblo.core.data.CategoryRepository
 import dev.quiblo.core.data.ChannelLogoRepository
 import dev.quiblo.core.data.ChannelRepository
@@ -191,8 +193,26 @@ internal class RecentKeys(private val capacity: Int = DEFAULT_CAPACITY) {
  * check. `TvBarSpot` in the television app is the same decision for the same reason.
  */
 enum class BrowseScope {
-    /** The provider's catalogue for one [MediaKind], grouped by its categories. */
+    /**
+     * The provider's catalogue for one [MediaKind], as a flat list.
+     *
+     * Paged. The list is the whole of a kind — tens of thousands of rows on a real account — and
+     * every screen using this scope draws it as one flat grid or one flat list, which is the
+     * shape Paging is for. [BrowseUiState.items] is empty here on purpose; the rows arrive
+     * through [BrowseViewModel.pagedItems].
+     */
     CATALOGUE,
+
+    /**
+     * The same catalogue, but only the first tiles of each category.
+     *
+     * The television's poster grid, and the one browse screen Paging is wrong for: it groups its
+     * whole answer into a row per category, and a paged list has no whole to group. Capping each
+     * category in SQL gives it an answer the size of what it draws instead of the size of the
+     * catalogue — which is what it was reading before, thirty thousand rows at a time, to show
+     * about forty per row.
+     */
+    CATEGORY_ROWS,
 
     /** Titles this viewer marked, across every kind. Ignores the script filter, by design. */
     FAVOURITES,
@@ -340,6 +360,45 @@ class BrowseViewModel(
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS), BrowseUiState())
 
+    /**
+     * The catalogue, a page at a time, for the screens that draw it flat.
+     *
+     * **Separate from [uiState] rather than a field inside it, and that is Paging's own shape
+     * rather than a preference.** `PagingData` is a stream of loads, not a value: putting one in
+     * a `StateFlow` of screen state would mean every unrelated change to that state — a rating
+     * arriving, a poster resolving, a category chip moving — handing the grid a "new" pager and
+     * throwing away its scroll position along with every page already loaded.
+     *
+     * `cachedIn` is what makes the stream survive a configuration change, and it belongs to the
+     * ViewModel because that is the only thing here that outlives one.
+     *
+     * Empty for every scope but [BrowseScope.CATALOGUE]. Favourites is a list somebody built by
+     * hand, Recently Added is already capped at forty, and the television's poster grid groups
+     * its whole answer — none of the three is a list long enough to page, and two of them cannot
+     * be paged at all.
+     */
+    val pagedItems: Flow<PagingData<Channel>> =
+        if (feed.scope != BrowseScope.CATALOGUE) {
+            flowOf(PagingData.empty())
+        } else {
+            combine(
+                activeSourceId,
+                selectedCategory,
+                query.debounce { if (it.isEmpty()) 0L else SEARCH_DEBOUNCE_MILLIS },
+            ) { active, selected, searchText -> Triple(active, selected, searchText) }
+                .flatMapLatest { (active, selected, searchText) ->
+                    val sourceId = (active as? ActiveSource.Resolved)?.id
+                        ?: return@flatMapLatest flowOf(PagingData.empty())
+                    channelRepository.pagedBrowse(
+                        sourceId = sourceId,
+                        kind = feed.kind,
+                        groupTitle = selected,
+                        query = searchText,
+                    )
+                }
+                .cachedIn(viewModelScope)
+        }
+
     private fun feedFor(sourceId: Long) = combine(
         categoriesFor(sourceId),
         selectedCategory,
@@ -371,14 +430,16 @@ class BrowseViewModel(
                     sinceEpochMillis = now() - RECENT_WINDOW_MILLIS,
                 ).map { BrowseRows(it.items, orderedByDate = it.orderedByDate) }
 
-            BrowseScope.CATALOGUE ->
-                channelRepository.observeBrowse(sourceId, feed.kind, selected, searchText).map(::BrowseRows)
+            BrowseScope.CATEGORY_ROWS ->
+                channelRepository.observeCategoryRows(sourceId, feed.kind, searchText).map(::BrowseRows)
+
+            // Paged, and therefore not here. `pagedItems` carries the rows; this scope's `items`
+            // stays empty rather than holding a second unpaged copy of the same query, which
+            // would be the whole cost this scope exists to have removed.
+            BrowseScope.CATALOGUE -> flowOf(BrowseRows(emptyList()))
         }
-        // A live list asks for the top of itself the moment it exists, rather than waiting for
-        // the remote to come to rest on a row that may never be reached. See prefetchGuides.
-        val items = if (feed.kind == MediaKind.LIVE) rows.onEach { prefetchGuides(it.items) } else rows
         combine(
-            items,
+            rows,
             guideFor(sourceId),
             ratings,
             posters,
@@ -473,15 +534,17 @@ class BrowseViewModel(
     private data class BrowseRows(val items: List<Channel>, val orderedByDate: Boolean = true)
 
     /**
-     * The provider's categories, for the one feed that groups by them.
+     * The provider's categories, for the two feeds that show them.
      *
-     * Favourites and Recently Added are single lists with no rail, and both were subscribing
-     * to a query whose every answer they threw away at the state boundary. The same reasoning
-     * as [guideFor] and [historyFor]: a feed subscribes to what it can display, and to nothing
-     * else.
+     * The phone's catalogue draws them as a filter rail; the television's poster grid draws one
+     * row per category and reads this for their *order*, which is the provider's and cannot be
+     * recovered from the items. Favourites and Recently Added are single lists with no rail, and
+     * both were subscribing to a query whose every answer they threw away at the state boundary.
+     * The same reasoning as [guideFor] and [historyFor]: a feed subscribes to what it can
+     * display, and to nothing else.
      */
     private fun categoriesFor(sourceId: Long): Flow<List<Category>> =
-        if (feed.scope == BrowseScope.CATALOGUE) {
+        if (feed.scope in CATALOGUE_SCOPES) {
             categoryRepository.observeCategories(sourceId, feed.kind)
         } else {
             flowOf(emptyList())
@@ -550,25 +613,6 @@ class BrowseViewModel(
     }
 
     /**
-     * Asks for the guide of the first handful of channels as soon as a live list exists.
-     *
-     * **This is the defect this branch is named for.** The television fetches a guide only for
-     * the row focus has rested on for 450ms, and nothing has focus when the screen opens — so
-     * the whole list drew with no programme on any row, indefinitely, for anybody who did not
-     * happen to stop on one. The phone never had this: it fetches for the rows on screen.
-     *
-     * Bounded and deduplicated rather than unbounded, because the restraint it replaces was
-     * right about the danger. [onRowVisible] carries the kind check, the stream-id check, the
-     * once-per-session dedupe and the concurrency limit; this adds a fixed ten calls into all
-     * of that and no new path around any of it. Re-emissions of the same list — a write to the
-     * table, a category change, a keystroke — cost nothing, because the dedupe has already seen
-     * these keys.
-     */
-    private fun prefetchGuides(channels: List<Channel>) {
-        channels.take(GUIDE_PREFETCH_ROWS).forEach(::onRowVisible)
-    }
-
-    /**
      * The "continue watching" feed for this screen.
      *
      * Nothing for Live, which records no position, and nothing for Favourites, which is a
@@ -582,7 +626,7 @@ class BrowseViewModel(
      * request the poster grid makes and therefore usually already answered from the cache.
      */
     private fun historyFor(sourceId: Long): Flow<List<HistoryEntry>> =
-        if (feed.scope != BrowseScope.CATALOGUE || feed.kind == MediaKind.LIVE) {
+        if (feed.scope !in CATALOGUE_SCOPES || feed.kind == MediaKind.LIVE) {
             flowOf(emptyList())
         } else {
             historyRepository.observeHistory(sourceId, feed.kind)
@@ -613,6 +657,14 @@ class BrowseViewModel(
      * tab fires a `get_short_epg` per row that can only ever come back empty. Panels
      * count those against their anti-flood rules and start refusing the account, which
      * takes series details and refresh down with it.
+     *
+     * **Every guide request goes through here, including the top-of-list prefetch.** That
+     * prefetch — `017`'s fix for a television list that drew blank until somebody focused a row
+     * — used to live in this class, which could see the whole list. The list is paged now, so
+     * the screen is what knows which rows exist and `TvLiveScreen` calls this for the first ten
+     * of them. Nothing about the guard moved: the kind check, the stream-id check, the
+     * once-per-session dedupe and the concurrency limit are all still here, and there is still
+     * no path around them.
      */
     fun onRowVisible(channel: Channel) {
         if (channel.kind != MediaKind.LIVE) return
@@ -792,6 +844,17 @@ class BrowseViewModel(
     }
 
     private companion object {
+        /**
+         * The two scopes that are a provider's catalogue rather than a list about the viewer.
+         *
+         * Both show the provider's categories and both show what was left half-watched; they
+         * differ only in the shape they read it in — a page of the whole kind, or the top of
+         * each category. Naming the pair once is what stops the next scope-conditional feed
+         * being added to one of them and quietly missing from the other, which is how the
+         * television lost its category order the first time this split existed.
+         */
+        val CATALOGUE_SCOPES = setOf(BrowseScope.CATALOGUE, BrowseScope.CATEGORY_ROWS)
+
         const val STOP_TIMEOUT_MILLIS = 5_000L
         const val SEARCH_DEBOUNCE_MILLIS = 120L
 
@@ -804,16 +867,6 @@ class BrowseViewModel(
          */
         const val RECENT_WINDOW_MILLIS = 30L * 24 * 60 * 60 * 1000
         const val MAX_CONCURRENT_GUIDE_FETCHES = 3
-
-        /**
-         * How many rows of a fresh live list are asked about without being focused.
-         *
-         * About a screenful on the largest layout, which is what makes the list look answered
-         * rather than empty. A fixed number and not a fraction of the account: the whole reason
-         * the television fetched one row at a time is that "per visible row" against a
-         * 20,000-channel account is how this project's account was blocked, twice.
-         */
-        const val GUIDE_PREFETCH_ROWS = 10
 
         /**
          * Four at a time against the metadata service.

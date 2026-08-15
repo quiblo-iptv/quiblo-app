@@ -147,6 +147,10 @@ components ship.
 - `androidx.navigationevent:navigationevent-android`
 - `androidx.navigationevent:navigationevent-compose`
 - `androidx.navigationevent:navigationevent-compose-android`
+- `androidx.paging:paging-common`
+- `androidx.paging:paging-common-android`
+- `androidx.paging:paging-compose`
+- `androidx.paging:paging-compose-android`
 - `androidx.print:print`
 - `androidx.profileinstaller:profileinstaller`
 - `androidx.recyclerview:recyclerview`
@@ -154,6 +158,8 @@ components ship.
 - `androidx.room:room-common`
 - `androidx.room:room-common-jvm`
 - `androidx.room:room-ktx`
+- `androidx.room:room-paging`
+- `androidx.room:room-paging-android`
 - `androidx.room:room-runtime`
 - `androidx.room:room-runtime-android`
 - `androidx.savedstate:savedstate`

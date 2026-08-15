@@ -96,6 +96,9 @@
     <string name="tv_search_suggestions">Did you mean</string>
     <string name="tv_search_clear">Clear</string>
     <string name="tv_search_advanced">Advanced</string>
+    <!-- One switch for hidden categories and hidden writing systems, because from the viewer's
+         side those are one question: look in the parts I usually do not want to see. -->
+    <string name="tv_search_include_hidden">Include hidden</string>
     <!-- Row headings come from feature:browse now, so both apps say the same words. -->
     <string name="tv_search_genres_coverage">Genres describe %1$d%% of your catalogue so far — browsing fills in the rest.</string>
     <string name="tv_search_genres_empty">Browse some films or series and you will be able to filter by genre here.</string>

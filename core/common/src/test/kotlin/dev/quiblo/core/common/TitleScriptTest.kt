@@ -48,9 +48,9 @@ class TitleScriptTest {
     @Test
     fun `digits and punctuation are skipped, letters are not`() {
         assertEquals(TitleScript.Arabic, "4 | مسلسلات".firstStrongScript())
-        // And the limit of the rule, pinned rather than hidden: the K in "4K" is a Latin
-        // letter, so a provider's "4K | مسلسلات" reads as Latin. A viewer hiding Latin loses
-        // it. That is why this setting is a subtraction the viewer opts into, never a default.
+        // The K in "4K" is a Latin letter, so a provider's "4K | مسلسلات" *runs* left to right.
+        // What it is hidden by is a different question, and `any letter of a hidden script`
+        // answers it: that title is both Latin and Arabic and either set hides it.
         assertEquals(TitleScript.Latin, "4K | مسلسلات".firstStrongScript())
     }
 
@@ -68,16 +68,102 @@ class TitleScriptTest {
         assertFalse("Հայկական".isInHiddenScript(TitleScript.offered.toSet()))
     }
 
+    /**
+     * The rule this filter used to have, kept as a measurement of the half that did not change.
+     *
+     * Which way a line of text runs is still decided by its first strong letter, and
+     * [firstStrongScript] is what answers that. What moved is the hiding decision, below.
+     */
     @Test
-    fun `a trailing arabic word does not make a latin title arabic`() {
+    fun `a trailing arabic word does not change which way a latin title runs`() {
         assertEquals(TitleScript.Latin, "Dune 2 مترجم".firstStrongScript())
-        assertFalse("Dune 2 مترجم".isInHiddenScript(setOf(TitleScript.Arabic)))
+    }
+
+    /**
+     * **Any letter hides, not the first one**, and this is the case that was reported.
+     *
+     * A catalogue is full of titles that begin in Latin and are otherwise Arabic — a provider's
+     * prefix, a quality marker, a stray English word — and under the first-letter rule every one
+     * of them came back for a viewer who had asked not to be shown Arabic.
+     */
+    @Test
+    fun `any letter of a hidden script hides the title`() {
+        val arabic = setOf(TitleScript.Arabic)
+
+        assertTrue("Dune 2 مترجم".isInHiddenScript(arabic))
+        assertTrue("4K | مسلسلات".isInHiddenScript(arabic))
+        assertTrue("THE مسلسل الاختيار".isInHiddenScript(arabic))
+        assertFalse("Dune 2".isInHiddenScript(arabic))
+    }
+
+    /**
+     * A trailing bracketed tag is what a provider has *done* to a title, not what the title is.
+     *
+     * `Oppenheimer [عربي]` is an English film with an Arabic dub, and a viewer hiding Arabic
+     * wants to keep it. All three bracket shapes, and however many of them are stacked up.
+     */
+    @Test
+    fun `a trailing bracketed tag does not decide the title`() {
+        val arabic = setOf(TitleScript.Arabic)
+
+        assertFalse("Oppenheimer [عربي]".isInHiddenScript(arabic))
+        assertFalse("Dune 2024 (مترجم)".isInHiddenScript(arabic))
+        assertFalse("Dune 2024 {مترجم}".isInHiddenScript(arabic))
+        assertFalse("Dune 2024 (مترجم) [عربي]".isInHiddenScript(arabic))
+    }
+
+    /**
+     * The cost of the rule, pinned rather than hidden.
+     *
+     * The same tag written without brackets is indistinguishable from a title, so an English film
+     * a panel has labelled that way disappears. Accepted knowingly: the alternative is calling a
+     * title Arabic when it is *mostly* Arabic, and nobody can predict a threshold from a screen.
+     */
+    @Test
+    fun `an unbracketed tag is not distinguishable from a title, and hides`() {
+        assertTrue("Dune 2024 مترجم".isInHiddenScript(setOf(TitleScript.Arabic)))
+    }
+
+    /** And it runs both ways: an Arabic title with an English word in it hides Latin. */
+    @Test
+    fun `the rule is symmetric`() {
+        assertTrue("مسلسل الاختيار HD".isInHiddenScript(setOf(TitleScript.Latin)))
+        assertTrue("مسلسل الاختيار HD".isInHiddenScript(setOf(TitleScript.Arabic)))
+        assertFalse("مسلسل الاختيار".isInHiddenScript(setOf(TitleScript.Latin)))
+    }
+
+    @Test
+    fun `every script in a title is reported`() {
+        assertEquals(
+            setOf(TitleScript.Latin, TitleScript.Arabic),
+            "Dune 2 مترجم".strongScripts(),
+        )
+        assertEquals(setOf(TitleScript.Latin), "One Piece".strongScripts())
+        assertEquals(emptySet<TitleScript>(), "2026".strongScripts())
+    }
+
+    /** A bracket a provider never closed is not a tag, and must not eat the title behind it. */
+    @Test
+    fun `an unclosed bracket is left alone`() {
+        assertTrue("Dune 2024 [مترجم".isInHiddenScript(setOf(TitleScript.Arabic)))
     }
 
     @Test
     fun `hiding a script hides titles written in it`() {
         assertTrue("قطعة واحدة".isInHiddenScript(setOf(TitleScript.Arabic)))
         assertFalse("One Piece".isInHiddenScript(setOf(TitleScript.Arabic)))
+    }
+
+    /**
+     * A tag at the *front* is why the trailing-pipe form is left alone.
+     *
+     * Providers write `AR | <title>` far more often than `<title> | AR`, so a rule that stripped
+     * the last pipe-separated segment would remove the title and keep the tag — the exact
+     * inversion of what the bracket rule is for. This title is Arabic and hides, which is right.
+     */
+    @Test
+    fun `a leading provider tag does not save an arabic title`() {
+        assertTrue("AR | مسلسل الاختيار".isInHiddenScript(setOf(TitleScript.Arabic)))
     }
 
     @Test

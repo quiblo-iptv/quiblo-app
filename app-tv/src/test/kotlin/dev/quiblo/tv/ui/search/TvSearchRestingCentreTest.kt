@@ -195,6 +195,7 @@ class TvSearchRestingCentreTest {
                     onOpen = { _, _ -> },
                     onQueryChange = {},
                     onSelectGenre = {},
+                    onToggleIncludeHidden = {},
                     onClear = {},
                     onResultVisible = {},
                 )

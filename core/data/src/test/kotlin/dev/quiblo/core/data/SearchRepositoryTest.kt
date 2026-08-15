@@ -18,6 +18,7 @@
 
 package dev.quiblo.core.data
 
+import dev.quiblo.core.common.TitleScript
 import dev.quiblo.core.database.dao.ChannelDao
 import dev.quiblo.core.database.dao.ChannelTitle
 import dev.quiblo.core.database.dao.ChannelWithFavorite
@@ -31,6 +32,7 @@ import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -70,18 +72,18 @@ class SearchRepositoryTest {
         val results = repository.search(sourceId = SOURCE_ID, query = "   ")
 
         assertTrue(results.isEmpty)
-        coVerify(exactly = 0) { channelDao.search(any(), any(), any(), any(), any()) }
-        coVerify(exactly = 0) { channelDao.titlesForMetadata(any()) }
+        coVerify(exactly = 0) { channelDao.search(any(), any(), any(), any(), any(), any()) }
+        coVerify(exactly = 0) { channelDao.titlesForMetadata(any(), any()) }
     }
 
     @Test
     @DisplayName("one term, three answers, kept apart")
     fun `searches every kind and keeps the results separate`() = runTest {
-        coEvery { channelDao.search(any(), SOURCE_ID, MediaKind.LIVE.name, "bbc", any()) } returns
+        coEvery { channelDao.search(any(), SOURCE_ID, MediaKind.LIVE.name, "bbc", any(), any()) } returns
             listOf(row(id = 1L, name = "BBC One", kind = MediaKind.LIVE))
-        coEvery { channelDao.search(any(), SOURCE_ID, MediaKind.VOD.name, "bbc", any()) } returns
+        coEvery { channelDao.search(any(), SOURCE_ID, MediaKind.VOD.name, "bbc", any(), any()) } returns
             listOf(row(id = 2L, name = "BBC Earth: A Perfect Planet", kind = MediaKind.VOD))
-        coEvery { channelDao.search(any(), SOURCE_ID, MediaKind.SERIES.name, "bbc", any()) } returns
+        coEvery { channelDao.search(any(), SOURCE_ID, MediaKind.SERIES.name, "bbc", any(), any()) } returns
             emptyList()
 
         val results = repository.search(sourceId = SOURCE_ID, query = "bbc")
@@ -101,7 +103,7 @@ class SearchRepositoryTest {
             TitleGenreRow("fargo", MediaKind.VOD.name, 1996, "Crime\nDrama", isMiss = false),
             TitleGenreRow("speed", MediaKind.VOD.name, NO_YEAR, "Action", isMiss = false),
         )
-        coEvery { channelDao.titlesForMetadata(SOURCE_ID) } returns listOf(
+        coEvery { channelDao.titlesForMetadata(SOURCE_ID, any()) } returns listOf(
             // As a panel actually writes them: a year in brackets and a quality marker, none
             // of which the cache key has.
             ChannelTitle(id = 10L, name = "Fargo (1996) [FHD]", kind = MediaKind.VOD.name),
@@ -127,7 +129,7 @@ class SearchRepositoryTest {
             // A miss carries no genres and must not be mistaken for one.
             TitleGenreRow("some unfindable title", MediaKind.VOD.name, NO_YEAR, null, isMiss = true),
         )
-        coEvery { channelDao.titlesForMetadata(SOURCE_ID) } returns emptyList()
+        coEvery { channelDao.titlesForMetadata(SOURCE_ID, any()) } returns emptyList()
 
         val index = repository.genreIndex(SOURCE_ID)
 
@@ -140,7 +142,7 @@ class SearchRepositoryTest {
         coEvery { titleMetadataDao.allGenreRows() } returns listOf(
             TitleGenreRow("the matrix", MediaKind.VOD.name, 1999, "Action", isMiss = false),
         )
-        coEvery { channelDao.titlesForMetadata(SOURCE_ID) } returns listOf(
+        coEvery { channelDao.titlesForMetadata(SOURCE_ID, any()) } returns listOf(
             ChannelTitle(id = 1L, name = "The Matrix (1999) [4K]", kind = MediaKind.VOD.name),
             ChannelTitle(id = 2L, name = "The Matrix (1999) [FHD]", kind = MediaKind.VOD.name),
             ChannelTitle(id = 3L, name = "The Matrix (1999) [SD]", kind = MediaKind.VOD.name),
@@ -167,6 +169,66 @@ class SearchRepositoryTest {
         assertEquals(emptyList<String>(), index.genres)
         coVerify(exactly = 0) { titleMetadataDao.allGenreRows() }
     }
+
+    /**
+     * A page of results is not quietly shortened by a hidden writing system.
+     *
+     * The script filter used to run *after* the SQL `LIMIT`, so a term matching forty Arabic
+     * titles and ten Latin ones read forty rows, threw thirty-nine of them away and showed one
+     * hit for a search that had plenty. It now asks for more than it will keep.
+     */
+    @Test
+    @DisplayName("hiding a script does not shrink a page of results")
+    fun `the query overscans when a script is hidden`() = runTest {
+        val mixed = (1..20).map { index ->
+            val arabic = index % 2 == 0
+            row(
+                id = index.toLong(),
+                name = if (arabic) "مسلسل $index" else "Series $index",
+                kind = MediaKind.SERIES,
+            )
+        }
+        coEvery { channelDao.search(any(), SOURCE_ID, any(), "s", any(), any()) } returns mixed
+
+        val results = hidingArabic().search(sourceId = SOURCE_ID, query = "s", limitPerKind = 10)
+
+        // Ten asked for, ten returned, and none of them in the hidden script.
+        assertEquals(10, results.series.size)
+        assertTrue(results.series.none { it.name.startsWith("مسلسل") })
+        // And it asked the database for more than ten, which is the whole mechanism.
+        coVerify { channelDao.search(any(), SOURCE_ID, MediaKind.SERIES.name, "s", 20, false) }
+    }
+
+    @Test
+    @DisplayName("one toggle covers hidden categories and hidden scripts alike")
+    fun `including hidden searches hidden categories and stops filtering scripts`() = runTest {
+        coEvery { channelDao.search(any(), SOURCE_ID, any(), "a", any(), any()) } returns
+            listOf(row(id = 1L, name = "مسلسل الاختيار", kind = MediaKind.SERIES))
+
+        val results = hidingArabic()
+            .search(sourceId = SOURCE_ID, query = "a", includeHidden = true)
+
+        assertEquals(listOf("مسلسل الاختيار"), results.series.map { it.name })
+        coVerify { channelDao.search(any(), SOURCE_ID, MediaKind.SERIES.name, "a", any(), true) }
+    }
+
+    @Test
+    @DisplayName("an ordinary search asks the database for what is not hidden")
+    fun `hidden categories are excluded unless asked for`() = runTest {
+        repository.search(sourceId = SOURCE_ID, query = "a")
+
+        coVerify { channelDao.search(any(), SOURCE_ID, MediaKind.VOD.name, "a", any(), false) }
+    }
+
+    /** The same repository with Arabic hidden, which is the only difference under test. */
+    private fun hidingArabic() = SearchRepository(
+        channelDao = channelDao,
+        profiles = fakeProfiles(),
+        titleMetadataDao = titleMetadataDao,
+        metadataRepository = metadataRepository,
+        matchDispatcher = Dispatchers.Default,
+        hiddenScripts = flowOf(setOf(TitleScript.Arabic)),
+    )
 
     private fun row(id: Long, name: String, kind: MediaKind) = ChannelWithFavorite(
         channel = ChannelEntity(

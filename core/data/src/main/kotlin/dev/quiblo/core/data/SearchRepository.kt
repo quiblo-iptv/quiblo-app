@@ -114,21 +114,35 @@ class SearchRepository(
         query: String,
         genre: String? = null,
         limitPerKind: Int = DEFAULT_LIMIT_PER_KIND,
+        /**
+         * Searches what the viewer has hidden as well — both hidden categories and hidden
+         * writing systems.
+         *
+         * One flag for both because they are one question from the viewer's side. Somebody who
+         * has hidden a category and then goes looking for something in it wants it found; making
+         * them work out which of two settings is responsible would be asking them to know how
+         * this is built.
+         *
+         * Not persisted anywhere. It belongs to one search, and a hiding setting that quietly
+         * stopped applying because of something typed last week is worse than no setting.
+         */
+        includeHidden: Boolean = false,
     ): SearchResults {
         val term = query.trim()
         if (term.isBlank() && genre.isNullOrBlank()) return SearchResults()
 
         // Read once for this search rather than per result list, so all three lists are
         // filtered against the same answer even if the setting changes mid-query.
-        val hidden = hiddenScripts.first()
+        val hidden = if (includeHidden) emptySet() else hiddenScripts.first()
+        val ask = Ask(sourceId, term, limitPerKind, includeHidden, hidden)
         val results = if (genre.isNullOrBlank()) {
             SearchResults(
-                live = matches(sourceId, MediaKind.LIVE, term, limitPerKind),
-                movies = matches(sourceId, MediaKind.VOD, term, limitPerKind),
-                series = matches(sourceId, MediaKind.SERIES, term, limitPerKind),
+                live = ask.matches(MediaKind.LIVE, term),
+                movies = ask.matches(MediaKind.VOD, term),
+                series = ask.matches(MediaKind.SERIES, term),
             )
         } else {
-            byGenre(sourceId, term, genre, limitPerKind)
+            byGenre(ask, genre)
         }
         return results.hidingUnreadableScripts(hidden)
     }
@@ -144,7 +158,9 @@ class SearchRepository(
         if (!metadataRepository.isEnabled) return GenreIndex(isMetadataDisabled = true)
 
         val cached = titleMetadataDao.allGenreRows()
-        val titles = channelDao.titlesForMetadata(sourceId)
+        // The whole catalogue, hidden categories included. This figure answers "how much of what
+        // you own has been described", and a viewer's hiding choices do not change that.
+        val titles = channelDao.titlesForMetadata(sourceId, includeHidden = true)
 
         return withContext(matchDispatcher) {
             val genres = cached
@@ -184,11 +200,32 @@ class SearchRepository(
         return (known * PERCENT / wanted.size).coerceIn(0, PERCENT)
     }
 
-    private suspend fun matches(sourceId: Long, kind: MediaKind, term: String, limit: Int): List<Channel> {
-        if (term.isBlank()) return emptyList()
+    /**
+     * One kind's worth of matches, already thinned of anything the viewer cannot read.
+     *
+     * **The script filter runs here rather than only on the way out**, and the query overscans to
+     * pay for it. It used to run after the SQL `LIMIT`, which meant hiding a writing system
+     * quietly shortened every page of results: a term matching forty Arabic titles and ten Latin
+     * ones returned forty rows, discarded thirty-nine of them, and showed a viewer one hit for a
+     * search that had plenty.
+     */
+    private suspend fun Ask.matches(
+        kind: MediaKind,
+        /** What to search for, which is the term for most callers and the genre word for live. */
+        text: String,
+        overscan: Int = 1,
+    ): List<Channel> {
+        if (text.isBlank()) return emptyList()
+        val keep = limit * overscan
+        val asked = if (hidden.isEmpty()) keep else keep * SCRIPT_OVERSCAN
         // Escaped so % and _ are searched for rather than acted on. See escapeForLike.
-        return channelDao.search(profiles.activeProfileId, sourceId, kind.name, escapeForLike(term), limit)
+        return channelDao
+            .search(profiles.activeProfileId, sourceId, kind.name, escapeForLike(text), asked, includeHidden)
+            .asSequence()
             .map { it.channel.toDomain(isFavorite = it.isFavorite) }
+            .filterNot { it.name.isInHiddenScript(hidden) }
+            .take(keep)
+            .toList()
     }
 
     /**
@@ -201,9 +238,11 @@ class SearchRepository(
      * called "CRIME NETWORK HD" comes back for "Crime", which is what a viewer expects, and
      * the alternative is a live column that is always empty.
      */
-    private suspend fun byGenre(sourceId: Long, term: String, genre: String, limit: Int): SearchResults {
+    private suspend fun byGenre(ask: Ask, genre: String): SearchResults {
+        val term = ask.term
+        val limit = ask.limit
         val cached = titleMetadataDao.allGenreRows()
-        val titles = channelDao.titlesForMetadata(sourceId)
+        val titles = channelDao.titlesForMetadata(ask.sourceId, ask.includeHidden)
 
         val wantedIds = withContext(matchDispatcher) {
             val inGenre = cached.asSequence()
@@ -229,20 +268,36 @@ class SearchRepository(
         }
 
         return SearchResults(
-            live = liveByGenre(sourceId, term, genre, limit),
+            live = ask.liveByGenre(genre),
             movies = rows.filter { it.kind == MediaKind.VOD }.take(limit),
             series = rows.filter { it.kind == MediaKind.SERIES }.take(limit),
         )
     }
 
-    private suspend fun liveByGenre(sourceId: Long, term: String, genre: String, limit: Int): List<Channel> =
+    private suspend fun Ask.liveByGenre(genre: String): List<Channel> =
         if (term.isBlank()) {
-            matches(sourceId, MediaKind.LIVE, genre, limit)
+            matches(MediaKind.LIVE, genre)
         } else {
-            matches(sourceId, MediaKind.LIVE, term, limit * LIVE_OVERSCAN)
+            matches(MediaKind.LIVE, term, overscan = LIVE_OVERSCAN)
                 .filter { it.name.contains(genre, ignoreCase = true) }
                 .take(limit)
         }
+
+    /**
+     * One search, as one value.
+     *
+     * Five of these travel together through every private function here, and passing them
+     * separately put three of them over detekt's parameter limit — which is the tool noticing
+     * what the shape of the code already said: these are not five arguments, they are one
+     * question asked in five parts.
+     */
+    private data class Ask(
+        val sourceId: Long,
+        val term: String,
+        val limit: Int,
+        val includeHidden: Boolean,
+        val hidden: Set<TitleScript>,
+    )
 
     private companion object {
         /**
@@ -264,6 +319,15 @@ class SearchRepository(
          * with many matches still leaves some once the genre has thinned them.
          */
         const val LIVE_OVERSCAN = 5
+
+        /**
+         * How many rows are read per kind when a writing system is hidden.
+         *
+         * The filter runs in Kotlin — SQLite cannot ask what script a string is in — so the query
+         * has to bring back more than it will keep. Twice is enough for a catalogue where one
+         * hidden script is the majority of it, which is the case this exists for.
+         */
+        const val SCRIPT_OVERSCAN = 2
 
         const val PERCENT = 100
     }

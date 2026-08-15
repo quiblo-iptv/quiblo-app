@@ -112,6 +112,7 @@ fun TvSearchScreen(
         onOpen = onOpen,
         onQueryChange = viewModel::search,
         onSelectGenre = viewModel::selectGenre,
+        onToggleIncludeHidden = viewModel::setIncludeHidden,
         onClear = viewModel::clear,
         onResultVisible = viewModel::onResultVisible,
         modifier = modifier,
@@ -134,6 +135,7 @@ internal fun TvSearchPanel(
     onOpen: (List<Channel>, Int) -> Unit,
     onQueryChange: (String) -> Unit,
     onSelectGenre: (String?) -> Unit,
+    onToggleIncludeHidden: (Boolean) -> Unit,
     onClear: () -> Unit,
     onResultVisible: (Channel) -> Unit,
     modifier: Modifier = Modifier,
@@ -203,6 +205,7 @@ internal fun TvSearchPanel(
             isAdvanced = isAdvanced,
             onQueryChange = onQueryChange,
             onSelectGenre = onSelectGenre,
+            onToggleIncludeHidden = onToggleIncludeHidden,
             onClear = onClear,
             onToggleAdvanced = { isAdvanced = !isAdvanced },
         )
@@ -275,6 +278,7 @@ internal fun ColumnScope.SearchHeader(
     isAdvanced: Boolean,
     onQueryChange: (String) -> Unit,
     onSelectGenre: (String?) -> Unit,
+    onToggleIncludeHidden: (Boolean) -> Unit,
     onClear: () -> Unit,
     onToggleAdvanced: () -> Unit,
 ) {
@@ -507,6 +511,16 @@ internal fun ColumnScope.SearchHeader(
         }
 
         if (isAdvanced) {
+            // First among the advanced controls, and before the genres, because it changes what
+            // every one of them can return rather than narrowing what they already do.
+            item(key = HIDDEN_KEY) {
+                TvChip(
+                    label = stringResource(R.string.tv_search_include_hidden),
+                    isSelected = state.includeHidden,
+                    onClick = { onToggleIncludeHidden(!state.includeHidden) },
+                )
+            }
+
             items(items = state.genres, key = { it }) { genre ->
                 TvChip(
                     label = genre,
@@ -653,3 +667,4 @@ private val CHIP_STRIP_PADDING = 4.dp
 
 /** Stable, so the chip row is not rebuilt when the genres behind it change. */
 private const val CLEAR_KEY = "__clear__"
+private const val HIDDEN_KEY = "__hidden__"

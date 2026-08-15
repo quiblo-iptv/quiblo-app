@@ -72,6 +72,14 @@ data class SearchUiState(
      * these come out of its answer rather than out of a second path beside it.
      */
     val suggestions: List<String> = emptyList(),
+    /**
+     * Whether this search is also looking in what the viewer has hidden.
+     *
+     * Off by default and reset with the screen. Hidden categories and hidden writing systems
+     * are one switch here because they are one question from the viewer's side: "look in the
+     * parts I usually do not want to see".
+     */
+    val includeHidden: Boolean = false,
 ) {
     /** True once a question has been asked, which is what moves the bar off the middle. */
     val isActive: Boolean get() = query.isNotBlank() || selectedGenre != null
@@ -101,6 +109,7 @@ class SearchViewModel(
 
     private val query = MutableStateFlow("")
     private val selectedGenre = MutableStateFlow<String?>(null)
+    private val includeHidden = MutableStateFlow(false)
     private val genreIndex = MutableStateFlow(GenreState())
     private val ratings = MutableStateFlow<Map<String, Double>>(emptyMap())
     private val posters = MutableStateFlow<Map<String, String>>(emptyMap())
@@ -144,16 +153,21 @@ class SearchViewModel(
     private val results: StateFlow<SearchResults> = combine(
         query.debounce { if (it.isBlank()) 0L else SEARCH_DEBOUNCE_MILLIS },
         selectedGenre,
+        includeHidden,
         activeSourceId,
-    ) { text, genre, sourceId -> Triple(text, genre, sourceId) }
-        .mapLatest { (text, genre, sourceId) ->
-            if (sourceId == null || (text.isBlank() && genre == null)) {
+    ) { text, genre, hidden, sourceId -> Ask(text, genre, hidden, sourceId) }
+        .mapLatest { ask ->
+            if (ask.sourceId == null || (ask.text.isBlank() && ask.genre == null)) {
                 isSearching.value = false
                 return@mapLatest SearchResults()
             }
             isSearching.value = true
-            searchRepository.search(sourceId = sourceId, query = text, genre = genre)
-                .also { isSearching.value = false }
+            searchRepository.search(
+                sourceId = ask.sourceId,
+                query = ask.text,
+                genre = ask.genre,
+                includeHidden = ask.includeHidden,
+            ).also { isSearching.value = false }
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS), SearchResults())
 
@@ -162,8 +176,9 @@ class SearchViewModel(
         selectedGenre,
         genreIndex,
         results,
-        combine(ratings, posters, isSearching, activeSourceId) { scores, art, searching, sourceId ->
-            Artwork(scores, art, searching, sourceId != null)
+        combine(ratings, posters, isSearching, activeSourceId, includeHidden) {
+                scores, art, searching, sourceId, hidden ->
+            Extras(scores, art, searching, sourceId != null, hidden)
         },
     ) { text, genre, index, found, extras ->
         SearchUiState(
@@ -181,6 +196,7 @@ class SearchViewModel(
             ratings = extras.ratings,
             posters = extras.posters,
             suggestions = found.suggestionsFor(text),
+            includeHidden = extras.includeHidden,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS), SearchUiState())
 
@@ -193,9 +209,15 @@ class SearchViewModel(
         selectedGenre.value = genre.takeIf { it != selectedGenre.value }
     }
 
+    /** Looks in hidden categories and hidden writing systems too, for this search only. */
+    fun setIncludeHidden(include: Boolean) {
+        includeHidden.value = include
+    }
+
     fun clear() {
         query.value = ""
         selectedGenre.value = null
+        includeHidden.value = false
     }
 
     /**
@@ -241,12 +263,21 @@ class SearchViewModel(
         val isLoading: Boolean = true,
     )
 
+    /** The whole question, bundled to fit `combine`. */
+    private data class Ask(
+        val text: String,
+        val genre: String?,
+        val includeHidden: Boolean,
+        val sourceId: Long?,
+    )
+
     /** Everything that is neither the question nor the answer, bundled to fit `combine`. */
-    private data class Artwork(
+    private data class Extras(
         val ratings: Map<String, Double>,
         val posters: Map<String, String>,
         val isSearching: Boolean,
         val hasSource: Boolean,
+        val includeHidden: Boolean,
     )
 
     private companion object {

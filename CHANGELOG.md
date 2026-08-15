@@ -15,15 +15,7 @@ Formatted after [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and ve
 
 ## Unreleased
 
-## 0.16.0
-
 ### Added
-
-- **A Recently Added tab on the television**, between Live and Movies, holding the newest films
-  and series on the service in one row rather than one row each — somebody wondering what is new
-  is not also choosing between two formats. Xtream accounts fill it, because a panel says when it
-  added each title and the app now keeps that date. It costs no extra request to the provider:
-  the dates arrive inside the film and series lists the app already fetches.
 
 - **Recently Added says what each poster is.** A row that mixes films and series is the one row
   in the app where the screen cannot already say which is which, so each tile carries a Movie or
@@ -34,7 +26,8 @@ Formatted after [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and ve
 - **A playlist that carries no dates gets the end of its own list** — the latest films and series
   in the order the provider lists them, interleaved so neither crowds the other out. The row is
   headed "Latest in your playlist" rather than "Recently added", because where something sits in
-  a playlist is not a date and the screen does not pretend otherwise.
+  a playlist is not a date and the screen does not pretend otherwise. It replaces the empty tab
+  0.16.0 shipped for a playlist with no dates in it.
 - **A film says what year it is from and how long it runs**, beside its score and certificate.
   Both come from the playlist where the panel supplies them and from The Movie Database where it
   does not, so the line fills in for an M3U playlist too. The year replaces the full release date
@@ -61,13 +54,24 @@ Formatted after [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and ve
   finished could come back reporting nothing done and a search screen describing none of the
   catalogue. Two causes, both closed: work already looked up now counts as looked up whatever
   its age, so a device whose clock is wrong when it starts up — a television that boots before
-  it fetches the time, an emulator resumed from an old snapshot — can no longer age the whole
-  cache at once; and the scan pushes what it has learned onto the disk as it goes rather than
-  leaving it in a log a power cut can take back. Settings on both apps now shows how many titles
-  are held, which is the number to read before switching off and again afterwards.
+  it fetches the time — can no longer age the whole cache at once; and the scan pushes what it
+  has learned onto the disk as it goes rather than leaving it in a log a power cut can take
+  back. Settings on both apps now shows how many titles are held, which is the number to read
+  before switching off and again afterwards.
 - **Saving the same TMDB key twice no longer empties the cache.** Clearing on a *changed* key is
   deliberate — a different key can answer differently — but re-entering the key already saved
   threw away every lookup standing behind it.
+
+## 0.16.0
+
+### Added
+
+- **A Recently Added tab on the television**, between Live and Movies, holding the newest films
+  and series on the service in one row rather than one row each — somebody wondering what is new
+  is not also choosing between two formats. Xtream accounts fill it, because a panel says when it
+  added each title and the app now keeps that date; M3U playlists carry no dates at all and the
+  tab says so instead of showing a list ordered by nothing. It costs no extra request to the
+  provider: the dates arrive inside the film and series lists the app already fetches.
 
 ## 0.15.1
 

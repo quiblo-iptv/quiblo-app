@@ -41,6 +41,8 @@ import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.flowOn
@@ -133,24 +135,68 @@ class ChannelRepository(
             .flowOn(browseDispatcher)
 
     /**
-     * The newest films and series a provider has added, in one list.
+     * The newest films and series a provider has added, in one list — and how that "newest" was
+     * arrived at, because the two answers are not equally strong.
+     *
+     * A source that dates its catalogue is asked for everything added since [sinceEpochMillis],
+     * newest first. A source that dates nothing gets the end of its own list instead, half films
+     * and half series, interleaved so neither is forty presses away. That second answer is a
+     * weaker claim and [RecentlyAddedFeed.orderedByDate] is how the screen knows to make a
+     * weaker one.
      *
      * The script filter applies, exactly as it does to browse: this is a catalogue feed, and a
      * viewer who has hidden a writing system did so to stop meeting titles in it. Favourites
      * are the one feed that ignores the filter, because those are titles chosen by hand.
      *
      * @param limit how many to keep. The caller's cap, not a page size — nothing pages this.
+     * @param sinceEpochMillis the oldest date that still counts as new. The caller owns the clock.
      */
-    fun observeRecentlyAdded(sourceId: Long, limit: Int): Flow<List<Channel>> =
-        profiles.activeProfile.flatMapLatest { profile ->
-            channelDao.observeRecentlyAdded(
-                profileId = profile?.id ?: Profile.NONE_ID,
-                sourceId = sourceId,
-                limit = limit,
-            )
-        }.map { rows -> rows.map { it.channel.toDomain(isFavorite = it.isFavorite) } }
-            .hidingUnreadableScripts(hiddenScripts) { it.name }
+    fun observeRecentlyAdded(sourceId: Long, limit: Int, sinceEpochMillis: Long): Flow<RecentlyAddedFeed> =
+        combine(
+            profiles.activeProfile,
+            channelDao.observeHasAddedDates(sourceId).distinctUntilChanged(),
+        ) { profile, hasDates -> (profile?.id ?: Profile.NONE_ID) to hasDates }
+            .flatMapLatest { (profileId, hasDates) ->
+                if (hasDates) {
+                    datedRecents(profileId, sourceId, limit, sinceEpochMillis)
+                } else {
+                    listOrderRecents(profileId, sourceId, limit)
+                }
+            }
             .flowOn(browseDispatcher)
+
+    private fun datedRecents(
+        profileId: Long,
+        sourceId: Long,
+        limit: Int,
+        sinceEpochMillis: Long,
+    ): Flow<RecentlyAddedFeed> = channelDao.observeRecentlyAdded(
+        profileId = profileId,
+        sourceId = sourceId,
+        sinceEpochMillis = sinceEpochMillis,
+        limit = limit,
+    ).map { rows -> rows.map { it.channel.toDomain(isFavorite = it.isFavorite) } }
+        .hidingUnreadableScripts(hiddenScripts) { it.name }
+        .map { RecentlyAddedFeed(items = it, orderedByDate = true) }
+
+    private fun listOrderRecents(profileId: Long, sourceId: Long, limit: Int): Flow<RecentlyAddedFeed> {
+        // Half the cap each, so a playlist with both ends up with both. An odd cap gives the
+        // extra place to films, which is the larger catalogue on every panel seen so far.
+        val perKind = limit - limit / 2
+        return combine(
+            tail(profileId, sourceId, MediaKind.VOD, perKind),
+            tail(profileId, sourceId, MediaKind.SERIES, limit / 2),
+        ) { films, series -> RecentlyAddedFeed(items = interleave(films, series), orderedByDate = false) }
+    }
+
+    private fun tail(profileId: Long, sourceId: Long, kind: MediaKind, limit: Int): Flow<List<Channel>> =
+        channelDao.observeLastInListOrder(
+            profileId = profileId,
+            sourceId = sourceId,
+            kind = kind.name,
+            limit = limit,
+        ).map { rows -> rows.map { it.channel.toDomain(isFavorite = it.isFavorite) } }
+            .hidingUnreadableScripts(hiddenScripts) { it.name }
 
     // Favourites are not filtered, and that is the point — see [hidingUnreadableScripts].
     /** Favourites across every content type (AC-FAV-01). */
@@ -277,4 +323,33 @@ class ChannelRepository(
      */
     private val seriesCache = ConcurrentHashMap<String, SeriesDetails>()
     private val vodCache = ConcurrentHashMap<String, VodDetails>()
+}
+
+/**
+ * The Recently Added row, and what its order actually means.
+ *
+ * Two facts rather than a list, because the screen's wording depends on the second one. A row
+ * built from provider dates is genuinely "recently added"; a row built from the end of a playlist
+ * is "the latest entries in your playlist" and must not claim more than that. Passing only the
+ * list would leave the screen guessing, and the guess it would make — "non-empty, so these must be
+ * new" — is the one that puts a wrong sentence over a right list.
+ */
+data class RecentlyAddedFeed(
+    val items: List<Channel> = emptyList(),
+    /** True when the provider dated these itself. False when the order is the playlist's own. */
+    val orderedByDate: Boolean = true,
+)
+
+/**
+ * One from each, in turn, until both run out.
+ *
+ * So that a playlist listing every film before every series does not produce a row of forty films
+ * with the series past the end of the cap. Order within each list is preserved.
+ */
+private fun interleave(first: List<Channel>, second: List<Channel>): List<Channel> = buildList {
+    val rounds = maxOf(first.size, second.size)
+    for (index in 0 until rounds) {
+        first.getOrNull(index)?.let(::add)
+        second.getOrNull(index)?.let(::add)
+    }
 }

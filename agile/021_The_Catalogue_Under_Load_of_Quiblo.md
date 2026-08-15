@@ -214,3 +214,36 @@ six pixels of it.
 
 The phone player has no ambient at all and does not get one here — that belongs with the episode
 controls already waiting on the phone.
+
+---
+
+## What a device still has to answer
+
+Ten tickets, `A14.1` to `A14.10`, in
+[`docs/TESTING-REQUIRED.md`](../docs/TESTING-REQUIRED.md). Every one of them is about how long
+something takes or whether a row is there at all, and neither can be answered on a small
+catalogue — which is exactly how three of these four defects reached a release.
+
+Two of them are worth naming here because they are the ones a passing build says least about:
+
+- **`A14.3`** wants a *number*. Three separate changes claim the browse load time between them —
+  the script mask, the per-category cap, and paging — and only a device can say which of them
+  mattered. "Still slow" cannot be acted on.
+- **`A14.8`** is the upgrade, with a writing system hidden. The whole design of `MIGRATION_18_19`
+  is that hiding keeps working while the backfill runs, and there is no way to see that except by
+  installing over 0.18.0 and looking twice, a minute apart.
+
+## What was not measured
+
+**Coverage is not reported for this round, and that is the project's existing rule rather than an
+omission here.** `coverageAll` covers `:source:m3u` and `:source:xtream` only — the parsers, which
+are pure functions over text where a covered line is genuinely an exercised line. Nothing in this
+round touched a parser, so the gate is green and says nothing about this work. The Amendment 10
+floor is written against first-party code generally; this repository narrowed it deliberately and
+wrote the reasoning into `build.gradle.kts`. Recorded as a divergence rather than acted on alone.
+
+What this round has instead is **31 new tests and four rewritten ones**, of which 20 run against
+real SQLite — because the work moved two predicates and a join *into* SQL, and a mocked DAO proves
+nothing about any of them. Two of the four reports have a test that is red against `v0.18.0` and
+green against the fix; the other two are load times, which no test on this machine can settle
+(`A14.3`).

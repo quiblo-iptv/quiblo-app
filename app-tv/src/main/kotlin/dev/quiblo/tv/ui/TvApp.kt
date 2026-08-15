@@ -43,6 +43,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -93,6 +94,7 @@ import dev.quiblo.tv.ui.search.TvSearchScreen
 import dev.quiblo.tv.ui.series.TvSeriesScreen
 import dev.quiblo.tv.ui.settings.TvSettingsScreen
 import dev.quiblo.tv.ui.sources.TvSourcesScreen
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
 
@@ -105,8 +107,16 @@ import org.koin.compose.koinInject
  * screen above it worthless.
  */
 @Composable
-fun TvApp() {
-    TvConsentGate { TvAppBehindConsent() }
+fun TvApp(
+    /**
+     * Ends the activity.
+     *
+     * The host's, because only it can finish itself, and a parameter rather than a `LocalContext`
+     * cast so that a test can compose this app and watch it ask to be closed without one.
+     */
+    onExit: () -> Unit = {},
+) {
+    TvConsentGate { TvAppBehindConsent(onExit = onExit) }
 }
 
 /**
@@ -136,7 +146,7 @@ private fun TvConsentGate(content: @Composable () -> Unit) {
 }
 
 @Composable
-private fun TvAppBehindConsent() {
+private fun TvAppBehindConsent(onExit: () -> Unit) {
     // Nobody watches anything until the app knows whose favourites it would be reading. The
     // gate is here rather than inside the shell so that no screen below it ever has to cope
     // with there being no profile — they simply are not composed yet.
@@ -179,6 +189,26 @@ private fun TvAppBehindConsent() {
         TvShell(
             selectedTab = selectedTab,
             onSelectTab = { selectedTab = it },
+            /*
+             * Closing the app, and forgetting who was watching on the way out.
+             *
+             * **Both halves, and the second is the reported one.** Backing out used to fall
+             * through to the system, which backgrounds an activity rather than finishing it — so
+             * the process survived, the chosen profile survived with it, and the next launch
+             * resumed straight into somebody else's favourites. Finishing alone would not fix
+             * that either: the chooser is cleared in `Application.onCreate`, which does not run
+             * again while the process is cached. Signing out is what makes the promise keepable
+             * whether the process dies or not.
+             *
+             * The sign-out is awaited before finishing, because a write racing an activity that
+             * is going away is a write that sometimes happens.
+             */
+            onExit = {
+                scope.launch {
+                    profiles.signOut()
+                    onExit()
+                }
+            },
             onOpenSettings = { backStack.add(TvOverlay.Settings) },
             onOpen = { items, index -> overlayFor(items, index)?.let(backStack::add) },
             onOpenChannel = { channel -> backStack.add(detailFor(channel)) },
@@ -376,6 +406,12 @@ private fun TvShell(
     onOpen: (List<Channel>, Int) -> Unit,
     onOpenChannel: (Channel) -> Unit,
     onSwitchProfile: () -> Unit,
+    /**
+     * Closes the app, having first forgotten who was watching.
+     *
+     * Both halves matter and only one of them is obvious. See [TvApp], where it is built.
+     */
+    onExit: () -> Unit,
     activeProfileName: String?,
     activeProfileAvatar: String?,
 ) {
@@ -393,16 +429,48 @@ private fun TvShell(
     // again on every return from Settings, a detail screen or the player.
     LaunchedEffect(Unit) { barFocusRequester.insistOnFocus() }
 
-    // Back walks to the first tab, and only then leaves the app.
-    //
-    // The alternative — back exiting from wherever the viewer happens to be — is how a
-    // television app loses somebody three tabs deep with one stray press. Focus returns to
-    // the bar with it, so the remote is visibly somewhere rather than apparently dead.
-    BackHandler(enabled = selectedTab != TvTab.SEARCH.ordinal) {
-        onSelectTab(TvTab.SEARCH.ordinal)
-        // The bar is already placed here — this is a press, not a first composition — so one ask
-        // is enough and there is no coroutine to insist from.
-        barFocusRequester.tryRequestFocus()
+    /**
+     * Whether one back press has already been spent, and the app is waiting for the second.
+     *
+     * Its own state rather than a timestamp compared on the next press, so the notice on screen
+     * and the meaning of the next press are one fact. Cleared by the effect below and by walking
+     * off Search, because a viewer who has gone somewhere else has stopped leaving.
+     */
+    var exitArmed by remember { mutableStateOf(false) }
+
+    LaunchedEffect(exitArmed) {
+        if (!exitArmed) return@LaunchedEffect
+        delay(EXIT_WINDOW_MILLIS)
+        exitArmed = false
+    }
+
+    /*
+     * Back walks to the first tab, and then takes two presses to leave.
+     *
+     * **Leaving used to mean falling through to the system**, which *backgrounds* an activity
+     * rather than finishing it. The process survived, the chosen profile survived with it, and
+     * the next launch resumed straight into somebody else's favourites — which is the reported
+     * half: "so I can pick profile again". [onExit] is what makes leaving mean leaving.
+     *
+     * Two presses rather than one, because back is also how a viewer walks out of everything
+     * else, and a stray press that closes the app is the one mistake a television app cannot
+     * let somebody make. Two presses rather than a dialog because this app has none, and a first
+     * modal on the way out would be a poor place to grow one.
+     */
+    BackHandler {
+        when (tvBackAction(TvBackState(selectedTab, exitArmed))) {
+            TvBackAction.GoToSearch -> {
+                onSelectTab(TvTab.SEARCH.ordinal)
+                // The bar is already placed here — this is a press, not a first composition — so
+                // one ask is enough and there is no coroutine to insist from.
+                barFocusRequester.tryRequestFocus()
+                exitArmed = false
+            }
+
+            TvBackAction.ArmExit -> exitArmed = true
+
+            TvBackAction.Exit -> onExit()
+        }
     }
 
     /*
@@ -420,61 +488,91 @@ private fun TvShell(
     var ambientArtwork: String? by remember { mutableStateOf(null) }
     val ambient = rememberAmbient(ambientArtwork)
 
-    Column(
+    Box(
         modifier = Modifier
             .fillMaxSize()
             .background(Color.Black)
             .ambientBackdrop(ambient),
     ) {
-        CompositionLocalProvider(LocalAmbientSink provides { ambientArtwork = it }) {
-            TvTopBar(
-                selectedTab = selectedTab,
-                onSelect = onSelectTab,
-                focusRequester = barFocusRequester,
-                onEnterContent = { contentFocusRequester.tryRequestFocus() },
-                onOpenSettings = onOpenSettings,
-                onSwitchProfile = onSwitchProfile,
-                activeProfileName = activeProfileName,
-                activeProfileAvatar = activeProfileAvatar,
-            )
+        Column(modifier = Modifier.fillMaxSize()) {
+            CompositionLocalProvider(LocalAmbientSink provides { ambientArtwork = it }) {
+                TvTopBar(
+                    selectedTab = selectedTab,
+                    onSelect = onSelectTab,
+                    focusRequester = barFocusRequester,
+                    onEnterContent = { contentFocusRequester.tryRequestFocus() },
+                    onOpenSettings = onOpenSettings,
+                    onSwitchProfile = onSwitchProfile,
+                    activeProfileName = activeProfileName,
+                    activeProfileAvatar = activeProfileAvatar,
+                )
 
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(start = SCREEN_PADDING, end = SCREEN_PADDING, bottom = SCREEN_PADDING)
-                    .focusRequester(contentFocusRequester)
-                    .focusGroup(),
-            ) {
-                when (TvTab.entries[selectedTab]) {
-                    TvTab.SEARCH -> TvSearchScreen(onOpen = onOpen)
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(start = SCREEN_PADDING, end = SCREEN_PADDING, bottom = SCREEN_PADDING)
+                        .focusRequester(contentFocusRequester)
+                        .focusGroup(),
+                ) {
+                    when (TvTab.entries[selectedTab]) {
+                        TvTab.SEARCH -> TvSearchScreen(onOpen = onOpen)
 
-                    TvTab.LIVE -> TvLiveScreen(onPlay = onOpen)
+                        TvTab.LIVE -> TvLiveScreen(onPlay = onOpen)
 
-                    TvTab.FOR_YOU -> TvForYouScreen(onPlay = onOpen)
+                        TvTab.FOR_YOU -> TvForYouScreen(onPlay = onOpen)
 
-                    TvTab.MOVIES -> TvPosterRows(
-                        kind = MediaKind.VOD,
-                        onPlay = onOpen,
-                        onResume = onOpenChannel,
-                    )
+                        TvTab.MOVIES -> TvPosterRows(
+                            kind = MediaKind.VOD,
+                            onPlay = onOpen,
+                            onResume = onOpenChannel,
+                        )
 
-                    TvTab.SERIES -> TvPosterRows(
-                        kind = MediaKind.SERIES,
-                        onPlay = onOpen,
-                        onResume = onOpenChannel,
-                    )
+                        TvTab.SERIES -> TvPosterRows(
+                            kind = MediaKind.SERIES,
+                            onPlay = onOpen,
+                            onResume = onOpenChannel,
+                        )
 
-                    TvTab.FAVOURITES -> TvPosterRows(
-                        kind = MediaKind.VOD,
-                        favouritesOnly = true,
-                        onPlay = onOpen,
-                        onResume = onOpenChannel,
-                    )
+                        TvTab.FAVOURITES -> TvPosterRows(
+                            kind = MediaKind.VOD,
+                            favouritesOnly = true,
+                            onPlay = onOpen,
+                            onResume = onOpenChannel,
+                        )
+                    }
                 }
             }
         }
+
+        /*
+         * "Press back again to close", along the bottom.
+         *
+         * A line rather than a dialog, because this app has none and the way out is a poor place
+         * to grow the first one. A line rather than a `Toast`, because a toast on a television is
+         * a phone-sized rectangle in a corner of a three-metre screen, drawn by the system in the
+         * system's own type at the system's own size.
+         *
+         * It takes no focus and no space: the shell underneath is laid out exactly as it is
+         * without it, so arming the exit cannot move anything the viewer was looking at.
+         */
+        if (exitArmed) {
+            Text(
+                text = stringResource(R.string.tv_back_again_to_close),
+                color = Color.White.copy(alpha = EXIT_NOTICE_ALPHA),
+                style = MaterialTheme.typography.bodyLarge,
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(bottom = SCREEN_PADDING),
+            )
+        }
     }
 }
+
+/** Long enough to find the button again, short enough that a stray press cannot close it later. */
+private const val EXIT_WINDOW_MILLIS = 3_000L
+
+/** Legible from a sofa, and quieter than anything the viewer came here to look at. */
+private const val EXIT_NOTICE_ALPHA = 0.75f
 
 /**
  * Text tabs with an underline, as the Google TV home screen does it.

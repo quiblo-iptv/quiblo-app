@@ -15,6 +15,14 @@ Formatted after [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and ve
 
 ## Unreleased
 
+### Changed
+
+- **Back twice on Search closes Quiblo, and it asks first.** Backing out used to hand the press to
+  the system, which puts the app in the background rather than closing it — so the next launch
+  carried on as whoever was watching last, and there was no way to get the "who is watching"
+  screen back. The first press now says "Press back again to close" along the bottom, the second
+  closes, and closing forgets who was watching so the next launch asks.
+
 ### Fixed
 
 - **The settings and profile buttons are highlighted again.** Sometimes the app opened, or came

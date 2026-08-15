@@ -13,6 +13,7 @@
     <string name="tv_tab_movies">Movies</string>
     <string name="tv_tab_series">Series</string>
     <string name="tv_tab_favourites">Favourites</string>
+    <string name="tv_back_again_to_close">Press back again to close Quiblo</string>
     <string name="tv_settings">Settings</string>
 
     <!-- First launch (FREEZE.md Amendment 9). The essential text is here rather than only

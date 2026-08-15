@@ -109,6 +109,38 @@ side: the focusable is not in the tree on the frame the request is made. It also
 sentence that is equally true of a test which never forced the race — which is how this survived a
 whole round of bar tests already.
 
-## 5 and 6
+## 5. `FEAT-029` — two backs on Search close the app
 
-*Not yet implemented. Each lands on its own branch and is written up here as it does.*
+**Reported:** *"make two backs on search screen & stack is empty close the app so I can pick
+profile again."*
+
+**Backing out never closed anything.** `BackHandler` was enabled only away from Search, so on
+Search the press fell through to the system — which *backgrounds* an activity rather than
+finishing it. The process survived, the chosen profile survived with it, and the next launch
+resumed straight into somebody else's favourites. That is the "so I can pick profile again" half,
+and it is the half that would still have been broken by simply finishing.
+
+**Finishing alone is not enough**, and this is the part worth reading twice. The chooser reappears
+because `Application.onCreate` clears the chosen profile — and that does not run again while the
+process is cached. So the shell signs out *and then* closes, awaited in that order, because a
+write racing an activity that is going away is a write that sometimes happens. And the activity
+uses `finishAndRemoveTask` rather than `finish`, so the television's recents list stops offering a
+card that resumes a session the viewer just asked to leave.
+
+**Two presses, and a line rather than a dialog.** Back is also how a viewer walks out of
+everything else, and a stray press that closes the app is the one mistake a television app cannot
+let somebody make. The notice is a `Text` along the bottom, taking no focus and no space, so
+arming the exit cannot move anything on screen. Not a `Toast`: on a television that is a
+phone-sized rectangle in the corner of a three-metre screen, in the system's own type at the
+system's own size. Not a dialog: this app has none, and the way out is a poor place to grow the
+first one. The window is three seconds and resets.
+
+The rule is `tvBackAction`, a function over state rather than branches inside the handler — the
+same shape as `tvBarAction` and for the same reason. Its third case is the one a careless version
+drops: **walking off Search disarms**, because a viewer who has gone somewhere else has stopped
+leaving. Without it, arming on Search and then walking to Movies leaves the next back on Search
+closing the app with no notice on screen at all. Four tests, one per case.
+
+## 6
+
+*Not yet implemented.*

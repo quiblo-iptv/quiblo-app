@@ -31,7 +31,20 @@ class TvMainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         setContent {
             QuibloTvTheme {
-                TvApp()
+                /*
+                 * Closing means closing, and `finishAndRemoveTask` is why.
+                 *
+                 * Plain `finish()` ends the activity and leaves the task in the recents list, so
+                 * the television's own "recent apps" still offers a card that resumes into a
+                 * session the viewer just asked to leave. Removing the task is what makes the
+                 * next launch a launch.
+                 *
+                 * It is not, on its own, enough to bring the profile chooser back — the chosen
+                 * profile is cleared in `Application.onCreate`, which does not run again while
+                 * the process is cached. The shell signs out before calling this, which is the
+                 * half that keeps the promise whether the process dies or not.
+                 */
+                TvApp(onExit = ::finishAndRemoveTask)
             }
         }
     }

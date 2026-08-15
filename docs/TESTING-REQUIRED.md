@@ -462,7 +462,8 @@ Two are not "owed a device" — they have had one and failed it:
 ## A9 — Round `018`: the metadata cache, the Recently Added window, and the detail line
 
 **Where:** the television first, the phone for the two rows that say so. Nothing here has been
-seen on a device.
+seen on a device. **The defect behind A9.1 was reported from two real televisions**, not from the
+emulator, so a power cycle at the wall is the case to reproduce.
 
 ### A9.1 — an hour of scanning survives being switched off
 

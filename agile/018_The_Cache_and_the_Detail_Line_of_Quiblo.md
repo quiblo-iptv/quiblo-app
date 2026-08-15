@@ -35,14 +35,18 @@ That pair is diagnostic. Exactly two things in the app read the whole cache tabl
 So two mechanisms produce that pair, and without the device neither can be ruled out:
 
 **A1 — the rows are gone.** Room commits into a write-ahead log and folds it into the database
-file later. A television cut at the mains, or an emulator killed rather than closed, loses
-whatever the log still held. `quiblo-tv` is configured `fastboot.forceFastBoot=yes`, so an
-unclean exit discards everything since the last snapshot.
+file later. A television cut at the mains loses whatever the log still held.
+
+**Answered on 2026-08-15: this happened on two real televisions, not on the emulator.** That
+retires the emulator-snapshot explanation entirely and it retires the third one below — a
+differently signed build wiping app data — as the likely cause on hardware the author updates
+normally. What is left is the two that this round closes, and both are ordinary behaviour on a
+set-top box: a write-ahead log that a power cut takes back, and a clock that is wrong at boot.
 
 **A2 — the rows are there and every one of them counts as stale.** A device whose clock is wrong
 while the scan runs and right after it reboots stamps every row in the past and expires the lot
-at once. Set-top boxes without a battery-backed clock and emulators resumed from old snapshots
-both do this.
+at once. A set-top box without a battery-backed clock does exactly this on every cold start, and
+two of them are where this was reported from.
 
 **A third fault, found on the way and independent of both:** `setApiKey` called `dao.clear()`
 unconditionally, so pressing Save on a key that was already saved threw away every lookup behind
@@ -67,9 +71,10 @@ it.
 ### What this cannot fix, stated plainly
 
 If the loss is an install that wipes app data — a differently signed build, an installer that
-uninstalls first — or an emulator killed without saving its snapshot, then nothing in this
-repository can help, because the app never got the chance to write anything. A9.2 in
-`docs/TESTING-REQUIRED.md` is written to catch exactly that case rather than blame the app for it.
+uninstalls first — then nothing in this repository can help, because the app never got the chance
+to write anything. A9.2 in `docs/TESTING-REQUIRED.md` is written to catch that case rather than
+blame the app for it. It is no longer the leading explanation: the report is from two televisions
+updated the ordinary way, which points at the two mechanisms above.
 
 ### Deliberately not done
 

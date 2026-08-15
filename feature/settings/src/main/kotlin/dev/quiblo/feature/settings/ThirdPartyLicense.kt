@@ -104,6 +104,14 @@ val THIRD_PARTY_LICENSES: List<ThirdPartyLicense> = listOf(
         notes = "The on-device database holding sources, channels, favourites and the guide.",
     ),
     ThirdPartyLicense(
+        name = "AndroidX Paging",
+        coordinates = "androidx.paging:*",
+        license = "Apache License 2.0",
+        url = "https://developer.android.com/topic/libraries/architecture/paging/v3-overview",
+        notes = "Loads a catalogue a page at a time, so a tab draws a screenful rather than " +
+            "reading every title a provider carries.",
+    ),
+    ThirdPartyLicense(
         name = "AndroidX DataStore",
         coordinates = "androidx.datastore:datastore-preferences",
         license = "Apache License 2.0",

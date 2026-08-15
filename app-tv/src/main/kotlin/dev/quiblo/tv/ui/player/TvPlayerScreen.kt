@@ -96,6 +96,7 @@ import dev.quiblo.feature.player.subtitleNoticeText
 import dev.quiblo.feature.player.trackMenu
 import dev.quiblo.tv.R
 import dev.quiblo.tv.ui.common.AmbientColours
+import dev.quiblo.tv.ui.common.PLAYER_CROSSFADE_MILLIS
 import dev.quiblo.tv.ui.common.ambientBackdrop
 import dev.quiblo.tv.ui.common.ambientFrom
 import dev.quiblo.tv.ui.detail.DetailButton
@@ -793,6 +794,7 @@ private fun VideoSurface(
     hasRenderedFirstFrame: Boolean,
 ) {
     val controller = remember { viewModel.controllerHandle() }
+    val ambientEnabled by viewModel.ambientPlayer.collectAsStateWithLifecycle()
 
     /*
      * Ambient light from the picture itself.
@@ -807,6 +809,10 @@ private fun VideoSurface(
      * layer rather than letterboxed inside itself — the view genuinely occupies less of the box
      * than the box has, so what is painted underneath shows around it. Where the video fills the
      * screen exactly there are no bars, nothing shows, and none of this costs anything.
+     *
+     * **On by default and switchable off in Settings.** It is a taste, and one with a real cost
+     * on the other side: switched off the surface is never sampled, rather than sampled and the
+     * answer thrown away.
      */
     var ambient by remember { mutableStateOf(AmbientColours.None) }
     var surface by remember { mutableStateOf<SurfaceView?>(null) }
@@ -815,7 +821,7 @@ private fun VideoSurface(
         modifier = Modifier
             .fillMaxSize()
             .clipToBounds()
-            .ambientBackdrop(ambient),
+            .ambientBackdrop(ambient, crossfadeMillis = PLAYER_CROSSFADE_MILLIS),
     ) {
         val scale = remember(videoAspectRatio, mode, maxWidth, maxHeight) {
             videoScale(
@@ -841,19 +847,21 @@ private fun VideoSurface(
         )
 
         /*
-         * One frame a second and a half, at 32x18.
+         * A frame every 400ms, at 32x18.
          *
          * Both numbers are the point. A frame that small costs nothing to copy and nothing to
-         * read, and it is already the blur — sampling six colours out of thirty-two pixels
-         * cannot pick up a detail, only a cast. And a second and a half is far slower than the
-         * picture changes, which is what makes the light drift with a scene rather than flicker
-         * with a cut.
+         * read, and it is already the blur — sampling six colours out of thirty-two pixels cannot
+         * pick up a detail, only a cast. And 400ms with a 300ms crossfade behind it is close
+         * enough to the picture to read as the picture's own light, where the 1500ms and 700ms
+         * this replaces could put the light a full two seconds behind the frame it came from.
          *
-         * Stopped whenever there is no first frame, so nothing is sampled off a dead surface.
+         * Stopped whenever there is no first frame, so nothing is sampled off a dead surface, and
+         * never started when the setting is off — a feature switched off does not do its work and
+         * discard the answer.
          */
-        LaunchedEffect(hasRenderedFirstFrame, surface) {
+        LaunchedEffect(hasRenderedFirstFrame, surface, ambientEnabled) {
             val view = surface ?: return@LaunchedEffect
-            if (!hasRenderedFirstFrame) {
+            if (!hasRenderedFirstFrame || !ambientEnabled) {
                 ambient = AmbientColours.None
                 return@LaunchedEffect
             }
@@ -1056,8 +1064,20 @@ private suspend fun sampleAmbient(view: SurfaceView): AmbientColours? =
 private const val AMBIENT_WIDTH = 32
 private const val AMBIENT_HEIGHT = 18
 
-/** Far slower than the picture changes, so the light drifts with a scene rather than a cut. */
-private const val AMBIENT_SAMPLE_MILLIS = 1_500L
+/**
+ * How often the surface is read.
+ *
+ * **Four times more often than it was, and the previous number was the complaint.** At 1500ms,
+ * plus a 700ms crossfade behind it, the light could be a full two seconds behind the frame it was
+ * supposedly taken from — close enough to be a feature, far enough to read as one thing following
+ * another rather than as one thing. A `PixelCopy` of 32×18 pixels is a trivial copy and the
+ * sampler reads six of them, so the cost of asking this often is the call itself, which is
+ * nothing next to decoding the frame it copies.
+ *
+ * Still slow enough that a scene drifts rather than flickers: the crossfade is the same length
+ * again, so nothing snaps.
+ */
+private const val AMBIENT_SAMPLE_MILLIS = 400L
 
 /**
  * Longer than it was, because the controls are now something a viewer navigates rather than

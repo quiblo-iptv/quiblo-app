@@ -165,4 +165,4 @@ private const val ARC_PEAK = 0.5f
 private const val ARC_END = 0.58f
 
 /** Slow enough to read as breathing. A fast circuit is a control asking to be pressed. */
-private const val CIRCUIT_MILLIS = 6_000
+internal const val CIRCUIT_MILLIS = 6_000

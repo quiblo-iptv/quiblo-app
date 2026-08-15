@@ -143,6 +143,29 @@ class PlayerSettingsStore(context: Context) {
     }
 
     /**
+     * Whether the player lights its black bars with the colours of the picture.
+     *
+     * **On by default**, because it is what the screen should have looked like from the start: a
+     * film is 2.35:1 and a panel is 16:9, so a film plays inside two dead-black bars for its whole
+     * length, and an unlit rectangle either side of the picture is not neutral on a television in
+     * a dark room. It is a switch rather than a fixed behaviour because it is a taste, and one
+     * with a real cost on the other side — the surface is sampled while the film plays, and
+     * somebody who does not want it should not be paying for it.
+     *
+     * Off means the sampling loop never starts, not that its answer is discarded. Same rule as
+     * [showLiveInSearch] above.
+     *
+     * App-wide rather than per profile, like everything else in this file.
+     */
+    val ambientPlayer: Flow<Boolean> = dataStore.data.map { preferences ->
+        preferences[AMBIENT_PLAYER] ?: true
+    }
+
+    suspend fun setAmbientPlayer(enabled: Boolean) {
+        dataStore.edit { it[AMBIENT_PLAYER] = enabled }
+    }
+
+    /**
      * How subtitles are drawn (INC-F11).
      *
      * Separate from [settings] rather than folded into it. `PlayerSettings` is engine tuning that
@@ -204,6 +227,7 @@ class PlayerSettingsStore(context: Context) {
         val THEME_MODE = stringPreferencesKey("theme_mode")
         val DYNAMIC_COLOR = booleanPreferencesKey("dynamic_color")
         val SHOW_LIVE_IN_SEARCH = booleanPreferencesKey("show_live_in_search")
+        val AMBIENT_PLAYER = booleanPreferencesKey("ambient_player")
         val HIDDEN_SCRIPTS = stringSetPreferencesKey("hidden_scripts")
         val SUBTITLE_MATCH_SYSTEM = booleanPreferencesKey("subtitle_match_system")
         val SUBTITLE_SIZE = stringPreferencesKey("subtitle_size")

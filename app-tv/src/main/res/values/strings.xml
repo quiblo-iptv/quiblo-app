@@ -146,6 +146,8 @@
     <string name="tv_settings_script_hangul">Korean</string>
     <string name="tv_settings_script_devanagari">Devanagari</string>
     <string name="tv_settings_script_thai">Thai</string>
+    <string name="tv_settings_ambient">Ambient light</string>
+    <string name="tv_settings_ambient_detail">On. Lights the black bars around a film with the colours of the picture.</string>
     <string name="tv_settings_search">Search</string>
     <string name="tv_settings_search_live">Live channels in advanced search</string>
     <string name="tv_settings_search_live_detail">Off. A live channel carries no genre, so a genre filter can only match it on its name.</string>

@@ -73,6 +73,7 @@ import dev.quiblo.core.model.Programme
 import dev.quiblo.feature.browse.BrowseViewModel
 import dev.quiblo.feature.browse.di.browseParams
 import dev.quiblo.tv.R
+import dev.quiblo.tv.ui.common.LocalAmbientSink
 import kotlinx.coroutines.delay
 import org.koin.androidx.compose.koinViewModel
 
@@ -93,6 +94,17 @@ fun TvLiveScreen(
     ),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+
+    /*
+     * Puts out whatever the catalogue left lit.
+     *
+     * The shell's backdrop is fed by focused posters, and a channel row is not one — a live logo
+     * is a small wide badge, and lighting a room from it would be lighting it from a wordmark. So
+     * this screen has no light of its own and says so, rather than inheriting the colours of a
+     * film that was focused two tabs ago.
+     */
+    val ambientSink = LocalAmbientSink.current
+    LaunchedEffect(Unit) { ambientSink(null) }
 
     /**
      * The channels, a page at a time.

@@ -73,7 +73,61 @@ Files: `feature/designsystem/BoringAvatar.kt` and its test. Nothing else — `Pr
 
 ---
 
-## 2 to 6
+## 2. `FEAT-026` — the same quickness everywhere
 
-*Not yet implemented. See the round's plan; each lands on its own branch and is written up here as
-it does.*
+**Reported:** *"make ambiant on outer screens same quickness."*
+
+The player came down to 300ms in `021`; the browse grid stayed at 700.
+
+**The 700 was paying for a problem something else already solves.** It was set longer than a D-pad
+key repeat so that holding right along a row produced one slow drift rather than twelve flashes —
+but nothing is fetched at all until focus has rested for `SETTLE_MILLIS`, so a row flown through
+never produces twelve colours to flash between. What the long crossfade bought instead was light
+arriving after the tile it belonged to.
+
+`SETTLE_MILLIS` is **untouched**, and its note now says why: it is the restraint rather than the
+slowness, it is what makes walking a row cost one fetch at the end rather than one per tile, and
+it is also what makes a short crossfade safe.
+
+The two constants stay two constants although they now hold the same number — one follows focus
+and the other follows the picture, and a single value would make the next person to tune either of
+them tune both without noticing.
+
+## 3. `FEAT-027` — Search gets its own light, and clears the last one
+
+**Reported:** *"ambiant not cleared on search screen … make it fade, and the glowing on the search
+itself makes its own moving glowing blured ambiant."*
+
+**Two faults, one cause.** Only the poster rows ever fed `LocalAmbientSink`, and nothing ever fed
+it back — so arriving at Search or Live left the colours of a film focused two tabs ago lighting a
+screen with no film on it.
+
+- **Clearing.** Search and Live push `null` on composition. `rememberAmbient` already reads that
+  as no light, and the backdrop's own crossfade turns it into the fade the report asks for rather
+  than a snap.
+- **Search's own light**, and this is the half worth reading twice. The search field has had a
+  travelling highlight since `013` — one bright arc going round its border every six seconds.
+  `driftingGlow` puts two pools of light in the room on **that same circuit**, at opposite ends of
+  one orbit, so the room turns with the arc. Sharing the period is deliberate: two nearly-equal
+  periods would drift apart into two things that never quite agree, which is the sort of wrongness
+  nobody can name and everybody sees.
+
+  The hue turns too, over two minutes — twenty circuits — so the colour is never seen to change,
+  only seen to have. And the pools are built through the artwork path's own fixed lightness,
+  saturation floor and `BACKDROP_ALPHA`, so the glow is exactly as bright as a poster's. A glow
+  that read brighter would make Search the loudest screen in the app, which is the opposite of
+  what a screen you arrive at to type is for.
+
+The two-pool drawing is now one shared private function, so the backdrop and the glow cannot come
+to disagree about the shape of light in this app.
+
+**Tested for the contract, not the look.** `TvAmbientClearedTest` pins that a screen with no
+artwork of its own says so — a one-line rule, in exactly the place a later refactor of either
+screen loses it — and that a screen *with* artwork still lights the room, which is what a careless
+fix (clear on every tab change) would break. The glow itself is two radial gradients on an
+infinite transition; a screenshot is the only honest assertion about how light looks, and `A15`
+sends that to the panel.
+
+## 4 to 6
+
+*Not yet implemented. Each lands on its own branch and is written up here as it does.*

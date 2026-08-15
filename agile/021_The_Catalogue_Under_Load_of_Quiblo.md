@@ -199,18 +199,30 @@ New dependencies: `androidx.paging:paging-runtime`, `paging-compose`, `paging-co
 
 ## 4. Ambient, on by default and closer to the frame
 
-*Not yet implemented.*
+Shipped in `0.14.0` and never given a switch. `TvPlayerScreen.VideoSurface` sampled the surface
+every `1_500ms` and `ambientBackdrop` crossfaded over `700ms`, so the light could sit ~2.2s behind
+the picture — near enough to look deliberate, far enough to read as two separate things rather
+than one.
 
-`TvPlayerScreen.VideoSurface` samples the surface every `AMBIENT_SAMPLE_MILLIS = 1_500L` and
-`ambientBackdrop` crossfades over `CROSSFADE_MILLIS = 700`, so the light sits up to ~2.2s behind
-the picture. There is no setting; it is unconditional.
-
-It gains `ambientPlayerEnabled` in `PlayerSettingsStore`, defaulting to **on**, following
+**The switch.** `ambientPlayer` in `PlayerSettingsStore`, defaulting to **on**, following
 `showLiveInSearch` exactly — including its rule that off means the work is not done rather than
-done and discarded, so the sampling loop never starts. `ambientBackdrop` takes its crossfade as a
-parameter: the browse grid keeps 700ms, chosen against D-pad key repeat, and the player gets
-300ms. Player sampling goes to 400ms; `PixelCopy` at 32×18 is a trivial copy and the sampler reads
-six pixels of it.
+done and discarded: the sampling loop never starts. It sits under Playback on the television's
+settings, not buried, because it changes what the screen looks like for the whole length of a film.
+
+**The seed matters and is the one thing worth a test.** Every layer mirroring the stored value has
+to start from `true`. A layer seeding `false` is invisible on inspection — the store answers a
+moment later and corrects it — and produces a switch that flickers off as settings opens and a
+flash of dead black bars at the start of every film. `AmbientSettingTest` pins it, with a store
+that never answers so the seed is the only thing under test.
+
+**The timings.** `ambientBackdrop` takes its crossfade as a parameter rather than a file constant,
+because the two callers answer different things. The browse grid keeps `GRID_CROSSFADE_MILLIS =
+700` — it follows *focus*, and that number was chosen against D-pad key repeat so a held press
+drifts rather than strobes. The player gets `PLAYER_CROSSFADE_MILLIS = 300`, because it follows the
+*picture*, where the same 700ms reads as the light arriving after the scene it belongs to. Sampling
+goes from 1500ms to 400ms: `PixelCopy` at 32×18 is a trivial copy and the sampler reads six pixels
+of it, so the cost of asking four times as often is the call itself — nothing next to decoding the
+frame it copies.
 
 The phone player has no ambient at all and does not get one here — that belongs with the episode
 controls already waiting on the phone.

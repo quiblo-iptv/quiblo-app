@@ -15,8 +15,33 @@ Formatted after [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and ve
 
 ## Unreleased
 
+### Added
+
+- **Ambient light on the player has a switch, in Settings under Playback, and it is on.** A film is
+  2.35:1 and a television is 16:9, so a film plays inside two black bars for its whole length — and
+  those bars are lit with the colours of the picture between them. It has been doing that since
+  0.14.0 with no way to turn it off; now there is one, and off means the picture is not sampled at
+  all rather than sampled and ignored.
+
 ### Changed
 
+- **The ambient light keeps up with the picture.** It read the screen a little under twice a second
+  and then took most of another second to change, so at worst the glow was around two seconds
+  behind the frame it came from — near enough to look deliberate, far enough to look like two
+  separate things. It now reads four times as often and settles twice as fast, which is close
+  enough to read as the picture's own light. A hard cut is still a fade rather than a flash.
+- **And the light behind the catalogue keeps up with the remote.** It took most of a second to
+  change colour, which was set that way so that holding right along a row would not strobe — but
+  nothing is even asked for until the remote has rested on a tile, so there was never a queue of
+  colours to strobe between. It now settles as quickly as the player's.
+- **Search and Live put out the light the catalogue left on.** The glow behind the app comes from
+  whatever poster the remote is resting on, and neither of those screens has one — so arriving at
+  either of them left the colours of a film you looked at two tabs ago sitting behind an empty
+  search box. They now fade it out on the way in.
+- **And Search lights itself instead.** Two soft pools that travel round the screen on the same
+  six-second circuit as the highlight going round the search box, turning slowly through the
+  colours as they go. It is exactly as bright as a poster's light and it needs nothing from the
+  network.
 - **Generated profile pictures are faces now.** They were four coloured shapes; they are a face on
   a coloured tile — the same generator library, a different one of its styles. Every profile
   already wearing a generated picture becomes a face the next time the app opens, and it is the

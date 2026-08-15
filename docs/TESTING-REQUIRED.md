@@ -155,10 +155,16 @@ been proven in unit tests.
 | **Passes if** | Arabic-titled rows disappear from browse and from search, favourites keep every one of them, and "Show everything again" brings them all back |
 | **Fails if** | A catalogue screen goes blank, the list takes visibly longer to draw than before, or a favourite disappears |
 
-**Two limits that are the design, not defects.** A category named `4K | مسلسلات` reads as Latin,
-because `K` is a Latin letter — hiding Latin loses it. And an Arabic film released under a
-transliterated Latin title is not hidden at all, because nothing in a playlist says it is Arabic.
-Report these as observations, not as failures.
+**Superseded in part by A11.** The rule this section was written against read the first letter of
+a title and stopped; round `019` Part B changed it to *any* letter outside a trailing bracketed
+tag, which is what the two paragraphs below were describing the cost of. `4K | مسلسلات` is now
+hidden by either script rather than read as Latin. The remaining limit still stands and is still
+the design: **an Arabic film released under a transliterated Latin title is not hidden at all**,
+because nothing in a playlist says it is Arabic. Report that as an observation, not a failure.
+
+Everything else on this row — the browse and search behaviour, favourites keeping every title,
+"Show everything again" — is unchanged and still owed a device. A11 is where the new rule's own
+rows are.
 
 ### INC-F10 — subtitle files, the panel's and the viewer's own
 

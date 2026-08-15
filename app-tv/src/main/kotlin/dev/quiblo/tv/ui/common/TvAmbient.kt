@@ -92,11 +92,11 @@ fun Modifier.ambientBackdrop(
     /**
      * How long the light takes to become the new light.
      *
-     * A parameter rather than one constant, because the two callers are answering different
-     * things. A browse grid is answering a D-pad, and [GRID_CROSSFADE_MILLIS] is longer than a
-     * key repeat on purpose: holding right along a row should be one slow drift rather than
-     * twelve flashes. The player is answering the picture itself, where the same number reads as
-     * the light lagging behind the scene — see [PLAYER_CROSSFADE_MILLIS].
+     * A parameter rather than one constant, because the two callers follow different things —
+     * [GRID_CROSSFADE_MILLIS] follows focus and [PLAYER_CROSSFADE_MILLIS] follows the picture —
+     * and one shared value would make the next person to tune either of them tune both without
+     * noticing. They happen to agree today, and that is a fact about the tuning rather than
+     * about the design.
      */
     crossfadeMillis: Int = GRID_CROSSFADE_MILLIS,
 ): Modifier = composed {
@@ -220,16 +220,26 @@ const val BACKDROP_ALPHA = 0.22f
 /** The far corner is quieter, so the screen has a direction rather than two equal lamps. */
 private const val SECOND_POOL_SCALE = 0.7f
 
-/** Longer than a D-pad key repeat, so a held press drifts rather than strobes. */
-const val GRID_CROSSFADE_MILLIS = 700
+/**
+ * How long the light behind a grid takes to become the new light.
+ *
+ * **700 until `022`, and the reasoning for it was doing a job something else already does.** It
+ * was set longer than a D-pad key repeat so that holding right along a row produced one slow
+ * drift rather than twelve flashes — but nothing is fetched at all until focus has rested for
+ * [SETTLE_MILLIS], so a row flown through never produces twelve colours to flash between. The
+ * crossfade was paying for a problem the settle had already solved, and what it bought instead
+ * was light that arrived after the tile it belonged to.
+ *
+ * The same 300 as the player, because the two are now answering the same complaint.
+ */
+const val GRID_CROSSFADE_MILLIS = 300
 
 /**
- * The player's crossfade, and it is short for the opposite reason the grid's is long.
+ * The player's crossfade.
  *
- * A grid backdrop follows *focus*, which moves faster than the eye wants a background to; the
- * player's follows the *picture*, and there the same 700ms read as the light arriving after the
- * scene it belongs to. Short enough to feel attached to the frame, long enough that a hard cut is
- * still a fade rather than a flash.
+ * The same number as the grid's, and kept as its own name rather than folded into one: the two
+ * follow different things — one follows focus, the other follows the picture — and a single
+ * constant would make the next person to tune one of them tune both without noticing.
  */
 const val PLAYER_CROSSFADE_MILLIS = 300
 
@@ -325,7 +335,14 @@ private val remembered = object : LinkedHashMap<String, AmbientColours>(0, 0.75f
 
 private const val REMEMBERED_MAX = 1_000
 
-/** Long enough that a held D-pad passes straight through a tile without costing anything. */
+/**
+ * Long enough that a held D-pad passes straight through a tile without costing anything.
+ *
+ * **Deliberately untouched when the crossfade came down in `022`.** This is the restraint, not
+ * the slowness: it is what makes walking a row cost one fetch at the end rather than one per tile
+ * passed, and it is also what makes a short crossfade safe — a row flown through never produces a
+ * queue of colours to flash between, because it never asks for them.
+ */
 private const val SETTLE_MILLIS = 180L
 
 /** Four times what the sampler reads, and a quarter of the bytes the first version decoded. */

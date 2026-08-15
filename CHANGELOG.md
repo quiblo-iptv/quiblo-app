@@ -30,6 +30,10 @@ Formatted after [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and ve
   behind the frame it came from — near enough to look deliberate, far enough to look like two
   separate things. It now reads four times as often and settles twice as fast, which is close
   enough to read as the picture's own light. A hard cut is still a fade rather than a flash.
+- **And the light behind the catalogue keeps up with the remote.** It took most of a second to
+  change colour, which was set that way so that holding right along a row would not strobe — but
+  nothing is even asked for until the remote has rested on a tile, so there was never a queue of
+  colours to strobe between. It now settles as quickly as the player's.
 
 ## 0.18.0
 

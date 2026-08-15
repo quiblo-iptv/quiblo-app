@@ -22,7 +22,7 @@ down at the bottom of `012` is the one this page is built around:
 
 So every row below says **what to look at**, not what was changed.
 
-Last updated: **2026-08-15**.
+Last updated: **2026-08-16**.
 
 ---
 
@@ -753,6 +753,103 @@ use rather than an afternoon.
 | **What to look at** | Install over an existing build |
 | **Passes if** | Every channel, favourite and resume point is where it was, and the tab works |
 | **Why it is here** | Schema 18. The migration adds one empty table and touches nothing, which is exactly the sort of claim that should still be checked once |
+
+---
+
+## A15 — Round `022`: the television, made to feel like one thing
+
+**Where:** the television, except `A15.9` and `A15.10`, which need a phone. Six of these are about
+how something *looks* or *feels*, which is the one class of claim a build cannot settle. From
+[`022`](../agile/022_The_Television_Made_To_Feel_Like_One_Thing_of_Quiblo.md).
+
+### A15.1 — the faces
+
+| | |
+| :---- | :---- |
+| **What to look at** | Open the profile chooser on a profile that already had a generated picture |
+| **Passes if** | It is a face on a coloured tile, and it is the *same* face every time the app opens |
+| **Fails if** | Still four coloured shapes, or a different face on each launch — the second would mean the seed is being regenerated rather than read |
+
+### A15.2 — and the chooser offers a dozen different ones
+
+| | |
+| :---- | :---- |
+| **What to look at** | Add a profile, type a name, and look at the row of faces offered |
+| **Passes if** | Twelve visibly different faces — different tiles, different shapes, mouths open and closed |
+| **Fails if** | Several look the same. The arithmetic is pinned by tests, so this is really asking whether *twelve* is enough to look varied at a glance |
+
+### A15.3 — the light behind the catalogue keeps up
+
+| | |
+| :---- | :---- |
+| **What to look at** | Walk along a poster row one press at a time, then hold right through a whole row |
+| **Passes if** | Stepping: the light changes about as fast as the poster does. Holding: one slow drift, no strobing |
+| **Fails if** | It flashes while the D-pad is held. That is the risk this change takes, and the settle is what is supposed to prevent it |
+
+### A15.4 — Search puts out the catalogue's light
+
+| | |
+| :---- | :---- |
+| **What to look at** | Focus a colourful poster on Movies, then press up and left to Search |
+| **Passes if** | The film's colours fade away rather than snapping off or staying |
+| **Fails if** | The old colours are still there behind the search box |
+
+### A15.5 — and lights itself
+
+| | |
+| :---- | :---- |
+| **What to look at** | Sit on Search with an empty box for a minute |
+| **Passes if** | Two soft pools of light moving slowly around, turning colour, going round in step with the highlight travelling round the search box |
+| **Fails if** | It is brighter than a poster's light, or it is fast enough to be distracting, or the room and the box's highlight visibly disagree about where they are |
+
+### A15.6 — the bar is always lit somewhere
+
+| | |
+| :---- | :---- |
+| **What to look at** | Open Settings and come back. **Do it ten times.** Then open a film, come back, ten times |
+| **Passes if** | Every single time, the bar is holding the remote — pressing right moves along it and the gear and face highlight when reached |
+| **Fails if** | Even once the remote appears to do nothing and nothing is highlighted. This is a race, so once in ten is the whole defect |
+
+### A15.7 — two backs close it
+
+| | |
+| :---- | :---- |
+| **What to look at** | On Search, press back once, read the screen, then press back again |
+| **Passes if** | "Press back again to close" along the bottom, then the app closes |
+| **Fails if** | The first press closes it, or the second does not, or the line covers something |
+
+### A15.8 — and it asks who is watching next time
+
+| | |
+| :---- | :---- |
+| **What to look at** | Close it that way, then open it again from the launcher |
+| **Passes if** | The "who is watching" chooser |
+| **Fails if** | It resumes into the same profile. That is the reported half, and it is the half that survives a fix which only closes the activity |
+
+### A15.9 — it installs on a phone
+
+| | |
+| :---- | :---- |
+| **What to look at** | Install the television app on a phone and find it in the launcher |
+| **Passes if** | It installs, appears in the launcher, opens, and turns when the phone turns |
+| **Fails if** | The store or `adb install` refuses it, or it installs and cannot be found, or it stays landscape |
+
+### A15.10 — and it can be driven by a finger
+
+| | |
+| :---- | :---- |
+| **What to look at** | On the phone: tap the tabs, the gear, the profile face, a poster, a channel. Then open Settings and tap into the Movie Database key field |
+| **Passes if** | Every one of them responds, and the keyboard does not cover the field being typed into |
+| **Fails if** | The tabs do nothing, or the keyboard hides the field |
+| **Why it is here** | Expected and accepted: everything is sized for a sofa and will look large, and the ambient light stays dark because it follows focus. Neither is a failure of this ticket |
+
+### A15.11 — and the panel is exactly as it was
+
+| | |
+| :---- | :---- |
+| **What to look at** | Back on the television: open Settings and focus the Movie Database key field |
+| **Passes if** | The list does not move when the keyboard opens |
+| **Fails if** | It shifts or shakes. `A15.9`'s manifest changes and the keyboard inset are the two edits that could have brought `#021` back |
 
 ---
 

@@ -192,3 +192,43 @@ that a focus search walks straight past a tap target — is the one that matters
 - **There is now a second phone-capable app beside `:app`.** Two UIs for one platform is a
   maintenance obligation, taken on because it was asked for, and recorded here as a decision
   rather than left to be discovered.
+
+
+---
+
+## What a device still has to answer
+
+Eleven tickets, `A15.1` to `A15.11`, in
+[`docs/TESTING-REQUIRED.md`](../docs/TESTING-REQUIRED.md). Six of this round's six items are about
+how something *looks* or *feels*, which is the one class of claim a build cannot settle. Three are
+worth naming:
+
+- **`A15.6` asks for ten repetitions and means it.** `BUG-028` is a race. A single open-and-return
+  proves nothing about a fix for something that failed intermittently, and "it seems better" is
+  what a race sounds like when it has not been fixed.
+- **`A15.8` is the reported reason rather than the reported behaviour.** Closing the app is easy
+  to see; the chooser coming back afterwards is the thing that was actually asked for, and it is
+  the half that survives a fix which only finishes the activity.
+- **`A15.11` is the regression watch.** The manifest edits and the keyboard inset in `FEAT-030`
+  are the two changes that could bring `#021`'s shaking settings list back, and it shakes on a
+  panel while staying flat everywhere else.
+
+## What was not measured
+
+Coverage is not reported for this round, for the same reason as `021`: `coverageAll` covers
+`:source:m3u` and `:source:xtream` only — the parsers, where a covered line is genuinely an
+exercised line — and nothing here touched a parser. Recorded as a divergence from Amendment 10
+rather than acted on alone.
+
+`licenceCheck` is unchanged and green. Beam is the same port as bauhaus was, not a dependency, so
+`docs/LICENSES.md` has nothing to add; the MIT notice at the top of `BoringAvatar.kt` names the
+variant and moved with it.
+
+What this round has instead is **19 tests written or rewritten** — nine on the avatar port, two on
+the ambient contract, two on the focus race, four on what a back press means, two on taps — and
+every one of them is on the half of a change that can be wrong without looking wrong: a face a
+unit out of place, a `false` return nobody read, a back press that disarms when it should not, a
+tap target that is quietly also a focus target.
+
+The other half of each of those changes is how it looks, and none of these say anything about
+that. `A15` is where that goes.

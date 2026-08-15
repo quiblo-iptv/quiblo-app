@@ -15,6 +15,20 @@ Formatted after [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and ve
 
 ## Unreleased
 
+### Changed
+
+- **The television asks before it types.** Every text field on the television — the search box,
+  the playlist and account forms, the metadata key, a profile's name — used to throw the
+  on-screen keyboard over the screen the moment the remote landed on it, so walking down the
+  settings list opened and dismissed a keyboard at every field on the way. A field now rests
+  under focus and opens its keyboard when it is pressed, the same way a field on a phone is
+  tapped before it is typed into.
+- **The category editor is a room you enter, not a list you walk through.** It was a scroller
+  among the settings rows, so passing it on the way to anything below cost one press per
+  category — two hundred of them on a real account. It is now shut by default and says how many
+  categories there are and how many are hidden; one press opens it, Back closes it, and walking
+  off either end closes it behind you. The rows inside have room to breathe, which they did not.
+
 ## 0.17.0
 
 ### Added

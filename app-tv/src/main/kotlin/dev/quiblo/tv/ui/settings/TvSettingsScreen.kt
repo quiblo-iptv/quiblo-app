@@ -46,6 +46,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Edit
@@ -54,13 +55,18 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -88,6 +94,7 @@ import dev.quiblo.tv.BuildConfig
 import dev.quiblo.tv.R
 import dev.quiblo.tv.ui.common.TvChip
 import dev.quiblo.tv.ui.common.TvTextField
+import dev.quiblo.tv.ui.common.tryRequestFocus
 import org.koin.androidx.compose.koinViewModel
 
 /**
@@ -352,41 +359,13 @@ fun TvSettingsScreen(
             )
         }
 
-        // The categories scroll inside a fixed-height box rather than as items of the outer
-        // list, which is what the panel asked for.
-        //
-        // A scrollable region inside a scrollable screen must hand focus back at its edges or
-        // the remote is stuck inside it forever — the worst failure this app can have, since a
-        // viewer's only way out is to kill it. `focusGroup()` is what does that here.
-        //
-        // **That is measured rather than argued**: `TvCategoryBoxFocusEscapeTest` drives this
-        // exact shape and asserts focus leaves at both ends, including with three hundred
-        // categories where the list has not composed the rows past the viewport. Four previous
-        // television focus questions in this project were answered by confident reasoning and
-        // all four were wrong, and #021 is still open on this very screen.
         item {
-            val shape = RoundedCornerShape(8.dp)
-            LazyColumn(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(min = 220.dp, max = 420.dp)
-                    .border(1.dp, Color.White.copy(alpha = 0.18f), shape)
-                    .clip(shape)
-                    .focusGroup(),
-            ) {
-                items(
-                    items = categories,
-                    key = { "${categoryKind.name}-${it.title}" },
-                ) { category ->
-                    CategoryEditRow(
-                        category = category,
-                        onToggleHidden = {
-                            viewModel.setCategoryHidden(category, !category.isHidden)
-                        },
-                        onRename = { viewModel.renameCategory(category, it) },
-                    )
-                }
-            }
+            CategoryBox(
+                categories = categories,
+                kind = categoryKind,
+                onToggleHidden = { viewModel.setCategoryHidden(it, !it.isHidden) },
+                onRename = { category, name -> viewModel.renameCategory(category, name) },
+            )
         }
 
         item { SectionHeading(stringResource(R.string.tv_settings_backup)) }
@@ -790,11 +769,212 @@ private fun scanMessage(state: MetadataScanState): String? = when (state) {
  * The rename is local and the provider's own title stays the key, so the edit reattaches
  * after every refresh rather than being lost with the ids.
  */
+/**
+ * The category editor: a room you enter, not a list you walk through.
+ *
+ * It was a scrollable box among the settings rows, and the report was that walking past it cost
+ * as many presses as it had categories — two hundred on a real panel — for a viewer on their way
+ * to the row underneath. A region that has to be traversed to be left is a region that charges
+ * everybody for what only one of them wanted.
+ *
+ * So it is shut by default and says what it holds. One press opens it, one Back closes it, and
+ * a viewer who is not editing categories passes it in a single press like every other row.
+ *
+ * **A scrollable region inside a scrollable screen must hand focus back at its edges** or the
+ * remote is stuck inside it forever — the worst failure this app can have, since a viewer's only
+ * way out is to kill it. There are two ways out of this one: Back, which is a [BackHandler]
+ * rather than a key interception because the dispatcher gives the most recently registered
+ * handler the key first — exactly the precedence wanted over the one closing the screen — and
+ * simply walking off either end, which shuts the box behind you.
+ *
+ * **Measured rather than argued**: `TvCategoryBoxFocusEscapeTest` drives this shape and asserts
+ * both that the shut box is left in one press and that the open one keeps focus inside, with
+ * three hundred categories where the list has not composed the rows past the viewport. Four
+ * previous television focus questions in this project were answered by confident reasoning and
+ * all four were wrong.
+ */
+@Composable
+internal fun CategoryBox(
+    categories: List<Category>,
+    kind: MediaKind,
+    onToggleHidden: (Category) -> Unit,
+    onRename: (Category, String?) -> Unit,
+) {
+    // Switching kind closes the box. The list underneath is a different list, and reopening is
+    // one press — cheaper than landing focus somewhere in a list that has just been replaced.
+    var isOpen by remember(kind) { mutableStateOf(false) }
+
+    /*
+     * Two ways out, and they want different things done with the focus.
+     *
+     * Back is a viewer saying "I am finished here", and focus belongs back on the box — a screen
+     * with nothing focused is a screen a remote cannot move on. Walking off the end is a viewer
+     * already on their way somewhere, and grabbing them back would be the box refusing to be
+     * left. So the flag records which happened, and the effect below only pulls focus for the
+     * first.
+     */
+    var focusReturns by remember { mutableStateOf(false) }
+    var focusIsInside by remember { mutableStateOf(false) }
+
+    val shape = RoundedCornerShape(8.dp)
+    val rows = remember { FocusRequester() }
+    val summary = remember { FocusRequester() }
+
+    BackHandler(enabled = isOpen) {
+        focusReturns = true
+        isOpen = false
+    }
+
+    // Whichever stage has just appeared takes the focus. Without this the node focus was on has
+    // left the composition and the remote is holding a screen with nothing focused on it.
+    //
+    // A frame is waited for first, and it is load-bearing: a `LaunchedEffect` runs when the
+    // composition is applied, which is before the lazy list has laid out a single row. Asking for
+    // focus at that point is asking for a node that does not exist yet, and `tryRequestFocus`
+    // swallows the failure — so the box opened and focus stayed on the settings row underneath.
+    // Measured by `TvCategoryBoxFocusEscapeTest`.
+    LaunchedEffect(isOpen) {
+        withFrameNanos { }
+        when {
+            isOpen -> rows.tryRequestFocus()
+            focusReturns -> {
+                summary.tryRequestFocus()
+                focusReturns = false
+            }
+        }
+    }
+
+    if (!isOpen) {
+        CategorySummary(
+            categories = categories,
+            shape = shape,
+            onOpen = { isOpen = true },
+            modifier = Modifier.focusRequester(summary),
+        )
+        return
+    }
+
+    LazyColumn(
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = BOX_MIN_HEIGHT, max = BOX_MAX_HEIGHT)
+            .border(2.dp, Color.White.copy(alpha = 0.55f), shape)
+            .clip(shape)
+            /*
+             * Walking off the end shuts the box behind you.
+             *
+             * Trapping focus inside it was tried first and is what `FocusProperties.onExit`
+             * exists for. It did not hold in a lazy list, and it was the wrong thing to want
+             * anyway: a region the D-pad enters and cannot leave is the worst failure this app
+             * can have, and one held shut by an experimental API is a bad bet on top of that.
+             *
+             * So the box is left the way every other region is left — by walking out of it — and
+             * it closes itself when that happens rather than standing open behind a viewer who
+             * has moved on. Back closes it too, and that one puts focus back on the box.
+             *
+             * The `focusIsInside` latch is what stops it closing the instant it opens: at that
+             * moment focus has not arrived yet, and `hasFocus` is legitimately false.
+             */
+            .onFocusChanged { state ->
+                if (state.hasFocus) {
+                    focusIsInside = true
+                } else if (focusIsInside) {
+                    focusIsInside = false
+                    isOpen = false
+                }
+            }
+            .focusGroup()
+            .padding(horizontal = BOX_PADDING_HORIZONTAL, vertical = BOX_PADDING_VERTICAL),
+    ) {
+        item {
+            Text(
+                text = stringResource(R.string.tv_settings_category_leave),
+                color = Color.White.copy(alpha = 0.45f),
+                fontSize = 12.sp,
+                modifier = Modifier.padding(bottom = 8.dp),
+            )
+        }
+        itemsIndexed(
+            items = categories,
+            key = { _, category -> "${kind.name}-${category.title}" },
+        ) { index, category ->
+            CategoryEditRow(
+                category = category,
+                onToggleHidden = { onToggleHidden(category) },
+                onRename = { onRename(category, it) },
+                firstControl = rows.takeIf { index == 0 },
+            )
+        }
+    }
+}
+
+/** What the shut box says: how many categories there are, how many are hidden, and how to edit. */
+@Composable
+private fun CategorySummary(
+    categories: List<Category>,
+    shape: RoundedCornerShape,
+    onOpen: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isFocused by interactionSource.collectIsFocusedAsState()
+    val hidden = categories.count { it.isHidden }
+
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .heightIn(min = SUMMARY_HEIGHT)
+            .border(
+                width = if (isFocused) 2.dp else 1.dp,
+                color = Color.White.copy(alpha = if (isFocused) 1f else 0.18f),
+                shape = shape,
+            )
+            .clip(shape)
+            // `clickable` is the focus target as well as the press target. An explicit
+            // `focusable()` in front of it makes a second one, and then the node a remote
+            // focuses is the outer of the two while the key handling sits on the inner — so the
+            // box takes focus and centre does nothing. Measured, by this file.
+            .clickable(interactionSource = interactionSource, indication = null, onClick = onOpen)
+            .padding(horizontal = BOX_PADDING_HORIZONTAL, vertical = BOX_PADDING_VERTICAL),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = if (categories.isEmpty()) {
+                stringResource(R.string.tv_settings_category_empty)
+            } else {
+                stringResource(R.string.tv_settings_category_summary, categories.size, hidden)
+            },
+            color = Color.White.copy(alpha = 0.9f),
+            fontSize = 16.sp,
+            modifier = Modifier.width(LABEL_WIDTH),
+        )
+
+        Spacer(modifier = Modifier.width(COLUMN_GAP))
+
+        // Not a chip. The whole row is the target, so a second focusable inside it would be a
+        // second press for nothing — and the box is opened by pressing what is focused.
+        Text(
+            text = stringResource(R.string.tv_settings_category_enter),
+            color = Color.White.copy(alpha = if (isFocused) 0.9f else 0.5f),
+            fontSize = 14.sp,
+        )
+    }
+}
+
 @Composable
 private fun CategoryEditRow(
     category: Category,
     onToggleHidden: () -> Unit,
     onRename: (String?) -> Unit,
+    /**
+     * Put on the pencil, which is the first thing a remote can land on in this row.
+     *
+     * The box asks the *first row* for focus when it opens, and it has to be a real focusable
+     * that is asked. A requester on the list itself, or on this row's `Column`, addresses a focus
+     * group — and a group asked to take focus before its lazy children have been laid out
+     * searches an empty subtree and quietly does nothing.
+     */
+    firstControl: FocusRequester? = null,
 ) {
     // Editing is opened, not always present.
     //
@@ -805,7 +985,7 @@ private fun CategoryEditRow(
     var isEditing by remember(category.title) { mutableStateOf(false) }
     var draft by remember(category.title) { mutableStateOf(category.customName.orEmpty()) }
 
-    Column(modifier = Modifier.padding(vertical = 2.dp)) {
+    Column(modifier = Modifier.padding(vertical = ROW_SPACING)) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
@@ -839,6 +1019,7 @@ private fun CategoryEditRow(
                     contentDescription = stringResource(R.string.tv_settings_rename_field),
                     isActive = isEditing,
                     onClick = { isEditing = !isEditing },
+                    modifier = firstControl?.let { Modifier.focusRequester(it) } ?: Modifier,
                 )
                 TvChip(
                     label = stringResource(
@@ -885,12 +1066,13 @@ private fun IconChip(
     contentDescription: String,
     isActive: Boolean,
     onClick: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val isFocused by interactionSource.collectIsFocusedAsState()
 
     Box(
-        modifier = Modifier
+        modifier = modifier
             .size(38.dp)
             .background(
                 color = if (isActive) Color.White.copy(alpha = 0.20f) else Color.Transparent,
@@ -1181,6 +1363,26 @@ private val BAR_WIDTH = 420.dp
 /** Thick enough to read from a sofa. A 4dp bar is a hairline at three metres. */
 private val BAR_HEIGHT = 10.dp
 private val RENAME_WIDTH = 320.dp
+
+/** Tall enough to be worth opening, short enough that the open box still has a screen behind it. */
+private val BOX_MIN_HEIGHT = 220.dp
+private val BOX_MAX_HEIGHT = 420.dp
+
+/** The shut box is one row of the settings list and is sized like one. */
+private val SUMMARY_HEIGHT = 64.dp
+
+/**
+ * Air inside the box's border.
+ *
+ * There was none: a category's name started at the border and its chips ended on it, which on a
+ * panel with overscan put both within a few pixels of the screen edge.
+ */
+private val BOX_PADDING_HORIZONTAL = 16.dp
+private val BOX_PADDING_VERTICAL = 12.dp
+
+/** Between one category and the next. At 2dp the rows read as a single block of text. */
+private val ROW_SPACING = 6.dp
+
 private const val MBPS = 1_000_000
 private const val BACKUP_MIME_TYPE = "application/json"
 private const val BACKUP_FILE_NAME = "quiblo-backup.json"

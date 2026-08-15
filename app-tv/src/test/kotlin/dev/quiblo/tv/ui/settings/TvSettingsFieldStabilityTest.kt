@@ -36,6 +36,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.isFocused
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
@@ -208,6 +209,42 @@ class TvSettingsFieldStabilityTest {
     }
 
     /**
+     * **The keyboard is opened by a press, never by arriving.**
+     *
+     * On a television focus is something a viewer passes *through*: walking down the settings
+     * list threw an on-screen keyboard over the screen at every field on the way. The resting
+     * stage of `TvTextField` is what stops that, and the way to see it from here is that no
+     * editable node exists until the field is pressed — an editor that is not composed cannot
+     * ask for an IME.
+     */
+    @Test
+    fun `arriving on the field does not open an editor`() {
+        arriveOnTheField()
+        focusTheField()
+
+        assertEquals(
+            "A text editor existed as soon as focus arrived, which is an on-screen keyboard " +
+                "thrown at a viewer who was only passing the field.",
+            0,
+            compose.onAllNodes(hasSetTextAction()).fetchSemanticsNodes().size,
+        )
+    }
+
+    /** And the other half: a press does open one, or the field could not be typed into at all. */
+    @Test
+    fun `pressing the field opens an editor`() {
+        arriveOnTheField()
+        focusTheField()
+        openTheEditor()
+
+        assertEquals(
+            "Pressing the field produced no editor, so there is no way to enter a key.",
+            1,
+            compose.onAllNodes(hasSetTextAction()).fetchSemanticsNodes().size,
+        )
+    }
+
+    /**
      * The fix, pinned where it lives.
      *
      * `adjustNothing` on the television activity is what stops the window resizing under the
@@ -289,7 +326,38 @@ class TvSettingsFieldStabilityTest {
 
     private fun traceWhileTyping(): List<Float> {
         arriveOnTheField()
+        focusTheField()
+        openTheEditor()
         return traceOfTyping()
+    }
+
+    /**
+     * Puts focus on the field by name.
+     *
+     * [arriveOnTheField] presses down from the row above, which is the path the stability tests
+     * exist to measure — and **that press does not land on the field.** The row above sits at the
+     * far left of a wide panel while the field sits in the right-hand column, and the focus
+     * search picks the Save chip under it. That was true before this file was touched, which
+     * means the typing trace was pressing keys at whatever Save does with them and reporting a
+     * flat line for it.
+     *
+     * So the arrival stays as it is, because what it measures is the scroll that arrival causes,
+     * and anything that wants the *field* asks for it by name.
+     */
+    private fun focusTheField() {
+        compose.onNodeWithText(FIELD_LABEL).requestFocus()
+        settle()
+    }
+
+    /**
+     * Presses the field, which is the only thing that produces an editor to type into.
+     *
+     * Before there were two stages this was not needed: focus alone produced a `BasicTextField`,
+     * and an on-screen keyboard with it, at every field a remote passed.
+     */
+    private fun openTheEditor() {
+        press(Key.DirectionCenter)
+        settle()
     }
 
     private fun traceOfTyping(): List<Float> {
@@ -413,6 +481,9 @@ class TvSettingsFieldStabilityTest {
         const val KEYBOARD_FRAMES = 12
 
         const val LANDMARK = "Settings"
+
+        /** `tv_settings_tmdb_field`, which is what the resting field shows when it is empty. */
+        const val FIELD_LABEL = "API key"
 
         /** Larger than any item here is tall, so index and offset combine without colliding. */
         const val ITEM_STRIDE = 10_000f

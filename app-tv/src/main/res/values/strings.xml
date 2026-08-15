@@ -139,6 +139,10 @@
     <string name="tv_settings_script_thai">Thai</string>
     <string name="tv_settings_categories">Categories</string>
     <string name="tv_settings_category_kind">Editing categories for</string>
+    <string name="tv_settings_category_summary">%1$d categories, %2$d hidden</string>
+    <string name="tv_settings_category_enter">Press to edit</string>
+    <string name="tv_settings_category_leave">Press Back to leave</string>
+    <string name="tv_settings_category_empty">No categories on this source</string>
     <string name="tv_settings_rename_field">Rename to</string>
     <string name="tv_settings_apply">Apply</string>
     <string name="tv_settings_hide">Hide</string>

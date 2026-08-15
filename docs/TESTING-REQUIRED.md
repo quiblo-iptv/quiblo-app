@@ -516,6 +516,60 @@ emulator, so a power cycle at the wall is the case to reproduce.
 
 ---
 
+## A10 — Round `019` Part A: the keyboard and the category box
+
+**Where:** the television, all of it. From
+[`019`](../agile/019_Friction_on_the_Television_of_Quiblo.md) Part A. Neither change needs a
+provider, so unlike most of this page these can be answered on the emulator — but the keyboard
+half is exactly the sort of thing that behaved differently on the Haier before (#021), so the
+panel is what settles it.
+
+### A10.1 — walking past a field costs nothing
+
+| | |
+| :---- | :---- |
+| **What to look at** | Open Settings and hold Down from the top, straight past the metadata key row, to the backup rows at the bottom |
+| **Passes if** | No keyboard appears at any point. You arrive at the bottom in one movement |
+| **Fails if** | A keyboard opens as focus lands on the key field, or the list jumps when it does |
+| **Why it is here** | This is the report. It also re-tests #021 from the other side: no keyboard means no window resize means nothing for the list to chase |
+
+### A10.2 — the field still works when it is wanted
+
+| | |
+| :---- | :---- |
+| **What to look at** | Land on the metadata key, press centre, type a few characters, press the keyboard's Done. Then the same on the search box, the playlist form's four fields, and a new profile's name |
+| **Passes if** | The keyboard opens on the press, the characters land in the field you pressed, and Done puts it away with focus still on that field |
+| **Fails if** | Characters land in a different field — the failure this component was written for — or the keyboard cannot be dismissed, or focus is nowhere afterwards and the remote does nothing |
+| **Why it is here** | Two stages means two ways for focus to be lost at the swap, and the app has been wrong about television focus four times |
+
+### A10.3 — the playlist form and the profile name do not ambush you
+
+| | |
+| :---- | :---- |
+| **What to look at** | Open Settings → playlists → add, and separately the add-profile screen |
+| **Passes if** | The first field is highlighted and no keyboard is up |
+| **Fails if** | A keyboard is already open when the screen appears |
+| **Why it is here** | Both screens ask for focus on their first field as they open, which used to mean asking for a keyboard |
+
+### A10.4 — the category box is passed in one press
+
+| | |
+| :---- | :---- |
+| **What to look at** | Settings, on an account with a lot of categories. Move down through the Categories section to the Backup rows below it |
+| **Passes if** | One press clears the box. It reads how many categories there are and how many are hidden |
+| **Fails if** | Focus enters the list of categories and has to be walked through |
+
+### A10.5 — and entered, and left
+
+| | |
+| :---- | :---- |
+| **What to look at** | Press the box. Hide a category, rename one. Press Back. Then reopen it and hold Down past the last category |
+| **Passes if** | It opens onto the first category's controls; Back closes it and leaves the box highlighted; holding Down walks out of the bottom and the box shuts behind you |
+| **Fails if** | Back closes Settings instead of the box, or focus ends up on nothing, or the box stays open once focus has left it |
+| **Why it is here** | Back is the way out, and it works by the box's handler being offered the key before the screen's. That precedence is worth seeing on a real remote |
+
+---
+
 ## C — Deferred measurements, in writing
 
 Things nobody can check yet, recorded so they stop being re-asked.

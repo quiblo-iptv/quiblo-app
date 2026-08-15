@@ -34,6 +34,14 @@ Formatted after [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and ve
   change colour, which was set that way so that holding right along a row would not strobe — but
   nothing is even asked for until the remote has rested on a tile, so there was never a queue of
   colours to strobe between. It now settles as quickly as the player's.
+- **Search and Live put out the light the catalogue left on.** The glow behind the app comes from
+  whatever poster the remote is resting on, and neither of those screens has one — so arriving at
+  either of them left the colours of a film you looked at two tabs ago sitting behind an empty
+  search box. They now fade it out on the way in.
+- **And Search lights itself instead.** Two soft pools that travel round the screen on the same
+  six-second circuit as the highlight going round the search box, turning slowly through the
+  colours as they go. It is exactly as bright as a poster's light and it needs nothing from the
+  network.
 
 ## 0.18.0
 

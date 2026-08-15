@@ -24,6 +24,10 @@ package dev.quiblo.tv.ui.common
 
 import android.graphics.Bitmap
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
@@ -39,6 +43,7 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.graphics.ColorUtils
 import androidx.core.graphics.get
@@ -50,6 +55,9 @@ import coil3.toBitmap
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
+import kotlin.math.PI
+import kotlin.math.cos
+import kotlin.math.sin
 
 /**
  * The colours of whatever is on screen, spilled onto the black behind it.
@@ -113,20 +121,93 @@ fun Modifier.ambientBackdrop(
 
     drawBehind {
         if (start.alpha == 0f && end.alpha == 0f) return@drawBehind
+        drawPools(start, end, nearAt = Offset(NEAR_X, NEAR_Y), farAt = Offset(FAR_X, FAR_Y))
+    }
+}
 
-        drawRect(
-            brush = Brush.radialGradient(
-                colors = listOf(start, Color.Transparent),
-                center = Offset(size.width * NEAR_X, size.height * NEAR_Y),
-                radius = size.width * NEAR_RADIUS,
-            ),
-        )
-        drawRect(
-            brush = Brush.radialGradient(
-                colors = listOf(end, Color.Transparent),
-                center = Offset(size.width * FAR_X, size.height * FAR_Y),
-                radius = size.width * FAR_RADIUS,
-            ),
+/**
+ * The two pools, given their colours and where on the screen they sit.
+ *
+ * Shared by the artwork backdrop above and the drifting glow below, so the two cannot come to
+ * disagree about how light on this app is shaped. The offsets are fractions of the screen rather
+ * than pixels, which is what lets the glow move them without knowing the size of anything.
+ */
+private fun DrawScope.drawPools(start: Color, end: Color, nearAt: Offset, farAt: Offset) {
+    drawRect(
+        brush = Brush.radialGradient(
+            colors = listOf(start, Color.Transparent),
+            center = Offset(size.width * nearAt.x, size.height * nearAt.y),
+            radius = size.width * NEAR_RADIUS,
+        ),
+    )
+    drawRect(
+        brush = Brush.radialGradient(
+            colors = listOf(end, Color.Transparent),
+            center = Offset(size.width * farAt.x, size.height * farAt.y),
+            radius = size.width * FAR_RADIUS,
+        ),
+    )
+}
+
+/**
+ * Light for a screen that has no artwork to take it from.
+ *
+ * **Search opens on nothing and stays on nothing until somebody types.** The catalogue lights
+ * itself from whatever poster the remote is resting on; a search screen has no poster, so before
+ * `022` it inherited whatever the last one had left lit — the colours of a film looked at two tabs
+ * ago, sitting behind an empty field. Clearing that and leaving black would have been honest and
+ * bleak, which is the exact problem `014` added ambient light to solve in the first place.
+ *
+ * So this is light that comes from nowhere but itself: two pools that drift and turn slowly
+ * through the spectrum, never arriving anywhere and never repeating an arrangement the eye can
+ * catch. It costs no request, no bitmap and no focus tracking, and it cannot be the wrong colours
+ * for what is on screen because there is nothing on screen to be wrong about.
+ *
+ * **It is exactly as bright as artwork is**, because it is built through the same fixed lightness,
+ * the same saturation floor and the same [BACKDROP_ALPHA] ceiling. A glow that read brighter than
+ * a poster's would make Search the loudest screen in the app, which is the opposite of what a
+ * screen you arrive at to type is for.
+ */
+fun Modifier.driftingGlow(): Modifier = composed {
+    val drift = rememberInfiniteTransition(label = "roomGlow")
+
+    /*
+     * The same circuit the field's own highlight travels on.
+     *
+     * Deliberately shared rather than a period of its own: the light going round the search box
+     * and the light in the room behind it are one thing seen twice, and two nearly-equal periods
+     * would drift apart into two things that never quite agree — which is the sort of wrongness
+     * nobody can name and everybody sees.
+     */
+    val angle by drift.animateFloat(
+        initialValue = 0f,
+        targetValue = FULL_TURN,
+        animationSpec = infiniteRepeatable(tween(CIRCUIT_MILLIS, easing = LinearEasing)),
+        label = "roomGlowAngle",
+    )
+
+    // Turning rather than sitting on two fixed colours. A hue that keeps going has no endpoints
+    // for the eye to learn, and a full turn takes twenty circuits — long enough that nobody
+    // watching a search screen ever sees the colour change, only that it has.
+    val hue by drift.animateFloat(
+        initialValue = 0f,
+        targetValue = FULL_TURN,
+        animationSpec = infiniteRepeatable(tween(HUE_TURN_MILLIS, easing = LinearEasing)),
+        label = "roomGlowHue",
+    )
+
+    drawBehind {
+        val radians = angle * PI.toFloat() / HALF_TURN
+        val orbitX = cos(radians) * DRIFT_REACH
+        val orbitY = sin(radians) * DRIFT_REACH
+
+        drawPools(
+            start = glowOfHue(hue, BACKDROP_ALPHA),
+            end = glowOfHue((hue + POOL_HUE_APART) % FULL_TURN, BACKDROP_ALPHA * SECOND_POOL_SCALE),
+            // Opposite ends of the same orbit, so the room has a direction that turns rather
+            // than two lamps wandering independently.
+            nearAt = Offset(NEAR_X + orbitX, NEAR_Y + orbitY),
+            farAt = Offset(FAR_X - orbitX, FAR_Y - orbitY),
         )
     }
 }
@@ -179,6 +260,33 @@ private fun FloatArray.toGlow(alpha: Float): Color {
     val corrected = floatArrayOf(this[HUE], this[SATURATION].coerceIn(GLOW_SATURATION, 1f), GLOW_LIGHTNESS)
     return Color(ColorUtils.HSLToColor(corrected)).copy(alpha = alpha)
 }
+
+/**
+ * A pool of light of one hue, through the same treatment artwork gets.
+ *
+ * The saturation is the floor rather than a measurement, because there is no pixel here to
+ * measure — but the lightness and the alpha are the artwork path's own, which is what keeps
+ * [driftingGlow] from being brighter than the catalogue it sits beside.
+ */
+private fun glowOfHue(hue: Float, alpha: Float): Color =
+    floatArrayOf(hue, GLOW_SATURATION, GLOW_LIGHTNESS).toGlow(alpha)
+
+/* [driftingGlow]'s own numbers. Slow enough that nobody watching a search screen sees a cycle. */
+
+/** A full turn of the colour wheel, in the degrees `HSLToColor` reads a hue in. */
+private const val FULL_TURN = 360f
+
+/** How far apart the two pools are kept on that wheel, so they light the room from two colours. */
+private const val POOL_HUE_APART = 140f
+
+/** Two minutes for a whole turn of hue: a colour never seen to change, only seen to have. */
+private const val HUE_TURN_MILLIS = 120_000
+
+/** Half a turn, which is also the degrees in pi radians. */
+private const val HALF_TURN = 180f
+
+/** How far a pool travels from where it sits, as a fraction of the screen. */
+private const val DRIFT_REACH = 0.12f
 
 /** Sampled on a grid rather than every pixel: this runs on artwork, not on a hot path. */
 private const val SAMPLE_GRID = 6

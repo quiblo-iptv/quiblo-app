@@ -18,6 +18,7 @@
 
 package dev.quiblo.core.data
 
+import dev.quiblo.core.database.DurabilityCheckpoint
 import dev.quiblo.core.database.dao.ChannelDao
 import dev.quiblo.core.model.MediaKind
 import dev.quiblo.source.tmdb.TmdbAnswer
@@ -28,6 +29,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -36,6 +38,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.flatMapMerge
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /**
  * Why a scan stopped early, in terms a screen can act on.
@@ -140,6 +143,13 @@ class TitleMetadataScanner(
     private val channelDao: ChannelDao,
     private val metadataRepository: TitleMetadataRepository,
     /**
+     * Pushes what has been written down onto the disk, at intervals and at the end.
+     *
+     * An hour of answers that a power cut can still take back is an hour that has not really been
+     * saved. See [DurabilityCheckpoint]; the interval is [CHECKPOINT_EVERY].
+     */
+    private val checkpoint: DurabilityCheckpoint = DurabilityCheckpoint.None,
+    /**
      * Deliberately not a ViewModel's scope.
      *
      * The scan outlives the screen that starts it: an hour of lookups that stopped the
@@ -181,7 +191,18 @@ class TitleMetadataScanner(
         synchronized(this) {
             if (isRunning || !metadataRepository.isEnabled) return
             refusal = null
-            job = scope.launch { scan(sourceId) }
+            job = scope.launch {
+                try {
+                    scan(sourceId)
+                } finally {
+                    // However this ends — finished, refused, cancelled, or thrown out of — what
+                    // was learned goes to the disk. NonCancellable because on the cancelled path
+                    // this coroutine is already cancelled and a suspending call in it would
+                    // return having done nothing, and cancelling is precisely when somebody is
+                    // leaving the room and, on a television, switching it off at the wall.
+                    withContext(NonCancellable) { checkpoint.flush() }
+                }
+            }
         }
     }
 
@@ -226,6 +247,9 @@ class TitleMetadataScanner(
                         is TmdbAnswer.Refused -> refusal = answer.reason.toScanRefusal()
                     }
                     _state.value = MetadataScanState.Running(done, total, found, missing)
+                    // Every so often rather than every answer: a flush is a disk write, and one
+                    // per title would make the scan wait on the disk instead of on the network.
+                    if (done % CHECKPOINT_EVERY == 0) checkpoint.flush()
                 }
         } catch (cancellation: CancellationException) {
             // Reported before rethrowing: a StateFlow write does not suspend, so it still
@@ -249,10 +273,11 @@ class TitleMetadataScanner(
      *    qualities has one title to look up, and the cache is keyed by the cleaned form —
      *    so the other three would be cache hits anyway, counted as work that was never work.
      * 3. **Minus what the cache already answers.** This is what makes a second scan cost
-     *    almost nothing, and what makes an interrupted one resume.
+     *    almost nothing, and what makes an interrupted one resume. Answered means answered at
+     *    any point, not answered recently — see [TitleMetadataRepository.answeredKeys].
      */
     private suspend fun workList(sourceId: Long): List<ScanItem> {
-        val cached = metadataRepository.freshlyCachedKeys()
+        val cached = metadataRepository.answeredKeys()
 
         // Insertion-ordered, so the scan walks the catalogue in the provider's own order and
         // a viewer watching the counter sees it move through something recognisable.
@@ -288,6 +313,15 @@ class TitleMetadataScanner(
          * from the panel blocks — a concurrency cap is not a rate limit.
          */
         const val DEFAULT_WORKERS = 4
+
+        /**
+         * How many answers between disk flushes.
+         *
+         * At four workers against a rate-limited service this is a minute or two of work, so a
+         * power cut costs a minute or two rather than an hour. Small enough to matter, large
+         * enough that the flush itself never becomes the thing the scan is waiting for.
+         */
+        const val CHECKPOINT_EVERY = 250
     }
 }
 

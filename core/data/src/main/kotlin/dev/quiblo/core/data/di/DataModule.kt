@@ -109,7 +109,7 @@ val dataModule: Module = module {
     }
     // A singleton because its scope is the application's: a scan started in settings has to
     // outlive the screen that started it, and an hour of lookups outlives several.
-    single { TitleMetadataScanner(channelDao = get(), metadataRepository = get()) }
+    single { TitleMetadataScanner(channelDao = get(), metadataRepository = get(), checkpoint = get()) }
     single { GuideRepository(get(), get(), get()) }
     single { BackupRepository(get(), get(), get(), transactions = get()) }
     single { PlayerSettingsRepository(get()) }

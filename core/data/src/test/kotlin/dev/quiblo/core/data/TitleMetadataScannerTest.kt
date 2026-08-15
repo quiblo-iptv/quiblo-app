@@ -18,6 +18,7 @@
 
 package dev.quiblo.core.data
 
+import dev.quiblo.core.database.DurabilityCheckpoint
 import dev.quiblo.core.database.dao.CachedTitleKey
 import dev.quiblo.core.database.dao.ChannelDao
 import dev.quiblo.core.database.dao.ChannelTitle
@@ -33,11 +34,13 @@ import dev.quiblo.source.tmdb.TmdbRefusal
 import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -59,6 +62,7 @@ class TitleMetadataScannerTest {
     private val channelDao: ChannelDao = mockk(relaxed = true)
     private val metadataDao = RecordingMetadataDao()
     private val client: TmdbClient = mockk()
+    private val checkpoint = CountingCheckpoint()
 
     private val keyStore: TmdbKeyStore = mockk<TmdbKeyStore>().apply {
         every { apiKey } returns MutableStateFlow("a-key")
@@ -131,13 +135,60 @@ class TitleMetadataScannerTest {
     }
 
     @Test
-    @DisplayName("an answer older than the cache's fortnight is asked again")
-    fun `a stale row is not treated as known`() = runTest {
+    @DisplayName("an answer older than the cache's fortnight is still not re-scanned")
+    fun `a stale row is treated as known`() = runTest {
         catalogue(title(1, "The Matrix (1999)"))
         metadataDao.put("the matrix", MediaKind.VOD, year = 1999, fetchedAt = FIXED_NOW - FIFTEEN_DAYS_MILLIS)
         coEvery { client.summary(any(), any(), any(), any()) } returns FOUND
 
-        assertEquals(MetadataScanState.Finished(total = 1, found = 1, missing = 0), scanAndAwait())
+        // This assertion used to be the opposite, and inverting it is the fix for an hour of
+        // scanning that appeared to evaporate across a restart. A wrong clock — a television
+        // that boots before it syncs the time, an emulator resumed from an old snapshot — ages
+        // every row at once, and under the old rule that handed the whole catalogue back as
+        // work to redo. A title that has been asked about stays asked about; the fortnight still
+        // governs when a single title is refetched for a screen that opens it.
+        assertEquals(MetadataScanState.Finished(total = 0, found = 0, missing = 0), scanAndAwait())
+    }
+
+    @Test
+    @DisplayName("what has been learned is pushed to the disk during the scan and at its end")
+    fun `the scan checkpoints its work`() = runTest {
+        catalogue(title(1, "A Film"), title(2, "B Film"))
+        coEvery { client.summary(any(), any(), any(), any()) } returns FOUND
+
+        scanAndAwait()
+
+        // Committed is not the same as written: Room keeps commits in a side log that a power
+        // cut can still take back, and this scan is an hour long.
+        assertEquals(1, checkpoint.flushes, "the finished scan was never pushed to the disk")
+    }
+
+    @Test
+    @DisplayName("a cancelled scan still pushes what it managed to learn")
+    fun `cancelling checkpoints rather than dropping the work`() = runTest {
+        catalogue(title(1, "A Film"), title(2, "B Film"))
+        // The second title never answers, so the scan is genuinely in flight when it is
+        // cancelled rather than cancelled before it began.
+        val inFlight = CompletableDeferred<Unit>()
+        var answered = 0
+        coEvery { client.summary(any(), any(), any(), any()) } coAnswers {
+            if (answered++ == 0) {
+                FOUND
+            } else {
+                inFlight.await()
+                FOUND
+            }
+        }
+
+        val scanner = scanner(workers = 1)
+        scanner.start(SOURCE_ID)
+        runCurrent()
+        scanner.cancel()
+        advanceUntilIdle()
+
+        // Cancelling is exactly when somebody is leaving, and on a television leaving often
+        // means switching it off at the wall.
+        assertTrue(checkpoint.flushes > 0, "a cancelled scan left its answers in the log")
     }
 
     @Test
@@ -248,9 +299,20 @@ class TitleMetadataScannerTest {
         metadataRepository = repository,
         // The test's own scheduler, so `advanceUntilIdle` drives the scan to completion
         // without any waiting in real time.
+        checkpoint = checkpoint,
         scope = CoroutineScope(coroutineContext),
         workers = workers,
     )
+
+    /** Counts the flushes, since when they happen is the whole of what is being asserted. */
+    private class CountingCheckpoint : DurabilityCheckpoint {
+        var flushes = 0
+            private set
+
+        override suspend fun flush() {
+            flushes++
+        }
+    }
 
     /** A cache that can be inspected, since what is *not* written is the point here. */
     private class RecordingMetadataDao : TitleMetadataDao {
@@ -270,6 +332,8 @@ class TitleMetadataScannerTest {
         override suspend fun upsert(entity: TitleMetadataEntity) {
             rows[Triple(entity.searchTitle, entity.kind, entity.year)] = entity
         }
+
+        override suspend fun count(): Int = rows.size
 
         override suspend fun clear() = rows.clear()
 

@@ -530,6 +530,16 @@ interface TitleMetadataDao {
     @Query("SELECT searchTitle, kind, year, fetchedAtEpochMillis FROM title_metadata")
     suspend fun allKeys(): List<CachedTitleKey>
 
+    /**
+     * How many answers the cache holds.
+     *
+     * On screen in settings, and there for one reason: an hour of scanning went missing across a
+     * restart and nothing on the device could say whether the rows had been lost or had merely
+     * stopped counting. One number, read before and after, tells those two apart.
+     */
+    @Query("SELECT COUNT(*) FROM title_metadata")
+    suspend fun count(): Int
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(entity: TitleMetadataEntity)
 

@@ -36,6 +36,17 @@ Formatted after [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and ve
   that simply has no listings for your channels, both used to look exactly like a blank line —
   which reads as Quiblo being broken. They are now two different sentences, and one of them is
   worth taking to your provider.
+- **An hour of looking up films and series is not thrown away by a restart.** A scan that had
+  finished could come back reporting nothing done and a search screen describing none of the
+  catalogue. Two causes, both closed: work already looked up now counts as looked up whatever
+  its age, so a device whose clock is wrong when it starts up — a television that boots before
+  it fetches the time, an emulator resumed from an old snapshot — can no longer age the whole
+  cache at once; and the scan pushes what it has learned onto the disk as it goes rather than
+  leaving it in a log a power cut can take back. Settings on both apps now shows how many titles
+  are held, which is the number to read before switching off and again afterwards.
+- **Saving the same TMDB key twice no longer empties the cache.** Clearing on a *changed* key is
+  deliberate — a different key can answer differently — but re-entering the key already saved
+  threw away every lookup standing behind it.
 
 ## 0.15.1
 

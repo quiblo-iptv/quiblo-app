@@ -131,6 +131,53 @@ class TitleMetadataRepositoryTest {
         coVerify(exactly = 0) { client.summary(any(), any(), any(), any()) }
     }
 
+    @Test
+    @DisplayName("an answer a fortnight old is still an answer, so a scan does not redo it")
+    fun `answered keys ignore the cache's life`() = runTest {
+        coEvery { client.summary(any(), any(), any(), any()) } returns
+            TmdbAnswer.Found(TitleMetadata(rating = 8.2, isPartial = true))
+        repository.ratingFor("The Matrix (1999)", MediaKind.VOD)
+
+        // Aged past the TTL, which is what a television with a wrong clock does to every row at
+        // once when it corrects itself. That used to hand a scan back its entire catalogue.
+        dao.rows.replaceAll { _, row -> row.copy(fetchedAtEpochMillis = FIXED_NOW - LONGER_THAN_TTL) }
+
+        assertEquals(1, repository.answeredKeys().size)
+        assertEquals(1, repository.cachedTitleCount())
+    }
+
+    @Test
+    @DisplayName("saving the key that is already saved does not throw the cache away")
+    fun `an unchanged key leaves the cache alone`() = runTest {
+        val stored = MutableStateFlow<String?>("a-key")
+        every { keyStore.apiKey } returns stored
+        coEvery { keyStore.set(any()) } answers { stored.value = firstArg() }
+        coEvery { client.summary(any(), any(), any(), any()) } returns
+            TmdbAnswer.Found(TitleMetadata(rating = 8.2, isPartial = true))
+        repository.ratingFor("The Matrix (1999)", MediaKind.VOD)
+
+        repository.setApiKey("  a-key  ")
+
+        // Whitespace is not a different key, and neither is the same key typed again. An hour
+        // of scanning stood behind this row.
+        assertEquals(1, dao.rows.size)
+    }
+
+    @Test
+    @DisplayName("a different key does empty the cache, because it can answer differently")
+    fun `a changed key clears the cache`() = runTest {
+        val stored = MutableStateFlow<String?>("a-key")
+        every { keyStore.apiKey } returns stored
+        coEvery { keyStore.set(any()) } answers { stored.value = firstArg() }
+        coEvery { client.summary(any(), any(), any(), any()) } returns
+            TmdbAnswer.Found(TitleMetadata(rating = 8.2, isPartial = true))
+        repository.ratingFor("The Matrix (1999)", MediaKind.VOD)
+
+        repository.setApiKey("another-key")
+
+        assertTrue(dao.rows.isEmpty())
+    }
+
     private class FakeTitleMetadataDao : TitleMetadataDao {
         val rows = mutableMapOf<Triple<String, String, Int>, TitleMetadataEntity>()
 
@@ -149,10 +196,15 @@ class TitleMetadataRepositoryTest {
             rows[Triple(entity.searchTitle, entity.kind, entity.year)] = entity
         }
 
+        override suspend fun count(): Int = rows.size
+
         override suspend fun clear() = rows.clear()
     }
 
     private companion object {
         const val FIXED_NOW = 1_000_000L
+
+        /** Longer than the fortnight the repository holds an answer for. */
+        const val LONGER_THAN_TTL = 15L * 24 * 60 * 60 * 1000
     }
 }

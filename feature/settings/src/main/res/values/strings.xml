@@ -70,6 +70,7 @@
 
     <string name="settings_metadata_scan_title">Fill in every film and series</string>
     <string name="settings_metadata_scan_summary">Looks up your whole catalogue once, so genres and scores are there before you browse. On a large playlist this takes a while — you can leave this screen, and it picks up where it stopped.</string>
+    <string name="settings_metadata_cached">Held now: %1$d titles looked up.</string>
     <string name="settings_metadata_scan_start">Start</string>
     <string name="settings_metadata_scan_stop">Stop</string>
     <string name="settings_metadata_scan_dismiss">Dismiss</string>

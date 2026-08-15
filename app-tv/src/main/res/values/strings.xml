@@ -148,6 +148,7 @@
     <string name="tv_settings_tmdb_cleared">Key removed.</string>
     <string name="tv_settings_scan">Fill in every film and series</string>
     <string name="tv_settings_scan_detail">Looks up your whole catalogue once, so genres and scores are there before you browse. Takes a while on a large playlist — you can leave this screen, and it picks up where it stopped.</string>
+    <string name="tv_settings_cached_titles">Held now: %1$d titles looked up.</string>
     <string name="tv_settings_scan_start">Start</string>
     <string name="tv_settings_scan_stop">Stop</string>
     <string name="tv_settings_scan_preparing">Working out what needs looking up…</string>

@@ -130,6 +130,7 @@ fun TvSettingsScreen(
     val categories by viewModel.categories.collectAsStateWithLifecycle()
     val backupState by viewModel.backupState.collectAsStateWithLifecycle()
     val scanState by viewModel.metadataScan.collectAsStateWithLifecycle()
+    val cachedTitles by viewModel.cachedTitleCount.collectAsStateWithLifecycle()
     val hiddenScripts by viewModel.hiddenScripts.collectAsStateWithLifecycle()
 
     // Collapsed by default: twelve components are an obligation to make available, not
@@ -308,6 +309,7 @@ fun TvSettingsScreen(
             item {
                 MetadataScanRow(
                     state = scanState,
+                    cachedTitles = cachedTitles,
                     onStart = viewModel::startMetadataScan,
                     onCancel = viewModel::cancelMetadataScan,
                     onDismiss = viewModel::dismissMetadataScan,
@@ -632,6 +634,7 @@ internal fun TmdbKeyRow(
 @Composable
 private fun MetadataScanRow(
     state: MetadataScanState,
+    cachedTitles: Int?,
     onStart: () -> Unit,
     onCancel: () -> Unit,
     onDismiss: () -> Unit,
@@ -692,6 +695,18 @@ private fun MetadataScanRow(
                     fontSize = 14.sp,
                     lineHeight = 19.sp,
                     modifier = Modifier.padding(top = 8.dp),
+                )
+            }
+
+            // What is held right now, which is the number to read before switching the
+            // television off and again after switching it back on.
+            cachedTitles?.let { count ->
+                Text(
+                    text = stringResource(R.string.tv_settings_cached_titles, count),
+                    color = Color.White.copy(alpha = 0.6f),
+                    fontSize = 14.sp,
+                    lineHeight = 19.sp,
+                    modifier = Modifier.padding(top = 6.dp),
                 )
             }
         }

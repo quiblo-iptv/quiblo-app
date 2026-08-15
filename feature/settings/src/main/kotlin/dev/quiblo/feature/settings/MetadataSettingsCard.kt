@@ -63,6 +63,8 @@ internal fun MetadataSettingsCard(
     onSave: (String) -> Unit,
     onClear: () -> Unit,
     scan: MetadataScanState,
+    /** How many titles are cached, or null before the count has been made. */
+    cachedTitles: Int?,
     onStartScan: () -> Unit,
     onCancelScan: () -> Unit,
     onDismissScan: () -> Unit,
@@ -121,6 +123,7 @@ internal fun MetadataSettingsCard(
             if (!savedKey.isNullOrBlank()) {
                 CatalogueScan(
                     state = scan,
+                    cachedTitles = cachedTitles,
                     onStart = onStartScan,
                     onCancel = onCancelScan,
                     onDismiss = onDismissScan,
@@ -148,6 +151,7 @@ internal fun MetadataSettingsCard(
 @Composable
 private fun CatalogueScan(
     state: MetadataScanState,
+    cachedTitles: Int?,
     onStart: () -> Unit,
     onCancel: () -> Unit,
     onDismiss: () -> Unit,
@@ -166,6 +170,17 @@ private fun CatalogueScan(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(top = 4.dp),
         )
+
+        // What the cache is holding, in one number. It answers the only question a viewer whose
+        // scan appeared to vanish can otherwise not answer: whether it vanished.
+        cachedTitles?.let { count ->
+            Text(
+                text = stringResource(R.string.settings_metadata_cached, count),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 4.dp),
+            )
+        }
 
         // Indeterminate until the work list exists, because until then there is no
         // denominator and a bar at either end would be a claim rather than a wait. A stopped

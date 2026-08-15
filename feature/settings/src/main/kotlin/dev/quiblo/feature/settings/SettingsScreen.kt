@@ -70,6 +70,7 @@ fun SettingsScreen(
     val tmdbKey by viewModel.tmdbApiKey.collectAsStateWithLifecycle()
     val tmdbCheck by viewModel.tmdbCheck.collectAsStateWithLifecycle()
     val metadataScan by viewModel.metadataScan.collectAsStateWithLifecycle()
+    val cachedTitles by viewModel.cachedTitleCount.collectAsStateWithLifecycle()
     val profilesViewModel: ProfilesViewModel = koinViewModel()
     val profilesState by profilesViewModel.uiState.collectAsStateWithLifecycle()
     val categoryKind by viewModel.selectedCategoryKind.collectAsStateWithLifecycle()
@@ -175,6 +176,7 @@ fun SettingsScreen(
                 onSave = viewModel::saveTmdbKey,
                 onClear = viewModel::clearTmdbKey,
                 scan = metadataScan,
+                cachedTitles = cachedTitles,
                 onStartScan = viewModel::startMetadataScan,
                 onCancelScan = viewModel::cancelMetadataScan,
                 onDismissScan = viewModel::dismissMetadataScan,

@@ -15,6 +15,14 @@ Formatted after [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and ve
 
 ## Unreleased
 
+### Changed
+
+- **Generated profile pictures are faces now.** They were four coloured shapes; they are a face on
+  a coloured tile — the same generator library, a different one of its styles. Every profile
+  already wearing a generated picture becomes a face the next time the app opens, and it is the
+  same face on your phone, on the television, and after a restore, because what is stored is still
+  only the seed. Pictures picked from the illustrated set are untouched.
+
 ## 0.18.0
 
 ### Added

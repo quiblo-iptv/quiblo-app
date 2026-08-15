@@ -53,7 +53,7 @@ import dev.quiblo.core.database.entity.TitleMetadataEntity
  * constant, so the version the app ships and the version the upgrade path is tested against
  * cannot drift apart.
  */
-const val SCHEMA_VERSION = 16
+const val SCHEMA_VERSION = 17
 
 /**
  * Every migration, in order, in one place.
@@ -79,6 +79,7 @@ val ALL_MIGRATIONS = arrayOf(
     MIGRATION_13_14,
     MIGRATION_14_15,
     MIGRATION_15_16,
+    MIGRATION_16_17,
 )
 
 /**

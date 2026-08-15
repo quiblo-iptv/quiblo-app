@@ -119,6 +119,12 @@ data class ChannelTitle(
     val kind: String,
 )
 
+// Fifteen queries against one table, which is one over the threshold. A DAO's size is the size
+// of the questions its table is asked, and every one of these is a different question with a
+// different index behind it — browse, search, favourites, recently added, the fallback for a
+// playlist that carries no dates. Splitting the interface to satisfy a count would put queries
+// over the same table behind two names and leave the count unchanged.
+@Suppress("TooManyFunctions")
 @Dao
 interface ChannelDao {
 
@@ -230,8 +236,12 @@ interface ChannelDao {
      *
      * `addedAtEpochMillis IS NOT NULL` is the load-bearing clause. An M3U playlist carries no
      * dates at all and every one of its rows is null here, so this returns nothing for one —
-     * which is what lets the screen say "this playlist carries no dates" instead of showing a
-     * list ordered by nothing and calling it recent.
+     * which is what lets [observeHasAddedDates] pick the other query rather than this one
+     * returning an ordering it does not have.
+     *
+     * [sinceEpochMillis] is the window: a title added eight months ago is not news, and a
+     * service that has added nothing this month should say so rather than fill a row with last
+     * spring. The caller owns the clock, as everything with a `now` in this project does.
      */
     @Query(
         """
@@ -242,11 +252,68 @@ interface ChannelDao {
         WHERE c.sourceId = :sourceId
           AND c.kind IN ('VOD', 'SERIES')
           AND c.addedAtEpochMillis IS NOT NULL
+          AND c.addedAtEpochMillis >= :sinceEpochMillis
         ORDER BY c.addedAtEpochMillis DESC, c.sortIndex ASC
         LIMIT :limit
         """,
     )
-    fun observeRecentlyAdded(profileId: Long, sourceId: Long, limit: Int): Flow<List<ChannelWithFavorite>>
+    fun observeRecentlyAdded(
+        profileId: Long,
+        sourceId: Long,
+        sinceEpochMillis: Long,
+        limit: Int,
+    ): Flow<List<ChannelWithFavorite>>
+
+    /**
+     * Whether this source dates anything at all.
+     *
+     * The question is about the *source*, not about the window: a panel that has added nothing
+     * for six weeks still dates its catalogue, and answering "no dates" for it would swap a row
+     * that is empty and honest for one that is full and invented. Observed rather than read
+     * once, so the first import of a fresh playlist flips it without anybody reopening the tab.
+     */
+    @Query(
+        """
+        SELECT EXISTS(
+            SELECT 1 FROM channels
+            WHERE sourceId = :sourceId AND kind IN ('VOD', 'SERIES') AND addedAtEpochMillis IS NOT NULL
+        )
+        """,
+    )
+    fun observeHasAddedDates(sourceId: Long): Flow<Boolean>
+
+    /**
+     * The end of the provider's own list for one kind, last entry first.
+     *
+     * The fallback for a playlist that carries no dates, and it claims less than the query
+     * above: this is where a title sits in the list, which is *usually* the order things were
+     * appended and is never promised to be. `017` refused to invent an ordering at all and the
+     * screen said so instead; the request since is that the tab show something, so the ordering
+     * is the provider's own rather than one this app made up, and the row is titled differently
+     * where it is used.
+     *
+     * One kind per call so the caller can take the tail of each and interleave them. A single
+     * query across both would return forty films and no series on any catalogue that lists its
+     * films last.
+     */
+    @Query(
+        """
+        SELECT c.*, (f.stableKey IS NOT NULL) AS isFavorite
+        FROM channels c
+        LEFT JOIN favorites f ON f.sourceId = c.sourceId AND f.stableKey = c.stableKey
+              AND f.profileId = :profileId
+        WHERE c.sourceId = :sourceId
+          AND c.kind = :kind
+        ORDER BY c.sortIndex DESC
+        LIMIT :limit
+        """,
+    )
+    fun observeLastInListOrder(
+        profileId: Long,
+        sourceId: Long,
+        kind: String,
+        limit: Int,
+    ): Flow<List<ChannelWithFavorite>>
 
     /**
      * Every film and series title a source carries, as strings.
@@ -529,6 +596,16 @@ interface TitleMetadataDao {
     /** Every key the cache holds, with its age, for the scan to skip what it already knows. */
     @Query("SELECT searchTitle, kind, year, fetchedAtEpochMillis FROM title_metadata")
     suspend fun allKeys(): List<CachedTitleKey>
+
+    /**
+     * How many answers the cache holds.
+     *
+     * On screen in settings, and there for one reason: an hour of scanning went missing across a
+     * restart and nothing on the device could say whether the rows had been lost or had merely
+     * stopped counting. One number, read before and after, tells those two apart.
+     */
+    @Query("SELECT COUNT(*) FROM title_metadata")
+    suspend fun count(): Int
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(entity: TitleMetadataEntity)

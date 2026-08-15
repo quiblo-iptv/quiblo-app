@@ -43,6 +43,11 @@
 
     <string name="tv_placeholder">%1$s content appears here.</string>
     <string name="tv_guide_none">No listings for this channel.</string>
+    <!-- The two guide failures a viewer can act on, and the reason they are worded as
+         statements about the provider rather than about the app: both used to render as a
+         blank line, which reads as Quiblo being broken and is the thing that got reported. -->
+    <string name="tv_guide_blocked">Your provider is not answering guide requests at the moment. It usually starts again on its own within a quarter of an hour.</string>
+    <string name="tv_guide_none_from_provider">Your provider has no programme listings for these channels.</string>
     <string name="tv_guide_on_now">On now</string>
     <string name="tv_guide_time">%1$s – %2$s</string>
     <string name="tv_no_channels">No channels yet. Add a playlist on your phone and import it here.</string>
@@ -76,7 +81,11 @@
          an M3U playlist supplies none at all, and "nothing here" would read as a fault in both
          cases. -->
     <string name="tv_row_recently_added">Recently added</string>
-    <string name="tv_recently_added_none">This playlist does not say when anything was added. Xtream accounts do; M3U playlists carry no dates.</string>
+    <string name="tv_row_latest_in_playlist">Latest in your playlist</string>
+    <string name="tv_recently_added_none">Nothing has been added to this service in the last thirty days.</string>
+    <string name="tv_no_films_or_series">This playlist has no films or series in it.</string>
+    <string name="tv_kind_movie">Movie</string>
+    <string name="tv_kind_series">Series</string>
 
     <string name="tv_sources_incomplete">Fill in the address, and either both the username and password or neither.</string>
 
@@ -143,6 +152,7 @@
     <string name="tv_settings_tmdb_cleared">Key removed.</string>
     <string name="tv_settings_scan">Fill in every film and series</string>
     <string name="tv_settings_scan_detail">Looks up your whole catalogue once, so genres and scores are there before you browse. Takes a while on a large playlist — you can leave this screen, and it picks up where it stopped.</string>
+    <string name="tv_settings_cached_titles">Held now: %1$d titles looked up.</string>
     <string name="tv_settings_scan_start">Start</string>
     <string name="tv_settings_scan_stop">Stop</string>
     <string name="tv_settings_scan_preparing">Working out what needs looking up…</string>

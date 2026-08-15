@@ -25,14 +25,17 @@ import dev.quiblo.core.database.entity.ChannelEntity
 import dev.quiblo.core.model.MediaKind
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.verify
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.withContext
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import java.util.concurrent.Executors
@@ -143,6 +146,36 @@ class ChannelRepositoryTest {
         // is done in SQL and read out here, and this is the assertion that the `flowOn`
         // did not disturb it.
         assertEquals(listOf(true, false), items.map { it.isFavorite })
+    }
+
+    @Test
+    fun `a dated source is asked for its dates, and nothing else`() = runTest {
+        every { channelDao.observeHasAddedDates(SOURCE_ID) } returns flowOf(true)
+        every { channelDao.observeRecentlyAdded(any(), any(), any(), any()) } returns
+            flowOf(listOf(row(id = 1L, name = "New film")))
+
+        val feed = repository.observeRecentlyAdded(SOURCE_ID, limit = 40, sinceEpochMillis = 100L).first()
+
+        assertEquals(listOf("New film"), feed.items.map { it.name })
+        assertTrue(feed.orderedByDate, "a dated source produced a row that does not claim its dates")
+        verify(exactly = 0) { channelDao.observeLastInListOrder(any(), any(), any(), any()) }
+    }
+
+    @Test
+    fun `an undated source falls back to the end of its own list, both kinds interleaved`() = runTest {
+        every { channelDao.observeHasAddedDates(SOURCE_ID) } returns flowOf(false)
+        every { channelDao.observeLastInListOrder(any(), any(), MediaKind.VOD.name, any()) } returns
+            flowOf(listOf(row(id = 1L, name = "Film A"), row(id = 2L, name = "Film B")))
+        every { channelDao.observeLastInListOrder(any(), any(), MediaKind.SERIES.name, any()) } returns
+            flowOf(listOf(row(id = 3L, name = "Series A")))
+
+        val feed = repository.observeRecentlyAdded(SOURCE_ID, limit = 40, sinceEpochMillis = 100L).first()
+
+        // Interleaved, so a playlist listing every film before every series does not fill the
+        // whole cap with films. And `orderedByDate` is false, which is what stops the screen
+        // above from calling list order a date.
+        assertEquals(listOf("Film A", "Series A", "Film B"), feed.items.map { it.name })
+        assertFalse(feed.orderedByDate, "list order was presented as a date order")
     }
 
     private fun row(id: Long, name: String, isFavorite: Boolean = true) = ChannelWithFavorite(

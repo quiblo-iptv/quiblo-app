@@ -110,6 +110,19 @@ class TvBrowseScrollStabilityTest {
     }
 
     /**
+     * The same row again, with the Recently Added tab's kind badge on every poster.
+     *
+     * The badge is an overlay inside the artwork rather than anything in the column beneath it,
+     * precisely so a tile's measured bounds do not change — and "precisely so" is worth nothing
+     * without this. #008 was four wrong analyses of a wobble whose cause was a focused tile
+     * whose reported rectangle grew, and a label placed a line lower would reintroduce it.
+     */
+    @Test
+    fun `a poster carrying a kind badge is no less still`() {
+        assertHoldsStill(rowIndex = 1, showKindBadge = true)
+    }
+
+    /**
      * The property under test: **moving along a row must not move the catalogue at all.**
      *
      * Not "must not move much", and not "must not change direction" — must not move. Left and
@@ -121,8 +134,8 @@ class TvBrowseScrollStabilityTest {
      * television does: the first row already passes it, and before the fix the second row
      * misses it by about six dp, arriving in a twitch on each of the first several presses.
      */
-    private fun assertHoldsStill(rowIndex: Int) {
-        val trace = traceWhileWalkingAlong(rowIndex)
+    private fun assertHoldsStill(rowIndex: Int, showKindBadge: Boolean = false) {
+        val trace = traceWhileWalkingAlong(rowIndex, showKindBadge = showKindBadge)
         val settled = trace.first()
         val drift = trace.maxOf { abs(it - settled) }
 
@@ -138,9 +151,13 @@ class TvBrowseScrollStabilityTest {
      * Holds RIGHT along [rowIndex] and records where that row's title sits on every frame,
      * then keeps recording after the key is released.
      */
-    private fun traceWhileWalkingAlong(rowIndex: Int, alsoRecord: () -> Unit = {}): List<Float> {
+    private fun traceWhileWalkingAlong(
+        rowIndex: Int,
+        showKindBadge: Boolean = false,
+        alsoRecord: () -> Unit = {},
+    ): List<Float> {
         compose.mainClock.autoAdvance = false
-        compose.setContent { Harness(catalogue()) }
+        compose.setContent { Harness(catalogue(), showKindBadge = showKindBadge) }
         settle()
         walkFocusDownTo(rowIndex)
 
@@ -254,13 +271,14 @@ class TvBrowseScrollStabilityTest {
      * the reason every row but the first has to be scrolled to.
      */
     @Composable
-    private fun Harness(rows: List<TvCategoryRow>) {
+    private fun Harness(rows: List<TvCategoryRow>, showKindBadge: Boolean = false) {
         Box(modifier = Modifier.size(width = CONTENT_WIDTH, height = CONTENT_HEIGHT)) {
             TvCategoryList(
                 rows = rows,
                 ratings = emptyMap(),
                 onVisible = {},
                 onItemClick = {},
+                showKindBadge = showKindBadge,
             )
         }
     }

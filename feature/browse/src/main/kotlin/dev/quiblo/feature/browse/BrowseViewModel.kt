@@ -23,6 +23,7 @@ import androidx.lifecycle.viewModelScope
 import dev.quiblo.core.data.CategoryRepository
 import dev.quiblo.core.data.ChannelLogoRepository
 import dev.quiblo.core.data.ChannelRepository
+import dev.quiblo.core.data.GuideOutcome
 import dev.quiblo.core.data.GuideRepository
 import dev.quiblo.core.data.SourceRepository
 import dev.quiblo.core.data.TitleMetadataRepository
@@ -66,9 +67,26 @@ data class BrowseUiState(
     val categories: List<Category> = emptyList(),
     val selectedCategory: String? = null,
     val items: List<Channel> = emptyList(),
+    /**
+     * Whether [items] are in the order the provider dated them, or in the order it listed them.
+     *
+     * Only [BrowseScope.RECENTLY_ADDED] ever sets this false, and it is not decoration: a row
+     * built from the end of a playlist is "the latest entries in your playlist" and titling it
+     * "Recently Added" would be a claim about dates that nobody made.
+     */
+    val orderedByDate: Boolean = true,
     val query: String = "",
     /** What is airing now, keyed by channel identity. Empty for sources with no guide. */
     val nowPlaying: Map<String, Programme> = emptyMap(),
+    /**
+     * How the last guide request went, or null when none has been made yet.
+     *
+     * Here so a live list can say *why* it is showing no programmes. [nowPlaying] being empty
+     * is the same picture whether the panel is refusing this app, has no listings for these
+     * channels, or has simply not been asked yet — and only one of those is worth a viewer
+     * telephoning their provider about.
+     */
+    val guideOutcome: GuideOutcome? = null,
     /**
      * Scores from the metadata service, keyed by channel identity.
      *
@@ -291,14 +309,25 @@ class BrowseViewModel(
     ) { categories, selected, searchText ->
         Triple(categories, selected, searchText)
     }.flatMapLatest { (categories, selected, searchText) ->
-        val items = when (feed.scope) {
-            BrowseScope.FAVOURITES -> channelRepository.observeFavorites(sourceId, searchText)
+        val rows = when (feed.scope) {
+            BrowseScope.FAVOURITES ->
+                channelRepository.observeFavorites(sourceId, searchText).map(::BrowseRows)
             // No search term: this feed has no field to type one into, and applying the one
             // left over from another screen would silently filter a list the viewer never
             // asked to filter.
-            BrowseScope.RECENTLY_ADDED -> channelRepository.observeRecentlyAdded(sourceId, feed.recentLimit)
-            BrowseScope.CATALOGUE -> channelRepository.observeBrowse(sourceId, feed.kind, selected, searchText)
+            BrowseScope.RECENTLY_ADDED ->
+                channelRepository.observeRecentlyAdded(
+                    sourceId = sourceId,
+                    limit = feed.recentLimit,
+                    sinceEpochMillis = now() - RECENT_WINDOW_MILLIS,
+                ).map { BrowseRows(it.items, orderedByDate = it.orderedByDate) }
+
+            BrowseScope.CATALOGUE ->
+                channelRepository.observeBrowse(sourceId, feed.kind, selected, searchText).map(::BrowseRows)
         }
+        // A live list asks for the top of itself the moment it exists, rather than waiting for
+        // the remote to come to rest on a row that may never be reached. See prefetchGuides.
+        val items = if (feed.kind == MediaKind.LIVE) rows.onEach { prefetchGuides(it.items) } else rows
         combine(
             items,
             guideFor(sourceId),
@@ -311,15 +340,26 @@ class BrowseViewModel(
                 hasSource = true,
                 categories = categories,
                 selectedCategory = selected,
-                items = list,
+                items = list.items,
+                orderedByDate = list.orderedByDate,
                 query = searchText,
-                nowPlaying = guide,
+                nowPlaying = guide.nowPlaying,
+                guideOutcome = guide.outcome,
                 ratings = scores,
                 posters = art,
                 history = history,
             )
         }
     }
+
+    /**
+     * One feed's rows, and whether their order is the provider's dates or its list.
+     *
+     * Only Recently Added can answer the second with "no", but it travels with the rows rather
+     * than beside them: the two are read in the same breath at the state boundary, and a
+     * separate flow for one boolean would be a second thing to keep in step with the first.
+     */
+    private data class BrowseRows(val items: List<Channel>, val orderedByDate: Boolean = true)
 
     /**
      * The provider's categories, for the one feed that groups by them.
@@ -351,12 +391,71 @@ class BrowseViewModel(
      * The same reasoning as [historyFor] immediately below, in the other direction: each
      * feed subscribes to what it can display and to nothing else.
      */
-    private fun guideFor(sourceId: Long): Flow<Map<String, Programme>> =
+    private fun guideFor(sourceId: Long): Flow<GuideFeed> =
         if (feed.kind == MediaKind.LIVE) {
-            guideRepository.observeNowPlaying(sourceId)
+            combine(guideRepository.observeNowPlaying(sourceId), guideOutcome, ::GuideFeed)
         } else {
-            flowOf(emptyMap())
+            flowOf(GuideFeed())
         }
+
+    /**
+     * The programmes and the reason there are none, together.
+     *
+     * One value rather than two more arguments to the `combine` below. They are also one fact:
+     * a screen reading "nothing is airing" needs the second half to know what to say about it.
+     */
+    private data class GuideFeed(
+        val nowPlaying: Map<String, Programme> = emptyMap(),
+        val outcome: GuideOutcome? = null,
+    )
+
+    /**
+     * How the guide requests have gone so far on this feed.
+     *
+     * Kept as a running summary rather than per channel. Per channel would be more precise and
+     * would say nothing more: the two answers worth putting on a screen are "your provider is
+     * refusing us" and "your provider has no listings for these channels", and both are facts
+     * about the account rather than about one row.
+     */
+    private val guideOutcome = MutableStateFlow<GuideOutcome?>(null)
+
+    /**
+     * Folds one channel's answer into that summary.
+     *
+     * The precedence is the point. One channel with listings proves the guide works, so
+     * [GuideOutcome.STORED] outranks everything and is never overwritten — otherwise a working
+     * guide would report itself broken the moment it met one channel the panel knows nothing
+     * about, which on a large account is most of them. Below that, a refusal outranks silence,
+     * because it is the one a viewer can do something about.
+     */
+    private fun recordGuideOutcome(outcome: GuideOutcome) {
+        guideOutcome.update { current ->
+            when {
+                current == GuideOutcome.STORED || outcome == GuideOutcome.STORED -> GuideOutcome.STORED
+                current == GuideOutcome.BLOCKED || outcome == GuideOutcome.BLOCKED -> GuideOutcome.BLOCKED
+                else -> outcome
+            }
+        }
+    }
+
+    /**
+     * Asks for the guide of the first handful of channels as soon as a live list exists.
+     *
+     * **This is the defect this branch is named for.** The television fetches a guide only for
+     * the row focus has rested on for 450ms, and nothing has focus when the screen opens — so
+     * the whole list drew with no programme on any row, indefinitely, for anybody who did not
+     * happen to stop on one. The phone never had this: it fetches for the rows on screen.
+     *
+     * Bounded and deduplicated rather than unbounded, because the restraint it replaces was
+     * right about the danger. [onRowVisible] carries the kind check, the stream-id check, the
+     * once-per-session dedupe and the concurrency limit; this adds a fixed ten calls into all
+     * of that and no new path around any of it. Re-emissions of the same list — a write to the
+     * table, a category change, a keystroke — cost nothing, because the dedupe has already seen
+     * these keys.
+     */
+    private fun prefetchGuides(channels: List<Channel>) {
+        channels.take(GUIDE_PREFETCH_ROWS).forEach(::onRowVisible)
+    }
 
     /**
      * The "continue watching" feed for this screen.
@@ -412,9 +511,14 @@ class BrowseViewModel(
 
         viewModelScope.launch {
             guideLimiter.withPermit {
-                if (!guideRepository.hasGuideFor(channel.sourceId, channel.stableKey)) {
+                val outcome = if (guideRepository.hasGuideFor(channel.sourceId, channel.stableKey)) {
+                    // Already cached from an earlier session, and it counts: the screen is
+                    // about to draw a programme line, so the guide plainly works here.
+                    GuideOutcome.STORED
+                } else {
                     guideRepository.refreshGuideFor(channel)
                 }
+                recordGuideOutcome(outcome)
             }
         }
     }
@@ -547,7 +651,7 @@ class BrowseViewModel(
         if (channel.providerStreamId == null) return
         if (!fullGuideRequested.add(channel.stableKey)) return
 
-        viewModelScope.launch { guideRepository.refreshFullGuideFor(channel) }
+        viewModelScope.launch { recordGuideOutcome(guideRepository.refreshFullGuideFor(channel)) }
     }
 
     fun selectCategory(groupTitle: String?) {
@@ -579,7 +683,26 @@ class BrowseViewModel(
     private companion object {
         const val STOP_TIMEOUT_MILLIS = 5_000L
         const val SEARCH_DEBOUNCE_MILLIS = 120L
+
+        /**
+         * How far back "recently added" reaches: thirty days.
+         *
+         * A cap on age rather than only on count. Without it a service that added forty films
+         * last March fills the row with them forever, and a tab that answers "what is new"
+         * with last spring is answering a question nobody asked.
+         */
+        const val RECENT_WINDOW_MILLIS = 30L * 24 * 60 * 60 * 1000
         const val MAX_CONCURRENT_GUIDE_FETCHES = 3
+
+        /**
+         * How many rows of a fresh live list are asked about without being focused.
+         *
+         * About a screenful on the largest layout, which is what makes the list look answered
+         * rather than empty. A fixed number and not a fraction of the account: the whole reason
+         * the television fetched one row at a time is that "per visible row" against a
+         * 20,000-channel account is how this project's account was blocked, twice.
+         */
+        const val GUIDE_PREFETCH_ROWS = 10
 
         /**
          * Four at a time against the metadata service.

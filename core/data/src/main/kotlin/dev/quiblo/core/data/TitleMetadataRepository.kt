@@ -243,26 +243,40 @@ class TitleMetadataRepository(
     }
 
     /**
-     * The titles the cache can already answer for, misses included.
+     * The titles the cache holds an answer for, misses included, whatever their age.
      *
-     * Only the fresh ones: an expired row will be asked about again the moment anything
-     * needs it, so counting it as known would leave the scan reporting work as done that it
-     * has not done. The freshness rule lives here rather than at the caller because the TTL
-     * is this class's business and two copies of it would drift.
+     * **Age is deliberately not consulted, and it used to be.** This set is subtracted from a
+     * scan's work list, and a scan is an hour of somebody's rate limit: a title that has been
+     * asked about is work that has been done, and a fortnight later it is still work that has
+     * been done. Filtering by the TTL here meant a single wrong clock — a television that boots
+     * before it syncs the time, an emulator resumed from a stale snapshot — could age every row
+     * at once and hand back a full catalogue to re-walk. That is the defect this method's
+     * previous shape produced on somebody's television, and it cost an hour.
+     *
+     * Nothing is stuck as a result. The TTL still governs [resolve], so an expired row is
+     * refetched the moment a screen actually needs it, and the refresh button ignores the cache
+     * entirely. What changed is only that *bulk* work no longer redoes itself.
      */
-    internal suspend fun freshlyCachedKeys(): Set<CacheIdentity> {
-        val horizon = now() - CACHE_TTL_MILLIS
-        return dao.allKeys()
-            .asSequence()
-            .filter { it.fetchedAtEpochMillis > horizon }
-            .mapTo(HashSet()) { CacheIdentity(TitleIdentity(it.searchTitle, it.year), it.kind) }
-    }
+    internal suspend fun answeredKeys(): Set<CacheIdentity> =
+        dao.allKeys().mapTo(HashSet()) { CacheIdentity(TitleIdentity(it.searchTitle, it.year), it.kind) }
 
+    /** How many answers are cached, for the figure settings shows. */
+    suspend fun cachedTitleCount(): Int = dao.count()
+
+    /**
+     * Saves the key, and empties the cache **only if the key actually changed**.
+     *
+     * A different key can return different results — a different language, a different region's
+     * certificates — so nothing carries over from one to another. The same key returns the same
+     * results, and clearing on it is pure loss: re-entering a key that was already saved threw
+     * away however many hours of scanning stood behind it, which is not what pressing Save on an
+     * unchanged field means anywhere.
+     */
     suspend fun setApiKey(apiKey: String?) {
-        keyStore.set(apiKey)
-        // A different key can return different results — a different language, a different
-        // region's certificates — so nothing carries over.
-        dao.clear()
+        val cleaned = apiKey?.trim()?.takeIf { it.isNotBlank() }
+        val changed = cleaned != keyStore.apiKey.value
+        keyStore.set(cleaned)
+        if (changed) dao.clear()
     }
 
     suspend fun validate(apiKey: String): Boolean = client.validate(apiKey)
@@ -375,6 +389,8 @@ private fun TitleMetadataEntity.toMetadata() = TitleMetadata(
     topCast = topCast?.split(LIST_SEPARATOR).orEmpty().filter { it.isNotBlank() },
     posterUrl = posterUrl,
     backdropUrl = backdropUrl,
+    releaseYear = releaseYear,
+    runtimeMinutes = runtimeMinutes,
     isPartial = isPartial,
 )
 
@@ -390,6 +406,8 @@ private fun TitleMetadata.toEntity(identity: TitleIdentity, kind: String, fetche
     topCast = topCast.joinToString(LIST_SEPARATOR).takeIf { it.isNotBlank() },
     posterUrl = posterUrl,
     backdropUrl = backdropUrl,
+    releaseYear = releaseYear,
+    runtimeMinutes = runtimeMinutes,
     fetchedAtEpochMillis = fetchedAt,
     isMiss = false,
     isPartial = isPartial,

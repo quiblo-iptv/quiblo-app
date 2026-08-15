@@ -203,6 +203,36 @@ class MigrationTest {
     }
 
     @Test
+    fun `16 to 17 keeps every cached title and its answers`() {
+        helper.createDatabase(DB_NAME, 16).use { old ->
+            old.execSQL(
+                "INSERT INTO `title_metadata` (`searchTitle`, `kind`, `year`, `overview`, `rating`, " +
+                    "`fetchedAtEpochMillis`, `isMiss`, `isPartial`) " +
+                    "VALUES ('the matrix', 'VOD', 1999, 'A hacker learns the truth.', 8.7, 100, 0, 0)",
+            )
+        }
+
+        val db = helper.runMigrationsAndValidate(DB_NAME, 17, true, MIGRATION_16_17)
+
+        // The row survives whole. `MIGRATION_11_12` dropped this table and had reasons; the
+        // reason not to do it again is that an hour of scanning stands behind these rows and a
+        // user's own rate limit is what buys them back.
+        db.query(
+            "SELECT `searchTitle`, `overview`, `rating`, `releaseYear`, `runtimeMinutes` FROM `title_metadata`",
+        ).use { cursor ->
+            assertTrue("the cached title did not survive the upgrade", cursor.moveToFirst())
+            assertEquals("the matrix", cursor.getString(0))
+            assertEquals("A hacker learns the truth.", cursor.getString(1))
+            assertEquals(8.7, cursor.getDouble(2), 0.001)
+            // Null rather than zero, and for the same reason a channel's date is: a year of 0
+            // is a claim, and this migration invents nothing. Both fill in on the next fetch.
+            assertTrue("a year was invented for an existing row", cursor.isNull(3))
+            assertTrue("a running time was invented for an existing row", cursor.isNull(4))
+            assertFalse("an extra row appeared", cursor.moveToNext())
+        }
+    }
+
+    @Test
     fun `10 to 11 adopts existing favourites rather than dropping them`() {
         // The opposite promise to the one above, and the one that matters more: this is the
         // viewer's own data and nobody can hand it back. AC-DATA-04.

@@ -22,9 +22,52 @@ Formatted after [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and ve
 - **A Recently Added tab on the television**, between Live and Movies, holding the newest films
   and series on the service in one row rather than one row each — somebody wondering what is new
   is not also choosing between two formats. Xtream accounts fill it, because a panel says when it
-  added each title and the app now keeps that date; M3U playlists carry no dates at all and the
-  tab says so instead of showing a list ordered by nothing. It costs no extra request to the
-  provider: the dates arrive inside the film and series lists the app already fetches.
+  added each title and the app now keeps that date. It costs no extra request to the provider:
+  the dates arrive inside the film and series lists the app already fetches.
+
+- **Recently Added says what each poster is.** A row that mixes films and series is the one row
+  in the app where the screen cannot already say which is which, so each tile carries a Movie or
+  Series label in the corner opposite its score.
+- **Recently Added covers the last thirty days**, rather than the newest forty titles whenever
+  they arrived. A service that added nothing this month now says so instead of showing last
+  spring.
+- **A playlist that carries no dates gets the end of its own list** — the latest films and series
+  in the order the provider lists them, interleaved so neither crowds the other out. The row is
+  headed "Latest in your playlist" rather than "Recently added", because where something sits in
+  a playlist is not a date and the screen does not pretend otherwise.
+- **A film says what year it is from and how long it runs**, beside its score and certificate.
+  Both come from the playlist where the panel supplies them and from The Movie Database where it
+  does not, so the line fills in for an M3U playlist too. The year replaces the full release date
+  the television used to print: nobody choosing a film needs the day of the month.
+- **A series says what year it began**, on both apps, and it says so whether or not a metadata
+  key is configured — the year is usually the panel's own.
+- **Every episode says how long it is.** Read from either field panels use for it, including the
+  written `00:47:15` form, and omitted rather than shown as zero where a provider does not time
+  its episodes.
+
+### Fixed
+
+- **The television's channel list shows what is on now without being prodded.** The guide was
+  fetched only for the row the remote had come to rest on, and nothing has focus when Live opens
+  — so the whole list drew with no programme against any channel until you happened to stop on
+  one. The top of a fresh list is now asked about straight away. It is a fixed ten channels and
+  no more, because "fetch for every visible row" against a large account is what gets a provider
+  to start refusing an app.
+- **A guide that is not arriving says why.** A provider refusing guide requests, and a provider
+  that simply has no listings for your channels, both used to look exactly like a blank line —
+  which reads as Quiblo being broken. They are now two different sentences, and one of them is
+  worth taking to your provider.
+- **An hour of looking up films and series is not thrown away by a restart.** A scan that had
+  finished could come back reporting nothing done and a search screen describing none of the
+  catalogue. Two causes, both closed: work already looked up now counts as looked up whatever
+  its age, so a device whose clock is wrong when it starts up — a television that boots before
+  it fetches the time, an emulator resumed from an old snapshot — can no longer age the whole
+  cache at once; and the scan pushes what it has learned onto the disk as it goes rather than
+  leaving it in a log a power cut can take back. Settings on both apps now shows how many titles
+  are held, which is the number to read before switching off and again afterwards.
+- **Saving the same TMDB key twice no longer empties the cache.** Clearing on a *changed* key is
+  deliberate — a different key can answer differently — but re-entering the key already saved
+  threw away every lookup standing behind it.
 
 ## 0.15.1
 

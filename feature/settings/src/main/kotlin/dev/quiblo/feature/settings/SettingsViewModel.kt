@@ -46,9 +46,11 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -107,6 +109,23 @@ class SettingsViewModel(
      * it where it is, not find it reset.
      */
     val metadataScan: StateFlow<MetadataScanState> = metadataScanner.state
+
+    /**
+     * How many titles the cache holds, or null before the first count has been made.
+     *
+     * On screen because an hour of scanning went missing across a restart and nothing on the
+     * device could say which of two very different things had happened: the rows were gone, or
+     * the rows were there and had stopped being counted. A number that survives a restart says
+     * the first; a number that does not says the second.
+     *
+     * Counted when the screen opens and whenever a scan starts or finishes, never per answer —
+     * a running scan emits once per title and a query each time would be thousands of them.
+     */
+    val cachedTitleCount: StateFlow<Int?> = metadataScanner.state
+        .map { it is MetadataScanState.Preparing || it is MetadataScanState.Running }
+        .distinctUntilChanged()
+        .map { metadataRepository.cachedTitleCount() }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(SUBSCRIPTION_TIMEOUT_MILLIS), null)
 
     /**
      * Fills in film and series information for the whole catalogue.

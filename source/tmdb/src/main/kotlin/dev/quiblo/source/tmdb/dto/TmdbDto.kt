@@ -20,6 +20,7 @@ package dev.quiblo.source.tmdb.dto
 
 import dev.quiblo.core.model.AuthorLabel
 import dev.quiblo.core.model.TitleMetadata
+import dev.quiblo.core.model.releaseYearIn
 import dev.quiblo.source.tmdb.TmdbClient
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
@@ -41,6 +42,13 @@ internal data class SearchResult(
     @SerialName("vote_average") val voteAverage: Double? = null,
     @SerialName("poster_path") val posterPath: String? = null,
     @SerialName("backdrop_path") val backdropPath: String? = null,
+    /**
+     * A film's release date and a series' first broadcast, both spelled by the endpoint that
+     * returned the hit. Only one of them is ever present, so both are read and the first
+     * non-blank wins — see [SearchResult.year].
+     */
+    @SerialName("release_date") val releaseDate: String? = null,
+    @SerialName("first_air_date") val firstAirDate: String? = null,
     /**
      * Numbers, not names — the search endpoint never spells its genres out.
      *
@@ -65,6 +73,9 @@ internal data class MovieDetailsDto(
     @SerialName("backdrop_path") val backdropPath: String? = null,
     val credits: CreditsDto? = null,
     @SerialName("release_dates") val releaseDates: ReleaseDatesDto? = null,
+    /** Whole minutes. Zero and null both mean the service does not know. */
+    val runtime: Int? = null,
+    @SerialName("release_date") val releaseDate: String? = null,
 )
 
 /**
@@ -86,6 +97,7 @@ internal data class TvDetailsDto(
     val credits: CreditsDto? = null,
     @SerialName("created_by") val createdBy: List<CreatorDto> = emptyList(),
     @SerialName("content_ratings") val contentRatings: ContentRatingsDto? = null,
+    @SerialName("first_air_date") val firstAirDate: String? = null,
 )
 
 @Serializable
@@ -139,6 +151,9 @@ internal fun MovieDetailsDto.toMetadata(): TitleMetadata = TitleMetadata(
     topCast = credits?.cast.orEmpty().leadNames(),
     posterUrl = posterPath?.let { TmdbClient.IMAGE_BASE_URL + it },
     backdropUrl = backdropPath?.let { TmdbClient.IMAGE_BASE_URL + it },
+    releaseYear = releaseYearIn(releaseDate),
+    // Zero is how the service says "unknown", exactly as it does for a score.
+    runtimeMinutes = runtime?.takeIf { it > 0 },
 )
 
 /**
@@ -158,6 +173,10 @@ internal fun TvDetailsDto.toMetadata(): TitleMetadata = TitleMetadata(
     topCast = credits?.cast.orEmpty().leadNames(),
     posterUrl = posterPath?.let { TmdbClient.IMAGE_BASE_URL + it },
     backdropUrl = backdropPath?.let { TmdbClient.IMAGE_BASE_URL + it },
+    releaseYear = releaseYearIn(firstAirDate),
+    // Left null on purpose. TMDB offers an average episode length for a series and it is not
+    // the length of anything a viewer is about to watch.
+    runtimeMinutes = null,
 )
 
 /**
@@ -174,8 +193,20 @@ internal fun SearchResult.toPartialMetadata(genreNames: Map<Int, String>): Title
     rating = voteAverage?.takeIf { it > 0.0 },
     posterUrl = posterPath?.let { TmdbClient.IMAGE_BASE_URL + it },
     backdropUrl = backdropPath?.let { TmdbClient.IMAGE_BASE_URL + it },
+    releaseYear = year(),
+    // A search hit carries no runtime at all, for either kind. That is what makes this record
+    // partial, and a detail screen upgrades it.
+    runtimeMinutes = null,
     isPartial = true,
 )
+
+/**
+ * The year of this hit, whichever of the two date fields the endpoint filled in.
+ *
+ * Films come back with `release_date` and series with `first_air_date`, and one search never
+ * returns both — so reading either is reading the only one there is.
+ */
+private fun SearchResult.year(): Int? = releaseYearIn(releaseDate) ?: releaseYearIn(firstAirDate)
 
 private fun List<CastMemberDto>.leadNames(): List<String> =
     sortedBy { it.order ?: Int.MAX_VALUE }.mapNotNull { it.name }.take(TOP_CAST_COUNT)

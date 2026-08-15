@@ -221,6 +221,14 @@ internal fun TvCategoryList(
      * scrolled to, and a grid of grey rectangles answers nothing.
      */
     posters: Map<String, String> = emptyMap(),
+    /**
+     * Whether each poster says what kind of thing it is.
+     *
+     * Off everywhere but Recently Added. A Movies row is already headed "Movies" and a label on
+     * every tile would say what the screen has said once; a row that mixes films and series is
+     * the one place the answer is not already on the page.
+     */
+    showKindBadge: Boolean = false,
     continueWatching: (@Composable () -> Unit)? = null,
 ) {
     LazyColumn(
@@ -242,6 +250,7 @@ internal fun TvCategoryList(
                 posters = posters,
                 onVisible = onVisible,
                 onItemClick = onItemClick,
+                showKindBadge = showKindBadge,
             )
         }
     }
@@ -311,6 +320,7 @@ private fun CategoryRow(
     posters: Map<String, String>,
     onVisible: (Channel) -> Unit,
     onItemClick: (TvRowItem) -> Unit,
+    showKindBadge: Boolean = false,
 ) {
     Column {
         Text(
@@ -336,6 +346,7 @@ private fun CategoryRow(
                     channel = item.channel,
                     rating = ratings[item.channel.stableKey],
                     fallbackArtworkUrl = posters[item.channel.stableKey],
+                    showKindBadge = showKindBadge,
                     onClick = { onItemClick(item) },
                 )
             }
@@ -367,6 +378,8 @@ internal fun TvPoster(
      * different things depending on where it is opened.
      */
     fallbackArtworkUrl: String? = null,
+    /** Draws "Movie" or "Series" in the far corner from the score. See [KindBadge]. */
+    showKindBadge: Boolean = false,
 ) {
     // A live channel's artwork is a small wide logo, not a poster. Cropping one to 2:3
     // shows a corner of a logo — the exact mistake PLAN-TV.md §3.3 exists to avoid — so a
@@ -488,6 +501,21 @@ internal fun TvPoster(
                             .padding(6.dp),
                     )
                 }
+
+                // Opposite corner from the score, and an overlay rather than anything in the
+                // column below. A label that took up layout would change this tile's measured
+                // height, and a focused tile whose bounds move is #008 all over again — see the
+                // note on the modifier order above.
+                if (showKindBadge) {
+                    kindLabel(channel.kind)?.let { label ->
+                        KindBadge(
+                            label = label,
+                            modifier = Modifier
+                                .align(Alignment.TopEnd)
+                                .padding(6.dp),
+                        )
+                    }
+                }
             }
 
             // No marquee. This was once thought to be the fix for the shake and it was not —
@@ -527,6 +555,44 @@ private fun ArtworkPlaceholder() {
         )
     }
 }
+
+/**
+ * "Movie" or "Series", drawn on the artwork.
+ *
+ * Its own plate for the reason [RatingBadge] has one: artwork is arbitrary, and words drawn
+ * straight onto it are legible or not depending on the film.
+ */
+@Composable
+private fun KindBadge(label: String, modifier: Modifier = Modifier) {
+    Text(
+        text = label,
+        color = Color.White,
+        fontSize = 12.sp,
+        fontWeight = FontWeight.SemiBold,
+        maxLines = 1,
+        modifier = modifier
+            .background(
+                color = Color.Black.copy(alpha = KIND_BADGE_ALPHA),
+                shape = RoundedCornerShape(6.dp),
+            )
+            .padding(horizontal = 6.dp, vertical = 2.dp),
+    )
+}
+
+/**
+ * The word for a kind, or null where there is no word worth drawing.
+ *
+ * Live returns null: a Recently Added row holds films and series only, and a channel that
+ * somehow reached this tile is better with no label than with one that explains nothing.
+ */
+@Composable
+private fun kindLabel(kind: MediaKind): String? = when (kind) {
+    MediaKind.VOD -> stringResource(R.string.tv_kind_movie)
+    MediaKind.SERIES -> stringResource(R.string.tv_kind_series)
+    MediaKind.LIVE -> null
+}
+
+private const val KIND_BADGE_ALPHA = 0.6f
 
 private val POSTER_WIDTH = 150.dp
 private const val POSTER_ASPECT_RATIO = 2f / 3f

@@ -70,6 +70,7 @@ import dev.quiblo.core.data.MetadataRefresh
 import dev.quiblo.core.model.Channel
 import dev.quiblo.core.model.Episode
 import dev.quiblo.core.model.Season
+import dev.quiblo.feature.browse.runtimeLabel
 import dev.quiblo.feature.series.SeriesDetailUiState
 import dev.quiblo.feature.series.SeriesDetailViewModel
 import dev.quiblo.tv.R
@@ -361,6 +362,10 @@ private fun SeriesHeader(
                 rating = state.metadata?.rating,
                 ageRating = state.metadata?.ageRating,
                 genres = state.metadata.genresOrEmpty(),
+                // The panel's year first, the service's second, and no length at all: a series
+                // does not have one, and the average episode length a service offers is not the
+                // length of anything anybody is about to watch.
+                year = state.details.releaseYear ?: state.metadata?.releaseYear,
                 extra = pluralSeasons(seasonCount),
             )
 
@@ -568,7 +573,21 @@ private fun EpisodeRow(episode: Episode, onClick: () -> Unit, modifier: Modifier
             fontWeight = if (isFocused) FontWeight.SemiBold else FontWeight.Normal,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
+            // Takes the space the title needs and leaves the length at the end of the row,
+            // where the eye finds it in the same place on every line.
+            modifier = Modifier.weight(1f, fill = true),
         )
+
+        // Omitted rather than blanked where the panel does not time its episodes, which is most
+        // of them: a column of dashes says less than no column at all.
+        runtimeLabel(episode.durationSeconds)?.let { length ->
+            Text(
+                text = length,
+                color = Color.White.copy(alpha = alpha * 0.6f),
+                fontSize = 14.sp,
+                maxLines = 1,
+            )
+        }
     }
 }
 

@@ -22,7 +22,7 @@ down at the bottom of `012` is the one this page is built around:
 
 So every row below says **what to look at**, not what was changed.
 
-Last updated: **2026-08-13**.
+Last updated: **2026-08-15**.
 
 ---
 
@@ -371,21 +371,25 @@ without a working panel — `STOPPERS.md` S2. The dates come from `get_vod_strea
 | **Fails if** | It is alphabetical, or grouped by kind, or the newest titles are at the far right — that is a sort applied after the cap rather than before it |
 | **Why it is here** | The order is the only claim this tab makes, and the only thing that can check it is somebody who knows what their provider added this week |
 
-### A8.3 — the two empty states, which are different facts
+### A8.3 — the empty states, which are different facts
+
+**Superseded in part by `018`.** An M3U playlist no longer draws a blank tab: it falls back to
+the end of its own list under a different heading. What remains here is the no-source case, and
+the dated case with nothing inside the window.
 
 | | |
 | :---- | :---- |
-| **What to look at** | The tab on an M3U playlist, and then on an account with no playlist at all |
-| **Passes if** | The M3U case says the playlist carries no dates and names Xtream as what does; the no-source case says to add a playlist under Settings |
-| **Fails if** | Either shows "Nothing here yet", or the M3U case shows a list — a playlist has no dates, so anything drawn there is ordered by nothing |
+| **What to look at** | The tab with no playlist configured at all |
+| **Passes if** | It says to add a playlist under Settings |
+| **Fails if** | It shows "Nothing here yet", which says nothing about what to do next |
 
 ### A8.4 — the upgrade, which is the part that can lose something
 
 | | |
 | :---- | :---- |
 | **What to look at** | Install over an existing build without clearing data. Favourites, continue watching, the catalogue |
-| **Passes if** | Everything is where it was, Recently Added is empty until the first refresh, and it fills after one |
-| **Fails if** | Anything is missing, or the row appears full immediately — nothing backfills the dates and nothing should |
+| **Passes if** | Everything is where it was, and on an Xtream account Recently Added is empty until the first refresh and fills after one |
+| **Fails if** | Anything is missing, or a dated account's row appears full immediately — nothing backfills the dates and nothing should. An M3U playlist is the exception since `018`: its row is drawn from list order and is full straight away, headed "Latest in your playlist" |
 | **Why it is here** | Schema 16. `AC-DATA-04`, and the most expensive place in this project to be wrong |
 
 ### A8.5 — the request count, which is the standing risk
@@ -396,6 +400,47 @@ without a working panel — `STOPPERS.md` S2. The dates come from `get_vod_strea
 | **Passes if** | Nothing slows down, no screen starts reporting the provider as unavailable, and series details still open |
 | **Fails if** | The account starts being refused — see `docs/` on provider blocks. The dates ride inside lists the app already fetches, so this tab should cost **zero** additional requests, and a block traced to it means something is asking per row |
 
+---
+
+## A9 — the live guide, from [`017`](../agile/017_Recently_Added_and_the_Live_Guide_of_Quiblo.md) Part B
+
+**Where:** the television. Reported as "EPG not working for live channels", on an Xtream panel.
+The fetch and parse path was not the fault and is unchanged; what changed is *when* it is asked
+and *what is said when it comes back empty*. **None of it has been seen against a real panel** —
+`STOPPERS.md` S2.
+
+### A9.1 — the list answers itself
+
+| | |
+| :---- | :---- |
+| **What to look at** | Open Live and put the remote down. Do not press anything |
+| **Passes if** | The top ten or so channels grow a programme line within a second or two, unprompted |
+| **Fails if** | Every row is still blank after a few seconds — that is the reported defect, unfixed |
+| **Why it is here** | The guide was fetched only for a row focus had rested on for 450ms, and nothing has focus when the screen opens |
+
+### A9.2 — the request count, which is the reason it was not done this way before
+
+| | |
+| :---- | :---- |
+| **What to look at** | Open Live, leave it, come back. Then hold Down and fly through the list. Then use the rest of the app |
+| **Passes if** | Nothing slows, series details still open, and the account is not refused |
+| **Fails if** | The provider starts refusing — the bound is ten per list per session, and a block traced here means the dedupe is not holding |
+| **Why it is here** | This is the failure this project has already had **twice**. It outranks the feature |
+
+### A9.3 — the two sentences
+
+| | |
+| :---- | :---- |
+| **What to look at** | The bottom of the Live screen when no programmes appear |
+| **Passes if** | A refusing provider produces the "not answering guide requests" line, and a provider with no listings produces the "no programme listings" line |
+| **Fails if** | Either says nothing, or an M3U playlist shows one of them — a playlist has never carried listings and saying so every visit is nagging |
+| **Why it is here** | Every one of these used to be a blank line, which reads as the app being broken and is what got reported |
+
+### A9.4 — what has *not* been built, so nobody looks for it
+
+**There is still no guide of any kind for an M3U playlist**, and no amount of this work changes
+that: `M3uSource` implements no guide interface and nothing in the repository parses XMLTV. If a
+guide is wanted for a playlist, that is `url-tvg`, gunzip, a parser and a cache — its own round.
 ---
 
 ## B — Owed from `012`, still owed
@@ -411,6 +456,63 @@ Two are not "owed a device" — they have had one and failed it:
 | :---- | :---- |
 | **#015** | Rejected 2026-08-11, rebuilt the same day, published in `v0.2.7`, **owed the panel again** |
 | **#021** | Rejected 2026-08-11 and **unfixed**. Its next step is a video capture, not another argued mechanism. Do not re-try `adjustNothing` |
+
+---
+
+## A9 — Round `018`: the metadata cache, the Recently Added window, and the detail line
+
+**Where:** the television first, the phone for the two rows that say so. Nothing here has been
+seen on a device. **The defect behind A9.1 was reported from two real televisions**, not from the
+emulator, so a power cycle at the wall is the case to reproduce.
+
+### A9.1 — an hour of scanning survives being switched off
+
+| | |
+| :---- | :---- |
+| **What to look at** | Run a scan. Read "Held now: N titles looked up" in Settings. Switch the television off at the wall, switch it back on, open Settings again |
+| **Passes if** | N is the same or larger, and starting a scan reports far less work to do than the first one did |
+| **Fails if** | N drops, or the scan reports the whole catalogue again. **Those two are different faults** — a smaller N means rows were lost and the disk flush did not hold; an unchanged N with a full scan means something is counting them as unknown |
+| **Why it is here** | This is the reported defect, and the number exists precisely so the two causes can be told apart. Nothing on the device could distinguish them while it was being diagnosed |
+
+### A9.2 — the same, across an app update
+
+| | |
+| :---- | :---- |
+| **What to look at** | Note N, install the new build over the old one without clearing data, read N again |
+| **Passes if** | N is unchanged |
+| **Fails if** | N is zero. If it is, check *how* the build was installed before believing the app: a differently signed build, or an install that uninstalls first, wipes everything the app owns and no code in this repository can prevent it |
+
+### A9.3 — Recently Added, thirty days and no more
+
+| | |
+| :---- | :---- |
+| **What to look at** | The row on the Xtream account, against what the provider says it added this month |
+| **Passes if** | Everything in the row was added within thirty days, newest first |
+| **Fails if** | It carries titles from last year, or it is empty on an account that has certainly added something this month |
+
+### A9.4 — the fallback row on a playlist with no dates
+
+| | |
+| :---- | :---- |
+| **What to look at** | The tab on an M3U playlist |
+| **Passes if** | It is headed **"Latest in your playlist"**, holds films and series alternating, and they are the ones at the end of that playlist |
+| **Fails if** | It is headed "Recently added" — the heading is the whole claim, and list order is not a date. Also fails if it is all films, which means the two kinds are not being taken separately |
+
+### A9.5 — the kind badge, and the stillness behind it
+
+| | |
+| :---- | :---- |
+| **What to look at** | Hold Right along the Recently Added row from the sofa |
+| **Passes if** | Every tile says Movie or Series in its top-right corner, and the screen does not move vertically at all |
+| **Fails if** | The catalogue twitches while the remote walks the row. That is #008 and the badge would be the cause — `TvBrowseScrollStabilityTest` covers it on the JVM, and this is the confirmation the JVM cannot give |
+
+### A9.6 — the facts line on a film, a series, and an episode
+
+| | |
+| :---- | :---- |
+| **What to look at** | A film's detail screen, a series' detail screen, and a season's episode list. Both apps |
+| **Passes if** | The film shows a year and a length beside its score; the series shows a year and no length; episodes show their own lengths where the provider times them, and nothing where it does not |
+| **Fails if** | A length reads `0m`, a year reads `1080`, or a series claims a running time. The first two are parsing accidents with a range check meant to stop them, and the third is a fact TMDB offers that this app deliberately does not use |
 
 ---
 

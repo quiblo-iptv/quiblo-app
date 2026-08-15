@@ -69,10 +69,14 @@ import coil3.compose.SubcomposeAsyncImage
 import dev.quiblo.core.data.MetadataRefresh
 import dev.quiblo.core.data.ScanRefusal
 import dev.quiblo.core.model.Channel
+import dev.quiblo.core.model.TitleMetadata
 import dev.quiblo.core.model.VodDetails
+import dev.quiblo.core.model.releaseYearIn
 import dev.quiblo.designsystem.AutoDirection
 import dev.quiblo.feature.browse.DetailOverlayActions
 import dev.quiblo.feature.browse.TitleFacts
+import dev.quiblo.feature.browse.runtimeLabel
+import dev.quiblo.feature.browse.runtimeLabelFromMinutes
 import org.koin.androidx.compose.koinViewModel
 import org.koin.core.parameter.parametersOf
 
@@ -229,7 +233,7 @@ private fun Details(
     modifier: Modifier = Modifier,
 ) {
     Column(modifier = modifier) {
-        state.details?.let { MetadataLine(it) }
+        state.details?.let { MetadataLine(it, state.metadata) }
         state.metadata?.let { TitleFacts(metadata = it, modifier = Modifier.padding(bottom = 12.dp)) }
 
         PlaybackButtons(state = state, onPlay = onPlay, onRemoveFromHistory = onRemoveFromHistory)
@@ -373,13 +377,16 @@ private fun ArtworkPlaceholder() {
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun MetadataLine(details: VodDetails) {
+private fun MetadataLine(details: VodDetails, metadata: TitleMetadata?) {
     val parts = listOfNotNull(
-        details.releaseDate?.takeIf { it.isNotBlank() },
+        // The year, not the whole date. A panel sends "2021-10-22"; nobody choosing a film
+        // needs the day of the month, and the metadata service fills the gap for a playlist
+        // that sends no date at all.
+        (releaseYearIn(details.releaseDate) ?: metadata?.releaseYear)?.toString(),
         details.genre?.takeIf { it.isNotBlank() },
-        details.durationSeconds?.takeIf { it > 0 }?.let {
-            stringResource(R.string.movie_minutes, it / SECONDS_PER_MINUTE)
-        },
+        // The panel's own length first, on the same rule as its artwork: it is timing the file
+        // it is about to serve, where the service is timing whichever cut it holds.
+        runtimeLabel(details.durationSeconds) ?: runtimeLabelFromMinutes(metadata?.runtimeMinutes),
         details.rating?.takeIf { it.isNotBlank() },
     )
     if (parts.isEmpty()) return

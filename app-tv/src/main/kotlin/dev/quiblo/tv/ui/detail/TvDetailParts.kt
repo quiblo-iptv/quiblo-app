@@ -95,16 +95,27 @@ fun DetailArtwork(url: String?, modifier: Modifier = Modifier) {
  *
  * Anything absent is omitted rather than shown blank. A panel supplies some of these and a
  * metadata service the rest, and a row of empty labels is worse than a shorter row.
+ *
+ * The order is the order a listings page uses, and it is not arbitrary: the score decides
+ * whether to read on, the year and the length decide whether to start it tonight, and the
+ * genres are the widest and go last so the truncation lands on them.
  */
 @Composable
 fun DetailFacts(
     rating: Double?,
     ageRating: String?,
     genres: List<String>,
+    /** The year of release, or of a series' first broadcast. */
+    year: Int? = null,
+    /** Already written out — `1h 52m`. See `runtimeLabel`. A series has none. */
+    runtime: String? = null,
+    /** Anything else this kind of title carries. A series puts its season count here. */
     extra: String? = null,
 ) {
     val parts = buildList {
         rating?.let { add("★ %.1f".format(it)) }
+        year?.let { add(it.toString()) }
+        runtime?.takeIf { it.isNotBlank() }?.let(::add)
         extra?.takeIf { it.isNotBlank() }?.let(::add)
         ageRating?.takeIf { it.isNotBlank() }?.let(::add)
         genres.takeIf { it.isNotEmpty() }?.let { add(it.joinToString(", ")) }

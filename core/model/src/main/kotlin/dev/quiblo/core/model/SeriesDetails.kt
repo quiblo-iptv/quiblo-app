@@ -35,6 +35,13 @@ data class Episode(
     val episodeNumber: Int,
     val streamUrl: String,
     val logoUrl: String? = null,
+    /**
+     * How long this episode runs, or null when the panel did not say.
+     *
+     * Null rather than zero: "we were not told" and "it is over in no time" are different
+     * facts, and a row showing `0m` states the second when it means the first.
+     */
+    val durationSeconds: Int? = null,
 )
 
 /**
@@ -55,4 +62,12 @@ data class SeriesDetails(
     val overview: String? = null,
     val coverUrl: String? = null,
     val seasons: List<Season> = emptyList(),
+    /**
+     * The year the series began, as the panel gives it, or null.
+     *
+     * A year rather than a date. A film's release date is a day and a series' is not — a run
+     * spanning six years has no single one — so the fact worth showing is the fact both kinds
+     * share.
+     */
+    val releaseYear: Int? = null,
 )

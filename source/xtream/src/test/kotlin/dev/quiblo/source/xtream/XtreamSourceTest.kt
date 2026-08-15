@@ -324,6 +324,46 @@ class XtreamSourceTest {
     }
 
     @Test
+    fun `episode lengths are read from whichever field the panel used`() = runTest {
+        val seriesInfoJson = """
+            {
+              "seasons": [{"season_number": 1, "name": "Season 1"}],
+              "info": {"name": "A Series", "releaseDate": "2008-01-20"},
+              "episodes": {
+                "1": [
+                  {"id": "1", "episode_num": 1, "title": "In seconds",
+                   "info": {"duration_secs": 2820}},
+                  {"id": "2", "episode_num": 2, "title": "On a clock",
+                   "info": {"duration": "00:47:15"}},
+                  {"id": "3", "episode_num": 3, "title": "Untimed",
+                   "info": {"movie_image": "http://img.png"}},
+                  {"id": "4", "episode_num": 4, "title": "Zeroed",
+                   "info": {"duration": "00:00:00", "duration_secs": 0}}
+                ]
+              }
+            }
+        """.trimIndent()
+
+        val source = sourceServing(mapOf("get_series_info" to seriesInfoJson))
+
+        val result = source.seriesDetails(request, seriesId = "99")
+        val details = assertInstanceOf(dev.quiblo.source.api.SeriesDetailsResult.Success::class.java, result).details
+        val episodes = details.seasons[0].episodes
+
+        assertEquals(2820, episodes[0].durationSeconds)
+        // 47 minutes and 15 seconds, read out of the written form. Panels send one field or the
+        // other and a series whose every episode says nothing looks like a provider that does
+        // not supply lengths.
+        assertEquals(2835, episodes[1].durationSeconds)
+        assertNull(episodes[2].durationSeconds)
+        // A zero is not a length. "We did not measure this" is what it means, and `0m` on a row
+        // would state something else.
+        assertNull(episodes[3].durationSeconds)
+        // And the series' own year, from the same response.
+        assertEquals(2008, details.releaseYear)
+    }
+
+    @Test
     fun `series with alternate property keys are mapped defensively`() = runTest {
         val seriesJson = """
             [

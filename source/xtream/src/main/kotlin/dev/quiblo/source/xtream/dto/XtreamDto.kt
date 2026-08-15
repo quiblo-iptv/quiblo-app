@@ -311,7 +311,17 @@ internal data class SeriesInfoDto(
     val cover: String? = null,
     @Serializable(FlexibleStringSerializer::class)
     val plot: String? = null,
-)
+    // Spelled both ways across panels, exactly as it is on a film. See VodInfoDto.
+    @SerialName("releaseDate")
+    @Serializable(FlexibleStringSerializer::class)
+    val releaseDate: String? = null,
+    @SerialName("release_date")
+    @Serializable(FlexibleStringSerializer::class)
+    val releaseDateAlt: String? = null,
+) {
+    val effectiveReleaseDate: String? get() = releaseDate?.takeIf { it.isNotBlank() }
+        ?: releaseDateAlt?.takeIf { it.isNotBlank() }
+}
 
 @Serializable
 internal data class SeasonDto(
@@ -349,7 +359,54 @@ internal data class EpisodeInfoDto(
     @SerialName("movie_image")
     @Serializable(FlexibleStringSerializer::class)
     val movieImage: String? = null,
-)
+    /** Seconds, on the panels that count in seconds. */
+    @SerialName("duration_secs")
+    @Serializable(FlexibleIntSerializer::class)
+    val durationSeconds: Int? = null,
+    /**
+     * `HH:MM:SS`, on the panels that write it out.
+     *
+     * Both fields are read because panels send one, the other, or both, and a series whose
+     * episodes all say nothing because the app looked for the wrong spelling is the sort of
+     * gap nobody reports — it looks like a provider that does not supply lengths.
+     */
+    @Serializable(FlexibleStringSerializer::class)
+    val duration: String? = null,
+) {
+    /**
+     * The length in seconds, from whichever field carries it.
+     *
+     * Zero and negative become null: a panel sending `"duration": "00:00:00"` is saying it does
+     * not know, and an episode listed as no seconds long is not a fact worth drawing.
+     */
+    val effectiveDurationSeconds: Int? get() =
+        (durationSeconds ?: duration?.let(::parseClockDuration))?.takeIf { it > 0 }
+}
+
+/**
+ * `HH:MM:SS` or `MM:SS` to seconds, or null for anything else.
+ *
+ * Written out rather than handed to a date parser: this is not a time of day, and a formatter
+ * that accepts one would happily read `25:00:00` as a wrapped clock rather than as the
+ * twenty-five hours a mislabelled box set claims to be.
+ */
+private fun parseClockDuration(value: String): Int? {
+    val parts = value.trim().split(':')
+    val numbers = parts.map { it.toIntOrNull() }
+    return when {
+        parts.size < SHORTEST_CLOCK || parts.size > LONGEST_CLOCK -> null
+        numbers.any { it == null || it < 0 } -> null
+        else -> numbers.filterNotNull().fold(0) { total, part -> total * SECONDS_PER_UNIT + part }
+    }
+}
+
+/** `MM:SS`. */
+private const val SHORTEST_CLOCK = 2
+
+/** `HH:MM:SS`. */
+private const val LONGEST_CLOCK = 3
+
+private const val SECONDS_PER_UNIT = 60
 
 /**
  * `get_vod_info` — details for one film.

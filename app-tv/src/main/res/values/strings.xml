@@ -9,7 +9,7 @@
 
     <string name="tv_tab_search">Search</string>
     <string name="tv_tab_live">Live</string>
-    <string name="tv_tab_recently_added">Recently Added</string>
+    <string name="tv_tab_for_you">For You</string>
     <string name="tv_tab_movies">Movies</string>
     <string name="tv_tab_series">Series</string>
     <string name="tv_tab_favourites">Favourites</string>
@@ -87,6 +87,12 @@
     <string name="tv_kind_movie">Movie</string>
     <string name="tv_kind_series">Series</string>
 
+    <!-- The other two For You rows. Neither is drawn at all when it is empty, so neither has an
+         empty message: a row that cannot say anything says nothing. -->
+    <string name="tv_row_now_popular">Now popular</string>
+    <string name="tv_row_you_may_like">You may like</string>
+    <string name="tv_because_you_watched">Because you watched %1$s</string>
+
     <string name="tv_sources_incomplete">Fill in the address, and either both the username and password or neither.</string>
 
     <!-- Search -->
@@ -96,6 +102,9 @@
     <string name="tv_search_suggestions">Did you mean</string>
     <string name="tv_search_clear">Clear</string>
     <string name="tv_search_advanced">Advanced</string>
+    <!-- One switch for hidden categories and hidden writing systems, because from the viewer's
+         side those are one question: look in the parts I usually do not want to see. -->
+    <string name="tv_search_include_hidden">Include hidden</string>
     <!-- Row headings come from feature:browse now, so both apps say the same words. -->
     <string name="tv_search_genres_coverage">Genres describe %1$d%% of your catalogue so far — browsing fills in the rest.</string>
     <string name="tv_search_genres_empty">Browse some films or series and you will be able to filter by genre here.</string>
@@ -137,8 +146,15 @@
     <string name="tv_settings_script_hangul">Korean</string>
     <string name="tv_settings_script_devanagari">Devanagari</string>
     <string name="tv_settings_script_thai">Thai</string>
+    <string name="tv_settings_search">Search</string>
+    <string name="tv_settings_search_live">Live channels in advanced search</string>
+    <string name="tv_settings_search_live_detail">Off. A live channel carries no genre, so a genre filter can only match it on its name.</string>
     <string name="tv_settings_categories">Categories</string>
     <string name="tv_settings_category_kind">Editing categories for</string>
+    <string name="tv_settings_category_summary">%1$d categories, %2$d hidden</string>
+    <string name="tv_settings_category_enter">Press to edit</string>
+    <string name="tv_settings_category_leave">Press Back to leave</string>
+    <string name="tv_settings_category_empty">No categories on this source</string>
     <string name="tv_settings_rename_field">Rename to</string>
     <string name="tv_settings_apply">Apply</string>
     <string name="tv_settings_hide">Hide</string>

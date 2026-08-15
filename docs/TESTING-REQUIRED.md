@@ -155,10 +155,16 @@ been proven in unit tests.
 | **Passes if** | Arabic-titled rows disappear from browse and from search, favourites keep every one of them, and "Show everything again" brings them all back |
 | **Fails if** | A catalogue screen goes blank, the list takes visibly longer to draw than before, or a favourite disappears |
 
-**Two limits that are the design, not defects.** A category named `4K | مسلسلات` reads as Latin,
-because `K` is a Latin letter — hiding Latin loses it. And an Arabic film released under a
-transliterated Latin title is not hidden at all, because nothing in a playlist says it is Arabic.
-Report these as observations, not as failures.
+**Superseded in part by A11.** The rule this section was written against read the first letter of
+a title and stopped; round `019` Part B changed it to *any* letter outside a trailing bracketed
+tag, which is what the two paragraphs below were describing the cost of. `4K | مسلسلات` is now
+hidden by either script rather than read as Latin. The remaining limit still stands and is still
+the design: **an Arabic film released under a transliterated Latin title is not hidden at all**,
+because nothing in a playlist says it is Arabic. Report that as an observation, not a failure.
+
+Everything else on this row — the browse and search behaviour, favourites keeping every title,
+"Show everything again" — is unchanged and still owed a device. A11 is where the new rule's own
+rows are.
 
 ### INC-F10 — subtitle files, the panel's and the viewer's own
 
@@ -513,6 +519,240 @@ emulator, so a power cycle at the wall is the case to reproduce.
 | **What to look at** | A film's detail screen, a series' detail screen, and a season's episode list. Both apps |
 | **Passes if** | The film shows a year and a length beside its score; the series shows a year and no length; episodes show their own lengths where the provider times them, and nothing where it does not |
 | **Fails if** | A length reads `0m`, a year reads `1080`, or a series claims a running time. The first two are parsing accidents with a range check meant to stop them, and the third is a fact TMDB offers that this app deliberately does not use |
+
+---
+
+## A10 — Round `019` Part A: the keyboard and the category box
+
+**Where:** the television, all of it. From
+[`019`](../agile/019_Friction_on_the_Television_of_Quiblo.md) Part A. Neither change needs a
+provider, so unlike most of this page these can be answered on the emulator — but the keyboard
+half is exactly the sort of thing that behaved differently on the Haier before (#021), so the
+panel is what settles it.
+
+### A10.1 — walking past a field costs nothing
+
+| | |
+| :---- | :---- |
+| **What to look at** | Open Settings and hold Down from the top, straight past the metadata key row, to the backup rows at the bottom |
+| **Passes if** | No keyboard appears at any point. You arrive at the bottom in one movement |
+| **Fails if** | A keyboard opens as focus lands on the key field, or the list jumps when it does |
+| **Why it is here** | This is the report. It also re-tests #021 from the other side: no keyboard means no window resize means nothing for the list to chase |
+
+### A10.2 — the field still works when it is wanted
+
+| | |
+| :---- | :---- |
+| **What to look at** | Land on the metadata key, press centre, type a few characters, press the keyboard's Done. Then the same on the search box, the playlist form's four fields, and a new profile's name |
+| **Passes if** | The keyboard opens on the press, the characters land in the field you pressed, and Done puts it away with focus still on that field |
+| **Fails if** | Characters land in a different field — the failure this component was written for — or the keyboard cannot be dismissed, or focus is nowhere afterwards and the remote does nothing |
+| **Why it is here** | Two stages means two ways for focus to be lost at the swap, and the app has been wrong about television focus four times |
+
+### A10.3 — the playlist form and the profile name do not ambush you
+
+| | |
+| :---- | :---- |
+| **What to look at** | Open Settings → playlists → add, and separately the add-profile screen |
+| **Passes if** | The first field is highlighted and no keyboard is up |
+| **Fails if** | A keyboard is already open when the screen appears |
+| **Why it is here** | Both screens ask for focus on their first field as they open, which used to mean asking for a keyboard |
+
+### A10.4 — the category box is passed in one press
+
+| | |
+| :---- | :---- |
+| **What to look at** | Settings, on an account with a lot of categories. Move down through the Categories section to the Backup rows below it |
+| **Passes if** | One press clears the box. It reads how many categories there are and how many are hidden |
+| **Fails if** | Focus enters the list of categories and has to be walked through |
+
+### A10.5 — and entered, and left
+
+| | |
+| :---- | :---- |
+| **What to look at** | Press the box. Hide a category, rename one. Press Back. Then reopen it and hold Down past the last category |
+| **Passes if** | It opens onto the first category's controls; Back closes it and leaves the box highlighted; holding Down walks out of the bottom and the box shuts behind you |
+| **Fails if** | Back closes Settings instead of the box, or focus ends up on nothing, or the box stays open once focus has left it |
+| **Why it is here** | Back is the way out, and it works by the box's handler being offered the key before the screen's. That precedence is worth seeing on a real remote |
+
+---
+
+## A11 — Round `019` Part B: hiding that hides
+
+**Where:** the television, on an account with Arabic or another non-Latin script in it. From
+[`019`](../agile/019_Friction_on_the_Television_of_Quiblo.md) Part B. The rule change is decided
+in `core/common` and is covered on the JVM; what a device is needed for is what a *real
+provider's* titles look like, which is the whole reason the old rule failed.
+
+### A11.1 — the shape of the titles, before anything else
+
+| | |
+| :---- | :---- |
+| **What to look at** | Browse Movies and Series with nothing hidden, and read the titles. Note how the provider writes its tags — leading, trailing, bracketed, piped |
+| **Passes if** | You can say which of those shapes your account uses. This is a reading, not a test |
+| **Why it is here** | The rule keeps a trailing bracketed tag and hides everything else. If this account tags some other way, the next two rows will say so and the rule needs revisiting rather than the code |
+
+### A11.2 — hiding Arabic hides Arabic
+
+| | |
+| :---- | :---- |
+| **What to look at** | Settings → hide Arabic. Then Movies, Series and Search |
+| **Passes if** | Titles with Arabic anywhere in them are gone, including ones that begin with an English word |
+| **Fails if** | Anything with Arabic letters in its name is still listed — that is the old first-letter rule, unchanged |
+
+### A11.3 — and what it costs
+
+| | |
+| :---- | :---- |
+| **What to look at** | With Arabic hidden, look for an English film your provider has tagged as dubbed or subtitled |
+| **Passes if** | One tagged `[عربي]` or `(مترجم)` is still there; one tagged with a bare Arabic word on the end is gone |
+| **Why it is here** | The second half is the accepted cost of the rule, written down so it is recognised as a decision rather than reported as a defect |
+
+### A11.4 — a hidden category stays hidden when searched
+
+| | |
+| :---- | :---- |
+| **What to look at** | Hide a category you know the contents of. Then search for something in it |
+| **Passes if** | Nothing from that category comes back |
+| **Fails if** | It does — which is the report |
+
+### A11.5 — and comes back when asked for
+
+| | |
+| :---- | :---- |
+| **What to look at** | Same search, then open Advanced and press Include hidden |
+| **Passes if** | The hidden category's titles appear, and so do titles in a hidden writing system. Pressing it again puts them away. Leaving Search and coming back has it off |
+| **Fails if** | It only brings back one of the two, or it is still on when the screen is reopened |
+
+### A11.6 — a full page is still a full page
+
+| | |
+| :---- | :---- |
+| **What to look at** | With a script hidden, search a term with a great many matches in the *other* script |
+| **Passes if** | The row is as long as it would be with nothing hidden |
+| **Fails if** | It is noticeably shorter — the filter is running after the cut again |
+
+---
+
+## A12 — Round `019` Part C: advanced search
+
+**Where:** the television, on a scanned account — the genre filter reads the metadata cache, so
+an unscanned catalogue has nothing to filter by and this section cannot be run at all. From
+[`019`](../agile/019_Friction_on_the_Television_of_Quiblo.md) Part C.
+
+### A12.1 — a genre fills both rows
+
+| | |
+| :---- | :---- |
+| **What to look at** | Search → Advanced → pick a common genre such as Drama or Action, with the search box empty |
+| **Passes if** | Both the films row and the series row have titles in them |
+| **Fails if** | One of the two is empty. That is the report, and it is the whole of what changed |
+| **Why it is here** | It needs a *large* catalogue. On a small one the old code passed too, which is part of why this took so long to be described accurately |
+
+### A12.2 — and it is not one kind's leftovers
+
+| | |
+| :---- | :---- |
+| **What to look at** | The same, on three or four different genres |
+| **Passes if** | Neither row is consistently shorter than the other in a way the catalogue does not explain |
+| **Fails if** | Series are always the short row — the cap is still being taken before the split somewhere |
+
+### A12.3 — no live channels unless asked
+
+| | |
+| :---- | :---- |
+| **What to look at** | Advanced search with a genre picked. Then Settings → Search → turn live channels on, and come back |
+| **Passes if** | No live row at all by default; the live row appears once the setting is on |
+| **Fails if** | Live channels are there with the setting off |
+
+### A12.4 — off means not asked
+
+| | |
+| :---- | :---- |
+| **What to look at** | With the setting off, use advanced search heavily for a few minutes |
+| **Passes if** | Nothing slows and the account is not refused |
+| **Why it is here** | Off is meant to mean the query is never made. This is the standing risk on every screen in this app and it outranks the feature |
+
+---
+
+## A13 — Round `020`: the For You tab
+
+**Where:** the television. From [`020`](../agile/020_For_You_of_Quiblo.md). **The first row can be
+seen on the emulator; the other two cannot be certified from this machine** — `STOPPERS.md` S2,
+and the third additionally needs a scanned catalogue and a real watch history, which is days of
+use rather than an afternoon.
+
+### A13.1 — the tab, and the row that was already there
+
+| | |
+| :---- | :---- |
+| **What to look at** | The bar. Then open the tab |
+| **Passes if** | It reads **For You**, sits after Live and before Movies, and its first row is the Recently Added row exactly as it was — same titles, same order, same heading |
+| **Fails if** | The tab moved, or the first row changed |
+
+### A13.2 — the tab scrolls
+
+| | |
+| :---- | :---- |
+| **What to look at** | Hold Down from the first row to the last |
+| **Passes if** | The screen scrolls between rows and every row is reachable |
+| **Fails if** | A row below the fold cannot be reached, or the screen jumps rather than scrolls |
+
+### A13.3 — the screen does not shake
+
+| | |
+| :---- | :---- |
+| **What to look at** | Hold Right along **each** of the three rows, from the top of the tab and from the bottom |
+| **Passes if** | Nothing moves vertically. At all |
+| **Fails if** | The rows twitch upward as a tile takes focus |
+| **Why it is here** | This is #008, and the two new tile shapes are exactly the sort of thing that brings it back. `TvBrowseScrollStabilityTest` says they do not; a panel is what settles it |
+
+### A13.4 — Now popular
+
+| | |
+| :---- | :---- |
+| **What to look at** | With a Movie Database key configured. The second row |
+| **Passes if** | At most five films and five series, each with a large number across the foot of its poster, and every one of them opens and plays from your own provider |
+| **Fails if** | A tile opens nothing, or a number is drawn outside the poster, or the row holds titles the account does not carry |
+
+### A13.5 — and what it costs
+
+| | |
+| :---- | :---- |
+| **What to look at** | Open the tab, leave it, come back. Several times, over several days if you can |
+| **Passes if** | The row is the same all week and the service does not start refusing |
+| **Fails if** | The account is rate-limited, or the row changes between two openings on the same day |
+
+### A13.6 — with no key, and with a key that is refused
+
+| | |
+| :---- | :---- |
+| **What to look at** | Clear the Movie Database key. Reopen the tab |
+| **Passes if** | The Now popular row is **gone**. Not empty, not spinning — absent |
+| **Fails if** | An empty row with a heading is drawn |
+
+### A13.7 — You may like
+
+| | |
+| :---- | :---- |
+| **What to look at** | On a scanned catalogue, after watching several things on one profile |
+| **Passes if** | The third row appears; each tile carries a line reading "Because you watched …" naming something you did watch; nothing already watched is in it; it is not five of the same genre |
+| **Fails if** | The row names something you never watched, or suggests back what you just finished |
+
+### A13.8 — and it belongs to one person
+
+| | |
+| :---- | :---- |
+| **What to look at** | Switch to another profile and open the tab |
+| **Passes if** | The suggestions differ, and a fresh profile has **no** third row at all |
+| **Fails if** | Two profiles see the same suggestions — that is one person's viewing shown to another |
+
+### A13.9 — the upgrade
+
+| | |
+| :---- | :---- |
+| **What to look at** | Install over an existing build |
+| **Passes if** | Every channel, favourite and resume point is where it was, and the tab works |
+| **Why it is here** | Schema 18. The migration adds one empty table and touches nothing, which is exactly the sort of claim that should still be checked once |
 
 ---
 

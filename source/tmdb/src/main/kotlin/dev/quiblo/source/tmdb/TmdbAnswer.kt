@@ -70,3 +70,34 @@ enum class TmdbRefusal {
     /** A 5xx, a timeout, no network, or a body that would not parse. Worth retrying later. */
     UNAVAILABLE,
 }
+
+/**
+ * One entry of a TMDB popular list.
+ *
+ * Deliberately not [TitleMetadata]. Nothing here is *about* a title the viewer owns — it is a
+ * name, a year and a position, which is everything needed to look for that title in a catalogue
+ * and nothing more. The record the detail screen reads still comes from the metadata cache, by
+ * the same path as every other title.
+ */
+data class PopularTitle(
+    /** Position in TMDB's own reply, from 1. It is what the row draws. */
+    val rank: Int,
+    val tmdbId: Int,
+    val title: String,
+    /** Null where TMDB has no release date, which happens on unreleased films. */
+    val year: Int?,
+    /** TMDB's artwork, used only where the provider supplied none — as everywhere else. */
+    val posterUrl: String?,
+)
+
+/**
+ * What asking for a popular list produced.
+ *
+ * Two outcomes rather than a nullable list, for the reason [TmdbAnswer] gives at length: an
+ * empty answer and a failure to ask are different facts, and this one is cached for a week.
+ */
+sealed interface TmdbPopular {
+    data class Titles(val entries: List<PopularTitle>) : TmdbPopular
+
+    data class Refused(val answer: TmdbAnswer.Refused) : TmdbPopular
+}

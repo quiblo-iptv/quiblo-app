@@ -38,14 +38,17 @@ internal enum class TvTab(@param:StringRes val labelRes: Int, val isIconOnly: Bo
     LIVE(R.string.tv_tab_live),
 
     /**
-     * What the provider put on the service most recently, films and series together.
+     * Three rows about three questions: what the provider added, what the world is watching of
+     * the things the provider carries, and what this viewer is likely to want.
      *
-     * Ahead of the catalogues rather than after them, because it is the only tab whose
-     * contents change between one evening and the next: Movies and Series are the same
-     * thousands of titles in the same provider order every time they are opened, and a viewer
-     * with nothing particular in mind has no reason to walk past this one to reach them.
+     * Ahead of the catalogues rather than after them, because it is the only tab whose contents
+     * change between one evening and the next: Movies and Series are the same thousands of titles
+     * in the same provider order every time they are opened, and a viewer with nothing particular
+     * in mind has no reason to walk past this one to reach them.
+     *
+     * It was Recently Added, which is now the first of its three rows.
      */
-    RECENTLY_ADDED(R.string.tv_tab_recently_added),
+    FOR_YOU(R.string.tv_tab_for_you),
     MOVIES(R.string.tv_tab_movies),
     SERIES(R.string.tv_tab_series),
     FAVOURITES(R.string.tv_tab_favourites),

@@ -19,17 +19,17 @@ Every item below lands on a screen that round is repairing.
 | :---- | :---- | :---- | :---- | :---- |
 | INC-F0 | Both | S | #016 | ~~Avatars for profiles~~ — **built 2026-08-12**, schema 13, both choosers, phone picker. The television picker and the control beside the gear are `STOPPERS.md` **S11** |
 | INC-F1 | Both | M | — | Autocomplete in search, from the local catalogue |
-| INC-F2 | Both | L | The scan | Suggestions from what has been watched |
+| INC-F2 | Both | L | The scan | ~~Suggestions from what has been watched~~ — **built 2026-08-15** on the television as the third row of the For You tab ([`020`](020_For_You_of_Quiblo.md)), exactly as designed below: content-based scoring, per profile, naming its cause. The phone does not have it |
 | INC-F3 | Both | S | #014 | Long-press a history entry to remove it — **phone half built 2026-08-12**. The television half is `STOPPERS.md` **S12**: that app has no dialog anywhere, and a one-action menu on a remote is a pattern it does not yet have |
 | INC-F4 | Both | M | — | ~~Long-press a channel for its full guide, on a timeline~~ — **built 2026-08-12**. Shared arithmetic in `:feature:browse`, a dragged strip on the phone and a D-pad one on the television. `get_simple_data_table`, asked once per channel per session. Nothing seen on a device yet |
 | INC-F6 | Both | M | #015 | Merge seasons into one list, and reverse the order — remembered per profile |
 | INC-F7 | Both | S | A key | Refresh this title's information from the metadata service |
-| INC-F8 | Both | S | — | ~~Category editing scrolls inside Settings~~ — **built 2026-08-12**, and it was a removal rather than an addition |
+| INC-F8 | Both | S | — | ~~Category editing scrolls inside Settings~~ — **built 2026-08-12**, and it was a removal rather than an addition. **Revised 2026-08-15** ([`019`](019_Friction_on_the_Television_of_Quiblo.md) Part A): on the television the scroller was a region every viewer had to walk *through*, so it is shut by default and entered with a press |
 | INC-F9 | Both | M | — | ~~A section whose text is right-to-left is laid out right-to-left~~ — **built 2026-08-12**. First-strong detector in `:core:common`, `AutoDirection` in `:feature:designsystem`, applied to the title and plot on all four detail screens |
 | INC-F10 | Both | L | — | ~~Subtitle files: the provider's, or one the viewer picks~~ — **built 2026-08-12**. Format sniffed from the file rather than its name, encoding detected rather than assumed, the picked file copied into the app and remembered against the title. Schema 15. Nothing seen on a device yet |
 | INC-F11 | Both | M | INC-F10 | ~~Subtitle appearance, set from the player~~ — **built 2026-08-12**. Size, colour and background in the track menu, offered only while a subtitle is showing. Starts from Android's own caption style; "Match system" returns to it. **Building it found that nothing had ever drawn a subtitle cue** — see below |
 | INC-F12 | Both | S | — | **Audio track selection. Not new scope — see below** |
-| INC-F14 | Both | M | INC-F9 | ~~Filter the catalogue to one language~~ — **built 2026-08-12** as a subtraction, not a selection: hide titles written in scripts the viewer does not read. App-wide, never applied to favourites |
+| INC-F14 | Both | M | INC-F9 | ~~Filter the catalogue to one language~~ — **built 2026-08-12** as a subtraction, not a selection: hide titles written in scripts the viewer does not read. App-wide, never applied to favourites. **Revised 2026-08-15** ([`019`](019_Friction_on_the_Television_of_Quiblo.md) Part B): any letter of a hidden script hides the title, not only the first one — the first-letter rule let through everything a provider had prefixed in Latin |
 | INC-E4 | Both | S | — | ~~The corner radius~~ — **built 2026-08-12**. There was no scale to raise; there was one to write |
 | INC-E1…E3 | TV | S | The panel | The search screen's shape. **Not built** — each is a question about how a screen reads from three metres. `STOPPERS.md` **S10** |
 
@@ -193,6 +193,12 @@ not replace it.
 
 ### INC-F14 — filter the catalogue to one language
 
+> **Revised 2026-08-15.** Signal 1 below reads *the first strong letter* of a title, and that is
+> what shipped. It let through every title a provider had prefixed in Latin, which on a real
+> account is most of them. [`019`](019_Friction_on_the_Television_of_Quiblo.md) Part B changed the
+> rule to any letter outside a trailing bracketed tag. The three signals and the case for a
+> subtraction over a selection are unchanged; only how signal 1 is read has moved.
+
 The intake asks the right question: *is this possible when we do not know what language anything
 is in?* **Partly, and the honest answer decides the design.**
 
@@ -295,6 +301,11 @@ fuller listing from Xtream is more rows of the same shape, not a schema change.
 ## Suggestions from what has been watched
 
 ### INC-F2 — what the intake calls "a learning algorithm/daemon"
+
+> **Built 2026-08-15**, on the television, in [`020`](020_For_You_of_Quiblo.md). Steps 1–3 below
+> and nothing further, as recommended. One change of shape: the row is titled **You may like** and
+> each tile carries its own "Because you watched X" line, rather than the row heading naming the
+> cause. The honesty the design was built around survives; only where the sentence is drawn moved.
 
 The intake asks what this would be. The short answer: **not machine learning, and not a daemon.**
 

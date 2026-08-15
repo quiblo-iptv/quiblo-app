@@ -45,6 +45,8 @@ val browseModule: Module = module {
             metadataRepository = get(),
             historyRepository = get(),
             channelLogoRepository = get(),
+            popularTitles = get(),
+            recommendations = get(),
         )
     }
 
@@ -53,6 +55,7 @@ val browseModule: Module = module {
             sourceRepository = get(),
             searchRepository = get(),
             metadataRepository = get(),
+            playerSettingsRepository = get(),
         )
     }
 }
@@ -70,3 +73,12 @@ fun browseParams(kind: MediaKind, scope: BrowseScope = BrowseScope.CATALOGUE) =
  * call site about why a "recently added" screen declares itself as films.
  */
 fun recentlyAddedParams() = browseParams(MediaKind.VOD, BrowseScope.RECENTLY_ADDED)
+
+/**
+ * Koin parameters for the television's For You tab.
+ *
+ * [BrowseFeed.kind] is a placeholder here for the same reason it is in [recentlyAddedParams]: the
+ * feed spans films and series at once, and every branch that reads `kind` is excluded by the
+ * scope.
+ */
+fun forYouParams() = browseParams(MediaKind.VOD, BrowseScope.FOR_YOU)

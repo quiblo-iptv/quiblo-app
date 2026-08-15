@@ -115,6 +115,8 @@ except where a criterion names an input method the television does not have.
 | AC-TV-15 | Playlists and accounts are reachable from Settings, and back from them returns to Settings rather than to the catalogue. They are not in the tab bar. |
 | AC-TV-16 | Every control the player draws is reachable and operable with the D-pad, and pressing down twice reaches the second row. The remote's own keys continue to drive playback with nothing on screen, and focus returns to the screen when the controls time out. *(Added by `FREEZE.md` Amendment 10.)* |
 | AC-TV-17 | From inside the player, a series moves to the next and previous episode in the order the episodes were made, stopping at the first and the last. When an episode ends the next is offered; the offer is not made for a film, at the end of a series, or after a failure, and it starts nothing once the viewer has declined it or left. *(Added by `FREEZE.md` Amendment 10.)* |
+| AC-TV-18 | Every text field on the television opens its keyboard when it is pressed and never when focus merely arrives on it, and leaving a field by any route puts the keyboard down and leaves focus on something. The category editor is passed in one press when shut, entered with one press, and left by Back or by walking off either end. *(`019` Part A.)* |
+| AC-TV-19 | The For You tab holds Recently Added, Now popular and You may like; a row with nothing to show is absent rather than empty; walking along any of them moves the screen not at all; and Now popular costs no more than two requests to the metadata service in any seven days and none without a key. *(`020`.)* |
 
 ## AC-META — Film and series information
 
@@ -167,6 +169,10 @@ Every AC above passes on a physical Android 11 device and a physical Android 14 
 Since Amendment 1 the television is part of v1.0, so there is a third row: **AC-TV-\* and the phone criteria that still apply pass on a physical Android TV device, driven by its remote alone.** A green phone sweep is not a v1.0. Progress against all three is recorded in [`ACCEPTANCE-SWEEP.md`](ACCEPTANCE-SWEEP.md).
 
 Amendment 4 added AC-TV-09…13 for the settings and detail screens the television gained on 2026-08-04. They are part of that third row and not a separate gate.
+
+AC-TV-18 and 19 arrived on 2026-08-15 with `019` and `020`. Both are the third row again rather
+than a separate gate, and the second of them carries the request bound this project has twice had
+to learn the hard way.
 
 AC-TV-14 and 15 arrived with the search screen on 2026-08-09, which is `PLAN-TV.md` §3.1
 being delivered rather than new scope: the bar in that document has always had a magnifier on

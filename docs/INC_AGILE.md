@@ -63,7 +63,7 @@ below, and **the bug fixes are executed before any feature on this page.**
 | BUG_FIX 11 | #022 | `012` |
 | FEATURE 12 | **#023** | `012` — **reclassified as a defect**: AC-PLAY-04 already requires it and the engine already does it |
 | FEATURE 0, 1, 3…11, 14 | INC-F0…F14 | [`013` Increment Round](../agile/013_Increment_Round_of_Quiblo_—_the_catalogue_a_viewer_actually_uses.md) |
-| FEATURE 2 | INC-F2 | `013` — answered there: content-based scoring, on device, not a model and not a daemon |
+| FEATURE 2 | INC-F2 | `013` — answered there: content-based scoring, on device, not a model and not a daemon. **Built 2026-08-15** in [`020`](../agile/020_For_You_of_Quiblo.md) |
 | FEATURE 13 | — | [`014` One Entry Per Title](../agile/014_One_Entry_Per_Title_of_Quiblo_—_duplicates,_qualities_and_languages.md) — its own document, as asked |
 | FEATURE 14 | INC-F14 | `013` — answered there: possible, best-effort, and designed as hiding rather than selecting |
 | ENHANCMENTS 1–4 | INC-E1…E4 | `013` |

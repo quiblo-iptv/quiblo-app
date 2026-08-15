@@ -281,7 +281,7 @@ class TitleMetadataScannerTest {
     }
 
     private fun catalogue(vararg titles: ChannelTitle) {
-        coEvery { channelDao.titlesForMetadata(SOURCE_ID) } returns titles.toList()
+        coEvery { channelDao.titlesForMetadata(SOURCE_ID, any()) } returns titles.toList()
     }
 
     private fun title(id: Long, name: String, kind: MediaKind = MediaKind.VOD) =

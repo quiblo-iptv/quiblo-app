@@ -200,6 +200,7 @@ class TvSearchResultsFitTest {
                     isAdvanced = isAdvanced,
                     onQueryChange = {},
                     onSelectGenre = {},
+                    onToggleIncludeHidden = {},
                     onClear = {},
                     onToggleAdvanced = {},
                 )

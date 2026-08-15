@@ -24,7 +24,9 @@ import dev.quiblo.core.data.ChannelLogoRepository
 import dev.quiblo.core.data.ChannelRepository
 import dev.quiblo.core.data.GuideOutcome
 import dev.quiblo.core.data.GuideRepository
+import dev.quiblo.core.data.PopularTitlesRepository
 import dev.quiblo.core.data.RecentlyAddedFeed
+import dev.quiblo.core.data.RecommendationRepository
 import dev.quiblo.core.data.SourceRepository
 import dev.quiblo.core.data.TitleMetadataRepository
 import dev.quiblo.core.data.WatchHistoryRepository
@@ -66,6 +68,11 @@ class BrowseViewModelTest {
     private val channelRepository: ChannelRepository = mockk(relaxed = true)
     private val categoryRepository: CategoryRepository = mockk(relaxed = true)
     private val guideRepository: GuideRepository = mockk(relaxed = true)
+
+    // Relaxed and unstubbed: every feed but For You must never touch them, which is what the
+    // "subscribes to nothing it cannot draw" assertions below are about.
+    private val popularTitles: PopularTitlesRepository = mockk(relaxed = true)
+    private val recommendations: RecommendationRepository = mockk(relaxed = true)
     private val metadataRepository: TitleMetadataRepository = mockk(relaxed = true)
     private val historyRepository: WatchHistoryRepository = mockk(relaxed = true)
     private val channelLogoRepository: ChannelLogoRepository = mockk(relaxed = true)
@@ -275,6 +282,8 @@ class BrowseViewModelTest {
         metadataRepository = metadataRepository,
         historyRepository = historyRepository,
         channelLogoRepository = channelLogoRepository,
+        popularTitles = popularTitles,
+        recommendations = recommendations,
     )
 
     private companion object {

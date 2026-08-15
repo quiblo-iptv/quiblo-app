@@ -38,6 +38,15 @@ internal data class SearchResponse(val results: List<SearchResult> = emptyList()
 @Serializable
 internal data class SearchResult(
     val id: Int? = null,
+    /**
+     * A film's title and a series' name, both spelled by the endpoint that returned the hit.
+     *
+     * Unread by the search path, which already knows what it asked for. The popular lists are
+     * the caller that needs them: nothing there was searched for by name, so the name is the
+     * only thing that can be matched against a catalogue.
+     */
+    val title: String? = null,
+    val name: String? = null,
     val overview: String? = null,
     @SerialName("vote_average") val voteAverage: Double? = null,
     @SerialName("poster_path") val posterPath: String? = null,
@@ -207,6 +216,13 @@ internal fun SearchResult.toPartialMetadata(genreNames: Map<Int, String>): Title
  * returns both — so reading either is reading the only one there is.
  */
 private fun SearchResult.year(): Int? = releaseYearIn(releaseDate) ?: releaseYearIn(firstAirDate)
+
+/** The film's title or the series' name, whichever the endpoint used. */
+internal fun SearchResult.titleOrName(): String? =
+    title?.takeIf { it.isNotBlank() } ?: name?.takeIf { it.isNotBlank() }
+
+/** The release year as this file already reads it, exposed for the popular lists. */
+internal fun SearchResult.releaseYear(): Int? = year()
 
 private fun List<CastMemberDto>.leadNames(): List<String> =
     sortedBy { it.order ?: Int.MAX_VALUE }.mapNotNull { it.name }.take(TOP_CAST_COUNT)

@@ -43,7 +43,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -112,6 +111,8 @@ fun TvSearchScreen(
         onOpen = onOpen,
         onQueryChange = viewModel::search,
         onSelectGenre = viewModel::selectGenre,
+        onToggleIncludeHidden = viewModel::setIncludeHidden,
+        onToggleAdvanced = viewModel::setAdvanced,
         onClear = viewModel::clear,
         onResultVisible = viewModel::onResultVisible,
         modifier = modifier,
@@ -134,13 +135,16 @@ internal fun TvSearchPanel(
     onOpen: (List<Channel>, Int) -> Unit,
     onQueryChange: (String) -> Unit,
     onSelectGenre: (String?) -> Unit,
+    onToggleIncludeHidden: (Boolean) -> Unit,
+    onToggleAdvanced: (Boolean) -> Unit,
     onClear: () -> Unit,
     onResultVisible: (Channel) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    // Survives a configuration change, so a viewer who opened the filters does not find them
-    // shut again for a reason that has nothing to do with them.
-    var isAdvanced by rememberSaveable { mutableStateOf(false) }
+    // The ViewModel's, not this screen's. Opening the filters changes what is *queried* — live
+    // channels are left out of an advanced search unless Settings keeps them — so the flag has
+    // to be somewhere the query can see it, and two copies of it would be two answers.
+    val isAdvanced = state.isAdvanced
 
     // Nothing asked, and no filters opened. The one state where the panel belongs to the
     // field rather than to an answer.
@@ -203,8 +207,9 @@ internal fun TvSearchPanel(
             isAdvanced = isAdvanced,
             onQueryChange = onQueryChange,
             onSelectGenre = onSelectGenre,
+            onToggleIncludeHidden = onToggleIncludeHidden,
             onClear = onClear,
-            onToggleAdvanced = { isAdvanced = !isAdvanced },
+            onToggleAdvanced = { onToggleAdvanced(!isAdvanced) },
         )
 
         Box(
@@ -275,6 +280,7 @@ internal fun ColumnScope.SearchHeader(
     isAdvanced: Boolean,
     onQueryChange: (String) -> Unit,
     onSelectGenre: (String?) -> Unit,
+    onToggleIncludeHidden: (Boolean) -> Unit,
     onClear: () -> Unit,
     onToggleAdvanced: () -> Unit,
 ) {
@@ -507,6 +513,16 @@ internal fun ColumnScope.SearchHeader(
         }
 
         if (isAdvanced) {
+            // First among the advanced controls, and before the genres, because it changes what
+            // every one of them can return rather than narrowing what they already do.
+            item(key = HIDDEN_KEY) {
+                TvChip(
+                    label = stringResource(R.string.tv_search_include_hidden),
+                    isSelected = state.includeHidden,
+                    onClick = { onToggleIncludeHidden(!state.includeHidden) },
+                )
+            }
+
             items(items = state.genres, key = { it }) { genre ->
                 TvChip(
                     label = genre,
@@ -653,3 +669,4 @@ private val CHIP_STRIP_PADDING = 4.dp
 
 /** Stable, so the chip row is not rebuilt when the genres behind it change. */
 private const val CLEAR_KEY = "__clear__"
+private const val HIDDEN_KEY = "__hidden__"

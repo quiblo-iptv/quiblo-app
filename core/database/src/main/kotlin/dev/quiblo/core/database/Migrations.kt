@@ -515,3 +515,31 @@ val MIGRATION_16_17 = object : Migration(16, 17) {
         db.execSQL("ALTER TABLE `title_metadata` ADD COLUMN `runtimeMinutes` INTEGER")
     }
 }
+
+/**
+ * A table for the week's popular lists.
+ *
+ * **A new table, so nothing existing is touched at all.** It holds a cache of an answer from a
+ * service rather than anything the viewer owns, and it starts empty: the first composition of the
+ * For You tab fetches it, or does not and draws no row. An upgrade therefore cannot lose anything
+ * here, and cannot cost anything either — unlike the metadata cache, which the same week's work
+ * went to some trouble to stop rebuilding.
+ */
+val MIGRATION_17_18 = object : Migration(17, 18) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS `popular_titles` (
+                `kind` TEXT NOT NULL,
+                `rank` INTEGER NOT NULL,
+                `tmdbId` INTEGER NOT NULL,
+                `title` TEXT NOT NULL,
+                `year` INTEGER,
+                `posterUrl` TEXT,
+                `fetchedAtEpochMillis` INTEGER NOT NULL,
+                PRIMARY KEY(`kind`, `rank`)
+            )
+            """.trimIndent(),
+        )
+    }
+}

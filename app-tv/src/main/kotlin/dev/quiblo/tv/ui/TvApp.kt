@@ -76,8 +76,8 @@ import dev.quiblo.core.model.Channel
 import dev.quiblo.core.model.MediaKind
 import dev.quiblo.designsystem.ProfileAvatar
 import dev.quiblo.tv.R
+import dev.quiblo.tv.ui.browse.TvForYouScreen
 import dev.quiblo.tv.ui.browse.TvPosterRows
-import dev.quiblo.tv.ui.browse.TvRecentlyAddedScreen
 import dev.quiblo.tv.ui.common.LocalAmbientSink
 import dev.quiblo.tv.ui.common.ambientBackdrop
 import dev.quiblo.tv.ui.common.rememberAmbient
@@ -440,7 +440,7 @@ private fun TvShell(
 
                     TvTab.LIVE -> TvLiveScreen(onPlay = onOpen)
 
-                    TvTab.RECENTLY_ADDED -> TvRecentlyAddedScreen(onPlay = onOpen)
+                    TvTab.FOR_YOU -> TvForYouScreen(onPlay = onOpen)
 
                     TvTab.MOVIES -> TvPosterRows(
                         kind = MediaKind.VOD,

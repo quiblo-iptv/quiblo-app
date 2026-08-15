@@ -31,6 +31,7 @@ import dev.quiblo.core.database.entity.ChannelEntity
 import dev.quiblo.core.database.entity.ChannelLogoEntity
 import dev.quiblo.core.database.entity.FavoriteEntity
 import dev.quiblo.core.database.entity.PickedSubtitleEntity
+import dev.quiblo.core.database.entity.PopularTitleEntity
 import dev.quiblo.core.database.entity.ProfileEntity
 import dev.quiblo.core.database.entity.ProgrammeEntity
 import dev.quiblo.core.database.entity.ResumePositionEntity
@@ -215,16 +216,31 @@ interface ChannelDao {
         WHERE c.sourceId = :sourceId
           AND c.kind = :kind
           AND c.name LIKE '%' || :query || '%' ESCAPE '\'
+          AND (:includeHidden OR c.groupTitle NOT IN (
+                SELECT o.originalTitle FROM category_overrides o
+                WHERE o.kind = c.kind AND o.isHidden = 1))
         ORDER BY c.sortIndex ASC
         LIMIT :limit
         """,
     )
+    // Room binds each `:name` to a parameter of its own; a query's arguments cannot be bundled
+    // into a value the way the repository above bundles them. Same reason as `observeBrowse`.
+    @Suppress("LongParameterList")
     suspend fun search(
         profileId: Long,
         sourceId: Long,
         kind: String,
         query: String,
         limit: Int,
+        /**
+         * Whether categories the viewer has hidden are searched too.
+         *
+         * Hidden used to mean "not in the category list" and nothing else, so a category switched
+         * off in Settings kept answering every search — the one place a viewer is least able to
+         * tell where a result came from. It now means hidden, and this flag is the
+         * advanced-search toggle asking for it back.
+         */
+        includeHidden: Boolean,
     ): List<ChannelWithFavorite>
 
     /**
@@ -323,8 +339,17 @@ interface ChannelDao {
      * this is the cheapest thing that can be handed to it. Live channels are excluded because
      * nothing looks a television channel up in a film database.
      */
-    @Query("SELECT id, name, kind FROM channels WHERE sourceId = :sourceId AND kind IN ('VOD', 'SERIES')")
-    suspend fun titlesForMetadata(sourceId: Long): List<ChannelTitle>
+    @Query(
+        """
+        SELECT c.id, c.name, c.kind FROM channels c
+        WHERE c.sourceId = :sourceId
+          AND c.kind IN ('VOD', 'SERIES')
+          AND (:includeHidden OR c.groupTitle NOT IN (
+                SELECT o.originalTitle FROM category_overrides o
+                WHERE o.kind = c.kind AND o.isHidden = 1))
+        """,
+    )
+    suspend fun titlesForMetadata(sourceId: Long, includeHidden: Boolean): List<ChannelTitle>
 
     /** The full rows behind ids the genre filter has already chosen. */
     @Query(
@@ -724,4 +749,48 @@ interface PickedSubtitleDao {
 
     @Query("DELETE FROM picked_subtitles WHERE stableKey = :stableKey")
     suspend fun delete(stableKey: String)
+}
+
+@Dao
+interface PopularTitleDao {
+
+    /**
+     * The whole held list, both catalogues, in rank order.
+     *
+     * A one-shot read rather than a `Flow`. The row that draws this is composed on demand and the
+     * table changes at most once a week — a subscription would re-run a sixty-thousand-title
+     * catalogue match every time anything else wrote to the database.
+     */
+    @Query("SELECT * FROM popular_titles ORDER BY kind ASC, rank ASC")
+    suspend fun all(): List<PopularTitleEntity>
+
+    /**
+     * When the held list was fetched, or null when nothing has been.
+     *
+     * The *oldest* stamp rather than the newest, so a refresh that wrote films and was then
+     * interrupted before the series does not read as a complete week's answer.
+     */
+    @Query("SELECT MIN(fetchedAtEpochMillis) FROM popular_titles")
+    suspend fun oldestFetchedAt(): Long?
+
+    /**
+     * Replaces one catalogue's list outright.
+     *
+     * A replace rather than an upsert: last week's rank 9 is not this week's anything, and a
+     * merge would leave the tail of an older list standing behind a shorter new one.
+     */
+    @Transaction
+    suspend fun replaceKind(kind: String, entries: List<PopularTitleEntity>) {
+        clearKind(kind)
+        insertAll(entries)
+    }
+
+    @Query("DELETE FROM popular_titles WHERE kind = :kind")
+    suspend fun clearKind(kind: String)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertAll(entries: List<PopularTitleEntity>)
+
+    @Query("DELETE FROM popular_titles")
+    suspend fun clear()
 }

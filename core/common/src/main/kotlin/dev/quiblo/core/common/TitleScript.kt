@@ -56,9 +56,13 @@ enum class TitleScript {
  * The script of this title, read from its first letter.
  *
  * The first letter and not a count of the whole string, for the same reason
- * [firstStrongDirection] uses the first strong character: "Dune 2 مترجم" is a Latin title with an
- * Arabic word appended, and a viewer hiding Arabic wants to keep it. Characters inside an isolate
- * are skipped for the same reason.
+ * [firstStrongDirection] uses the first strong character — an isolate's contents are skipped for
+ * that reason too.
+ *
+ * **This is the layout question, not the hiding question.** Which way a line of text runs is
+ * decided by its first strong character and by nothing else; [isInHiddenScript] used to be
+ * decided the same way and no longer is. The two moved apart deliberately, so do not collapse
+ * them back together.
  *
  * Returns `null` when the title has no letters at all — a channel called "4K 01" says nothing
  * about what its viewer reads, and nothing is what it should be treated as saying.
@@ -69,13 +73,60 @@ fun String.firstStrongScript(): TitleScript? =
         .firstNotNullOfOrNull { Character.UnicodeScript.of(it).toTitleScript() }
 
 /**
- * True when this title is written in one of [hidden].
+ * Every script this title has a letter in.
  *
- * False for an empty set, and false for a title with no letters. Both are the same rule: the
- * filter hides only what it can positively identify (INC-F14).
+ * A set rather than a single answer, because a provider's title routinely carries two: an English
+ * film filed with an Arabic word for "subtitled", an Arabic series with "HD" on the end.
+ */
+fun String.strongScripts(): Set<TitleScript> =
+    codePointsOutsideIsolates()
+        .filter { Character.isLetter(it) }
+        .mapNotNull { Character.UnicodeScript.of(it).toTitleScript() }
+        .toSet()
+
+/**
+ * True when any part of this title is written in one of [hidden].
+ *
+ * **Any letter, not the first one.** The first-letter rule was this filter's original design and
+ * the reported problem with it: a catalogue is full of titles that begin in Latin and are
+ * otherwise Arabic — a provider's prefix, a quality marker, a stray "The" — and every one of them
+ * came back for a viewer who had asked not to be shown Arabic. Reading one letter of a title and
+ * deciding from it only works when titles are clean, and a panel's titles are not.
+ *
+ * **A trailing bracketed tag does not count**, because that is where a provider puts what it has
+ * done to a title rather than what the title is: `Oppenheimer [عربي]` is an English film with an
+ * Arabic dub, and hiding Arabic should not lose it. [withoutTrailingTags] is what draws that line.
+ *
+ * What the rule cannot save is the same tag written without brackets — `Dune 2024 مترجم` hides.
+ * That is the cost of the rule and it was accepted knowingly: the alternative is counting letters
+ * and calling a title Arabic when it is mostly Arabic, which is a threshold nobody can predict
+ * from the screen.
+ *
+ * False for an empty set, and false for a title with no letters. Both are the same rule as
+ * before: the filter hides only what it can positively identify (INC-F14).
  */
 fun String.isInHiddenScript(hidden: Set<TitleScript>): Boolean =
-    hidden.isNotEmpty() && firstStrongScript() in hidden
+    hidden.isNotEmpty() && withoutTrailingTags().strongScripts().any { it in hidden }
+
+/**
+ * This title with any trailing bracketed groups removed — `[…]`, `(…)` and `{…}`, repeatedly.
+ *
+ * **Only brackets, and only at the end.** A trailing `| AR` segment is the other shape a tag
+ * comes in and it is deliberately left alone, because the same providers write it at the *front*
+ * far more often: stripping the last pipe-separated segment of `AR | مسلسل الاختيار` removes the
+ * title and keeps the tag, which is the exact inversion of what this is for.
+ */
+internal fun String.withoutTrailingTags(): String {
+    var trimmed = trim()
+    while (true) {
+        val stripped = TRAILING_TAG.replace(trimmed, "").trim()
+        if (stripped == trimmed) return trimmed
+        trimmed = stripped
+    }
+}
+
+/** One bracketed group at the very end, of any of the three kinds a provider uses. */
+private val TRAILING_TAG = Regex("""\s*[\[({][^\[\](){}]*[])}]\s*$""")
 
 private fun Character.UnicodeScript.toTitleScript(): TitleScript? = when (this) {
     Character.UnicodeScript.LATIN -> TitleScript.Latin

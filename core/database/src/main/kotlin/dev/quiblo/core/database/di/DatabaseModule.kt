@@ -48,4 +48,5 @@ val databaseModule: Module = module {
     single { get<QuibloDatabase>().seriesPreferenceDao() }
     single { get<QuibloDatabase>().programmeDao() }
     single { get<QuibloDatabase>().pickedSubtitleDao() }
+    single { get<QuibloDatabase>().popularTitleDao() }
 }

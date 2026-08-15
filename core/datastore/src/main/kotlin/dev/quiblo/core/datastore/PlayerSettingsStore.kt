@@ -125,6 +125,24 @@ class PlayerSettingsStore(context: Context) {
     }
 
     /**
+     * Whether advanced search offers a row of live channels.
+     *
+     * **Off by default**, which is the one setting in this file whose default is a subtraction.
+     * A live channel has no metadata and never will, so in a genre search it is matched on the
+     * genre word appearing in its own name — a deliberately weak rule that fills a column which
+     * would otherwise always be empty, with the column nobody filtering by genre asked for.
+     *
+     * App-wide rather than per profile, like the hidden scripts above and for the same reason.
+     */
+    val showLiveInSearch: Flow<Boolean> = dataStore.data.map { preferences ->
+        preferences[SHOW_LIVE_IN_SEARCH] ?: false
+    }
+
+    suspend fun setShowLiveInSearch(enabled: Boolean) {
+        dataStore.edit { it[SHOW_LIVE_IN_SEARCH] = enabled }
+    }
+
+    /**
      * How subtitles are drawn (INC-F11).
      *
      * Separate from [settings] rather than folded into it. `PlayerSettings` is engine tuning that
@@ -185,6 +203,7 @@ class PlayerSettingsStore(context: Context) {
         val AUTO_NEXT_DELAY = stringPreferencesKey("auto_next_delay")
         val THEME_MODE = stringPreferencesKey("theme_mode")
         val DYNAMIC_COLOR = booleanPreferencesKey("dynamic_color")
+        val SHOW_LIVE_IN_SEARCH = booleanPreferencesKey("show_live_in_search")
         val HIDDEN_SCRIPTS = stringSetPreferencesKey("hidden_scripts")
         val SUBTITLE_MATCH_SYSTEM = booleanPreferencesKey("subtitle_match_system")
         val SUBTITLE_SIZE = stringPreferencesKey("subtitle_size")

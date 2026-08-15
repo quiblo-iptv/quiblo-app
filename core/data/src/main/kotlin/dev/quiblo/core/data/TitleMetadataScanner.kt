@@ -283,7 +283,9 @@ class TitleMetadataScanner(
         // a viewer watching the counter sees it move through something recognisable.
         val chosen = LinkedHashMap<CacheIdentity, ScanItem>()
 
-        channelDao.titlesForMetadata(sourceId).forEach { row ->
+        // Hidden categories are scanned too. Hiding is a choice about what a viewer wants to see
+        // today, and unhiding a category should not then cost an hour of lookups.
+        channelDao.titlesForMetadata(sourceId, includeHidden = true).forEach { row ->
             val identity = row.name.cacheIdentity(row.kind) ?: return@forEach
             val kind = row.kind.toMediaKindOrNull() ?: return@forEach
             if (identity in cached) return@forEach
@@ -336,10 +338,4 @@ internal fun TmdbRefusal.toScanRefusal(): ScanRefusal = when (this) {
     TmdbRefusal.RATE_LIMITED -> ScanRefusal.RATE_LIMITED
     TmdbRefusal.KEY_REJECTED -> ScanRefusal.KEY_REJECTED
     TmdbRefusal.UNAVAILABLE -> ScanRefusal.UNAVAILABLE
-}
-
-private fun String.toMediaKindOrNull(): MediaKind? = when (this) {
-    MediaKind.VOD.name -> MediaKind.VOD
-    MediaKind.SERIES.name -> MediaKind.SERIES
-    else -> null
 }

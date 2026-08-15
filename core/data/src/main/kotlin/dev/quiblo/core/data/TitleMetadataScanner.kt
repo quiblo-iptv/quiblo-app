@@ -339,9 +339,3 @@ internal fun TmdbRefusal.toScanRefusal(): ScanRefusal = when (this) {
     TmdbRefusal.KEY_REJECTED -> ScanRefusal.KEY_REJECTED
     TmdbRefusal.UNAVAILABLE -> ScanRefusal.UNAVAILABLE
 }
-
-private fun String.toMediaKindOrNull(): MediaKind? = when (this) {
-    MediaKind.VOD.name -> MediaKind.VOD
-    MediaKind.SERIES.name -> MediaKind.SERIES
-    else -> null
-}

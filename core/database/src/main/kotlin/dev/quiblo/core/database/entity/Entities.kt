@@ -456,3 +456,31 @@ data class PickedSubtitleEntity(
     val language: String? = null,
     val pickedAt: Long,
 )
+
+/**
+ * One entry of a TMDB popular list, held for a week.
+ *
+ * **A cache of an answer, not a catalogue of its own.** Nothing here is a title the viewer owns;
+ * it is a name, a year and a position, kept only long enough to look for that name in the
+ * catalogue every time the row is composed. The record a detail screen reads still comes from
+ * `title_metadata`, by the same path as every other title.
+ *
+ * Keyed by kind and rank rather than by `tmdbId`, because the row's whole content is *TMDB's
+ * order* — the same film at rank 2 this week and rank 9 next week is a different fact, and a
+ * primary key on the id would make the two indistinguishable without a second column anyway.
+ *
+ * `fetchedAtEpochMillis` is stamped on every row of a fetch rather than held once elsewhere, so
+ * a half-written refresh cannot leave a table that claims to be newer than its contents.
+ */
+@Entity(tableName = "popular_titles", primaryKeys = ["kind", "rank"])
+data class PopularTitleEntity(
+    /** `VOD` or `SERIES`, the app's own vocabulary rather than TMDB's `movie` and `tv`. */
+    val kind: String,
+    val rank: Int,
+    val tmdbId: Int,
+    val title: String,
+    /** Null where TMDB has no release date. Not zero: nothing joins on this column. */
+    val year: Int? = null,
+    val posterUrl: String? = null,
+    val fetchedAtEpochMillis: Long,
+)

@@ -151,6 +151,22 @@ class ChannelRepository(
      * @param limit how many to keep. The caller's cap, not a page size — nothing pages this.
      * @param sinceEpochMillis the oldest date that still counts as new. The caller owns the clock.
      */
+    /**
+     * The playable rows behind a set of ids, for the feeds that choose by id rather than by query.
+     *
+     * The popular row and the suggestions row both work out *which* titles they want somewhere
+     * else — one against a service's list, one against a scoring function — and then need the
+     * catalogue rows for them. One read for both, because the two lists overlap more often than
+     * not and two queries for one question is two chances to disagree about a favourite.
+     */
+    suspend fun channelsByIds(ids: List<Long>): List<Channel> =
+        if (ids.isEmpty()) {
+            emptyList()
+        } else {
+            channelDao.findAllByIds(profiles.activeProfileId, ids)
+                .map { it.channel.toDomain(isFavorite = it.isFavorite) }
+        }
+
     fun observeRecentlyAdded(sourceId: Long, limit: Int, sinceEpochMillis: Long): Flow<RecentlyAddedFeed> =
         combine(
             profiles.activeProfile,

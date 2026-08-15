@@ -26,10 +26,12 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -52,6 +54,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
@@ -251,13 +254,41 @@ internal fun TvCategoryList(
                 onVisible = onVisible,
                 onItemClick = onItemClick,
                 showKindBadge = showKindBadge,
+                style = row.style,
             )
         }
     }
 }
 
 /** One category's worth of posters, ready to render. */
-internal data class TvCategoryRow(val title: String, val items: List<TvRowItem>)
+internal data class TvCategoryRow(
+    val title: String,
+    val items: List<TvRowItem>,
+    /**
+     * How this row's tiles are drawn.
+     *
+     * A property of the row rather than of each tile, which is what keeps every tile in a row
+     * the same size as its neighbours. That is not tidiness: a focused poster whose measured
+     * bounds differ from the one beside it is defect #008, and the note inside [TvPoster] says
+     * what finding that cost.
+     */
+    val style: TvRowStyle = TvRowStyle.POSTER,
+)
+
+/** The two shapes a row of tiles comes in. */
+internal enum class TvRowStyle {
+    /** A poster and its title. Every row in the app but one. */
+    POSTER,
+
+    /**
+     * A poster with its position drawn large across the artwork.
+     *
+     * The Now Popular row, and the reason it looks like the numbered rows on a commercial
+     * service: the number *is* the content there, and a row of ten identical posters says
+     * nothing a viewer can read from a sofa.
+     */
+    RANKED,
+}
 
 /**
  * A poster and where it sits in the flat list.
@@ -266,7 +297,20 @@ internal data class TvCategoryRow(val title: String, val items: List<TvRowItem>)
  * of every item in the catalogue on each press — unnoticeable on a short list, and on a
  * large one a pause between pressing a film and anything happening.
  */
-internal data class TvRowItem(val channel: Channel, val flatIndex: Int)
+internal data class TvRowItem(
+    val channel: Channel,
+    val flatIndex: Int,
+    /** Where this title sits in the list it came from. Only [TvRowStyle.RANKED] draws it. */
+    val rank: Int? = null,
+    /**
+     * A line under the poster, for the one row that has something to explain.
+     *
+     * The suggestions row names the title that caused each tile, which is what a scoring
+     * function can say and a model cannot. Its height is reserved for every tile in the row
+     * whether or not that tile has one, so the row measures the same all the way along.
+     */
+    val caption: String? = null,
+)
 
 /**
  * Groups the catalogue into rows, recording each item's flat position as it goes.
@@ -313,6 +357,7 @@ private fun groupIntoRows(
 }
 
 @Composable
+@Suppress("LongParameterList")
 private fun CategoryRow(
     category: String,
     items: List<TvRowItem>,
@@ -321,6 +366,7 @@ private fun CategoryRow(
     onVisible: (Channel) -> Unit,
     onItemClick: (TvRowItem) -> Unit,
     showKindBadge: Boolean = false,
+    style: TvRowStyle = TvRowStyle.POSTER,
 ) {
     Column {
         Text(
@@ -348,6 +394,12 @@ private fun CategoryRow(
                     fallbackArtworkUrl = posters[item.channel.stableKey],
                     showKindBadge = showKindBadge,
                     onClick = { onItemClick(item) },
+                    rank = item.rank.takeIf { style == TvRowStyle.RANKED },
+                    // Reserved for the whole row, not only for the tiles that have one. A tile
+                    // one line taller than its neighbour is a tile whose bounds differ from its
+                    // neighbour's, which is where #008 came from.
+                    caption = item.caption,
+                    showCaption = items.any { it.caption != null },
                 )
             }
         }
@@ -380,6 +432,18 @@ internal fun TvPoster(
     fallbackArtworkUrl: String? = null,
     /** Draws "Movie" or "Series" in the far corner from the score. See [KindBadge]. */
     showKindBadge: Boolean = false,
+    /** This title's position in the list it came from, drawn across the artwork when present. */
+    rank: Int? = null,
+    /** One line under the title, saying why this tile is here. */
+    caption: String? = null,
+    /**
+     * Whether the caption's line is reserved at all.
+     *
+     * Set for every tile of a row that has any captions, so a tile without one is the same
+     * height as a tile with one. **A tile whose height depends on its own content is what
+     * defect #008 was**, and the long note below is the record of what that cost to find.
+     */
+    showCaption: Boolean = false,
 ) {
     // A live channel's artwork is a small wide logo, not a poster. Cropping one to 2:3
     // shows a corner of a logo — the exact mistake PLAN-TV.md §3.3 exists to avoid — so a
@@ -491,31 +555,12 @@ internal fun TvPoster(
                     )
                 }
 
-                // Top left, where the phone's card puts it, so the two apps agree about what a
-                // poster looks like.
-                rating?.let {
-                    RatingBadge(
-                        rating = it,
-                        modifier = Modifier
-                            .align(Alignment.TopStart)
-                            .padding(6.dp),
-                    )
-                }
-
-                // Opposite corner from the score, and an overlay rather than anything in the
-                // column below. A label that took up layout would change this tile's measured
-                // height, and a focused tile whose bounds move is #008 all over again — see the
-                // note on the modifier order above.
-                if (showKindBadge) {
-                    kindLabel(channel.kind)?.let { label ->
-                        KindBadge(
-                            label = label,
-                            modifier = Modifier
-                                .align(Alignment.TopEnd)
-                                .padding(6.dp),
-                        )
-                    }
-                }
+                PosterOverlays(
+                    kind = channel.kind,
+                    rating = rating,
+                    rank = rank,
+                    showKindBadge = showKindBadge,
+                )
             }
 
             // No marquee. This was once thought to be the fix for the shake and it was not —
@@ -535,7 +580,70 @@ internal fun TvPoster(
                     .padding(top = 8.dp)
                     .fillMaxWidth(),
             )
+
+            // A fixed line, present or blank, for every tile in a row that has any. Its height
+            // is set rather than left to the text, so an empty one and a full one measure alike.
+            if (showCaption) {
+                Text(
+                    text = caption.orEmpty(),
+                    color = Color.White.copy(alpha = 0.55f),
+                    fontSize = 11.sp,
+                    lineHeight = CAPTION_LINE_HEIGHT,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier
+                        .padding(top = 2.dp)
+                        .height(CAPTION_HEIGHT)
+                        .fillMaxWidth(),
+                )
+            }
         }
+    }
+}
+
+/**
+ * Everything drawn *on* the artwork: the score, the kind, the rank.
+ *
+ * All three are overlays and none of them takes up layout. **That is the rule this composable
+ * exists to keep in one place**: a label in the column below would change the tile's measured
+ * height, and a focused tile whose bounds move is defect #008 all over again — the long note on
+ * the modifier order in [TvPoster] is the record of what finding that cost.
+ */
+@Composable
+private fun BoxScope.PosterOverlays(
+    kind: MediaKind,
+    rating: Double?,
+    rank: Int?,
+    showKindBadge: Boolean,
+) {
+    // Top left, where the phone's card puts it, so the two apps agree about what a poster
+    // looks like.
+    rating?.let {
+        RatingBadge(
+            rating = it,
+            modifier = Modifier.align(Alignment.TopStart).padding(6.dp),
+        )
+    }
+
+    // Opposite corner from the score.
+    if (showKindBadge) {
+        kindLabel(kind)?.let { label ->
+            KindBadge(
+                label = label,
+                modifier = Modifier.align(Alignment.TopEnd).padding(6.dp),
+            )
+        }
+    }
+
+    // Inside the artwork rather than beside it, which is the one decision that matters here. A
+    // numeral in the layout — the shape a commercial service uses, with the figure standing
+    // outside the poster — would make this tile wider than every other tile in the app, and its
+    // width would depend on whether the number had one digit or two.
+    rank?.let {
+        RankNumeral(
+            rank = it,
+            modifier = Modifier.align(Alignment.BottomStart).fillMaxWidth(),
+        )
     }
 }
 
@@ -592,7 +700,47 @@ private fun kindLabel(kind: MediaKind): String? = when (kind) {
     MediaKind.LIVE -> null
 }
 
+/**
+ * The position, drawn large across the bottom of the artwork.
+ *
+ * A gradient under it rather than a plate, because the figure is far too big for one and the
+ * point of it is that it reads from across a room: the poster fades to black at its foot and the
+ * numeral sits in the dark part. Nothing here takes up layout — see the note at the call site.
+ */
+@Composable
+private fun RankNumeral(rank: Int, modifier: Modifier = Modifier) {
+    Box(
+        modifier = modifier
+            .height(RANK_SCRIM_HEIGHT)
+            .background(
+                Brush.verticalGradient(
+                    listOf(Color.Transparent, Color.Black.copy(alpha = RANK_SCRIM_ALPHA)),
+                ),
+            ),
+        contentAlignment = Alignment.BottomStart,
+    ) {
+        Text(
+            text = rank.toString(),
+            color = Color.White,
+            fontSize = RANK_SIZE,
+            lineHeight = RANK_SIZE,
+            fontWeight = FontWeight.Black,
+            maxLines = 1,
+            modifier = Modifier.padding(start = 6.dp, bottom = 2.dp),
+        )
+    }
+}
+
 private const val KIND_BADGE_ALPHA = 0.6f
+
+/** Big enough to be the thing a viewer reads first, which is the whole point of the row. */
+private val RANK_SIZE = 56.sp
+private val RANK_SCRIM_HEIGHT = 72.dp
+private const val RANK_SCRIM_ALPHA = 0.75f
+
+/** One line, at a fixed height so a tile without a caption measures like one with. */
+private val CAPTION_HEIGHT = 15.dp
+private val CAPTION_LINE_HEIGHT = 13.sp
 
 private val POSTER_WIDTH = 150.dp
 private const val POSTER_ASPECT_RATIO = 2f / 3f

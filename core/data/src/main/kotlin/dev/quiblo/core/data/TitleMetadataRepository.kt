@@ -360,7 +360,13 @@ internal fun String.cacheIdentity(kind: String): CacheIdentity? =
  * searching for one matches whatever film happens to share its name, and the guide already
  * says what is on it.
  */
-private fun MediaKind.toTmdbKind(): TmdbKind? = when (this) {
+/**
+ * The catalogue TMDB would file this kind under, or null for a live channel.
+ *
+ * Shared with [PopularTitlesRepository] rather than copied into it. A second copy of a two-line
+ * mapping is how a third kind comes to be handled in one place and not the other.
+ */
+internal fun MediaKind.toTmdbKind(): TmdbKind? = when (this) {
     MediaKind.VOD -> TmdbKind.MOVIE
     MediaKind.SERIES -> TmdbKind.SERIES
     MediaKind.LIVE -> null

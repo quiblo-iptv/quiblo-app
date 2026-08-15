@@ -19,7 +19,7 @@ Every item below lands on a screen that round is repairing.
 | :---- | :---- | :---- | :---- | :---- |
 | INC-F0 | Both | S | #016 | ~~Avatars for profiles~~ — **built 2026-08-12**, schema 13, both choosers, phone picker. The television picker and the control beside the gear are `STOPPERS.md` **S11** |
 | INC-F1 | Both | M | — | Autocomplete in search, from the local catalogue |
-| INC-F2 | Both | L | The scan | Suggestions from what has been watched |
+| INC-F2 | Both | L | The scan | ~~Suggestions from what has been watched~~ — **built 2026-08-15** on the television as the third row of the For You tab ([`020`](020_For_You_of_Quiblo.md)), exactly as designed below: content-based scoring, per profile, naming its cause. The phone does not have it |
 | INC-F3 | Both | S | #014 | Long-press a history entry to remove it — **phone half built 2026-08-12**. The television half is `STOPPERS.md` **S12**: that app has no dialog anywhere, and a one-action menu on a remote is a pattern it does not yet have |
 | INC-F4 | Both | M | — | ~~Long-press a channel for its full guide, on a timeline~~ — **built 2026-08-12**. Shared arithmetic in `:feature:browse`, a dragged strip on the phone and a D-pad one on the television. `get_simple_data_table`, asked once per channel per session. Nothing seen on a device yet |
 | INC-F6 | Both | M | #015 | Merge seasons into one list, and reverse the order — remembered per profile |
@@ -301,6 +301,11 @@ fuller listing from Xtream is more rows of the same shape, not a schema change.
 ## Suggestions from what has been watched
 
 ### INC-F2 — what the intake calls "a learning algorithm/daemon"
+
+> **Built 2026-08-15**, on the television, in [`020`](020_For_You_of_Quiblo.md). Steps 1–3 below
+> and nothing further, as recommended. One change of shape: the row is titled **You may like** and
+> each tile carries its own "Because you watched X" line, rather than the row heading naming the
+> cause. The honesty the design was built around survives; only where the sentence is drawn moved.
 
 The intake asks what this would be. The short answer: **not machine learning, and not a daemon.**
 

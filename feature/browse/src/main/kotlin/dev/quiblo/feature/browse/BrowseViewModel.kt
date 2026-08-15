@@ -25,6 +25,8 @@ import dev.quiblo.core.data.ChannelLogoRepository
 import dev.quiblo.core.data.ChannelRepository
 import dev.quiblo.core.data.GuideOutcome
 import dev.quiblo.core.data.GuideRepository
+import dev.quiblo.core.data.PopularTitlesRepository
+import dev.quiblo.core.data.RecommendationRepository
 import dev.quiblo.core.data.SourceRepository
 import dev.quiblo.core.data.TitleMetadataRepository
 import dev.quiblo.core.data.WatchHistoryRepository
@@ -43,6 +45,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
@@ -114,7 +117,29 @@ data class BrowseUiState(
      * Favourites is a list the user built by hand rather than one built by watching.
      */
     val history: List<HistoryEntry> = emptyList(),
+    /**
+     * Rows beside the main one, for the feed that has more than one.
+     *
+     * Only [BrowseScope.FOR_YOU] fills it. A list of lists rather than two named fields because
+     * the screen draws them in order and a row that has nothing in it is simply absent — which is
+     * the whole of how "no key" and "no history" are rendered.
+     */
+    val extraRows: List<FeedRow> = emptyList(),
 )
+
+/** Which of the For You rows this is. The screen turns it into a heading. */
+enum class FeedRowId { NOW_POPULAR, YOU_MAY_LIKE }
+
+/**
+ * One extra row, and enough about each tile to draw it.
+ *
+ * [FeedRowItem.rank] is TMDB's position within its own kind and [FeedRowItem.caption] is the
+ * title that caused a suggestion. Both are nullable and both are usually null: a poster row is
+ * the ordinary case and these two are the exceptions that earn their extra field.
+ */
+data class FeedRow(val id: FeedRowId, val items: List<FeedRowItem>)
+
+data class FeedRowItem(val channel: Channel, val rank: Int? = null, val caption: String? = null)
 
 /**
  * "Have we already asked about this one?", for a catalogue too big to remember all of.
@@ -179,6 +204,16 @@ enum class BrowseScope {
      * catalogue.
      */
     RECENTLY_ADDED,
+
+    /**
+     * The television's For You tab: three rows about three different questions.
+     *
+     * What the provider added lately, what the world is watching of the things this provider
+     * carries, and what this viewer is likely to want. The first is [RECENTLY_ADDED]'s own feed
+     * and arrives in `items`; the other two are [BrowseUiState.extraRows], because they are
+     * lists of a different shape — one carries a rank and the other carries a reason.
+     */
+    FOR_YOU,
 }
 
 /**
@@ -226,6 +261,8 @@ class BrowseViewModel(
     private val metadataRepository: TitleMetadataRepository,
     private val historyRepository: WatchHistoryRepository,
     private val channelLogoRepository: ChannelLogoRepository,
+    private val popularTitles: PopularTitlesRepository,
+    private val recommendations: RecommendationRepository,
     /** Injected like every repository's, rather than read off the wall clock inline. */
     private val now: () -> Long = System::currentTimeMillis,
 ) : ViewModel() {
@@ -322,6 +359,15 @@ class BrowseViewModel(
                     sinceEpochMillis = now() - RECENT_WINDOW_MILLIS,
                 ).map { BrowseRows(it.items, orderedByDate = it.orderedByDate) }
 
+            // The first of the three For You rows is the newest-first feed exactly as the tab
+            // used to be. The other two are fetched once and held in `extraRows`.
+            BrowseScope.FOR_YOU ->
+                channelRepository.observeRecentlyAdded(
+                    sourceId = sourceId,
+                    limit = feed.recentLimit,
+                    sinceEpochMillis = now() - RECENT_WINDOW_MILLIS,
+                ).map { BrowseRows(it.items, orderedByDate = it.orderedByDate) }
+
             BrowseScope.CATALOGUE ->
                 channelRepository.observeBrowse(sourceId, feed.kind, selected, searchText).map(::BrowseRows)
         }
@@ -333,8 +379,8 @@ class BrowseViewModel(
             guideFor(sourceId),
             ratings,
             posters,
-            historyFor(sourceId),
-        ) { list, guide, scores, art, history ->
+            combine(historyFor(sourceId), extraRowsFor(sourceId)) { entries, extras -> entries to extras },
+        ) { list, guide, scores, art, (history, extras) ->
             BrowseUiState(
                 isLoading = false,
                 hasSource = true,
@@ -348,7 +394,56 @@ class BrowseViewModel(
                 ratings = scores,
                 posters = art,
                 history = history,
+                extraRows = extras,
             )
+        }
+    }
+
+    /**
+     * The two rows that are not a query.
+     *
+     * Fetched once per source rather than subscribed to. Neither is a live view of anything: the
+     * popular list changes weekly, and the suggestions are arithmetic over a history that only
+     * moves when something is watched — which is not while this screen is open. A `Flow` that
+     * re-ran on every write to the database would recompute a sixty-thousand-title match for
+     * nothing.
+     *
+     * Nothing here fails loudly. A refusal, a missing key or an unscanned catalogue all produce
+     * an empty list, and an empty row is not drawn at all.
+     */
+    private fun extraRowsFor(sourceId: Long): Flow<List<FeedRow>> =
+        if (feed.scope != BrowseScope.FOR_YOU) {
+            flowOf(emptyList())
+        } else {
+            flow {
+                emit(emptyList())
+                emit(buildExtraRows(sourceId))
+            }
+        }
+
+    private suspend fun buildExtraRows(sourceId: Long): List<FeedRow> {
+        val popular = popularTitles.popular(sourceId)
+        val suggestions = recommendations.suggestions(sourceId)
+
+        // One read for both rows. Resolving each list separately would be two queries for one
+        // question, and the ids overlap more often than not.
+        val wanted = (popular.map { it.channelId } + suggestions.map { it.channelId }).distinct()
+        val byId = if (wanted.isEmpty()) emptyMap() else channelRepository.channelsByIds(wanted).associateBy { it.id }
+
+        val popularRow = popular.mapNotNull { entry ->
+            byId[entry.channelId]?.let { FeedRowItem(channel = it, rank = entry.rank) }
+        }
+        val suggestionRow = suggestions.mapNotNull { suggestion ->
+            byId[suggestion.channelId]?.let { FeedRowItem(channel = it, caption = suggestion.becauseOf) }
+        }
+
+        // Artwork for anything the provider gave none for, exactly as the poster grid asks for
+        // it. Without this a suggestion row on a catalogue with no covers is grey rectangles.
+        (popularRow + suggestionRow).forEach { requestPreview(it.channel.stableKey, it.channel.name, it.channel.kind) }
+
+        return buildList {
+            if (popularRow.isNotEmpty()) add(FeedRow(FeedRowId.NOW_POPULAR, popularRow))
+            if (suggestionRow.isNotEmpty()) add(FeedRow(FeedRowId.YOU_MAY_LIKE, suggestionRow))
         }
     }
 

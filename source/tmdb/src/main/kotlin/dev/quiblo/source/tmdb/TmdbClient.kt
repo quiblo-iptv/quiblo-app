@@ -23,6 +23,8 @@ import dev.quiblo.source.tmdb.dto.MovieDetailsDto
 import dev.quiblo.source.tmdb.dto.SearchResponse
 import dev.quiblo.source.tmdb.dto.SearchResult
 import dev.quiblo.source.tmdb.dto.TvDetailsDto
+import dev.quiblo.source.tmdb.dto.releaseYear
+import dev.quiblo.source.tmdb.dto.titleOrName
 import dev.quiblo.source.tmdb.dto.toMetadata
 import dev.quiblo.source.tmdb.dto.toPartialMetadata
 import io.ktor.client.HttpClient
@@ -153,6 +155,44 @@ class TmdbClient(
             }
         }
     }
+
+    /**
+     * What TMDB says is popular right now, in its own order.
+     *
+     * **One request per catalogue and nothing else.** The list is written to a cache with a
+     * weekly life, so a household refreshing every evening still costs two requests a week —
+     * which matters here more than anywhere: this project's provider account has been blocked
+     * twice over requests it did not need, and TMDB refusing is the same failure with a
+     * different host.
+     *
+     * The rank is the position in the reply and is kept rather than recomputed. TMDB's own
+     * ordering is the whole content of the answer; sorting it again by anything this app can
+     * see would be replacing that answer with a guess.
+     */
+    suspend fun popular(apiKey: String, kind: TmdbKind): TmdbPopular =
+        when (val reply = fetch(apiKey, "/${kind.detailsPath}/popular")) {
+            is Reply.Failed -> TmdbPopular.Refused(reply.refusal)
+            is Reply.Body -> {
+                val results = reply.decode<SearchResponse>()?.results
+                // A body that will not parse is a failure to ask, not an empty week. Recording
+                // it as an answer would cache a bug for seven days.
+                if (results == null) {
+                    TmdbPopular.Refused(TmdbAnswer.Refused(TmdbRefusal.UNAVAILABLE))
+                } else {
+                    TmdbPopular.Titles(
+                        results.mapIndexedNotNull { index, result ->
+                            PopularTitle(
+                                rank = index + 1,
+                                tmdbId = result.id ?: return@mapIndexedNotNull null,
+                                title = result.titleOrName() ?: return@mapIndexedNotNull null,
+                                year = result.releaseYear(),
+                                posterUrl = result.posterPath?.let { IMAGE_BASE_URL + it },
+                            )
+                        },
+                    )
+                }
+            }
+        }
 
     /** True when the key is accepted, for the settings screen to report. */
     suspend fun validate(apiKey: String): Boolean =

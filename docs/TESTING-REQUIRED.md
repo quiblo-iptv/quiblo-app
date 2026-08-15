@@ -674,6 +674,88 @@ an unscanned catalogue has nothing to filter by and this section cannot be run a
 
 ---
 
+## A13 — Round `020`: the For You tab
+
+**Where:** the television. From [`020`](../agile/020_For_You_of_Quiblo.md). **The first row can be
+seen on the emulator; the other two cannot be certified from this machine** — `STOPPERS.md` S2,
+and the third additionally needs a scanned catalogue and a real watch history, which is days of
+use rather than an afternoon.
+
+### A13.1 — the tab, and the row that was already there
+
+| | |
+| :---- | :---- |
+| **What to look at** | The bar. Then open the tab |
+| **Passes if** | It reads **For You**, sits after Live and before Movies, and its first row is the Recently Added row exactly as it was — same titles, same order, same heading |
+| **Fails if** | The tab moved, or the first row changed |
+
+### A13.2 — the tab scrolls
+
+| | |
+| :---- | :---- |
+| **What to look at** | Hold Down from the first row to the last |
+| **Passes if** | The screen scrolls between rows and every row is reachable |
+| **Fails if** | A row below the fold cannot be reached, or the screen jumps rather than scrolls |
+
+### A13.3 — the screen does not shake
+
+| | |
+| :---- | :---- |
+| **What to look at** | Hold Right along **each** of the three rows, from the top of the tab and from the bottom |
+| **Passes if** | Nothing moves vertically. At all |
+| **Fails if** | The rows twitch upward as a tile takes focus |
+| **Why it is here** | This is #008, and the two new tile shapes are exactly the sort of thing that brings it back. `TvBrowseScrollStabilityTest` says they do not; a panel is what settles it |
+
+### A13.4 — Now popular
+
+| | |
+| :---- | :---- |
+| **What to look at** | With a Movie Database key configured. The second row |
+| **Passes if** | At most five films and five series, each with a large number across the foot of its poster, and every one of them opens and plays from your own provider |
+| **Fails if** | A tile opens nothing, or a number is drawn outside the poster, or the row holds titles the account does not carry |
+
+### A13.5 — and what it costs
+
+| | |
+| :---- | :---- |
+| **What to look at** | Open the tab, leave it, come back. Several times, over several days if you can |
+| **Passes if** | The row is the same all week and the service does not start refusing |
+| **Fails if** | The account is rate-limited, or the row changes between two openings on the same day |
+
+### A13.6 — with no key, and with a key that is refused
+
+| | |
+| :---- | :---- |
+| **What to look at** | Clear the Movie Database key. Reopen the tab |
+| **Passes if** | The Now popular row is **gone**. Not empty, not spinning — absent |
+| **Fails if** | An empty row with a heading is drawn |
+
+### A13.7 — You may like
+
+| | |
+| :---- | :---- |
+| **What to look at** | On a scanned catalogue, after watching several things on one profile |
+| **Passes if** | The third row appears; each tile carries a line reading "Because you watched …" naming something you did watch; nothing already watched is in it; it is not five of the same genre |
+| **Fails if** | The row names something you never watched, or suggests back what you just finished |
+
+### A13.8 — and it belongs to one person
+
+| | |
+| :---- | :---- |
+| **What to look at** | Switch to another profile and open the tab |
+| **Passes if** | The suggestions differ, and a fresh profile has **no** third row at all |
+| **Fails if** | Two profiles see the same suggestions — that is one person's viewing shown to another |
+
+### A13.9 — the upgrade
+
+| | |
+| :---- | :---- |
+| **What to look at** | Install over an existing build |
+| **Passes if** | Every channel, favourite and resume point is where it was, and the tab works |
+| **Why it is here** | Schema 18. The migration adds one empty table and touches nothing, which is exactly the sort of claim that should still be checked once |
+
+---
+
 ## C — Deferred measurements, in writing
 
 Things nobody can check yet, recorded so they stop being re-asked.

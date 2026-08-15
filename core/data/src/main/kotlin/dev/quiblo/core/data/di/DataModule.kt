@@ -26,7 +26,9 @@ import dev.quiblo.core.data.ChannelRepository
 import dev.quiblo.core.data.GuideRepository
 import dev.quiblo.core.data.LocalFileContentFetcher
 import dev.quiblo.core.data.PlayerSettingsRepository
+import dev.quiblo.core.data.PopularTitlesRepository
 import dev.quiblo.core.data.ProfileRepository
+import dev.quiblo.core.data.RecommendationRepository
 import dev.quiblo.core.data.ScriptFilterRepository
 import dev.quiblo.core.data.SearchRepository
 import dev.quiblo.core.data.SeriesPreferenceRepository
@@ -118,4 +120,22 @@ val dataModule: Module = module {
     single { TitleMetadataRepository(get(), get(), get()) }
     single { IptvOrgClient(get<HttpClient>()) }
     single { ChannelLogoRepository(get(), get(), get()) }
+    // Named for the same reason `SearchRepository` above is: both end in a dispatcher and a
+    // clock that have defaults, and a positional `get()` too many hands Koin's answer for
+    // something else to one of them. Koin resolves by type and does not type-check the order.
+    single {
+        PopularTitlesRepository(
+            dao = get(),
+            channelDao = get(),
+            client = get(),
+            metadata = get(),
+        )
+    }
+    single {
+        RecommendationRepository(
+            history = get(),
+            titleMetadataDao = get(),
+            channelDao = get(),
+        )
+    }
 }

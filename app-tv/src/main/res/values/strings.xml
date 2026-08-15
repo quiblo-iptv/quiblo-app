@@ -9,7 +9,7 @@
 
     <string name="tv_tab_search">Search</string>
     <string name="tv_tab_live">Live</string>
-    <string name="tv_tab_recently_added">Recently Added</string>
+    <string name="tv_tab_for_you">For You</string>
     <string name="tv_tab_movies">Movies</string>
     <string name="tv_tab_series">Series</string>
     <string name="tv_tab_favourites">Favourites</string>
@@ -86,6 +86,12 @@
     <string name="tv_no_films_or_series">This playlist has no films or series in it.</string>
     <string name="tv_kind_movie">Movie</string>
     <string name="tv_kind_series">Series</string>
+
+    <!-- The other two For You rows. Neither is drawn at all when it is empty, so neither has an
+         empty message: a row that cannot say anything says nothing. -->
+    <string name="tv_row_now_popular">Now popular</string>
+    <string name="tv_row_you_may_like">You may like</string>
+    <string name="tv_because_you_watched">Because you watched %1$s</string>
 
     <string name="tv_sources_incomplete">Fill in the address, and either both the username and password or neither.</string>
 

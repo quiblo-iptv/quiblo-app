@@ -31,6 +31,7 @@ import dev.quiblo.core.database.entity.ChannelEntity
 import dev.quiblo.core.database.entity.ChannelLogoEntity
 import dev.quiblo.core.database.entity.FavoriteEntity
 import dev.quiblo.core.database.entity.PickedSubtitleEntity
+import dev.quiblo.core.database.entity.PopularTitleEntity
 import dev.quiblo.core.database.entity.ProfileEntity
 import dev.quiblo.core.database.entity.ProgrammeEntity
 import dev.quiblo.core.database.entity.ResumePositionEntity
@@ -748,4 +749,48 @@ interface PickedSubtitleDao {
 
     @Query("DELETE FROM picked_subtitles WHERE stableKey = :stableKey")
     suspend fun delete(stableKey: String)
+}
+
+@Dao
+interface PopularTitleDao {
+
+    /**
+     * The whole held list, both catalogues, in rank order.
+     *
+     * A one-shot read rather than a `Flow`. The row that draws this is composed on demand and the
+     * table changes at most once a week — a subscription would re-run a sixty-thousand-title
+     * catalogue match every time anything else wrote to the database.
+     */
+    @Query("SELECT * FROM popular_titles ORDER BY kind ASC, rank ASC")
+    suspend fun all(): List<PopularTitleEntity>
+
+    /**
+     * When the held list was fetched, or null when nothing has been.
+     *
+     * The *oldest* stamp rather than the newest, so a refresh that wrote films and was then
+     * interrupted before the series does not read as a complete week's answer.
+     */
+    @Query("SELECT MIN(fetchedAtEpochMillis) FROM popular_titles")
+    suspend fun oldestFetchedAt(): Long?
+
+    /**
+     * Replaces one catalogue's list outright.
+     *
+     * A replace rather than an upsert: last week's rank 9 is not this week's anything, and a
+     * merge would leave the tail of an older list standing behind a shorter new one.
+     */
+    @Transaction
+    suspend fun replaceKind(kind: String, entries: List<PopularTitleEntity>) {
+        clearKind(kind)
+        insertAll(entries)
+    }
+
+    @Query("DELETE FROM popular_titles WHERE kind = :kind")
+    suspend fun clearKind(kind: String)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertAll(entries: List<PopularTitleEntity>)
+
+    @Query("DELETE FROM popular_titles")
+    suspend fun clear()
 }

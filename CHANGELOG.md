@@ -15,6 +15,24 @@ Formatted after [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and ve
 
 ## Unreleased
 
+### Added
+
+- **The television's Recently Added tab is now For You, and holds three rows.** The first is
+  Recently Added itself, unchanged. The second, **Now popular**, is what the world is watching of
+  the things your own provider actually carries — five films and five series, numbered, from The
+  Movie Database's weekly lists. The third, **You may like**, suggests titles from what has been
+  watched on your profile, and every tile says which of your own choices put it there.
+- **Suggestions are worked out on the device and nowhere else.** No account, no server, nothing
+  sent anywhere: it is arithmetic over the genres already in your cache, weighted by how much of
+  each thing you actually watched and by how recently. It is per profile, so nobody in the house
+  sees anybody else's viewing.
+- **A row that has nothing to say is not drawn.** No Movie Database key, a catalogue nobody has
+  scanned yet, a profile that has not watched anything: each of those simply removes a row rather
+  than leaving an empty shelf or a spinner that never finishes.
+- **Now popular costs two requests a week.** The lists are kept for seven days, so opening the app
+  every evening asks for nothing extra, and a service that refuses leaves last week's row standing
+  rather than emptying it.
+
 ### Fixed
 
 - **Hiding a writing system now hides a title with any of it in.** It read the first letter of a

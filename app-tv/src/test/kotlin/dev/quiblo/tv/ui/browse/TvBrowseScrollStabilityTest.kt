@@ -123,6 +123,34 @@ class TvBrowseScrollStabilityTest {
     }
 
     /**
+     * The same, for the two shapes the For You tab added.
+     *
+     * **The rank is an overlay and the caption's line is reserved for the whole row**, and both
+     * of those were chosen for exactly this reason. A numeral standing outside the poster would
+     * make a tile's width depend on how many digits its number has; a caption drawn only on the
+     * tiles that have one would make a tile's height depend on its own content. Either is a
+     * focused tile whose reported rectangle differs from its neighbour's, which is #008.
+     *
+     * The note inside `TvPoster` says a label that grows a line will start the loop again. This
+     * is the test that note points at.
+     */
+    @Test
+    fun `a ranked row is no less still`() {
+        assertHoldsStill(rowIndex = 1, style = TvRowStyle.RANKED)
+    }
+
+    @Test
+    fun `a row carrying captions is no less still`() {
+        assertHoldsStill(rowIndex = 1, captioned = true)
+    }
+
+    /** And the case the reservation exists for: one tile in the row has no caption of its own. */
+    @Test
+    fun `a captioned row with a gap in it is no less still`() {
+        assertHoldsStill(rowIndex = 1, captioned = true, captionGapEvery = 3)
+    }
+
+    /**
      * The property under test: **moving along a row must not move the catalogue at all.**
      *
      * Not "must not move much", and not "must not change direction" — must not move. Left and
@@ -134,8 +162,18 @@ class TvBrowseScrollStabilityTest {
      * television does: the first row already passes it, and before the fix the second row
      * misses it by about six dp, arriving in a twitch on each of the first several presses.
      */
-    private fun assertHoldsStill(rowIndex: Int, showKindBadge: Boolean = false) {
-        val trace = traceWhileWalkingAlong(rowIndex, showKindBadge = showKindBadge)
+    private fun assertHoldsStill(
+        rowIndex: Int,
+        showKindBadge: Boolean = false,
+        style: TvRowStyle = TvRowStyle.POSTER,
+        captioned: Boolean = false,
+        captionGapEvery: Int = 0,
+    ) {
+        val trace = traceWhileWalkingAlong(
+            rowIndex,
+            showKindBadge = showKindBadge,
+            rows = catalogue(style = style, captioned = captioned, captionGapEvery = captionGapEvery),
+        )
         val settled = trace.first()
         val drift = trace.maxOf { abs(it - settled) }
 
@@ -154,10 +192,11 @@ class TvBrowseScrollStabilityTest {
     private fun traceWhileWalkingAlong(
         rowIndex: Int,
         showKindBadge: Boolean = false,
+        rows: List<TvCategoryRow> = catalogue(),
         alsoRecord: () -> Unit = {},
     ): List<Float> {
         compose.mainClock.autoAdvance = false
-        compose.setContent { Harness(catalogue(), showKindBadge = showKindBadge) }
+        compose.setContent { Harness(rows, showKindBadge = showKindBadge) }
         settle()
         walkFocusDownTo(rowIndex)
 
@@ -289,20 +328,33 @@ class TvBrowseScrollStabilityTest {
      * scrolling at all. Artwork is deliberately absent so nothing here touches the network: a
      * poster with no logo draws its placeholder.
      */
-    private fun catalogue(): List<TvCategoryRow> = (0 until ROWS).map { row ->
+    private fun catalogue(
+        style: TvRowStyle = TvRowStyle.POSTER,
+        captioned: Boolean = false,
+        /** Every nth tile gets no caption, so a row can be walked across a gap in one. */
+        captionGapEvery: Int = 0,
+    ): List<TvCategoryRow> = (0 until ROWS).map { row ->
         TvCategoryRow(
             title = rowTitle(row),
+            style = style,
             items = (0 until POSTERS_PER_ROW).map { column ->
+                val index = row * POSTERS_PER_ROW + column
                 TvRowItem(
                     channel = Channel(
-                        id = (row * POSTERS_PER_ROW + column).toLong(),
+                        id = index.toLong(),
                         sourceId = 1L,
                         name = posterTitle(row, column),
                         streamUrl = "https://example.invalid/${row}_$column",
                         kind = MediaKind.VOD,
                         groupTitle = rowTitle(row),
                     ),
-                    flatIndex = row * POSTERS_PER_ROW + column,
+                    flatIndex = index,
+                    rank = if (style == TvRowStyle.RANKED) column + 1 else null,
+                    caption = when {
+                        !captioned -> null
+                        captionGapEvery > 0 && column % captionGapEvery == 0 -> null
+                        else -> "Because you watched ${posterTitle(row, 0)}"
+                    },
                 )
             },
         )

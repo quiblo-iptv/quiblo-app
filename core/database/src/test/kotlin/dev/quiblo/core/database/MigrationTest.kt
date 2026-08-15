@@ -232,6 +232,41 @@ class MigrationTest {
         }
     }
 
+    /**
+     * The popular-list table arrives empty and takes nothing with it.
+     *
+     * A new table is the cheapest schema change there is, and this one holds a cache of a
+     * service's answer rather than anything the viewer owns — so unlike the metadata cache above
+     * it there is nothing to preserve and nothing an upgrade can cost. What is asserted is the
+     * other half: that adding it leaves a channel, a favourite and a resume point exactly where
+     * they were.
+     */
+    @Test
+    fun `17 to 18 adds the popular table and disturbs nothing`() {
+        helper.createDatabase(DB_NAME, 17).use { old ->
+            old.execSQL(
+                "INSERT INTO `sources` (`id`, `name`, `kind`, `url`, `createdAtEpochMillis`) " +
+                    "VALUES (1, 'A panel', 'XTREAM', 'https://example.invalid', 0)",
+            )
+            old.execSQL(
+                "INSERT INTO `channels` (`id`, `sourceId`, `name`, `streamUrl`, `kind`, " +
+                    "`groupTitle`, `stableKey`, `sortIndex`) " +
+                    "VALUES (1, 1, 'Dune', 'https://example.invalid/1', 'VOD', 'Films', 'key-1', 0)",
+            )
+        }
+
+        val db = helper.runMigrationsAndValidate(DB_NAME, 18, true, MIGRATION_17_18)
+
+        db.query("SELECT COUNT(*) FROM `popular_titles`").use { cursor ->
+            assertTrue(cursor.moveToFirst())
+            assertEquals(0, cursor.getInt(0))
+        }
+        db.query("SELECT `name` FROM `channels`").use { cursor ->
+            assertTrue("the catalogue did not survive the upgrade", cursor.moveToFirst())
+            assertEquals("Dune", cursor.getString(0))
+        }
+    }
+
     @Test
     fun `10 to 11 adopts existing favourites rather than dropping them`() {
         // The opposite promise to the one above, and the one that matters more: this is the

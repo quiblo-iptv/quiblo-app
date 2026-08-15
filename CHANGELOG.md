@@ -15,6 +15,14 @@ Formatted after [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and ve
 
 ## Unreleased
 
+### Fixed
+
+- **Now popular no longer goes missing on the television.** The row is fetched with your Movie
+  Database key, and the key is kept encrypted — which means reading it takes a moment. For You
+  was built before that moment had passed, found no key, fetched nothing, and had no way to ask
+  again for as long as the tab stayed open. It now waits for the key, and a key pasted into
+  Settings while the tab is open fills the row straight away instead of waiting for a restart.
+
 ## 0.18.0
 
 ### Added

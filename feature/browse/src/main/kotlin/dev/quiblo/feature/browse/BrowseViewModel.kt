@@ -44,6 +44,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
@@ -298,7 +299,9 @@ class BrowseViewModel(
 
     init {
         // Reads the stored key once, so the first posters on screen already know whether
-        // there is anything to ask.
+        // there is anything to ask. [requestPreview] samples `isEnabled` synchronously and has
+        // no way to wait; [extraRowsFor] does wait, and calls this itself rather than trusting
+        // this launch to have finished — the two are not the same guarantee.
         viewModelScope.launch { metadataRepository.load() }
     }
 
@@ -402,11 +405,22 @@ class BrowseViewModel(
     /**
      * The two rows that are not a query.
      *
-     * Fetched once per source rather than subscribed to. Neither is a live view of anything: the
-     * popular list changes weekly, and the suggestions are arithmetic over a history that only
-     * moves when something is watched — which is not while this screen is open. A `Flow` that
-     * re-ran on every write to the database would recompute a sixty-thousand-title match for
-     * nothing.
+     * Not subscribed to the catalogue. Neither row is a live view of anything: the popular list
+     * changes weekly, and the suggestions are arithmetic over a history that only moves when
+     * something is watched — which is not while this screen is open. A `Flow` that re-ran on
+     * every write to the database would recompute a sixty-thousand-title match for nothing.
+     *
+     * **Keyed on the metadata key, and nothing is built until that key is known.** This is the
+     * defect the shape exists for. The popular row cannot be fetched without the key, the key
+     * lives in an encrypted store, and reading it is a `MasterKey` build plus a keystore round
+     * trip — so a build that merely *sampled* `apiKey.value` lost a race it was never told it
+     * was in, read null, skipped the fetch, and left the row empty for the life of the screen
+     * with nothing to ask again. Awaiting [TitleMetadataRepository.load] removes the race;
+     * keying on the value afterwards is what makes a key pasted into Settings mid-session fill
+     * the row rather than wait for a relaunch.
+     *
+     * One build per distinct key, not two: waiting is what keeps the null pass — a full
+     * suggestions match over the catalogue — from being paid for and thrown away.
      *
      * Nothing here fails loudly. A refusal, a missing key or an unscanned catalogue all produce
      * an empty list, and an empty row is not drawn at all.
@@ -417,7 +431,9 @@ class BrowseViewModel(
         } else {
             flow {
                 emit(emptyList())
-                emit(buildExtraRows(sourceId))
+                metadataRepository.load()
+                // No `distinctUntilChanged`: `apiKey` is a StateFlow and already conflates.
+                emitAll(metadataRepository.apiKey.map { buildExtraRows(sourceId) })
             }
         }
 

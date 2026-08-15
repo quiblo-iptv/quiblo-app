@@ -15,6 +15,18 @@ Formatted after [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and ve
 
 ## Unreleased
 
+### Added
+
+- **The television app installs on phones and tablets, and takes taps.** It was published as a
+  television app and nothing else — the store hid it from every device without a television screen,
+  and it would not have appeared in a phone's launcher even if you sideloaded it. Posters, channel
+  rows and player buttons always responded to a tap; the top bar did not, and now does. It still
+  turns to face a phone, and its text fields make room for the keyboard.
+
+  Two things it does not do yet: the ambient light stays dark, because it follows whatever the
+  remote is resting on and a finger rests on nothing; and everything is still sized to be read
+  from a sofa, so on a phone it is large.
+
 ### Changed
 
 - **Back twice on Search closes Quiblo, and it asks first.** Backing out used to hand the press to

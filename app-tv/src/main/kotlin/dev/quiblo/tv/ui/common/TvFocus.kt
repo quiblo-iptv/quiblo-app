@@ -18,8 +18,11 @@
 
 package dev.quiblo.tv.ui.common
 
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.runtime.withFrameNanos
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.input.pointer.pointerInput
 
 /**
  * Requests focus, tolerating there being nothing to focus.
@@ -79,3 +82,26 @@ suspend fun FocusRequester.insistOnFocus(attempts: Int = FOCUS_ATTEMPTS) {
  * nothing at all stops asking within a fifth of a second rather than for the life of the screen.
  */
 private const val FOCUS_ATTEMPTS = 10
+
+/**
+ * Runs [onTap] when this is tapped, and adds nothing to the focus tree.
+ *
+ * **`Modifier.clickable` would have been one word shorter and would have reintroduced a defect
+ * this app already fixed once.** `clickable` makes what it is applied to focusable, and the
+ * television's top bar is deliberately *one* focus target rather than five: with a focusable per
+ * tab, any event that destroyed the focused element inside the content below — a form opening, a
+ * list emptying, a spinner appearing — left Compose falling back to the first focusable in the
+ * tree, which was a tab, which selected itself and threw the viewer onto another screen. Content
+ * could silently change which tab you were on.
+ *
+ * A raw tap detector adds no focus node at all, so the invariant the bar's own note states —
+ * *nothing but a press moves the selection* — stays exactly true, with "press" now meaning a key
+ * or a finger rather than only a key.
+ *
+ * It also intentionally has no ripple and no focus ring. On a television these controls draw
+ * their own answer to "where is the remote", and a second indicator drawn by a touch affordance
+ * would be a competitor for the eye — which is `AC-TV-02`, and the reason the bar is shaped this
+ * way in the first place.
+ */
+fun Modifier.onTap(onTap: () -> Unit): Modifier =
+    pointerInput(onTap) { detectTapGestures { onTap() } }

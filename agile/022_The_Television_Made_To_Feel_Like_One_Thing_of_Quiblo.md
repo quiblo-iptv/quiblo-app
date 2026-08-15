@@ -141,6 +141,54 @@ drops: **walking off Search disarms**, because a viewer who has gone somewhere e
 leaving. Without it, arming on Search and then walking to Movies leaves the next back on Search
 closing the app with no notice on screen at all. Four tests, one per case.
 
-## 6
+## 6. `FEAT-030` — touch, and phones
 
-*Not yet implemented.*
+**Asked:** *"how costy is it to make tv app works with touch screen — if not too much make it work
+in touch screen and workable on phones."*
+
+**Cheaper than it looks, because the tiles were already built for it.** `TvPosterRows`,
+`TvLiveScreen` and `TvPlayerControls` all use `clickable`/`combinedClickable`, so a tap on a
+poster, a channel row or a player button has always worked. Three things did not.
+
+**The manifest was television-only in three separate ways**, and each one fails differently:
+
+- `leanback` was `required="true"`, which is the line that made this a television app *and nothing
+  else* — the store filters such an app off every device that is not a television. Optional now;
+  the feature is still declared and TV home screens read the `LEANBACK_LAUNCHER` filter rather
+  than this.
+- The activity declared only `LEANBACK_LAUNCHER`, so it would install on a phone and then not
+  appear in that phone's launcher. `LAUNCHER` sits beside it now.
+- `screenOrientation="landscape"` is right about a television and wrong about a handset, where a
+  locked orientation is an app that refuses to turn. Removed; `configChanges` already declares
+  that this activity handles a rotation itself.
+
+**The keyboard is the one place a single value could not serve both.** `adjustNothing` is
+*measured*, not preferred — `TvSettingsFieldStabilityTest` holds the trace of a settings list
+chasing a shrinking viewport four items down, and of the same trace flat once the window is held
+still. It is right on a television, where the leanback keyboard is a full-screen overlay. It is
+wrong on a phone, where the keyboard covers the field being typed into. So the window stays fixed
+on both and the *content* insets itself on a handset, decided from `UiModeManager` rather than
+from a screen size — a ten-inch tablet in landscape is not a television and a small television is.
+
+**The top bar is the one control a finger could not reach**, and it is deliberately *one* focus
+target rather than five. `Modifier.clickable` would have fixed the reach in one word and
+reintroduced the defect that shape exists to prevent: `clickable` makes what it touches focusable,
+and with a focusable per tab, any event destroying the focused element in the content below left
+Compose falling back to the first focusable in the tree — a tab — which selected itself and threw
+the viewer onto another screen. `Modifier.onTap` is a raw tap detector with no focus node, so the
+bar's own invariant holds unchanged: *nothing but a press moves the selection*, with "press" now
+meaning a key or a finger. `TvTapAddsNoFocusTest` asserts both halves, and the second half —
+that a focus search walks straight past a tap target — is the one that matters.
+
+### What this does not do, said plainly
+
+- **The ambient light does not light on a touchscreen.** It is fed by whichever tile holds focus,
+  and on a phone nothing does; the screen falls back to black behind the grid, which is how it
+  looked before `014`. Degraded, not broken, and left rather than rewired because the alternative
+  touches the one screen this project has burned four wrong analyses on.
+- **Sizing is untouched.** 10-foot padding and type on a phone is large but readable. Re-laying-out
+  every screen is different work from making it reachable, and doing half of it would be worse
+  than doing none.
+- **There is now a second phone-capable app beside `:app`.** Two UIs for one platform is a
+  maintenance obligation, taken on because it was asked for, and recorded here as a decision
+  rather than left to be discovered.

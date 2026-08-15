@@ -11,12 +11,19 @@
 
     <!--
       A television has no touchscreen and Android assumes one unless told otherwise, so
-      without this the app is filtered off every TV in the store. leanback is what makes it
-      a TV app; leanback_only would exclude tablets, and there is no reason to.
+      without both of these the app is filtered off every TV in the store. leanback is what
+      makes it a TV app; leanback_only would exclude tablets, and there is no reason to.
+
+      **`required="false"` on leanback since `022`.** It was `true`, which is the line that made
+      this a television app *and nothing else*: the store filters an app requiring leanback off
+      every device that is not a television, so it could not be installed on a phone or a tablet
+      at all. Declaring it optional keeps every television — the feature is still declared, and
+      TV home screens read the LEANBACK_LAUNCHER filter below rather than this — while letting a
+      handset install it.
     -->
     <uses-feature
         android:name="android.software.leanback"
-        android:required="true" />
+        android:required="false" />
     <uses-feature
         android:name="android.hardware.touchscreen"
         android:required="false" />
@@ -48,12 +55,20 @@
           it buys nothing. AC-TV-10 is unaffected — leaving a field with the keyboard up is the
           IME's action key, not the window's size.
         -->
+        <!--
+          `screenOrientation` is gone, and that is `022` rather than an oversight.
+
+          It was `landscape`, which is right about a television and wrong about the phones this
+          now installs on: a locked orientation on a handset is an app that refuses to turn. A
+          television reports one orientation and never changes it, so removing the lock changes
+          nothing there — `configChanges` already declares that this activity handles a rotation
+          itself, which is what stops one recreating the whole shell mid-browse.
+        -->
         <activity
             android:name=".TvMainActivity"
             android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|smallestScreenSize|uiMode"
             android:exported="true"
             android:label="@string/tv_app_name"
-            android:screenOrientation="landscape"
             android:theme="@style/Theme.QuibloTv"
             android:windowSoftInputMode="adjustNothing">
             <!--
@@ -64,6 +79,14 @@
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
+                <!--
+                  And the ordinary one, for the handsets `022` opened this to. A phone launcher
+                  reads LAUNCHER and nothing else, so without this the app installs on a phone
+                  and then cannot be found from its own home screen — which is the same defect
+                  the note above describes in the other direction, and the reason that note
+                  exists to be read before this filter is edited.
+                -->
+                <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
 

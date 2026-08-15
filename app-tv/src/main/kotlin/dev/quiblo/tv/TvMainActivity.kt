@@ -18,6 +18,8 @@
 
 package dev.quiblo.tv
 
+import android.app.UiModeManager
+import android.content.res.Configuration
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -29,6 +31,7 @@ class TvMainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
         setContent {
             QuibloTvTheme {
                 /*
@@ -44,8 +47,35 @@ class TvMainActivity : ComponentActivity() {
                  * the process is cached. The shell signs out before calling this, which is the
                  * half that keeps the promise whether the process dies or not.
                  */
-                TvApp(onExit = ::finishAndRemoveTask)
+                /*
+                 * The content makes room for a keyboard on a handset, and does not on a
+                 * television.
+                 *
+                 * `adjustNothing` in the manifest is measured, not preferred:
+                 * `TvSettingsFieldStabilityTest` holds the trace of a settings list chasing a
+                 * shrinking viewport four items down before settling, and of the same trace flat
+                 * once the window is held still. It is right on a television, where the leanback
+                 * keyboard is a full-screen overlay with its own view of what is being typed —
+                 * the app's window making room for it buys nothing.
+                 *
+                 * A phone's keyboard is not an overlay; it covers the bottom of the window, and a
+                 * window that refuses to move hides the field being typed into. So the window
+                 * stays fixed either way and the *content* insets itself on a handset, which
+                 * leaves the measured behaviour on the panel untouched rather than trading it.
+                 */
+                TvApp(onExit = ::finishAndRemoveTask, insetForKeyboard = !isTelevision())
             }
         }
     }
+
+    /**
+     * Whether this is running on a television.
+     *
+     * Asked of the system rather than inferred from a screen size, because that is the question:
+     * a ten-inch tablet in landscape is not a television and a small television is. `uiMode` is
+     * what the platform itself uses to decide, and it is what the leanback launcher reads.
+     */
+    private fun isTelevision(): Boolean =
+        (getSystemService(UI_MODE_SERVICE) as UiModeManager).currentModeType ==
+            Configuration.UI_MODE_TYPE_TELEVISION
 }

@@ -34,6 +34,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -82,6 +83,7 @@ import dev.quiblo.tv.ui.browse.TvPosterRows
 import dev.quiblo.tv.ui.common.LocalAmbientSink
 import dev.quiblo.tv.ui.common.ambientBackdrop
 import dev.quiblo.tv.ui.common.insistOnFocus
+import dev.quiblo.tv.ui.common.onTap
 import dev.quiblo.tv.ui.common.rememberAmbient
 import dev.quiblo.tv.ui.common.tryRequestFocus
 import dev.quiblo.tv.ui.consent.TvConsentScreen
@@ -115,8 +117,19 @@ fun TvApp(
      * cast so that a test can compose this app and watch it ask to be closed without one.
      */
     onExit: () -> Unit = {},
+    /**
+     * Whether the content should make room for a soft keyboard.
+     *
+     * False on a television, where the keyboard is a full-screen overlay and the window is
+     * deliberately held still — see `TvSettingsFieldStabilityTest` and the note in
+     * `TvMainActivity`. True on the handsets `022` opened this app to, where a keyboard that
+     * covers the bottom of the window would cover the field being typed into.
+     */
+    insetForKeyboard: Boolean = false,
 ) {
-    TvConsentGate { TvAppBehindConsent(onExit = onExit) }
+    Box(modifier = if (insetForKeyboard) Modifier.imePadding() else Modifier) {
+        TvConsentGate { TvAppBehindConsent(onExit = onExit) }
+    }
 }
 
 /**
@@ -669,12 +682,20 @@ private fun TvTopBar(
                     contentDescription = stringResource(tab.labelRes),
                     isSelected = index == selectedTab,
                     isBarFocused = isBarFocused,
+                    modifier = Modifier.onTap {
+                        spot = TvBarSpot.TABS
+                        onSelect(index)
+                    },
                 )
             } else {
                 TextTab(
                     label = stringResource(tab.labelRes),
                     isSelected = index == selectedTab,
                     isBarFocused = isBarFocused,
+                    modifier = Modifier.onTap {
+                        spot = TvBarSpot.TABS
+                        onSelect(index)
+                    },
                 )
             }
         }
@@ -697,6 +718,7 @@ private fun TvTopBar(
                 icon = Icons.Filled.Settings,
                 contentDescription = stringResource(R.string.tv_settings),
                 isHighlighted = spot == TvBarSpot.GEAR && isFocused,
+                modifier = Modifier.onTap(onOpenSettings),
             )
 
             /*
@@ -716,6 +738,7 @@ private fun TvTopBar(
                 name = activeProfileName,
                 avatar = activeProfileAvatar,
                 isHighlighted = spot == TvBarSpot.PROFILE && isFocused,
+                modifier = Modifier.onTap(onSwitchProfile),
             )
         }
     }
@@ -729,9 +752,14 @@ private fun TvTopBar(
  * shift the two icons beside each other every time the remote moved between them.
  */
 @Composable
-private fun BarProfile(name: String?, avatar: String?, isHighlighted: Boolean) {
+private fun BarProfile(
+    name: String?,
+    avatar: String?,
+    isHighlighted: Boolean,
+    modifier: Modifier = Modifier,
+) {
     Box(
-        modifier = Modifier
+        modifier = modifier
             .size(40.dp)
             .border(
                 width = if (isHighlighted) 2.dp else 0.dp,
@@ -810,6 +838,7 @@ private fun IconTab(
     contentDescription: String,
     isSelected: Boolean,
     isBarFocused: Boolean,
+    modifier: Modifier = Modifier,
 ) {
     val alpha by animateFloatAsState(
         targetValue = when {
@@ -820,7 +849,7 @@ private fun IconTab(
         label = "iconTabAlpha",
     )
 
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+    Column(modifier = modifier, horizontalAlignment = Alignment.CenterHorizontally) {
         Box(
             modifier = Modifier.height(TAB_LABEL_HEIGHT),
             contentAlignment = Alignment.Center,
@@ -852,11 +881,12 @@ private fun BarIcon(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     contentDescription: String,
     isHighlighted: Boolean,
+    modifier: Modifier = Modifier,
 ) {
     // Not focusable, by design. The bar above owns focus and decides where along itself the
     // remote is resting; this only has to look like the answer.
     Box(
-        modifier = Modifier
+        modifier = modifier
             .size(40.dp)
             .background(
                 color = if (isHighlighted) Color.White.copy(alpha = 0.20f) else Color.Transparent,

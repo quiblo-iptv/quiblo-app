@@ -56,6 +56,17 @@ class PlayerSettingsRepository(private val store: PlayerSettingsStore) {
     suspend fun setDynamicColor(enabled: Boolean) = store.setDynamicColor(enabled)
 
     /**
+     * Whether advanced search offers a row of live channels. Off unless the viewer asks.
+     *
+     * Here rather than in a repository of its own because it is one boolean in the same file as
+     * the rest of the ordinary preferences, and a class that forwarded a single flow would be a
+     * layer that only forwards.
+     */
+    val showLiveInSearch: Flow<Boolean> = store.showLiveInSearch
+
+    suspend fun setShowLiveInSearch(enabled: Boolean) = store.setShowLiveInSearch(enabled)
+
+    /**
      * How subtitles are drawn (INC-F11).
      *
      * Read by the player and written from inside it, where the effect is visible. There is no

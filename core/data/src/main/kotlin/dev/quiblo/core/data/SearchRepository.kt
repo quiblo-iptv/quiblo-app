@@ -57,6 +57,50 @@ data class SearchResults(
 }
 
 /**
+ * Everything about a search except the source and the words typed into it.
+ *
+ * One value rather than four more parameters. They travel together, they all have sensible
+ * defaults, and a call site that wants to change one of them should not have to name the rest.
+ */
+data class SearchOptions(
+    /** Narrows to one genre, which is the only thing advanced search filters by. */
+    val genre: String? = null,
+    /**
+     * Searches what the viewer has hidden as well — both hidden categories and hidden writing
+     * systems.
+     *
+     * One flag for both because they are one question from the viewer's side. Somebody who has
+     * hidden a category and then goes looking for something in it wants it found; making them
+     * work out which of two settings is responsible would be asking them to know how this is
+     * built.
+     *
+     * Not persisted anywhere. It belongs to one search, and a hiding setting that quietly stopped
+     * applying because of something typed last week is worse than no setting.
+     */
+    val includeHidden: Boolean = false,
+    /**
+     * Whether live channels are searched at all.
+     *
+     * True by default, because a plain search across everything is what the screen is for. It is
+     * advanced search that turns it off: a live channel has no metadata, so a genre only reaches
+     * it through the genre word appearing in the channel's own name — a weak rule filling a
+     * column nobody filtering by genre asked for. Off means the query is not made, not that its
+     * answer is thrown away.
+     */
+    val includeLive: Boolean = true,
+    val limitPerKind: Int = DEFAULT_LIMIT_PER_KIND,
+)
+
+/**
+ * How many hits per kind a screen is given.
+ *
+ * A television shows one row per kind and a viewer walks it with a D-pad; past forty presses
+ * nobody is reading, they are giving up. The cap is also what keeps a two-letter term from being
+ * a full-table read.
+ */
+const val DEFAULT_LIMIT_PER_KIND = 40
+
+/**
  * The genres a catalogue can currently be filtered by, and how much of it has been described.
  *
  * [coveragePercent] is quoted to the viewer rather than hidden, because a genre filter built
@@ -112,37 +156,23 @@ class SearchRepository(
     suspend fun search(
         sourceId: Long,
         query: String,
-        genre: String? = null,
-        limitPerKind: Int = DEFAULT_LIMIT_PER_KIND,
-        /**
-         * Searches what the viewer has hidden as well — both hidden categories and hidden
-         * writing systems.
-         *
-         * One flag for both because they are one question from the viewer's side. Somebody who
-         * has hidden a category and then goes looking for something in it wants it found; making
-         * them work out which of two settings is responsible would be asking them to know how
-         * this is built.
-         *
-         * Not persisted anywhere. It belongs to one search, and a hiding setting that quietly
-         * stopped applying because of something typed last week is worse than no setting.
-         */
-        includeHidden: Boolean = false,
+        options: SearchOptions = SearchOptions(),
     ): SearchResults {
         val term = query.trim()
-        if (term.isBlank() && genre.isNullOrBlank()) return SearchResults()
+        if (term.isBlank() && options.genre.isNullOrBlank()) return SearchResults()
 
         // Read once for this search rather than per result list, so all three lists are
         // filtered against the same answer even if the setting changes mid-query.
-        val hidden = if (includeHidden) emptySet() else hiddenScripts.first()
-        val ask = Ask(sourceId, term, limitPerKind, includeHidden, hidden)
-        val results = if (genre.isNullOrBlank()) {
+        val hidden = if (options.includeHidden) emptySet() else hiddenScripts.first()
+        val ask = Ask(sourceId, term, options.limitPerKind, options.includeHidden, hidden)
+        val results = if (options.genre.isNullOrBlank()) {
             SearchResults(
-                live = ask.matches(MediaKind.LIVE, term),
+                live = if (options.includeLive) ask.matches(MediaKind.LIVE, term) else emptyList(),
                 movies = ask.matches(MediaKind.VOD, term),
                 series = ask.matches(MediaKind.SERIES, term),
             )
         } else {
-            byGenre(ask, genre)
+            byGenre(ask, options.genre, options.includeLive)
         }
         return results.hidingUnreadableScripts(hidden)
     }
@@ -238,7 +268,7 @@ class SearchRepository(
      * called "CRIME NETWORK HD" comes back for "Crime", which is what a viewer expects, and
      * the alternative is a live column that is always empty.
      */
-    private suspend fun byGenre(ask: Ask, genre: String): SearchResults {
+    private suspend fun byGenre(ask: Ask, genre: String, includeLive: Boolean): SearchResults {
         val term = ask.term
         val limit = ask.limit
         val cached = titleMetadataDao.allGenreRows()
@@ -250,14 +280,34 @@ class SearchRepository(
                 .filter { row -> row.genres.orEmpty().splitGenres().any { it.equals(genre, ignoreCase = true) } }
                 .mapTo(HashSet()) { it.identity() }
 
-            titles.asSequence()
+            val matching = titles.asSequence()
                 .filter { term.isBlank() || it.name.contains(term, ignoreCase = true) }
                 .filter { title -> title.name.cacheIdentity(title.kind) in inGenre }
-                // Two kinds share one cap so a genre held mostly by series still returns
-                // films, and the split back into columns happens after the rows are read.
-                .take(limit * KINDS_WITH_METADATA)
-                .map { it.id }
                 .toList()
+
+            /*
+             * **A cap per kind, taken before the split rather than after it.**
+             *
+             * This used to be one cap of `limit * 2` over the whole matching sequence, with the
+             * split into columns happening afterwards — and the comment on it said the cap was
+             * shared "so a genre held mostly by series still returns films". It did the opposite.
+             *
+             * `titlesForMetadata` has no `ORDER BY`, so SQLite returns rowid order; rows are
+             * inserted live, then films, then series, so rowid order puts *every* film ahead of
+             * *every* series. On a small catalogue eighty rows reach the series. On a real one
+             * they do not, and the series column is empty — or the films column is, on an account
+             * whose series were inserted first. Which one is empty depends on nothing a viewer
+             * can see, which is why this was reported as random.
+             *
+             * Taking each kind's own cap cannot starve either, whatever order the rows arrive in.
+             */
+            KIND_COLUMNS.flatMap { kind ->
+                matching.asSequence()
+                    .filter { it.kind == kind.name }
+                    .take(limit)
+                    .map { it.id }
+                    .toList()
+            }
         }
 
         val rows = if (wantedIds.isEmpty()) {
@@ -268,7 +318,7 @@ class SearchRepository(
         }
 
         return SearchResults(
-            live = ask.liveByGenre(genre),
+            live = if (includeLive) ask.liveByGenre(genre) else emptyList(),
             movies = rows.filter { it.kind == MediaKind.VOD }.take(limit),
             series = rows.filter { it.kind == MediaKind.SERIES }.take(limit),
         )
@@ -301,16 +351,12 @@ class SearchRepository(
 
     private companion object {
         /**
-         * How many hits per kind a screen is given.
+         * The two columns a genre search fills from the metadata cache.
          *
-         * A television shows one row per kind and a viewer walks it with a D-pad; past
-         * forty presses nobody is reading, they are giving up. The cap is also what keeps a
-         * two-letter term from being a full-table read.
+         * Live is not among them: a television channel has no metadata and never will, so it is
+         * matched on its own name and capped on its own.
          */
-        const val DEFAULT_LIMIT_PER_KIND = 40
-
-        /** Films and series. Live is matched by name and capped on its own. */
-        const val KINDS_WITH_METADATA = 2
+        val KIND_COLUMNS = listOf(MediaKind.VOD, MediaKind.SERIES)
 
         /**
          * How many live matches are read before the genre word is applied to their names.

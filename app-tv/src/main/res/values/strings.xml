@@ -140,6 +140,9 @@
     <string name="tv_settings_script_hangul">Korean</string>
     <string name="tv_settings_script_devanagari">Devanagari</string>
     <string name="tv_settings_script_thai">Thai</string>
+    <string name="tv_settings_search">Search</string>
+    <string name="tv_settings_search_live">Live channels in advanced search</string>
+    <string name="tv_settings_search_live_detail">Off. A live channel carries no genre, so a genre filter can only match it on its name.</string>
     <string name="tv_settings_categories">Categories</string>
     <string name="tv_settings_category_kind">Editing categories for</string>
     <string name="tv_settings_category_summary">%1$d categories, %2$d hidden</string>

@@ -43,7 +43,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -113,6 +112,7 @@ fun TvSearchScreen(
         onQueryChange = viewModel::search,
         onSelectGenre = viewModel::selectGenre,
         onToggleIncludeHidden = viewModel::setIncludeHidden,
+        onToggleAdvanced = viewModel::setAdvanced,
         onClear = viewModel::clear,
         onResultVisible = viewModel::onResultVisible,
         modifier = modifier,
@@ -136,13 +136,15 @@ internal fun TvSearchPanel(
     onQueryChange: (String) -> Unit,
     onSelectGenre: (String?) -> Unit,
     onToggleIncludeHidden: (Boolean) -> Unit,
+    onToggleAdvanced: (Boolean) -> Unit,
     onClear: () -> Unit,
     onResultVisible: (Channel) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    // Survives a configuration change, so a viewer who opened the filters does not find them
-    // shut again for a reason that has nothing to do with them.
-    var isAdvanced by rememberSaveable { mutableStateOf(false) }
+    // The ViewModel's, not this screen's. Opening the filters changes what is *queried* — live
+    // channels are left out of an advanced search unless Settings keeps them — so the flag has
+    // to be somewhere the query can see it, and two copies of it would be two answers.
+    val isAdvanced = state.isAdvanced
 
     // Nothing asked, and no filters opened. The one state where the panel belongs to the
     // field rather than to an answer.
@@ -207,7 +209,7 @@ internal fun TvSearchPanel(
             onSelectGenre = onSelectGenre,
             onToggleIncludeHidden = onToggleIncludeHidden,
             onClear = onClear,
-            onToggleAdvanced = { isAdvanced = !isAdvanced },
+            onToggleAdvanced = { onToggleAdvanced(!isAdvanced) },
         )
 
         Box(

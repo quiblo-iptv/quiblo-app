@@ -627,6 +627,47 @@ provider's* titles look like, which is the whole reason the old rule failed.
 
 ---
 
+## A12 — Round `019` Part C: advanced search
+
+**Where:** the television, on a scanned account — the genre filter reads the metadata cache, so
+an unscanned catalogue has nothing to filter by and this section cannot be run at all. From
+[`019`](../agile/019_Friction_on_the_Television_of_Quiblo.md) Part C.
+
+### A12.1 — a genre fills both rows
+
+| | |
+| :---- | :---- |
+| **What to look at** | Search → Advanced → pick a common genre such as Drama or Action, with the search box empty |
+| **Passes if** | Both the films row and the series row have titles in them |
+| **Fails if** | One of the two is empty. That is the report, and it is the whole of what changed |
+| **Why it is here** | It needs a *large* catalogue. On a small one the old code passed too, which is part of why this took so long to be described accurately |
+
+### A12.2 — and it is not one kind's leftovers
+
+| | |
+| :---- | :---- |
+| **What to look at** | The same, on three or four different genres |
+| **Passes if** | Neither row is consistently shorter than the other in a way the catalogue does not explain |
+| **Fails if** | Series are always the short row — the cap is still being taken before the split somewhere |
+
+### A12.3 — no live channels unless asked
+
+| | |
+| :---- | :---- |
+| **What to look at** | Advanced search with a genre picked. Then Settings → Search → turn live channels on, and come back |
+| **Passes if** | No live row at all by default; the live row appears once the setting is on |
+| **Fails if** | Live channels are there with the setting off |
+
+### A12.4 — off means not asked
+
+| | |
+| :---- | :---- |
+| **What to look at** | With the setting off, use advanced search heavily for a few minutes |
+| **Passes if** | Nothing slows and the account is not refused |
+| **Why it is here** | Off is meant to mean the query is never made. This is the standing risk on every screen in this app and it outranks the feature |
+
+---
+
 ## C — Deferred measurements, in writing
 
 Things nobody can check yet, recorded so they stop being re-asked.

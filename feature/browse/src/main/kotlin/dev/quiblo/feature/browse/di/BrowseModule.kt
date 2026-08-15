@@ -53,6 +53,7 @@ val browseModule: Module = module {
             sourceRepository = get(),
             searchRepository = get(),
             metadataRepository = get(),
+            playerSettingsRepository = get(),
         )
     }
 }

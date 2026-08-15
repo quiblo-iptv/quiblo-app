@@ -260,6 +260,14 @@ class SettingsViewModel(
         playerSettingsRepository.setDynamicColor(enabled)
     }
 
+    /** Whether advanced search offers a row of live channels. Off unless it is asked for. */
+    val showLiveInSearch: StateFlow<Boolean> = playerSettingsRepository.showLiveInSearch
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(SUBSCRIPTION_TIMEOUT_MILLIS), false)
+
+    fun setShowLiveInSearch(enabled: Boolean) = viewModelScope.launch {
+        playerSettingsRepository.setShowLiveInSearch(enabled)
+    }
+
     /** Writing systems the viewer has hidden from the catalogue and from search (INC-F14). */
     val hiddenScripts: StateFlow<Set<TitleScript>> = scriptFilter.hiddenScripts
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(SUBSCRIPTION_TIMEOUT_MILLIS), emptySet())

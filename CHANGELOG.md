@@ -28,11 +28,20 @@ Formatted after [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and ve
   place you are least able to tell where a result came from. Advanced search has an Include
   hidden switch for the times you want to look there anyway; it covers hidden writing systems in
   the same press.
+- **Advanced search returns films *and* series.** A genre search read a fixed number of titles
+  from the catalogue and only then split them into the two rows — and because a provider's films
+  are all stored ahead of its series, on any real account those titles were all films and the
+  series row came back empty. Which row was empty depended on nothing you could see, which is why
+  it looked random. Each row now takes its own share.
 - **Hiding a writing system no longer shortens the results.** The filter ran after the database
   had already cut the list to a screenful, so a search with plenty of matches could show one.
 
 ### Changed
 
+- **Advanced search leaves live channels out.** A live channel carries no genre and never will,
+  so a genre filter could only match one on the words in its name — which filled a row nobody
+  filtering by genre had asked for. Settings has a switch for anyone who wants it back, and with
+  it off the channels are not looked up at all rather than looked up and discarded.
 - **The television asks before it types.** Every text field on the television — the search box,
   the playlist and account forms, the metadata key, a profile's name — used to throw the
   on-screen keyboard over the screen the moment the remote landed on it, so walking down the

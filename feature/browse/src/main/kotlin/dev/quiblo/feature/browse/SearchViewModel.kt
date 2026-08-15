@@ -20,6 +20,8 @@ package dev.quiblo.feature.browse
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import dev.quiblo.core.data.PlayerSettingsRepository
+import dev.quiblo.core.data.SearchOptions
 import dev.quiblo.core.data.SearchRepository
 import dev.quiblo.core.data.SearchResults
 import dev.quiblo.core.data.SourceRepository
@@ -80,6 +82,13 @@ data class SearchUiState(
      * parts I usually do not want to see".
      */
     val includeHidden: Boolean = false,
+    /**
+     * Whether the filters are open.
+     *
+     * The view model's rather than the screen's, because it changes the *query* and not only the
+     * layout: advanced search leaves live channels out unless a setting says otherwise.
+     */
+    val isAdvanced: Boolean = false,
 ) {
     /** True once a question has been asked, which is what moves the bar off the middle. */
     val isActive: Boolean get() = query.isNotBlank() || selectedGenre != null
@@ -105,11 +114,23 @@ class SearchViewModel(
     sourceRepository: SourceRepository,
     private val searchRepository: SearchRepository,
     private val metadataRepository: TitleMetadataRepository,
+    playerSettingsRepository: PlayerSettingsRepository,
 ) : ViewModel() {
+
+    /**
+     * Whether advanced search offers live channels, from Settings.
+     *
+     * Read here rather than at the screen because it decides whether a query is *made*. A row
+     * that is fetched and then not drawn is a request paid for and thrown away, and this project
+     * has had its provider account blocked twice over requests it did not need.
+     */
+    private val showLiveInSearch: StateFlow<Boolean> = playerSettingsRepository.showLiveInSearch
+        .stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
     private val query = MutableStateFlow("")
     private val selectedGenre = MutableStateFlow<String?>(null)
     private val includeHidden = MutableStateFlow(false)
+    private val isAdvanced = MutableStateFlow(false)
     private val genreIndex = MutableStateFlow(GenreState())
     private val ratings = MutableStateFlow<Map<String, Double>>(emptyMap())
     private val posters = MutableStateFlow<Map<String, String>>(emptyMap())
@@ -155,7 +176,9 @@ class SearchViewModel(
         selectedGenre,
         includeHidden,
         activeSourceId,
-    ) { text, genre, hidden, sourceId -> Ask(text, genre, hidden, sourceId) }
+        // Live is left out of an advanced search unless Settings says to keep it.
+        combine(isAdvanced, showLiveInSearch) { advanced, showLive -> !advanced || showLive },
+    ) { text, genre, hidden, sourceId, live -> Ask(text, genre, hidden, sourceId, live) }
         .mapLatest { ask ->
             if (ask.sourceId == null || (ask.text.isBlank() && ask.genre == null)) {
                 isSearching.value = false
@@ -165,8 +188,11 @@ class SearchViewModel(
             searchRepository.search(
                 sourceId = ask.sourceId,
                 query = ask.text,
-                genre = ask.genre,
-                includeHidden = ask.includeHidden,
+                options = SearchOptions(
+                    genre = ask.genre,
+                    includeHidden = ask.includeHidden,
+                    includeLive = ask.includeLive,
+                ),
             ).also { isSearching.value = false }
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS), SearchResults())
@@ -176,9 +202,14 @@ class SearchViewModel(
         selectedGenre,
         genreIndex,
         results,
-        combine(ratings, posters, isSearching, activeSourceId, includeHidden) {
-                scores, art, searching, sourceId, hidden ->
-            Extras(scores, art, searching, sourceId != null, hidden)
+        combine(
+            ratings,
+            posters,
+            isSearching,
+            activeSourceId,
+            combine(includeHidden, isAdvanced) { hidden, advanced -> hidden to advanced },
+        ) { scores, art, searching, sourceId, switches ->
+            Extras(scores, art, searching, sourceId != null, switches.first, switches.second)
         },
     ) { text, genre, index, found, extras ->
         SearchUiState(
@@ -197,6 +228,7 @@ class SearchViewModel(
             posters = extras.posters,
             suggestions = found.suggestionsFor(text),
             includeHidden = extras.includeHidden,
+            isAdvanced = extras.isAdvanced,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS), SearchUiState())
 
@@ -212,6 +244,10 @@ class SearchViewModel(
     /** Looks in hidden categories and hidden writing systems too, for this search only. */
     fun setIncludeHidden(include: Boolean) {
         includeHidden.value = include
+    }
+
+    fun setAdvanced(advanced: Boolean) {
+        isAdvanced.value = advanced
     }
 
     fun clear() {
@@ -269,6 +305,7 @@ class SearchViewModel(
         val genre: String?,
         val includeHidden: Boolean,
         val sourceId: Long?,
+        val includeLive: Boolean,
     )
 
     /** Everything that is neither the question nor the answer, bundled to fit `combine`. */
@@ -278,6 +315,7 @@ class SearchViewModel(
         val isSearching: Boolean,
         val hasSource: Boolean,
         val includeHidden: Boolean,
+        val isAdvanced: Boolean,
     )
 
     private companion object {

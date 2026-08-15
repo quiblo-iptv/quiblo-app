@@ -139,6 +139,7 @@ fun TvSettingsScreen(
     val scanState by viewModel.metadataScan.collectAsStateWithLifecycle()
     val cachedTitles by viewModel.cachedTitleCount.collectAsStateWithLifecycle()
     val hiddenScripts by viewModel.hiddenScripts.collectAsStateWithLifecycle()
+    val showLiveInSearch by viewModel.showLiveInSearch.collectAsStateWithLifecycle()
 
     // Collapsed by default: twelve components are an obligation to make available, not
     // twelve rows to walk past on the way to anything else.
@@ -345,6 +346,21 @@ fun TvSettingsScreen(
                     onClick = viewModel::showEveryScript,
                 )
             }
+        }
+
+        item { SectionHeading(stringResource(R.string.tv_settings_search)) }
+
+        item {
+            OptionRow(
+                label = stringResource(R.string.tv_settings_search_live),
+                description = stringResource(R.string.tv_settings_search_live_detail),
+                options = listOf(false, true),
+                selected = showLiveInSearch,
+                labelFor = {
+                    stringResource(if (it) R.string.tv_settings_on else R.string.tv_settings_off)
+                },
+                onSelect = viewModel::setShowLiveInSearch,
+            )
         }
 
         item { SectionHeading(stringResource(R.string.tv_settings_categories)) }

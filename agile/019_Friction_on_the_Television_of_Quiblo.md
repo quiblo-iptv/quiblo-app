@@ -200,8 +200,6 @@ above except the script rule** — its in-tab search goes through `BrowseViewMod
 
 ## Part C — advanced search answers both halves
 
-**Not yet built.** Root cause located.
-
 ### The report
 
 > a huge issue here that its even series or movies that show not both and it's random!
@@ -240,6 +238,34 @@ by default, with a setting to bring it back, and off means the query is not made
 4. A setting brings them back, and it is one of the television's chip rows like every other
    television boolean.
 5. With live off, no live query is issued.
+
+### What was built
+
+| Layer | Change |
+| :---- | :---- |
+| `core/data` | `byGenre` caps each kind on its own. `KINDS_WITH_METADATA` is gone; `KIND_COLUMNS` replaces it and names what it is |
+| `core/data` | `SearchOptions` — genre, `includeHidden`, `includeLive`, `limitPerKind` as one value. The public `search` had reached six parameters, which is the tool noticing what the code already said |
+| `core/datastore` | `show_live_in_search`, defaulting to **false** — the one default in that file that is a subtraction |
+| `core/data`, `feature/settings` | Through `PlayerSettingsRepository` and `SettingsViewModel`, beside the other booleans rather than in a repository of its own |
+| `feature/browse` | `SearchViewModel` owns whether advanced is open, and combines it with the setting into `includeLive` |
+| `app-tv` | A Search section in Settings with the usual two-chip row; the search screen reads `state.isAdvanced` instead of keeping its own copy |
+
+**Advanced moved into the ViewModel**, and it is worth saying why: it used to be
+`rememberSaveable` on the screen, which was right while it only changed the layout. It now
+changes what is *queried*, and a flag the query cannot see would have meant fetching a live row
+and then declining to draw it — a request paid for and thrown away, in a project whose provider
+account has been blocked twice over requests it did not need.
+
+### Testing
+
+- `SearchRepositoryTest` — a genre held by a hundred films and a hundred series, returned in the
+  order SQLite returns them, fills both columns to the cap. **Confirmed to fail against the
+  previous shared cap** rather than assumed to: reverting the one expression turns it red and
+  nothing else with it.
+- `SearchRepositoryTest` — with live switched off no live query is issued at all, and the film
+  query still is.
+
+Manual: `docs/TESTING-REQUIRED.md` §A12.
 
 ---
 

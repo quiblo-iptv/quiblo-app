@@ -112,7 +112,11 @@ class SearchRepositoryTest {
         coEvery { channelDao.findAllByIds(any(), listOf(10L)) } returns
             listOf(row(id = 10L, name = "Fargo (1996) [FHD]", kind = MediaKind.VOD))
 
-        val results = repository.search(sourceId = SOURCE_ID, query = "", genre = "Crime")
+        val results = repository.search(
+            sourceId = SOURCE_ID,
+            query = "",
+            options = SearchOptions(genre = "Crime"),
+        )
 
         assertEquals(listOf("Fargo (1996) [FHD]"), results.movies.map { it.name })
         // The rows are read for the chosen ids only. Reading them all and filtering afterwards
@@ -190,7 +194,11 @@ class SearchRepositoryTest {
         }
         coEvery { channelDao.search(any(), SOURCE_ID, any(), "s", any(), any()) } returns mixed
 
-        val results = hidingArabic().search(sourceId = SOURCE_ID, query = "s", limitPerKind = 10)
+        val results = hidingArabic().search(
+            sourceId = SOURCE_ID,
+            query = "s",
+            options = SearchOptions(limitPerKind = 10),
+        )
 
         // Ten asked for, ten returned, and none of them in the hidden script.
         assertEquals(10, results.series.size)
@@ -206,7 +214,7 @@ class SearchRepositoryTest {
             listOf(row(id = 1L, name = "مسلسل الاختيار", kind = MediaKind.SERIES))
 
         val results = hidingArabic()
-            .search(sourceId = SOURCE_ID, query = "a", includeHidden = true)
+            .search(sourceId = SOURCE_ID, query = "a", options = SearchOptions(includeHidden = true))
 
         assertEquals(listOf("مسلسل الاختيار"), results.series.map { it.name })
         coVerify { channelDao.search(any(), SOURCE_ID, MediaKind.SERIES.name, "a", any(), true) }
@@ -218,6 +226,62 @@ class SearchRepositoryTest {
         repository.search(sourceId = SOURCE_ID, query = "a")
 
         coVerify { channelDao.search(any(), SOURCE_ID, MediaKind.VOD.name, "a", any(), false) }
+    }
+
+    /**
+     * **The report: "it shows series or movies, not both, and it's random."**
+     *
+     * It was neither random nor a display problem. `titlesForMetadata` has no `ORDER BY`, so
+     * SQLite returns rowid order, and rows are inserted live-then-films-then-series — which puts
+     * every film ahead of every series. One shared cap of `limit * 2` was taken from that
+     * sequence *before* the split into columns, so past eighty matching films the series column
+     * was empty. The fixture below is that catalogue in miniature.
+     */
+    @Test
+    @DisplayName("a genre held by both kinds fills both columns")
+    fun `the genre filter caps each kind on its own`() = runTest {
+        val films = (1..CROWD).map { "Film $it" to MediaKind.VOD }
+        val series = (1..CROWD).map { "Series $it" to MediaKind.SERIES }
+        val catalogue = films + series
+
+        coEvery { titleMetadataDao.allGenreRows() } returns catalogue.map { (name, kind) ->
+            TitleGenreRow(name.lowercase(), kind.name, NO_YEAR, "Crime", isMiss = false)
+        }
+        // In the order SQLite returns them: every film, and only then every series.
+        coEvery { channelDao.titlesForMetadata(SOURCE_ID, any()) } returns
+            catalogue.mapIndexed { index, (name, kind) ->
+                ChannelTitle(id = index.toLong(), name = name, kind = kind.name)
+            }
+        coEvery { channelDao.findAllByIds(any(), any()) } answers {
+            secondArg<List<Long>>().map { id ->
+                val (name, kind) = catalogue[id.toInt()]
+                row(id = id, name = name, kind = kind)
+            }
+        }
+
+        val results = repository.search(
+            sourceId = SOURCE_ID,
+            query = "",
+            options = SearchOptions(genre = "Crime", limitPerKind = 40),
+        )
+
+        assertEquals(40, results.movies.size)
+        assertEquals(40, results.series.size)
+    }
+
+    @Test
+    @DisplayName("advanced search does not pay for a live query it will not show")
+    fun `live is not queried when it is switched off`() = runTest {
+        repository.search(
+            sourceId = SOURCE_ID,
+            query = "bbc",
+            options = SearchOptions(includeLive = false),
+        )
+
+        coVerify(exactly = 0) {
+            channelDao.search(any(), any(), MediaKind.LIVE.name, any(), any(), any())
+        }
+        coVerify { channelDao.search(any(), any(), MediaKind.VOD.name, any(), any(), any()) }
     }
 
     /** The same repository with Arabic hidden, which is the only difference under test. */
@@ -246,5 +310,13 @@ class SearchRepositoryTest {
 
     private companion object {
         const val SOURCE_ID = 3L
+
+        /**
+         * Enough of each kind that the old shared cap could not reach the second one.
+         *
+         * The cap was `limit * 2`, so a hundred films ahead of the series is comfortably past it
+         * and a smaller fixture would have passed against the bug.
+         */
+        const val CROWD = 100
     }
 }

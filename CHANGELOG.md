@@ -17,12 +17,6 @@ Formatted after [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and ve
 
 ### Added
 
-- **Ambient light on the player has a switch, in Settings under Playback, and it is on.** A film is
-  2.35:1 and a television is 16:9, so a film plays inside two black bars for its whole length — and
-  those bars are lit with the colours of the picture between them. It has been doing that since
-  0.14.0 with no way to turn it off; now there is one, and off means the picture is not sampled at
-  all rather than sampled and ignored.
-
 ### Changed
 
 - **The ambient light keeps up with the picture.** It read the screen a little under twice a second
@@ -75,6 +69,11 @@ screen was paying to load all of it.
 Upgrading keeps your catalogue exactly as it is. The new information is filled in quietly after the
 app starts, and until it is, hiding works exactly as it did before — nothing appears or disappears
 in the meantime.
+- **Back twice on Search closes Quiblo, and it asks first.** Backing out used to hand the press to
+  the system, which puts the app in the background rather than closing it — so the next launch
+  carried on as whoever was watching last, and there was no way to get the "who is watching"
+  screen back. The first press now says "Press back again to close" along the bottom, the second
+  closes, and closing forgets who was watching so the next launch asks.
 
 ### Fixed
 
@@ -83,6 +82,11 @@ in the meantime.
   was built before that moment had passed, found no key, fetched nothing, and had no way to ask
   again for as long as the tab stayed open. It now waits for the key, and a key pasted into
   Settings while the tab is open fills the row straight away instead of waiting for a restart.
+- **The settings and profile buttons are highlighted again.** Sometimes the app opened, or came
+  back from Settings, with nothing on the top bar lit and the remote apparently doing nothing — the
+  selected tab kept its underline, which made it look as though the bar was awake when it was not.
+  The app was asking the bar to take focus a moment before the bar existed, and not noticing it had
+  been refused. It now asks again until it lands.
 
 ## 0.18.0
 

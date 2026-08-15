@@ -128,6 +128,162 @@ fix (clear on every tab change) would break. The glow itself is two radial gradi
 infinite transition; a screenshot is the only honest assertion about how light looks, and `A15`
 sends that to the panel.
 
-## 4 to 6
+## 4. `BUG-028` — the bar with nothing highlighted on it
 
-*Not yet implemented. Each lands on its own branch and is written up here as it does.*
+**Reported:** *"a bug that happened many times that settings button and profile button are not
+highlighted."*
+
+**The report is a symptom two steps downstream of the cause, and the screenshot says which.** The
+gear and the face are highlighted when the bar holds focus *and* the remote is resting on them.
+The tabs keep their underline regardless, because that is **selection**, not focus. So a picture
+of a bar with an underlined tab and no highlighted icons is a picture of a shell where *nothing at
+all* has focus — and in that state the bar's key handler never runs either, which is why the
+remote also appears dead until something else takes focus.
+
+**The cause is narrower than it looked, and the probe changed the diagnosis.** The plan for this
+round said a `FocusRequester` whose node is not placed *throws* and that `tryRequestFocus`
+swallows the exception. Half right. `requestFocus()` **returns a boolean** in this version of
+Compose: it does not throw when the node exists but has not been placed yet, it returns `false` —
+and `runCatching` has nothing to catch. The failure was a discarded return value, not a swallowed
+exception.
+
+`TvShell` asked from a `LaunchedEffect`, which runs after composition and before layout has
+necessarily placed anything. And the shell leaves composition entirely whenever an overlay opens,
+so the ask ran again on every return from Settings, a detail screen or the player — and lost often
+enough to be reported as happening "many times".
+
+`insistOnFocus` asks again on the next frame while the answer is `false`, bounded at ten frames.
+A frame between attempts rather than a busy loop, because a frame is precisely what is being
+waited for. `tryRequestFocus` stays exactly as it is for the callers it was written for — a
+content area that may legitimately hold nothing focusable — and its own note now says which of the
+two failures it is swallowing.
+
+**A race cannot be asserted by running it and hoping**, so `TvFocusRaceTest` forces the losing
+side: the focusable is not in the tree on the frame the request is made. It also asserts the
+*old* call still fails in that arrangement, because otherwise "the bar ends up focused" would be a
+sentence that is equally true of a test which never forced the race — which is how this survived a
+whole round of bar tests already.
+
+## 5. `FEAT-029` — two backs on Search close the app
+
+**Reported:** *"make two backs on search screen & stack is empty close the app so I can pick
+profile again."*
+
+**Backing out never closed anything.** `BackHandler` was enabled only away from Search, so on
+Search the press fell through to the system — which *backgrounds* an activity rather than
+finishing it. The process survived, the chosen profile survived with it, and the next launch
+resumed straight into somebody else's favourites. That is the "so I can pick profile again" half,
+and it is the half that would still have been broken by simply finishing.
+
+**Finishing alone is not enough**, and this is the part worth reading twice. The chooser reappears
+because `Application.onCreate` clears the chosen profile — and that does not run again while the
+process is cached. So the shell signs out *and then* closes, awaited in that order, because a
+write racing an activity that is going away is a write that sometimes happens. And the activity
+uses `finishAndRemoveTask` rather than `finish`, so the television's recents list stops offering a
+card that resumes a session the viewer just asked to leave.
+
+**Two presses, and a line rather than a dialog.** Back is also how a viewer walks out of
+everything else, and a stray press that closes the app is the one mistake a television app cannot
+let somebody make. The notice is a `Text` along the bottom, taking no focus and no space, so
+arming the exit cannot move anything on screen. Not a `Toast`: on a television that is a
+phone-sized rectangle in the corner of a three-metre screen, in the system's own type at the
+system's own size. Not a dialog: this app has none, and the way out is a poor place to grow the
+first one. The window is three seconds and resets.
+
+The rule is `tvBackAction`, a function over state rather than branches inside the handler — the
+same shape as `tvBarAction` and for the same reason. Its third case is the one a careless version
+drops: **walking off Search disarms**, because a viewer who has gone somewhere else has stopped
+leaving. Without it, arming on Search and then walking to Movies leaves the next back on Search
+closing the app with no notice on screen at all. Four tests, one per case.
+
+## 6. `FEAT-030` — touch, and phones
+
+**Asked:** *"how costy is it to make tv app works with touch screen — if not too much make it work
+in touch screen and workable on phones."*
+
+**Cheaper than it looks, because the tiles were already built for it.** `TvPosterRows`,
+`TvLiveScreen` and `TvPlayerControls` all use `clickable`/`combinedClickable`, so a tap on a
+poster, a channel row or a player button has always worked. Three things did not.
+
+**The manifest was television-only in three separate ways**, and each one fails differently:
+
+- `leanback` was `required="true"`, which is the line that made this a television app *and nothing
+  else* — the store filters such an app off every device that is not a television. Optional now;
+  the feature is still declared and TV home screens read the `LEANBACK_LAUNCHER` filter rather
+  than this.
+- The activity declared only `LEANBACK_LAUNCHER`, so it would install on a phone and then not
+  appear in that phone's launcher. `LAUNCHER` sits beside it now.
+- `screenOrientation="landscape"` is right about a television and wrong about a handset, where a
+  locked orientation is an app that refuses to turn. Removed; `configChanges` already declares
+  that this activity handles a rotation itself.
+
+**The keyboard is the one place a single value could not serve both.** `adjustNothing` is
+*measured*, not preferred — `TvSettingsFieldStabilityTest` holds the trace of a settings list
+chasing a shrinking viewport four items down, and of the same trace flat once the window is held
+still. It is right on a television, where the leanback keyboard is a full-screen overlay. It is
+wrong on a phone, where the keyboard covers the field being typed into. So the window stays fixed
+on both and the *content* insets itself on a handset, decided from `UiModeManager` rather than
+from a screen size — a ten-inch tablet in landscape is not a television and a small television is.
+
+**The top bar is the one control a finger could not reach**, and it is deliberately *one* focus
+target rather than five. `Modifier.clickable` would have fixed the reach in one word and
+reintroduced the defect that shape exists to prevent: `clickable` makes what it touches focusable,
+and with a focusable per tab, any event destroying the focused element in the content below left
+Compose falling back to the first focusable in the tree — a tab — which selected itself and threw
+the viewer onto another screen. `Modifier.onTap` is a raw tap detector with no focus node, so the
+bar's own invariant holds unchanged: *nothing but a press moves the selection*, with "press" now
+meaning a key or a finger. `TvTapAddsNoFocusTest` asserts both halves, and the second half —
+that a focus search walks straight past a tap target — is the one that matters.
+
+### What this does not do, said plainly
+
+- **The ambient light does not light on a touchscreen.** It is fed by whichever tile holds focus,
+  and on a phone nothing does; the screen falls back to black behind the grid, which is how it
+  looked before `014`. Degraded, not broken, and left rather than rewired because the alternative
+  touches the one screen this project has burned four wrong analyses on.
+- **Sizing is untouched.** 10-foot padding and type on a phone is large but readable. Re-laying-out
+  every screen is different work from making it reachable, and doing half of it would be worse
+  than doing none.
+- **There is now a second phone-capable app beside `:app`.** Two UIs for one platform is a
+  maintenance obligation, taken on because it was asked for, and recorded here as a decision
+  rather than left to be discovered.
+
+
+---
+
+## What a device still has to answer
+
+Eleven tickets, `A15.1` to `A15.11`, in
+[`docs/TESTING-REQUIRED.md`](../docs/TESTING-REQUIRED.md). Six of this round's six items are about
+how something *looks* or *feels*, which is the one class of claim a build cannot settle. Three are
+worth naming:
+
+- **`A15.6` asks for ten repetitions and means it.** `BUG-028` is a race. A single open-and-return
+  proves nothing about a fix for something that failed intermittently, and "it seems better" is
+  what a race sounds like when it has not been fixed.
+- **`A15.8` is the reported reason rather than the reported behaviour.** Closing the app is easy
+  to see; the chooser coming back afterwards is the thing that was actually asked for, and it is
+  the half that survives a fix which only finishes the activity.
+- **`A15.11` is the regression watch.** The manifest edits and the keyboard inset in `FEAT-030`
+  are the two changes that could bring `#021`'s shaking settings list back, and it shakes on a
+  panel while staying flat everywhere else.
+
+## What was not measured
+
+Coverage is not reported for this round, for the same reason as `021`: `coverageAll` covers
+`:source:m3u` and `:source:xtream` only — the parsers, where a covered line is genuinely an
+exercised line — and nothing here touched a parser. Recorded as a divergence from Amendment 10
+rather than acted on alone.
+
+`licenceCheck` is unchanged and green. Beam is the same port as bauhaus was, not a dependency, so
+`docs/LICENSES.md` has nothing to add; the MIT notice at the top of `BoringAvatar.kt` names the
+variant and moved with it.
+
+What this round has instead is **19 tests written or rewritten** — nine on the avatar port, two on
+the ambient contract, two on the focus race, four on what a back press means, two on taps — and
+every one of them is on the half of a change that can be wrong without looking wrong: a face a
+unit out of place, a `false` return nobody read, a back press that disarms when it should not, a
+tap target that is quietly also a focus target.
+
+The other half of each of those changes is how it looks, and none of these say anything about
+that. `A15` is where that goes.

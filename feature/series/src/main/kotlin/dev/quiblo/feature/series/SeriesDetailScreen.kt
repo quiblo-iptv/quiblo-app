@@ -83,6 +83,7 @@ import dev.quiblo.core.model.TitleMetadata
 import dev.quiblo.designsystem.AutoDirection
 import dev.quiblo.feature.browse.DetailOverlayActions
 import dev.quiblo.feature.browse.TitleFacts
+import dev.quiblo.feature.browse.runtimeLabel
 import dev.quiblo.source.api.SourceError
 import org.koin.androidx.compose.koinViewModel
 import org.koin.core.parameter.parametersOf
@@ -451,9 +452,14 @@ private fun SeriesHeader(channel: Channel, details: SeriesDetails, metadata: Tit
                 )
             }
 
-            metadata?.let {
-                TitleFacts(metadata = it, modifier = Modifier.padding(top = 6.dp))
-            }
+            // Drawn even with no metadata service configured, because the year is usually the
+            // panel's own and a screen that hides it until somebody pastes an API key is hiding
+            // a fact it already has.
+            TitleFacts(
+                metadata = metadata ?: TitleMetadata(),
+                modifier = Modifier.padding(top = 6.dp),
+                year = details.releaseYear ?: metadata?.releaseYear,
+            )
 
             // The panel's own synopsis is preferred over TMDB's: it describes the thing the
             // user is about to play, in the language their provider serves it in.
@@ -533,6 +539,17 @@ private fun EpisodeItem(episode: Episode, showSeason: Boolean, onClick: () -> Un
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
+
+                // Under the title rather than beside it: a phone row is narrow, and a length
+                // competing for the same line would shorten the title on every episode to make
+                // room for a fact most panels do not even send.
+                runtimeLabel(episode.durationSeconds)?.let { length ->
+                    Text(
+                        text = length,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
             }
         }
     }

@@ -32,6 +32,7 @@ import dev.quiblo.core.model.SourceKind
 import dev.quiblo.core.model.SubtitleFile
 import dev.quiblo.core.model.SubtitleOrigin
 import dev.quiblo.core.model.VodDetails
+import dev.quiblo.core.model.releaseYearIn
 import dev.quiblo.source.api.CredentialStore
 import dev.quiblo.source.api.Credentials
 import dev.quiblo.source.api.GuideResult
@@ -458,6 +459,7 @@ class XtreamSource internal constructor(
                         episodeNumber = epNum,
                         streamUrl = streamUrl,
                         logoUrl = logo,
+                        durationSeconds = dto.info?.effectiveDurationSeconds,
                     )
                 )
             }
@@ -481,6 +483,7 @@ class XtreamSource internal constructor(
             overview = overview,
             coverUrl = coverUrl,
             seasons = seasonsList,
+            releaseYear = releaseYearIn(info?.effectiveReleaseDate),
         )
     }
 

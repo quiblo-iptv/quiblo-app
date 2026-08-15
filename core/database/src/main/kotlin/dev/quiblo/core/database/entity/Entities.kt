@@ -319,6 +319,22 @@ data class TitleMetadataEntity(
     val topCast: String? = null,
     val posterUrl: String? = null,
     val backdropUrl: String? = null,
+    /**
+     * The year the service gives, which is not the same fact as [year].
+     *
+     * [year] is part of the key and comes out of the *provider's* title; this is what the
+     * metadata service says, and it is what a screen shows when the panel supplied no date of
+     * its own. Keeping them apart matters: the key must never move because a service disagreed
+     * with a playlist about a remake.
+     */
+    val releaseYear: Int? = null,
+    /**
+     * A film's length in whole minutes, from the service.
+     *
+     * Null for a series: the average episode length a service offers is not the length of
+     * anything a viewer is about to watch, and putting it on screen would state it as one.
+     */
+    val runtimeMinutes: Int? = null,
     /** When this was fetched, so a stale entry can be refreshed rather than kept forever. */
     val fetchedAtEpochMillis: Long,
     /**

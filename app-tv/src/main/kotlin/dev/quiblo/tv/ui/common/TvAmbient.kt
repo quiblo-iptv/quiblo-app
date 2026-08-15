@@ -87,15 +87,27 @@ data class AmbientColours(val start: Color, val end: Color) {
  * screen, which is where everything a viewer is reading happens to be. Light from the edges
  * leaves the middle alone.
  */
-fun Modifier.ambientBackdrop(colours: AmbientColours): Modifier = composed {
+fun Modifier.ambientBackdrop(
+    colours: AmbientColours,
+    /**
+     * How long the light takes to become the new light.
+     *
+     * A parameter rather than one constant, because the two callers are answering different
+     * things. A browse grid is answering a D-pad, and [GRID_CROSSFADE_MILLIS] is longer than a
+     * key repeat on purpose: holding right along a row should be one slow drift rather than
+     * twelve flashes. The player is answering the picture itself, where the same number reads as
+     * the light lagging behind the scene — see [PLAYER_CROSSFADE_MILLIS].
+     */
+    crossfadeMillis: Int = GRID_CROSSFADE_MILLIS,
+): Modifier = composed {
     val start by animateColorAsState(
         targetValue = colours.start,
-        animationSpec = tween(CROSSFADE_MILLIS),
+        animationSpec = tween(crossfadeMillis),
         label = "ambientStart",
     )
     val end by animateColorAsState(
         targetValue = colours.end,
-        animationSpec = tween(CROSSFADE_MILLIS),
+        animationSpec = tween(crossfadeMillis),
         label = "ambientEnd",
     )
 
@@ -209,7 +221,17 @@ const val BACKDROP_ALPHA = 0.22f
 private const val SECOND_POOL_SCALE = 0.7f
 
 /** Longer than a D-pad key repeat, so a held press drifts rather than strobes. */
-private const val CROSSFADE_MILLIS = 700
+const val GRID_CROSSFADE_MILLIS = 700
+
+/**
+ * The player's crossfade, and it is short for the opposite reason the grid's is long.
+ *
+ * A grid backdrop follows *focus*, which moves faster than the eye wants a background to; the
+ * player's follows the *picture*, and there the same 700ms read as the light arriving after the
+ * scene it belongs to. Short enough to feel attached to the frame, long enough that a hard cut is
+ * still a fade rather than a flash.
+ */
+const val PLAYER_CROSSFADE_MILLIS = 300
 
 /**
  * Where a focused tile says which picture it is showing.

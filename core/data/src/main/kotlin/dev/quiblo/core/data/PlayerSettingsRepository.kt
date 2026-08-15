@@ -66,6 +66,11 @@ class PlayerSettingsRepository(private val store: PlayerSettingsStore) {
 
     suspend fun setShowLiveInSearch(enabled: Boolean) = store.setShowLiveInSearch(enabled)
 
+    /** Whether the player lights its black bars from the picture. On unless switched off. */
+    val ambientPlayer: Flow<Boolean> = store.ambientPlayer
+
+    suspend fun setAmbientPlayer(enabled: Boolean) = store.setAmbientPlayer(enabled)
+
     /**
      * How subtitles are drawn (INC-F11).
      *

@@ -140,6 +140,7 @@ fun TvSettingsScreen(
     val cachedTitles by viewModel.cachedTitleCount.collectAsStateWithLifecycle()
     val hiddenScripts by viewModel.hiddenScripts.collectAsStateWithLifecycle()
     val showLiveInSearch by viewModel.showLiveInSearch.collectAsStateWithLifecycle()
+    val ambientPlayer by viewModel.ambientPlayer.collectAsStateWithLifecycle()
 
     // Collapsed by default: twelve components are an obligation to make available, not
     // twelve rows to walk past on the way to anything else.
@@ -253,6 +254,22 @@ fun TvSettingsScreen(
                 selected = playerSettings.bufferMode,
                 labelFor = { it.name.lowercase().replaceFirstChar(Char::uppercase) },
                 onSelect = viewModel::setBufferMode,
+            )
+        }
+
+        // On by default, and here rather than buried: it changes what the screen looks like for
+        // the whole length of a film, and a viewer who does not want it should not have to guess
+        // whether the app has one.
+        item {
+            OptionRow(
+                label = stringResource(R.string.tv_settings_ambient),
+                description = stringResource(R.string.tv_settings_ambient_detail),
+                options = listOf(true, false),
+                selected = ambientPlayer,
+                labelFor = {
+                    stringResource(if (it) R.string.tv_settings_on else R.string.tv_settings_off)
+                },
+                onSelect = viewModel::setAmbientPlayer,
             )
         }
 

@@ -15,6 +15,22 @@ Formatted after [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and ve
 
 ## Unreleased
 
+### Added
+
+- **Ambient light on the player has a switch, in Settings under Playback, and it is on.** A film is
+  2.35:1 and a television is 16:9, so a film plays inside two black bars for its whole length — and
+  those bars are lit with the colours of the picture between them. It has been doing that since
+  0.14.0 with no way to turn it off; now there is one, and off means the picture is not sampled at
+  all rather than sampled and ignored.
+
+### Changed
+
+- **The ambient light keeps up with the picture.** It read the screen a little under twice a second
+  and then took most of another second to change, so at worst the glow was around two seconds
+  behind the frame it came from — near enough to look deliberate, far enough to look like two
+  separate things. It now reads four times as often and settles twice as fast, which is close
+  enough to read as the picture's own light. A hard cut is still a fade rather than a flash.
+
 ## 0.18.0
 
 ### Added

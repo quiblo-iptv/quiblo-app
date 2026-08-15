@@ -75,6 +75,15 @@ fun browseParams(kind: MediaKind, scope: BrowseScope = BrowseScope.CATALOGUE) =
 fun recentlyAddedParams() = browseParams(MediaKind.VOD, BrowseScope.RECENTLY_ADDED)
 
 /**
+ * Koin parameters for the television's poster grid.
+ *
+ * Its own scope because it is a different question to the phone's flat grid, not a different
+ * rendering of the same one: it draws a row per category, so it wants the first tiles of each
+ * rather than a page of the whole kind. See [BrowseScope.CATEGORY_ROWS].
+ */
+fun categoryRowsParams(kind: MediaKind) = browseParams(kind, BrowseScope.CATEGORY_ROWS)
+
+/**
  * Koin parameters for the television's For You tab.
  *
  * [BrowseFeed.kind] is a placeholder here for the same reason it is in [recentlyAddedParams]: the

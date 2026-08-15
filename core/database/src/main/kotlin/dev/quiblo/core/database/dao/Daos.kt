@@ -18,12 +18,14 @@
 
 package dev.quiblo.core.database.dao
 
+import androidx.paging.PagingSource
 import androidx.room.Dao
 import androidx.room.Delete
 import androidx.room.Embedded
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import androidx.room.RoomWarnings
 import androidx.room.Transaction
 import androidx.room.Update
 import dev.quiblo.core.database.entity.CategoryOverrideEntity
@@ -180,6 +182,101 @@ interface ChannelDao {
          * hiding what it always hid while `CatalogueIdentityBackfill` works through it, instead
          * of hiding nothing — or, since unknown has every bit set, hiding everything.
          */
+        unknownMask: Int,
+    ): Flow<List<ChannelWithFavorite>>
+
+    /**
+     * The browse query again, a page at a time.
+     *
+     * **The same predicates, deliberately — and it is one query written twice for one reason.**
+     * Room cannot return both a `Flow<List<…>>` and a `PagingSource` from one declaration, and
+     * the two consumers genuinely want different things: the television's poster grid groups its
+     * whole answer into category rows, and a flat grid does not. Anything that changes about what
+     * a browse screen shows has to change in both, which is what
+     * `PagedBrowseMatchesUnpagedTest` exists to catch.
+     *
+     * The `LIMIT`/`OFFSET` is Room's, not written here: a `PagingSource` return type is what
+     * makes it generate one.
+     */
+    @Query(
+        """
+        SELECT c.*, (f.stableKey IS NOT NULL) AS isFavorite
+        FROM channels c
+        LEFT JOIN favorites f ON f.sourceId = c.sourceId AND f.stableKey = c.stableKey
+              AND f.profileId = :profileId
+        WHERE c.sourceId = :sourceId
+          AND c.kind = :kind
+          AND (:groupTitle IS NULL OR c.groupTitle = :groupTitle)
+          AND (:query = '' OR c.name LIKE '%' || :query || '%' ESCAPE '\')
+          AND (:favoritesOnly = 0 OR f.stableKey IS NOT NULL)
+          AND (c.scriptMask = :unknownMask OR (:hiddenMask & c.scriptMask) = 0)
+        ORDER BY c.sortIndex ASC
+        """,
+    )
+    @Suppress("LongParameterList")
+    fun pagedBrowse(
+        profileId: Long,
+        sourceId: Long,
+        kind: String,
+        groupTitle: String?,
+        query: String,
+        favoritesOnly: Int,
+        hiddenMask: Int,
+        unknownMask: Int,
+    ): PagingSource<Int, ChannelWithFavorite>
+
+    /**
+     * The first [perCategory] items of every category of one kind, in one query.
+     *
+     * **For the television's poster grid, which cannot be paged and should not be.** That screen
+     * groups its answer into a row per category; a paged list has no whole to group, so Paging is
+     * the wrong tool there. What it was actually doing wrong is simpler: it read *every* row of a
+     * kind — thirty thousand of them on a real account — to draw about forty tiles per row, and
+     * grouped the lot in Kotlin on every emission.
+     *
+     * A window function caps each category before any of it leaves SQLite, so the answer is the
+     * size of what is drawn rather than the size of the catalogue. Nobody walks three thousand
+     * tiles along one row with a D-pad; `BrowseFeed.recentLimit` is the same reasoning already
+     * applied to Recently Added.
+     *
+     * The ordering is the outer query's, not the window's. `ROW_NUMBER` needs its own
+     * `PARTITION BY`, and leaving the result in that order would hand the screen its categories
+     * grouped by name — where the category *order* is the provider's and is read from elsewhere
+     * (`observeCategoriesByKind`). Sorting by `sortIndex` returns it to the order every other
+     * feed uses and lets the grouping in Kotlin stay exactly as it was.
+     *
+     * Window functions need SQLite 3.25; `minSdk` here is 30, which ships 3.28.
+     */
+    @Query(
+        """
+        SELECT * FROM (
+            SELECT c.*, (f.stableKey IS NOT NULL) AS isFavorite,
+                   ROW_NUMBER() OVER (PARTITION BY c.groupTitle ORDER BY c.sortIndex ASC) AS rowInCategory
+            FROM channels c
+            LEFT JOIN favorites f ON f.sourceId = c.sourceId AND f.stableKey = c.stableKey
+                  AND f.profileId = :profileId
+            WHERE c.sourceId = :sourceId
+              AND c.kind = :kind
+              AND (:query = '' OR c.name LIKE '%' || :query || '%' ESCAPE '\')
+              AND (c.scriptMask = :unknownMask OR (:hiddenMask & c.scriptMask) = 0)
+        )
+        WHERE rowInCategory <= :perCategory
+        ORDER BY sortIndex ASC
+        """,
+    )
+    // `rowInCategory` is the window function's own counter and exists only to be compared
+    // against `perCategory` in the outer `WHERE`. Room is right that nothing reads it; it is
+    // not a column that should be mapped, and `@RewriteQueriesToDropUnusedColumns` is not the
+    // answer either — dropping it would take the predicate that uses it with it.
+    @Suppress("LongParameterList")
+    @SuppressWarnings(RoomWarnings.QUERY_MISMATCH)
+    fun observeCategoryRows(
+        profileId: Long,
+        sourceId: Long,
+        kind: String,
+        query: String,
+        perCategory: Int,
+        hiddenMask: Int,
         unknownMask: Int,
     ): Flow<List<ChannelWithFavorite>>
 

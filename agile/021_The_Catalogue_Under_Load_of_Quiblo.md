@@ -151,23 +151,49 @@ started — but both could now join on the stored key instead. Raised rather tha
 
 ### Paging — `BUG-023`, and the one place it does not fit
 
-*Not yet implemented.*
+`observeBrowse` had no `LIMIT` and nothing paged it, so opening Movies read every row of the kind,
+allocated a domain object per row and handed the lot to a lazy grid that draws about twelve. Two
+shapes were needed, not one:
 
-The phone's browse grid and the television's Live list are flat `items(...)` calls and take
-Paging 3 cleanly. The television's Movies and Series grid does not: `groupIntoRows` buckets the
-whole flat list into per-category rows in Kotlin, and a paged list has no whole to group. That
-screen instead takes the shape it already implies — the category list is a cheap query, so each
-row becomes its own bounded query of about forty items, fetched as the row scrolls into view.
-Nobody walks three thousand tiles along one row with a D-pad, which is the reasoning
-`BrowseFeed.recentLimit` already uses.
+- **Flat lists take Paging 3.** The phone's browse grid and list, and the television's Live list.
+  `pagedBrowse` in the DAO, `Pager` in the repository, `cachedIn(viewModelScope)` on
+  `BrowseViewModel.pagedItems`. It is deliberately *not* a field on `BrowseUiState`: `PagingData`
+  is a stream of loads rather than a value, and putting one inside screen state would hand the
+  grid a fresh pager — and throw away its scroll position and every loaded page — every time a
+  rating arrived or a poster resolved.
+- **The television's poster grid cannot be paged**, because `groupIntoRows` buckets its whole
+  answer into a row per category and a paged list has no whole to group. It gets
+  `BrowseScope.CATEGORY_ROWS` and one window-function query capping each category at forty —
+  `ROW_NUMBER() OVER (PARTITION BY groupTitle …)`, ordered back into the provider's own order by
+  the outer query, because `ROW_NUMBER`'s partition would otherwise hand the screen its categories
+  alphabetically. Forty is `BrowseFeed.recentLimit`'s reasoning: nobody presses right forty times.
+  The screen's grouping and its measured scroll behaviour are untouched; it simply reads about as
+  many rows as it draws.
 
-*Consequence to accept:* `onPlay(state.items, item.flatIndex)` hands the player everything on
-screen to zap along. It becomes the rows loaded so far. That is a real behaviour change and the
-honest one — the old list was only complete because the screen was paying to load the whole
-catalogue.
+**The guide prefetch moved rather than being dropped.** `017` fixed a television Live list that
+drew blank until somebody focused a row, by asking for the first ten channels' guides as soon as
+the list existed. That lived in the ViewModel because the ViewModel could see the list. The list
+is paged now, so `TvLiveScreen` calls `onRowVisible` for the first ten loaded rows instead —
+and nothing about the guard moved: the kind check, the stream-id check, the once-per-session
+dedupe and the concurrency limit are all still behind that one door, which is what the rewritten
+`BrowseViewModelTest` cases now assert directly.
 
-*At risk and to be re-run rather than edited around:* `TvBrowseScrollStabilityTest` (defect #008,
-four wrong analyses).
+**Consequence accepted:** `onPlay(items, index)` handed the player everything on screen to zap
+along. It is now the pages loaded so far. A real behaviour change, and the honest one — the old
+list was only complete because the screen was paying to load the whole catalogue.
+
+**Two copies of one query, and the test that keeps them honest.** Room cannot return both a
+`Flow<List<…>>` and a `PagingSource` from one declaration, so the browse predicates are written
+twice. A predicate added to one and forgotten in the other is not a build failure and not a crash
+— it is one app hiding a writing system the other does not.
+`PagedBrowseMatchesUnpagedTest` asserts the two answers are the same list across category, search,
+favourites, a hidden script and an uncomputed row.
+
+**Not touched:** `TvBrowseScrollStabilityTest` needed no change, because the poster grid's own
+shape did not change — only the size of what it is handed.
+
+New dependencies: `androidx.paging:paging-runtime`, `paging-compose`, `paging-common`,
+`androidx.room:room-paging`. All Apache-2.0, so gate 1 is satisfied.
 
 ---
 

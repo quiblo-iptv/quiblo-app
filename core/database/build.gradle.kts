@@ -64,6 +64,8 @@ dependencies {
     implementation(projects.core.common)
     implementation(libs.room.runtime)
     implementation(libs.room.ktx)
+    // A `PagingSource` returned from a DAO is Room's own type. See `pagedBrowse`.
+    api(libs.room.paging)
     implementation(libs.kotlinx.coroutines.core)
     implementation(platform(libs.koin.bom))
     implementation(libs.koin.core)

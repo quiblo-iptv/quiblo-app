@@ -37,6 +37,9 @@ dependencies {
     implementation(projects.source.tmdb)
     implementation(projects.source.xtream)
     implementation(libs.kotlinx.coroutines.core)
+    // `Flow<PagingData<Channel>>` crosses this module's public surface, so `api` and not
+    // `implementation`: a feature collecting one has to be able to name the type.
+    api(libs.paging.common)
     implementation(platform(libs.koin.bom))
     implementation(libs.koin.core)
     implementation(libs.ktor.client.core)

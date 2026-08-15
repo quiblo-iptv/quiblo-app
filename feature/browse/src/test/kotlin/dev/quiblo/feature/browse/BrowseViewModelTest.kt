@@ -138,70 +138,75 @@ class BrowseViewModelTest {
         verify { guideRepository.observeNowPlaying(SOURCE.id) }
     }
 
+    /**
+     * The guard around guide requests, exercised through the one door there is.
+     *
+     * **The top-of-list prefetch has moved to `TvLiveScreen` and these have moved with it.** It
+     * used to live in this class because this class could see the whole list; the list is paged
+     * now, so the screen is what knows which rows exist. What did *not* move is the guard, and
+     * that is what these assert — a screen calling this ten times must cost ten requests and
+     * never eleven, however many times the same rows are handed back.
+     *
+     * The bound is why any of this is safe: "per visible row" against a 20,000-channel account
+     * is how this project's provider blocked it, twice.
+     */
     @Test
-    fun `a fresh live list asks for the top of itself without anything being focused`() = runTest {
-        // The reported defect. On the television nothing has focus when Live opens, and the
-        // guide was fetched only for a row focus had rested on — so every row drew blank,
-        // indefinitely, for anybody who did not happen to stop on one.
-        every { channelRepository.observeBrowse(any(), any(), any(), any(), any()) } returns
-            flowOf(liveChannels(count = 30))
+    fun `a list handed to the guide twice costs one request per channel`() = runTest {
+        val viewModel = viewModelFor(BrowseFeed(MediaKind.LIVE))
+        val channels = liveChannels(count = 10)
 
-        viewModelFor(BrowseFeed(MediaKind.LIVE)).uiState.drain()
+        channels.forEach(viewModel::onRowVisible)
+        // The same rows again — a page re-emitted, a category changed back, a keystroke.
+        channels.forEach(viewModel::onRowVisible)
+        testDispatcher.scheduler.advanceUntilIdle()
 
         coVerify(exactly = 10) { guideRepository.refreshGuideFor(any()) }
     }
 
     @Test
-    fun `the prefetch is bounded and does not repeat for a list it has already seen`() = runTest {
-        // The bound is the reason this is safe to do at all: "per visible row" against a
-        // 20,000-channel account is how this project's provider blocked it, twice. A list that
-        // re-emits — a write to the table, a keystroke, a category change — must cost nothing.
-        every { channelRepository.observeBrowse(any(), any(), any(), any(), any()) } returns
-            flowOf(liveChannels(count = 500), liveChannels(count = 500))
+    fun `a film is never asked about, because a poster has nowhere to put a programme`() = runTest {
+        val viewModel = viewModelFor(BrowseFeed(MediaKind.VOD))
 
-        viewModelFor(BrowseFeed(MediaKind.LIVE)).uiState.drain()
-
-        coVerify(exactly = 10) { guideRepository.refreshGuideFor(any()) }
-    }
-
-    @Test
-    fun `the films feed prefetches nothing, because a poster has nowhere to put a programme`() = runTest {
-        every { channelRepository.observeBrowse(any(), any(), any(), any(), any()) } returns
-            flowOf(liveChannels(count = 30).map { it.copy(kind = MediaKind.VOD) })
-
-        viewModelFor(BrowseFeed(MediaKind.VOD)).uiState.drain()
+        liveChannels(count = 30).map { it.copy(kind = MediaKind.VOD) }.forEach(viewModel::onRowVisible)
+        testDispatcher.scheduler.advanceUntilIdle()
 
         coVerify(exactly = 0) { guideRepository.refreshGuideFor(any()) }
     }
 
     @Test
     fun `a refusing panel reaches the screen instead of looking like an empty guide`() = runTest {
-        every { channelRepository.observeBrowse(any(), any(), any(), any(), any()) } returns
-            flowOf(liveChannels(count = 3))
         coEvery { guideRepository.refreshGuideFor(any()) } returns GuideOutcome.BLOCKED
 
-        val state = viewModelFor(BrowseFeed(MediaKind.LIVE)).uiState
-        state.drain()
+        val viewModel = viewModelFor(BrowseFeed(MediaKind.LIVE))
+        viewModel.uiState.test {
+            awaitItem()
+            liveChannels(count = 3).forEach(viewModel::onRowVisible)
+            testDispatcher.scheduler.advanceUntilIdle()
+            cancelAndIgnoreRemainingEvents()
+        }
 
-        assertEquals(GuideOutcome.BLOCKED, state.value.guideOutcome)
+        assertEquals(GuideOutcome.BLOCKED, viewModel.uiState.value.guideOutcome)
     }
 
     @Test
     fun `one channel with listings is enough to stop reporting trouble`() = runTest {
         // Most channels on a large account have no listing, and a guide that reported itself
         // broken on meeting the first of them would be wrong about every working account.
-        every { channelRepository.observeBrowse(any(), any(), any(), any(), any()) } returns
-            flowOf(liveChannels(count = 3))
         coEvery { guideRepository.refreshGuideFor(any()) } returnsMany listOf(
             GuideOutcome.EMPTY,
             GuideOutcome.STORED,
             GuideOutcome.EMPTY,
         )
 
-        val state = viewModelFor(BrowseFeed(MediaKind.LIVE)).uiState
-        state.drain()
+        val viewModel = viewModelFor(BrowseFeed(MediaKind.LIVE))
+        viewModel.uiState.test {
+            awaitItem()
+            liveChannels(count = 3).forEach(viewModel::onRowVisible)
+            testDispatcher.scheduler.advanceUntilIdle()
+            cancelAndIgnoreRemainingEvents()
+        }
 
-        assertEquals(GuideOutcome.STORED, state.value.guideOutcome)
+        assertEquals(GuideOutcome.STORED, viewModel.uiState.value.guideOutcome)
     }
 
     private fun liveChannels(count: Int) = (1..count).map { index ->
@@ -214,6 +219,22 @@ class BrowseViewModelTest {
             tvgId = "key-$index",
             providerStreamId = index.toString(),
         )
+    }
+
+    /**
+     * The catalogue feed carries no list of its own, because the paged one is the list.
+     *
+     * Two copies of the same query — one paged for the grid, one whole for the state — would be
+     * the entire cost paging exists to have removed, hidden behind a field nothing reads.
+     */
+    @Test
+    fun `the catalogue scope does not also read the whole kind`() = runTest {
+        val viewModel = viewModelFor(BrowseFeed(MediaKind.VOD))
+
+        viewModel.uiState.drain()
+
+        assertEquals(emptyList<Channel>(), viewModel.uiState.value.items)
+        verify(exactly = 0) { channelRepository.observeBrowse(any(), any(), any(), any(), any()) }
     }
 
     @Test

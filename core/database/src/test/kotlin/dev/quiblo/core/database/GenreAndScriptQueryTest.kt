@@ -214,6 +214,76 @@ class GenreAndScriptQueryTest {
         assertEquals(4, db.channelDao().countDescribedTitles(SOURCE_ID))
     }
 
+    /**
+     * The television's poster grid reads the top of each category, not the whole kind.
+     *
+     * It used to read every row of a kind — thirty thousand on a real account — and group the
+     * lot in Kotlin, to draw rows about forty tiles wide. The window function caps each category
+     * before any of it leaves SQLite.
+     */
+    @Test
+    fun `each category is capped, and the cap is per category rather than shared`() = runTest {
+        seed()
+        db.channelDao().insertAll(
+            (100..120L).map { channel(id = it, name = "Action $it", kind = "VOD", category = "Action") } +
+                (200..220L).map { channel(id = it, name = "Drama $it", kind = "VOD", category = "Drama") },
+        )
+
+        val rows = categoryRows(perCategory = 5)
+
+        // Five from each of the two crowded categories, and everything from the small one —
+        // a cap per category cannot starve a category, whatever order SQLite returns rows in.
+        assertEquals(5, rows.count { it.channel.groupTitle == "Action" })
+        assertEquals(5, rows.count { it.channel.groupTitle == "Drama" })
+        assertEquals(4, rows.count { it.channel.groupTitle == "Everything" })
+    }
+
+    /**
+     * The rows come back in the provider's order, not grouped by category name.
+     *
+     * `ROW_NUMBER` needs its own `PARTITION BY`, and leaving the result in that order would hand
+     * the screen its categories alphabetically — where the category *order* is the provider's and
+     * is read from `observeCategoriesByKind`. The outer `ORDER BY` puts it back.
+     */
+    @Test
+    fun `category rows keep the provider's own ordering`() = runTest {
+        seed()
+
+        assertEquals(
+            categoryRows(perCategory = 40).map { it.channel.id },
+            categoryRows(perCategory = 40).map { it.channel.id }.sorted(),
+        )
+    }
+
+    @Test
+    fun `a hidden writing system is not in the category rows either`() = runTest {
+        seed()
+        db.channelDao().insertAll(
+            listOf(
+                channel(
+                    id = 50,
+                    name = "مسلسل",
+                    kind = "VOD",
+                    scriptMask = TitleScript.Arabic.bit,
+                ),
+            ),
+        )
+
+        assertEquals(5, categoryRows(perCategory = 40, hiddenMask = 0).size)
+        assertEquals(4, categoryRows(perCategory = 40, hiddenMask = TitleScript.Arabic.bit).size)
+    }
+
+    private suspend fun categoryRows(perCategory: Int, hiddenMask: Int = 0) =
+        db.channelDao().observeCategoryRows(
+            profileId = 1L,
+            sourceId = SOURCE_ID,
+            kind = "VOD",
+            query = "",
+            perCategory = perCategory,
+            hiddenMask = hiddenMask,
+            unknownMask = SCRIPT_MASK_UNKNOWN,
+        ).first()
+
     private suspend fun genre(genre: String, kind: String) = db.channelDao().searchByGenre(
         profileId = 1L,
         sourceId = SOURCE_ID,
@@ -276,13 +346,14 @@ class GenreAndScriptQueryTest {
         searchTitle: String = "",
         identityYear: Int = 0,
         scriptMask: Int = TitleScript.Latin.bit,
+        category: String = "Everything",
     ) = ChannelEntity(
         id = id,
         sourceId = SOURCE_ID,
         name = name,
         streamUrl = "https://example.invalid/$id",
         kind = kind,
-        groupTitle = "Everything",
+        groupTitle = category,
         stableKey = "key-$id",
         sortIndex = id.toInt(),
         searchTitle = searchTitle,

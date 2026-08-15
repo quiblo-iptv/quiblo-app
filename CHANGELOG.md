@@ -15,6 +15,14 @@ Formatted after [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and ve
 
 ## Unreleased
 
+### Fixed
+
+- **The settings and profile buttons are highlighted again.** Sometimes the app opened, or came
+  back from Settings, with nothing on the top bar lit and the remote apparently doing nothing — the
+  selected tab kept its underline, which made it look as though the bar was awake when it was not.
+  The app was asking the bar to take focus a moment before the bar existed, and not noticing it had
+  been refused. It now asks again until it lands.
+
 ## 0.18.0
 
 ### Added

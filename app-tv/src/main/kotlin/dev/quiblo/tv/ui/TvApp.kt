@@ -80,6 +80,7 @@ import dev.quiblo.tv.ui.browse.TvForYouScreen
 import dev.quiblo.tv.ui.browse.TvPosterRows
 import dev.quiblo.tv.ui.common.LocalAmbientSink
 import dev.quiblo.tv.ui.common.ambientBackdrop
+import dev.quiblo.tv.ui.common.insistOnFocus
 import dev.quiblo.tv.ui.common.rememberAmbient
 import dev.quiblo.tv.ui.common.tryRequestFocus
 import dev.quiblo.tv.ui.consent.TvConsentScreen
@@ -383,7 +384,14 @@ private fun TvShell(
     val barFocusRequester = remember { FocusRequester() }
     val contentFocusRequester = remember { FocusRequester() }
 
-    LaunchedEffect(Unit) { barFocusRequester.tryRequestFocus() }
+    // Insists rather than tries, and that distinction is `022` #4. `requestFocus()` returns a
+    // boolean rather than throwing when its node is not placed yet, and `tryRequestFocus` drops
+    // that `false` on the floor — so the shell sat with *nothing* focused: no highlight on the
+    // gear or the face, and a remote that appeared dead because the bar's key handler was never
+    // reached. This effect runs after composition and before layout has necessarily placed
+    // anything, and the shell leaves composition whenever an overlay opens, so it lost that race
+    // again on every return from Settings, a detail screen or the player.
+    LaunchedEffect(Unit) { barFocusRequester.insistOnFocus() }
 
     // Back walks to the first tab, and only then leaves the app.
     //
@@ -392,6 +400,8 @@ private fun TvShell(
     // the bar with it, so the remote is visibly somewhere rather than apparently dead.
     BackHandler(enabled = selectedTab != TvTab.SEARCH.ordinal) {
         onSelectTab(TvTab.SEARCH.ordinal)
+        // The bar is already placed here — this is a press, not a first composition — so one ask
+        // is enough and there is no coroutine to insist from.
         barFocusRequester.tryRequestFocus()
     }
 

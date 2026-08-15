@@ -17,6 +17,11 @@ Formatted after [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and ve
 
 ### Changed
 
+- **Generated profile pictures are faces now.** They were four coloured shapes; they are a face on
+  a coloured tile — the same generator library, a different one of its styles. Every profile
+  already wearing a generated picture becomes a face the next time the app opens, and it is the
+  same face on your phone, on the television, and after a restore, because what is stored is still
+  only the seed. Pictures picked from the illustrated set are untouched.
 - **Advanced search answers a genre instead of thinking about it.** Filtering by a genre used to
   read every film and series on your account and re-clean all of their titles from scratch — fifty
   thousand of them on a large provider, every single time you pressed a genre, with nothing kept

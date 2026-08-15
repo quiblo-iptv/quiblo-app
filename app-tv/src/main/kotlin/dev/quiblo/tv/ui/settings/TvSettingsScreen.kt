@@ -912,6 +912,7 @@ internal fun CategoryBox(
         }
         itemsIndexed(
             items = categories,
+            // not display text: a lazy-list key, so switching kind cannot reuse a row's state.
             key = { _, category -> "${kind.name}-${category.title}" },
         ) { index, category ->
             CategoryEditRow(

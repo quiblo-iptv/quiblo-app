@@ -570,6 +570,63 @@ panel is what settles it.
 
 ---
 
+## A11 — Round `019` Part B: hiding that hides
+
+**Where:** the television, on an account with Arabic or another non-Latin script in it. From
+[`019`](../agile/019_Friction_on_the_Television_of_Quiblo.md) Part B. The rule change is decided
+in `core/common` and is covered on the JVM; what a device is needed for is what a *real
+provider's* titles look like, which is the whole reason the old rule failed.
+
+### A11.1 — the shape of the titles, before anything else
+
+| | |
+| :---- | :---- |
+| **What to look at** | Browse Movies and Series with nothing hidden, and read the titles. Note how the provider writes its tags — leading, trailing, bracketed, piped |
+| **Passes if** | You can say which of those shapes your account uses. This is a reading, not a test |
+| **Why it is here** | The rule keeps a trailing bracketed tag and hides everything else. If this account tags some other way, the next two rows will say so and the rule needs revisiting rather than the code |
+
+### A11.2 — hiding Arabic hides Arabic
+
+| | |
+| :---- | :---- |
+| **What to look at** | Settings → hide Arabic. Then Movies, Series and Search |
+| **Passes if** | Titles with Arabic anywhere in them are gone, including ones that begin with an English word |
+| **Fails if** | Anything with Arabic letters in its name is still listed — that is the old first-letter rule, unchanged |
+
+### A11.3 — and what it costs
+
+| | |
+| :---- | :---- |
+| **What to look at** | With Arabic hidden, look for an English film your provider has tagged as dubbed or subtitled |
+| **Passes if** | One tagged `[عربي]` or `(مترجم)` is still there; one tagged with a bare Arabic word on the end is gone |
+| **Why it is here** | The second half is the accepted cost of the rule, written down so it is recognised as a decision rather than reported as a defect |
+
+### A11.4 — a hidden category stays hidden when searched
+
+| | |
+| :---- | :---- |
+| **What to look at** | Hide a category you know the contents of. Then search for something in it |
+| **Passes if** | Nothing from that category comes back |
+| **Fails if** | It does — which is the report |
+
+### A11.5 — and comes back when asked for
+
+| | |
+| :---- | :---- |
+| **What to look at** | Same search, then open Advanced and press Include hidden |
+| **Passes if** | The hidden category's titles appear, and so do titles in a hidden writing system. Pressing it again puts them away. Leaving Search and coming back has it off |
+| **Fails if** | It only brings back one of the two, or it is still on when the screen is reopened |
+
+### A11.6 — a full page is still a full page
+
+| | |
+| :---- | :---- |
+| **What to look at** | With a script hidden, search a term with a great many matches in the *other* script |
+| **Passes if** | The row is as long as it would be with nothing hidden |
+| **Fails if** | It is noticeably shorter — the filter is running after the cut again |
+
+---
+
 ## C — Deferred measurements, in writing
 
 Things nobody can check yet, recorded so they stop being re-asked.

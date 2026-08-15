@@ -107,8 +107,6 @@ Manual: `docs/TESTING-REQUIRED.md` §A4.
 
 ## Part B — hidden means hidden
 
-**Not yet built.** Root causes located, acceptance criteria settled.
-
 ### The reports
 
 > in Writing system hiding functionality we only hide if the title is fully arabic and so, make
@@ -153,10 +151,50 @@ first-strong and must not move with this.
 5. A toggle in advanced search returns hidden categories *and* hidden scripts, for that search.
 6. Hiding a script does not silently shrink a page of results — the query overscans and filters.
 
+### What was built
+
+| Layer | Change |
+| :---- | :---- |
+| `core/common` | `String.strongScripts()`, `String.withoutTrailingTags()`, and `isInHiddenScript` rewritten around them. `firstStrongScript()` untouched |
+| `core/database` | `ChannelDao.search` and `titlesForMetadata` take `includeHidden` and exclude channels whose `groupTitle` is hidden *for that kind* |
+| `core/data` | `SearchRepository.search(includeHidden)`; the script filter moved inside `matches` with a `SCRIPT_OVERSCAN` of 2; the five arguments a search carries became one `Ask` |
+| `feature/browse` | `SearchViewModel.setIncludeHidden`, reset by `clear()`, in the state |
+| `app-tv` | An Include hidden chip, first among the advanced controls |
+
+**Two decisions worth keeping.**
+
+**The trailing-pipe form is not stripped**, although the shape of the rule invites it. Providers
+write `AR | <title>` far more often than `<title> | AR`, so a rule that removed the last
+pipe-separated segment would take the title and keep the tag — the exact inversion of what the
+bracket rule is for. A test pins it.
+
+**The genre index and the metadata scan both read the *whole* catalogue**, hidden categories
+included. Coverage answers "how much of what you own has been described", which a hiding choice
+does not change; and a scan that skipped hidden categories would make unhiding one cost an hour
+of lookups.
+
+### Testing
+
+- `TitleScriptTest` — rewritten. Any letter hides; each of the three bracket shapes and a stack
+  of them survive; the unbracketed tag hides and is pinned as the cost; the rule is symmetric;
+  an unclosed bracket is left alone; a *leading* provider tag does not save an Arabic title.
+- `HiddenCategorySearchTest` (new, real Room on Robolectric) — a hidden category is not searched,
+  the toggle brings it back, hiding a category of one kind leaves the same name under another
+  alone, a renamed-but-visible category is still searched, and the genre filter's title list
+  obeys the same rule. Mocked-DAO tests can prove none of this: the whole behaviour is one
+  correlated subquery.
+- `SearchRepositoryTest` — the overscan asks for twice what it keeps and still returns a full
+  page with a script hidden; `includeHidden` reaches the DAO and stops the script filter; an
+  ordinary search asks for `includeHidden = false`.
+
+Manual: `docs/TESTING-REQUIRED.md` §A11.
+
 ### Out of scope, and its own item
 
 Browsing with "all categories" selected still shows items from hidden categories. Same defect
-family, different screen, and it wants its own branch.
+family, different screen, and it wants its own branch. **The phone is unaffected by everything
+above except the script rule** — its in-tab search goes through `BrowseViewModel` and
+`observeBrowse`, not through `SearchRepository`, so it is the same item.
 
 ---
 

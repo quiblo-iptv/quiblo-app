@@ -15,6 +15,22 @@ Formatted after [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and ve
 
 ## Unreleased
 
+### Fixed
+
+- **Hiding a writing system now hides a title with any of it in.** It read the first letter of a
+  title and stopped, so anything a provider had prefixed in English — a quality marker, a channel
+  number, a stray "The" — came back in full for somebody who had asked not to be shown that
+  script. A tag in brackets on the end is still ignored, because `Oppenheimer [عربي]` is an
+  English film with an Arabic dub and hiding Arabic should not lose it. The same tag written
+  without brackets cannot be told apart from a title, and that one is hidden.
+- **A hidden category is hidden from search too.** Switching a category off in Settings took it
+  out of the category list and nowhere else, so every search kept answering from it — the one
+  place you are least able to tell where a result came from. Advanced search has an Include
+  hidden switch for the times you want to look there anyway; it covers hidden writing systems in
+  the same press.
+- **Hiding a writing system no longer shortens the results.** The filter ran after the database
+  had already cut the list to a screenful, so a search with plenty of matches could show one.
+
 ### Changed
 
 - **The television asks before it types.** Every text field on the television — the search box,

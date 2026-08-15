@@ -18,7 +18,9 @@
 
 package dev.quiblo.core.data
 
+import dev.quiblo.core.common.SCRIPT_MASK_UNKNOWN
 import dev.quiblo.core.common.TitleScript
+import dev.quiblo.core.common.toMask
 import dev.quiblo.core.database.dao.ChannelDao
 import dev.quiblo.core.database.dao.FavoriteDao
 import dev.quiblo.core.database.dao.SourceDao
@@ -119,19 +121,29 @@ class ChannelRepository(
     ): Flow<List<Channel>> =
         // Re-queried when the profile changes, so switching redraws the hearts rather than
         // leaving the previous viewer's on screen until something else invalidates them.
-        profiles.activeProfile.flatMapLatest { profile ->
-            channelDao.observeBrowse(
-                profileId = profile?.id ?: Profile.NONE_ID,
-                sourceId = sourceId,
-                kind = kind.name,
-                groupTitle = groupTitle,
-                // Escaped so a viewer typing % or _ searches for those characters rather than
-                // handing SQL a wildcard. See escapeForLike.
-                query = escapeForLike(query.trim()),
-                favoritesOnly = if (favoritesOnly) 1 else 0,
-            )
-        }.map { rows -> rows.map { it.channel.toDomain(isFavorite = it.isFavorite) } }
-            .hidingUnreadableScripts(hiddenScripts) { it.name }
+        //
+        // Re-queried on the hidden scripts too, and that is the change `021` made: the filter
+        // used to run in Kotlin over every row of every emission, and it is now a bitmask
+        // predicate the query itself applies. A row that will be hidden is no longer read, no
+        // longer mapped, and no longer walked character by character to decide.
+        combine(profiles.activeProfile, hiddenScripts) { profile, hidden -> profile to hidden }
+            .flatMapLatest { (profile, hidden) ->
+                channelDao.observeBrowse(
+                    profileId = profile?.id ?: Profile.NONE_ID,
+                    sourceId = sourceId,
+                    kind = kind.name,
+                    groupTitle = groupTitle,
+                    // Escaped so a viewer typing % or _ searches for those characters rather than
+                    // handing SQL a wildcard. See escapeForLike.
+                    query = escapeForLike(query.trim()),
+                    favoritesOnly = if (favoritesOnly) 1 else 0,
+                    hiddenMask = hidden.toMask(),
+                    unknownMask = SCRIPT_MASK_UNKNOWN,
+                ).map { rows ->
+                    rows.hidingUncomputedScripts(hidden, { it.channel.scriptMask }, { it.channel.name })
+                }
+            }
+            .map { rows -> rows.map { it.channel.toDomain(isFavorite = it.isFavorite) } }
             .flowOn(browseDispatcher)
 
     /**

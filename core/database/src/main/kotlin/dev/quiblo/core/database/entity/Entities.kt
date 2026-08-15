@@ -22,6 +22,7 @@ import androidx.room.Entity
 import androidx.room.ForeignKey
 import androidx.room.Index
 import androidx.room.PrimaryKey
+import dev.quiblo.core.common.SCRIPT_MASK_UNKNOWN
 
 /**
  * A user-configured source.
@@ -84,6 +85,24 @@ data class SourceEntity(
          * exact cost `Index("sourceId", "kind", "sortIndex")` exists to have removed once.
          */
         Index("sourceId", "kind", "addedAtEpochMillis"),
+        /**
+         * The browse query again, with the writing-system filter in front of the sort.
+         *
+         * `observeBrowse` gained `scriptMask` as a predicate, and a predicate SQLite cannot
+         * reach through the index is a predicate it tests row by row — which is the whole cost
+         * this column was added to remove. Ordered filter-then-sort, exactly as
+         * `Index("sourceId", "kind", "sortIndex")` is.
+         */
+        Index("sourceId", "kind", "scriptMask", "sortIndex"),
+        /**
+         * The genre filter's join key.
+         *
+         * `title_metadata` is keyed by cleaned title, kind and year, so the filter is now a join
+         * on those three rather than fifty thousand regex passes in Kotlin. Without this index
+         * that join is a full scan of the channel table per genre press, which is the same cost
+         * wearing different clothes.
+         */
+        Index("searchTitle", "identityYear", "kind"),
     ],
 )
 data class ChannelEntity(
@@ -111,6 +130,38 @@ data class ChannelEntity(
      * rows deep.
      */
     val addedAtEpochMillis: Long? = null,
+    /**
+     * This title's cleaned identity, and the year read off it — the metadata cache's key.
+     *
+     * **Stored rather than computed on read, and that is the whole of defect `021`.** Cleaning a
+     * title is eight regex passes; a genre search cleaned every film and series on the account to
+     * find the ones in a genre, which on this project's own provider is fifty thousand rows and
+     * four hundred thousand regex applications *per press of a genre chip*. The answer never
+     * changes for a given title, so it is worked out once when the row is written and joined on
+     * afterwards.
+     *
+     * Blank when the title cleans away to nothing — a bare language tag, a name written entirely
+     * outside Latin. That is the existing "do not ask about this one" value and it keeps meaning
+     * exactly that; it is not a key a hundred junk rows may share.
+     *
+     * [identityYear] is `NO_YEAR` rather than null for the reason the metadata cache's own column
+     * is: this is half of a key, and SQLite does not consider two nulls equal.
+     */
+    val searchTitle: String = "",
+    val identityYear: Int = 0,
+    /**
+     * Which writing systems this title has a letter in, as a bitmask.
+     *
+     * The other half of the same decision. Hiding a script was a regex strip, a full codepoint
+     * walk and a `Set` allocation **per title per emission** of a browse feed that loads every
+     * row of a kind — so it is now one integer, computed at import and tested with `&` in SQL.
+     *
+     * `SCRIPT_MASK_UNKNOWN` until something has computed it, which is every row written before
+     * schema 19. A row still carrying it is filtered in Kotlin exactly as it was before this
+     * column existed, so a catalogue mid-backfill hides what it always hid rather than briefly
+     * hiding nothing — or, worse, briefly hiding everything.
+     */
+    val scriptMask: Int = SCRIPT_MASK_UNKNOWN,
 )
 
 /**

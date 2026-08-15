@@ -15,6 +15,26 @@ Formatted after [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and ve
 
 ## Unreleased
 
+### Changed
+
+- **Advanced search answers a genre instead of thinking about it.** Filtering by a genre used to
+  read every film and series on your account and re-clean all of their titles from scratch — fifty
+  thousand of them on a large provider, every single time you pressed a genre, with nothing kept
+  between presses. It looked like the app had hung; it was working, extremely hard, on a question
+  it had already answered once. Each title's cleaned name is now worked out when your playlist is
+  loaded and remembered, so a genre is one indexed lookup.
+- **Hiding a writing system no longer costs anything to read.** The same change underneath: which
+  scripts a title is written in is worked out once and stored, rather than re-read letter by letter
+  for every row of every screen, every time the screen changes. Movies, Series and Live all draw
+  sooner for it, and a title you have hidden is no longer fetched from the database only to be
+  thrown away.
+- **The "how much of your catalogue is described" figure is counted rather than derived**, which
+  was the third thing making the search screen slow to open.
+
+Upgrading keeps your catalogue exactly as it is. The new information is filled in quietly after the
+app starts, and until it is, hiding works exactly as it did before — nothing appears or disappears
+in the meantime.
+
 ## 0.18.0
 
 ### Added

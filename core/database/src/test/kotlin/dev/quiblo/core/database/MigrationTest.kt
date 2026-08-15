@@ -21,6 +21,7 @@ package dev.quiblo.core.database
 import androidx.room.testing.MigrationTestHelper
 import androidx.sqlite.db.framework.FrameworkSQLiteOpenHelperFactory
 import androidx.test.platform.app.InstrumentationRegistry
+import dev.quiblo.core.common.SCRIPT_MASK_UNKNOWN
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -264,6 +265,50 @@ class MigrationTest {
         db.query("SELECT `name` FROM `channels`").use { cursor ->
             assertTrue("the catalogue did not survive the upgrade", cursor.moveToFirst())
             assertEquals("Dune", cursor.getString(0))
+        }
+    }
+
+    /**
+     * The identity columns arrive unfilled, and unfilled is a value rather than a gap.
+     *
+     * **What is asserted here is a refusal to do work.** A migration runs on the first access to
+     * the database with every screen waiting behind it, and cleaning a sixty-seven-thousand-title
+     * catalogue is ten to twenty seconds of a television frozen on its own splash. So this adds
+     * columns and reads nothing, and `CatalogueIdentityBackfill` fills them afterwards.
+     *
+     * The value the rows arrive carrying is the load-bearing part. `SCRIPT_MASK_UNKNOWN` is a
+     * third state, distinct from "no scripts", precisely so the browse and search queries can
+     * pass those rows through to the Kotlin filter that decided every row before schema 19 — and
+     * a hidden writing system therefore keeps hiding while the backfill runs. Defaulting the
+     * column to `0` instead would have been a window in which hiding quietly stopped working,
+     * which is the defect the release before this one was spent fixing.
+     */
+    @Test
+    fun `18 to 19 adds the identity columns without reading a single row`() {
+        helper.createDatabase(DB_NAME, 18).use { old ->
+            old.execSQL(
+                "INSERT INTO `sources` (`id`, `name`, `kind`, `url`, `createdAtEpochMillis`) " +
+                    "VALUES (1, 'A panel', 'XTREAM', 'https://example.invalid', 0)",
+            )
+            old.execSQL(
+                "INSERT INTO `channels` (`id`, `sourceId`, `name`, `streamUrl`, `kind`, " +
+                    "`groupTitle`, `stableKey`, `sortIndex`) " +
+                    "VALUES (1, 1, 'Dune (2021)', 'https://example.invalid/1', 'VOD', 'Films', 'key-1', 0)",
+            )
+        }
+
+        val db = helper.runMigrationsAndValidate(DB_NAME, 19, true, MIGRATION_18_19)
+
+        db.query("SELECT `name`, `searchTitle`, `identityYear`, `scriptMask` FROM `channels`").use { cursor ->
+            assertTrue("the catalogue did not survive the upgrade", cursor.moveToFirst())
+            assertEquals("Dune (2021)", cursor.getString(0))
+            assertEquals("", cursor.getString(1))
+            assertEquals(0, cursor.getInt(2))
+            assertEquals(
+                "an upgraded row must say 'not computed', not 'no scripts'",
+                SCRIPT_MASK_UNKNOWN,
+                cursor.getInt(3),
+            )
         }
     }
 

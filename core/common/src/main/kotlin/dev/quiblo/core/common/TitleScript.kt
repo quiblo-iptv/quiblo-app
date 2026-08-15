@@ -27,17 +27,17 @@ package dev.quiblo.core.common
  * one written only in kanji is [Han] and shares that entry with Chinese — which is the honest
  * answer, since those characters alone do not say which language it is.
  */
-enum class TitleScript {
-    Latin,
-    Arabic,
-    Hebrew,
-    Cyrillic,
-    Greek,
-    Han,
-    Kana,
-    Hangul,
-    Devanagari,
-    Thai,
+enum class TitleScript(val bit: Int) {
+    Latin(1 shl 0),
+    Arabic(1 shl 1),
+    Hebrew(1 shl 2),
+    Cyrillic(1 shl 3),
+    Greek(1 shl 4),
+    Han(1 shl 5),
+    Kana(1 shl 6),
+    Hangul(1 shl 7),
+    Devanagari(1 shl 8),
+    Thai(1 shl 9),
     ;
 
     companion object {
@@ -51,6 +51,35 @@ enum class TitleScript {
         val offered: List<TitleScript> = entries
     }
 }
+
+/**
+ * These scripts as one integer, for a column and a `WHERE` clause.
+ *
+ * **The bit is written down rather than taken from `ordinal`**, because this number is persisted:
+ * a mask stored against sixty thousand catalogue rows would silently come to mean something else
+ * the day somebody inserts an entry above another, and the failure would be titles disappearing
+ * from a viewer's catalogue with nothing in the diff that looks like it did that.
+ */
+fun Set<TitleScript>.toMask(): Int = fold(0) { mask, script -> mask or script.bit }
+
+/**
+ * Every script this title has a letter in, as a mask — the stored form of [isInHiddenScript].
+ *
+ * Computed once when a catalogue row is written and read back as an integer, so hiding a writing
+ * system is a bitwise test in SQL rather than a regex strip, a full codepoint walk and a `Set`
+ * allocation for every row of every page. Same rule, same exception for a trailing bracketed tag,
+ * same cost — paid at import instead of on every read.
+ */
+fun String.scriptMask(): Int = withoutTrailingTags().strongScripts().toMask()
+
+/**
+ * What [scriptMask] means when nothing has computed it yet.
+ *
+ * Its own value rather than `0`, because "this title is in no script we name" and "nobody has
+ * looked" are different facts and only one of them is safe to filter on. A row still carrying
+ * this is filtered in Kotlin, exactly as it was before the column existed.
+ */
+const val SCRIPT_MASK_UNKNOWN: Int = -1
 
 /**
  * The script of this title, read from its first letter.

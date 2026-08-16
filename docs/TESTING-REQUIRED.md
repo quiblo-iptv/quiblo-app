@@ -945,6 +945,95 @@ how something *looks* or *feels*, which is the one class of claim a build cannot
 | **Passes if** | The list does not move when the keyboard opens |
 | **Fails if** | It shifts or shakes. `A15.9`'s manifest changes and the keyboard inset are the two edits that could have brought `#021` back |
 
+## A16 — Round `023`: the shelves on For You
+
+**Where:** the television, except `A16.7`, which is the phone. From
+[`023`](../agile/023_The_Shelves_of_For_You_of_Quiblo.md). Three of these need a Movie Database key
+and a scanned catalogue; two of those additionally need a provider that does *not* carry some of
+this week's popular titles, which is most of them.
+
+### A16.1 — two rows, ten each
+
+| | |
+| :---- | :---- |
+| **What to look at** | Open For You with a Movie Database key set and a scanned catalogue |
+| **Passes if** | **Popular films** and **Popular series** are separate rows, each numbered 1 upwards, no Movie/Series badge on either |
+| **Fails if** | One mixed row, or the numbers restart partway along, or a row holds more than ten |
+
+### A16.2 — the number reads from the sofa
+
+| | |
+| :---- | :---- |
+| **What to look at** | Both popular rows, from a normal viewing distance |
+| **Passes if** | The figure stands beside the poster, large enough to read across the room |
+| **Fails if** | It is inside the artwork, or it is too small to read at three metres — the whole argument for a numbered row is that the number is the content |
+
+### A16.3 — and walking the row does not move the screen
+
+| | |
+| :---- | :---- |
+| **What to look at** | Hold right along a popular row, past position 9, and watch the rows above and below |
+| **Passes if** | Nothing moves vertically, including across the 9 to 10 crossing |
+| **Fails if** | The catalogue twitches. **This is defect #008 and it is the risk this round took**: the numeral now stands outside the poster, and only a fixed-width gutter keeps 1 and 10 the same width. `TvBrowseScrollStabilityTest` walks this shape, so a failure here means the test's model of the screen is wrong |
+
+### A16.4 — a title the provider does not carry
+
+| | |
+| :---- | :---- |
+| **What to look at** | Find a place in either popular row marked **Unavailable** |
+| **Passes if** | The poster is dimmed, the number is still there and still in sequence, and pressing it writes **Not available yet** under the tile without opening anything or moving anything |
+| **Fails if** | The tile plays, or a dialog appears, or the row changes height when the line appears |
+
+### A16.5 — the rows are there before they are worked out
+
+| | |
+| :---- | :---- |
+| **What to look at** | Leave For You, go to Movies, come back. Then close the app entirely and reopen it |
+| **Passes if** | Both rows are on screen immediately, in the order they were in, and nothing flashes empty first |
+| **Fails if** | An empty shelf, or a visible pause, or the rows arrive one at a time |
+
+### A16.6 — Search's light reaches the corners
+
+| | |
+| :---- | :---- |
+| **What to look at** | Sit on Search with an empty box and look at the edges of the screen and the area behind the tab bar |
+| **Passes if** | The glow runs to all four corners and passes behind the bar, exactly as a poster's light does on Movies |
+| **Fails if** | A dark margin down either side, a dark band under the bar, or a visible rectangle edge anywhere |
+
+### A16.7 — categories in your own order, on the phone
+
+| | |
+| :---- | :---- |
+| **What to look at** | Settings, the categories card. Move one category up twice, then open Live |
+| **Passes if** | It is two places higher in the card, and the category picker on Live shows the same order |
+| **Fails if** | The list scatters rather than shifting one place, or the two screens disagree |
+
+### A16.8 — and on the television
+
+| | |
+| :---- | :---- |
+| **What to look at** | Settings, open the category box, move one down with the remote. Leave settings and open Movies |
+| **Passes if** | One press moves it one place, focus stays where it was, and the poster rows on Movies are in the new order |
+| **Fails if** | Focus jumps to another row, or the box closes, or the rows do not follow |
+
+### A16.9 — and the order survives a refresh
+
+| | |
+| :---- | :---- |
+| **What to look at** | Move two categories, then refresh the source from Settings |
+| **Passes if** | Both are still where you put them |
+| **Fails if** | They are back in the provider's order. The order is stored against the provider's own name for the category, so this is the assertion that the name is what came back |
+
+### A16.10 — Recently Added is fifteen
+
+| | |
+| :---- | :---- |
+| **What to look at** | Count the first row on For You on an account with plenty added this month |
+| **Passes if** | Fifteen at most |
+| **Fails if** | More. Forty is what it was |
+
+---
+
 ---
 
 ## C — Deferred measurements, in writing

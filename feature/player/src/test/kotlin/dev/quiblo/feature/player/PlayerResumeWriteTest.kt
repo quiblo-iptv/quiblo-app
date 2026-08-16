@@ -166,6 +166,38 @@ class PlayerResumeWriteTest {
         assertTrue(saved.isEmpty())
     }
 
+    /**
+     * The regression test for a crash on every press of Play, found on the panel and caused here.
+     *
+     * `viewModelScope` dispatches on `Dispatchers.Main.immediate`, and *immediate* means what it
+     * says: on the main thread the body of a `launch` runs before the call returns. So an `init`
+     * block that collects a property declared below it collects a null — the property has not been
+     * assigned yet — and the app dies the moment anything is played.
+     *
+     * **Every other test in this file passed while that was true**, because `StandardTestDispatcher`
+     * queues the launch instead of running it, which is exactly the behaviour the real main thread
+     * does not have. This one uses an unconfined dispatcher as main, which reproduces the immediate
+     * execution, and it fails with a `NullPointerException` if the block moves back above `state`.
+     */
+    @Test
+    fun `constructing the ViewModel on a main thread that runs launches immediately does not crash`() = runTest {
+        Dispatchers.setMain(UnconfinedTestDispatcher())
+
+        val viewModel = PlayerViewModel(
+            controller = controller,
+            channelRepository = channelRepository,
+            historyRepository = historyRepository,
+            subtitleRepository = subtitleRepository,
+            settingsRepository = settingsRepository,
+            applicationScope = ApplicationScope(CoroutineScope(UnconfinedTestDispatcher())),
+            watchEvents = watchEvents,
+        )
+
+        // Reaching this line is the assertion. The state is read as well, because a constructor
+        // that survives by never touching the property would pass a test that only checked it ran.
+        assertEquals(playbackState.value, viewModel.state.value)
+    }
+
     /** A ViewModel with something loaded and playing, which is what makes a position meaningful. */
     private fun TestScope.viewModelPlaying(isLive: Boolean = false): PlayerViewModel {
         val channel = if (isLive) CHANNEL.copy(kind = MediaKind.LIVE) else CHANNEL

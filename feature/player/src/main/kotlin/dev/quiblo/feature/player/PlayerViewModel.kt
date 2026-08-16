@@ -85,31 +85,6 @@ class PlayerViewModel(
     /** Whether this sitting has already been written down. See [recordOccasion]. */
     private var recorded = false
 
-    init {
-        /*
-         * A resume point every ten seconds of playback, rather than only when playback stops.
-         *
-         * Stop and dispose were the two moments a position was written, and both assume the app
-         * gets to run afterwards. A process killed for memory while a film is paused, a television
-         * switched off at the wall, a crash: each of those lost everything since the title was
-         * opened, which on a two-hour film is up to two hours of "where was I".
-         *
-         * **Driven by the position rather than by a timer**, and that is the whole of why there is
-         * no clock here. A ten-second timer keeps running while a film is paused, while a viewer
-         * reads the description, and for as long as the screen exists — writing the same number to
-         * the database over and over. Watching the position cross a ten-second boundary writes
-         * exactly when there is something new to say and stops on its own when nothing is moving.
-         *
-         * `rememberPosition` returns immediately for live, for nothing loaded, and for a position
-         * still at zero, so the first crossing of a fresh item costs nothing.
-         */
-        viewModelScope.launch {
-            state.map { it.positionMillis / PERSIST_INTERVAL_MILLIS }
-                .distinctUntilChanged()
-                .collect { rememberPosition() }
-        }
-    }
-
     val state: StateFlow<PlaybackState> = controller.state
 
     /**
@@ -518,6 +493,39 @@ class PlayerViewModel(
             seasonNumber = playing.seasonNumber,
             episodeNumber = playing.episodeNumber,
         )
+    }
+
+    /*
+     * A resume point every ten seconds of playback, rather than only when playback stops.
+     *
+     * Stop and dispose were the two moments a position was written, and both assume the app gets
+     * to run afterwards. A process killed for memory while a film is paused, a television switched
+     * off at the wall, a crash: each of those lost everything since the title was opened, which on
+     * a two-hour film is up to two hours of "where was I".
+     *
+     * **Driven by the position rather than by a timer**, and that is the whole of why there is no
+     * clock here. A ten-second timer keeps running while a film is paused, while a viewer reads a
+     * description, and for as long as the screen exists — writing the same number to the database
+     * over and over. Watching the position cross a ten-second boundary writes exactly when there
+     * is something new to say and stops on its own when nothing is moving.
+     *
+     * `rememberPosition` returns immediately for live, for nothing loaded, and for a position
+     * still at zero, so the first crossing of a fresh item costs nothing.
+     *
+     * **This block is last in the class, and that is load-bearing.** `viewModelScope` dispatches on
+     * `Dispatchers.Main.immediate`, which on the main thread runs the body *now* rather than after
+     * the constructor returns — so an `init` placed above a property it reads collects a null and
+     * takes the app down the moment anything is played. It was placed above `state`, and it did.
+     * Kotlin runs initialisers in declaration order; anything this touches has to be declared
+     * before it. `PlayerStartsCollectingImmediatelyTest` is the guard, and it fails when this block
+     * moves back up.
+     */
+    init {
+        viewModelScope.launch {
+            controller.state.map { it.positionMillis / PERSIST_INTERVAL_MILLIS }
+                .distinctUntilChanged()
+                .collect { rememberPosition() }
+        }
     }
 
     private companion object {

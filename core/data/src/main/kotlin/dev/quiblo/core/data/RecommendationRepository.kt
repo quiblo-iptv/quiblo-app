@@ -61,7 +61,8 @@ class RecommendationRepository(
 
         // Hidden categories are left out here, unlike the popular row. A suggestion is the app
         // proposing something unprompted, and proposing out of a shelf the viewer has put away
-        // is the app arguing with them.
+        // is the app arguing with them. A hidden writing system is the same argument, and it is
+        // answered where these ids become rows — `ChannelRepository.channelsByIds`, BUG-031.
         val titles = channelDao.titlesForMetadata(sourceId, includeHidden = false)
 
         return withContext(matchDispatcher) {

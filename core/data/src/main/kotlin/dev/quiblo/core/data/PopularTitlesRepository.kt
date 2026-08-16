@@ -82,8 +82,14 @@ class PopularTitlesRepository(
 
         // Hidden categories are included. This row is about what a provider carries, and a
         // viewer who has tidied a category out of their browse list has not said the films in
-        // it stopped existing — the script filter above the browse feed is the setting that
-        // speaks to that, and it applies to what this row is rendered into.
+        // it stopped existing — the script filter is the setting that speaks to that.
+        //
+        // That filter is applied where these ids become rows, in `ChannelRepository.channelsByIds`,
+        // and not here: this stage has cleaned titles rather than catalogue rows, and the mask
+        // lives on the row. It runs *after* [perKind] is taken, so hiding a writing system can
+        // leave the row shorter than the cap. That is the honest order — the alternative is
+        // reaching further down TMDB's list to backfill places a hidden title vacated, which
+        // would make the filter change which titles are popular.
         val titles = channelDao.titlesForMetadata(sourceId, includeHidden = true)
 
         return withContext(matchDispatcher) {

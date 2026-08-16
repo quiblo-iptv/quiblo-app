@@ -87,6 +87,13 @@ in the meantime.
   selected tab kept its underline, which made it look as though the bar was awake when it was not.
   The app was asking the bar to take focus a moment before the bar existed, and not noticing it had
   been refused. It now asks again until it lands.
+- **Hiding a writing system now applies to For You as well.** Now popular and You may like were the
+  two rows that ignored the setting entirely: hide Arabic, and the catalogue, the search results and
+  Recently Added would all respect it while those two carried on proposing Arabic titles. They were
+  the worst two rows to get it wrong in, because they are the ones that offer something you did not
+  ask for. Both now honour it. A row can come out shorter than its usual length when a hidden title
+  would have filled a place — the alternative was letting the setting decide which titles count as
+  popular, which is a different claim entirely.
 
 ## 0.18.0
 

@@ -130,8 +130,15 @@ data class BrowseUiState(
     val extraRows: List<FeedRow> = emptyList(),
 )
 
-/** Which of the For You rows this is. The screen turns it into a heading. */
-enum class FeedRowId { NOW_POPULAR, YOU_MAY_LIKE }
+/**
+ * Which of the For You rows this is. The screen turns it into a heading.
+ *
+ * Popular is two rows rather than one. The two lists come from different endpoints and neither
+ * says anything about the other, so a single row of five films and five series had to number
+ * itself 1–5 twice and lean on a badge to tell the halves apart. Two rows of ten say the same
+ * thing without the badge and without the repeated numbers.
+ */
+enum class FeedRowId { POPULAR_MOVIES, POPULAR_SERIES, YOU_MAY_LIKE }
 
 /**
  * One extra row, and enough about each tile to draw it.
@@ -142,7 +149,46 @@ enum class FeedRowId { NOW_POPULAR, YOU_MAY_LIKE }
  */
 data class FeedRow(val id: FeedRowId, val items: List<FeedRowItem>)
 
-data class FeedRowItem(val channel: Channel, val rank: Int? = null, val caption: String? = null)
+/**
+ * A tile on a For You row, which may or may not have a catalogue row behind it.
+ *
+ * A sealed pair rather than a nullable [Channel], because the difference is the whole of what the
+ * screen does with it: one can be opened and the other can only explain itself. A nullable field
+ * would let a caller forget, and forgetting here means handing the player a title with no stream.
+ */
+sealed interface FeedRowItem {
+
+    /** Where this title sits in the list it came from. Only the popular rows have one. */
+    val rank: Int?
+
+    /** A line under the title, saying why the tile is here. Only the suggestions row has one. */
+    val caption: String?
+
+    /** A title this provider carries. */
+    data class Playable(
+        val channel: Channel,
+        override val rank: Int? = null,
+        override val caption: String? = null,
+    ) : FeedRowItem
+
+    /**
+     * A title this provider does not carry.
+     *
+     * It keeps its place in the ranking and is drawn from what the metadata service said, because
+     * a top ten with its unavailable places quietly removed is a top ten a viewer cannot read.
+     * There is no channel and no stream behind it, and the screen is what says so when it is
+     * opened.
+     */
+    data class Unavailable(
+        val key: String,
+        val title: String,
+        val kind: MediaKind,
+        val posterUrl: String?,
+        override val rank: Int?,
+    ) : FeedRowItem {
+        override val caption: String? get() = null
+    }
+}
 
 /**
  * "Have we already asked about this one?", for a catalogue too big to remember all of.
@@ -252,11 +298,16 @@ data class BrowseFeed(
      *
      * A cap rather than a page: the row is walked with a D-pad, and nobody presses right forty
      * times. Reading more would cost a query nobody scrolls to the end of.
+     *
+     * Fifteen since `023`, down from forty. Forty was chosen as "more than anyone will walk",
+     * which is an argument for the number being harmless rather than for it being right — and it
+     * is not harmless on the row above two others, where the answer to "what is new" wants to be
+     * short enough to be an answer.
      */
     val recentLimit: Int get() = RECENT_LIMIT
 
     private companion object {
-        const val RECENT_LIMIT = 40
+        const val RECENT_LIMIT = 15
     }
 }
 
@@ -502,24 +553,47 @@ class BrowseViewModel(
         val popular = popularTitles.popular(sourceId)
         val suggestions = recommendations.suggestions(sourceId)
 
-        // One read for both rows. Resolving each list separately would be two queries for one
-        // question, and the ids overlap more often than not.
-        val wanted = (popular.map { it.channelId } + suggestions.map { it.channelId }).distinct()
+        // One read for all three rows. Resolving each list separately would be several queries
+        // for one question, and the ids overlap more often than not.
+        val wanted = (popular.mapNotNull { it.channelId } + suggestions.map { it.channelId }).distinct()
         val byId = if (wanted.isEmpty()) emptyMap() else channelRepository.channelsByIds(wanted).associateBy { it.id }
 
-        val popularRow = popular.mapNotNull { entry ->
-            byId[entry.channelId]?.let { FeedRowItem(channel = it, rank = entry.rank) }
+        // A title the provider carries but the script filter has removed comes back from
+        // `channelsByIds` as nothing at all, and is drawn as unavailable — which it is, to this
+        // viewer, for as long as they have hidden its writing system.
+        val popularRows = popular.groupBy { it.kind }.mapValues { (_, entries) ->
+            entries.map { entry ->
+                val channel = entry.channelId?.let { byId[it] }
+                if (channel != null) {
+                    FeedRowItem.Playable(channel = channel, rank = entry.rank)
+                } else {
+                    FeedRowItem.Unavailable(
+                        key = "${entry.kind.name}-${entry.rank}",
+                        title = entry.title,
+                        kind = entry.kind,
+                        posterUrl = entry.posterUrl,
+                        rank = entry.rank,
+                    )
+                }
+            }
         }
         val suggestionRow = suggestions.mapNotNull { suggestion ->
-            byId[suggestion.channelId]?.let { FeedRowItem(channel = it, caption = suggestion.becauseOf) }
+            byId[suggestion.channelId]?.let { FeedRowItem.Playable(channel = it, caption = suggestion.becauseOf) }
         }
 
         // Artwork for anything the provider gave none for, exactly as the poster grid asks for
         // it. Without this a suggestion row on a catalogue with no covers is grey rectangles.
-        (popularRow + suggestionRow).forEach { requestPreview(it.channel.stableKey, it.channel.name, it.channel.kind) }
+        // An unavailable tile is not asked about: it already carries the artwork the list it came
+        // from supplied, and there is no catalogue row to look one up for.
+        (popularRows.values.flatten() + suggestionRow)
+            .filterIsInstance<FeedRowItem.Playable>()
+            .forEach { requestPreview(it.channel.stableKey, it.channel.name, it.channel.kind) }
 
         return buildList {
-            if (popularRow.isNotEmpty()) add(FeedRow(FeedRowId.NOW_POPULAR, popularRow))
+            popularRows[MediaKind.VOD]?.takeIf { it.isNotEmpty() }
+                ?.let { add(FeedRow(FeedRowId.POPULAR_MOVIES, it)) }
+            popularRows[MediaKind.SERIES]?.takeIf { it.isNotEmpty() }
+                ?.let { add(FeedRow(FeedRowId.POPULAR_SERIES, it)) }
             if (suggestionRow.isNotEmpty()) add(FeedRow(FeedRowId.YOU_MAY_LIKE, suggestionRow))
         }
     }

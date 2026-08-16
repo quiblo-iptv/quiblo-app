@@ -251,6 +251,9 @@ class BrowseViewModelTest {
         verify {
             channelRepository.observeRecentlyAdded(SOURCE.id, RECENT_LIMIT, FIXED_NOW - THIRTY_DAYS_MILLIS)
         }
+        // And the cap itself, spelled out rather than read from the code under test. `023`
+        // shortened it from forty, and a constant compared against itself would not have noticed.
+        assertEquals(15, RECENT_LIMIT)
         // The catalogue query is the one whose absence matters: it returns tens of thousands
         // of rows for a kind this feed does not restrict itself to, and running both would
         // mean the screen paid for a list it never draws.
@@ -306,7 +309,7 @@ class BrowseViewModelTest {
         viewModel.uiState.drain()
 
         assertEquals(
-            listOf(FeedRowId.NOW_POPULAR),
+            listOf(FeedRowId.POPULAR_MOVIES),
             viewModel.uiState.value.extraRows.map { it.id },
         )
     }
@@ -335,7 +338,7 @@ class BrowseViewModelTest {
         viewModel.uiState.drain()
 
         assertEquals(
-            listOf(FeedRowId.NOW_POPULAR),
+            listOf(FeedRowId.POPULAR_MOVIES),
             viewModel.uiState.value.extraRows.map { it.id },
         )
     }
@@ -402,7 +405,13 @@ class BrowseViewModelTest {
             kind = MediaKind.VOD,
         )
 
-        val POPULAR_ENTRY = PopularEntry(rank = 1, channelId = POPULAR_CHANNEL.id, kind = MediaKind.VOD)
+        val POPULAR_ENTRY = PopularEntry(
+            rank = 1,
+            kind = MediaKind.VOD,
+            channelId = POPULAR_CHANNEL.id,
+            title = POPULAR_CHANNEL.name,
+            posterUrl = null,
+        )
 
         /**
          * How long the encrypted store is made to take.

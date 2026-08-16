@@ -88,11 +88,18 @@
     <string name="tv_kind_movie">Movie</string>
     <string name="tv_kind_series">Series</string>
 
-    <!-- The other two For You rows. Neither is drawn at all when it is empty, so neither has an
+    <!-- The other three For You rows. None is drawn at all when it is empty, so none has an
          empty message: a row that cannot say anything says nothing. -->
     <string name="tv_row_now_popular">Now popular</string>
+    <string name="tv_row_popular_movies">Popular films</string>
+    <string name="tv_row_popular_series">Popular series</string>
     <string name="tv_row_you_may_like">You may like</string>
     <string name="tv_because_you_watched">Because you watched %1$s</string>
+
+    <!-- A popular title this provider does not carry. The badge is on the poster; the sentence
+         appears under it when the tile is pressed, in the line every tile of that row reserves. -->
+    <string name="tv_unavailable">Unavailable</string>
+    <string name="tv_not_available_yet">Not available yet</string>
 
     <string name="tv_sources_incomplete">Fill in the address, and either both the username and password or neither.</string>
 

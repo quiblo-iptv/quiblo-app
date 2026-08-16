@@ -123,9 +123,15 @@ class PopularTitlesRepositoryTest {
         assertEquals(listOf(7L), row.map { it.channelId })
     }
 
+    /**
+     * `023`: a title the provider does not carry keeps its place and says so.
+     *
+     * The row used to drop it, which meant a viewer saw a top ten with four films in it and no
+     * way to tell whether the other six were unpopular or simply absent from their account.
+     */
     @Test
-    @DisplayName("only what this provider actually carries reaches the row")
-    fun `titles the catalogue does not have are dropped`() = runTest {
+    @DisplayName("a title this provider does not carry keeps its place, without a channel")
+    fun `titles the catalogue does not have are kept and marked`() = runTest {
         coEvery { dao.oldestFetchedAt() } returns NOW
         coEvery { dao.all() } returns listOf(
             entity(kind = MediaKind.VOD, rank = 1, title = "Nothing Here"),
@@ -136,44 +142,62 @@ class PopularTitlesRepositoryTest {
 
         val row = repository.popular(SOURCE_ID)
 
-        assertEquals(listOf(7L), row.map { it.channelId })
-        // TMDB's own position, kept rather than renumbered: this is rank 2 of the popular list
-        // even though it is the only tile that survived.
-        assertEquals(listOf(2), row.map { it.rank })
+        // TMDB's own positions, both of them, in order.
+        assertEquals(listOf(1, 2), row.map { it.rank })
+        assertEquals(listOf(null, 7L), row.map { it.channelId })
+        assertEquals(listOf(false, true), row.map { it.isAvailable })
+        // What an unavailable tile is drawn from: the metadata service's own title.
+        assertEquals("Nothing Here", row.first().title)
     }
 
     /**
-     * The cap is taken *after* the match, which is the difference between a full row and a gappy
-     * one on a provider that carries none of the world's current top five.
+     * The cap is taken by rank, before the match rather than after it.
+     *
+     * That is `023`'s reversal and it is the whole reason the row can be read as a ranking:
+     * reaching down to eleventh place to fill a gap left by a title the viewer cannot play would
+     * publish an order nobody measured.
      */
     @Test
-    fun `five of each are kept, counted after the match`() = runTest {
+    fun `ten of each are kept, counted by rank rather than by what matched`() = runTest {
         coEvery { dao.oldestFetchedAt() } returns NOW
         coEvery { dao.all() } returns
-            (1..10).map { entity(MediaKind.VOD, it, "Film $it") } +
-            (1..10).map { entity(MediaKind.SERIES, it, "Show $it") }
-        // The provider carries none of the top five of either, and plenty below them.
+            (1..20).map { entity(MediaKind.VOD, it, "Film $it") } +
+            (1..20).map { entity(MediaKind.SERIES, it, "Show $it") }
+        // The provider carries none of the top ten of either, and plenty below them.
         coEvery { channelDao.titlesForMetadata(SOURCE_ID, any()) } returns
-            (6..10).map { ChannelTitle(it.toLong(), "Film $it", MediaKind.VOD.name) } +
-            (6..10).map { ChannelTitle(it + 100L, "Show $it", MediaKind.SERIES.name) }
+            (11..20).map { ChannelTitle(it.toLong(), "Film $it", MediaKind.VOD.name) } +
+            (11..20).map { ChannelTitle(it + 100L, "Show $it", MediaKind.SERIES.name) }
 
         val row = repository.popular(SOURCE_ID)
 
-        assertEquals(5, row.count { it.kind == MediaKind.VOD })
-        assertEquals(5, row.count { it.kind == MediaKind.SERIES })
-        // Films first, then series, which is the order the row is drawn in.
+        assertEquals(10, row.count { it.kind == MediaKind.VOD })
+        assertEquals(10, row.count { it.kind == MediaKind.SERIES })
+        assertEquals((1..10).toList(), row.filter { it.kind == MediaKind.VOD }.map { it.rank })
+        // None of them is playable here, and every one of them is still in the row.
+        assertTrue(row.none { it.isAvailable })
+        // Films first, then series, which is the order the rows are drawn in.
         assertEquals(MediaKind.VOD, row.first().kind)
         assertEquals(MediaKind.SERIES, row.last().kind)
     }
 
+    /**
+     * A provider carrying none of the list still gets the list.
+     *
+     * The row is now about what the world is watching, annotated with what this account can
+     * play, so an empty catalogue produces ten unavailable tiles rather than no row. The row
+     * still disappears entirely when there is nothing *fetched* — that case is above.
+     */
     @Test
-    @DisplayName("a provider carrying none of it gets no row rather than an empty one")
-    fun `nothing matched is an empty answer`() = runTest {
+    @DisplayName("a provider carrying none of it still gets the ranking, all of it unavailable")
+    fun `nothing matched is still a row`() = runTest {
         coEvery { dao.oldestFetchedAt() } returns NOW
         coEvery { dao.all() } returns listOf(entity(MediaKind.VOD, 1, "Dune"))
         coEvery { channelDao.titlesForMetadata(SOURCE_ID, any()) } returns emptyList()
 
-        assertTrue(repository.popular(SOURCE_ID).isEmpty())
+        val row = repository.popular(SOURCE_ID)
+
+        assertEquals(1, row.size)
+        assertTrue(row.none { it.isAvailable })
     }
 
     private fun entity(kind: MediaKind, rank: Int, title: String) = PopularTitleEntity(

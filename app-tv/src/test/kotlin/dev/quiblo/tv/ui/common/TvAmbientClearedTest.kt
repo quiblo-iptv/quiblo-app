@@ -27,7 +27,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNull
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -71,7 +70,7 @@ class TvAmbientClearedTest {
 
     @Test
     fun `a screen with no artwork of its own puts out the last screen's light`() {
-        var lit: String? = "https://example.invalid/a-film-two-tabs-ago.jpg"
+        var lit: AmbientRequest? = AmbientRequest.Artwork("https://example.invalid/a-film-two-tabs-ago.jpg")
 
         compose.setContent {
             CompositionLocalProvider(LocalAmbientSink provides { lit = it }) {
@@ -80,7 +79,34 @@ class TvAmbientClearedTest {
         }
         compose.waitForIdle()
 
-        assertNull("a screen with no artwork of its own is still lit by the last one", lit)
+        assertEquals(
+            "a screen with no artwork of its own is still lit by the last one",
+            AmbientRequest.None,
+            lit,
+        )
+    }
+
+    /**
+     * And Search asks for its own light rather than drawing it.
+     *
+     * `023`: the drifting glow used to be a modifier on the search screen's own column, inside the
+     * shell's padding and below the tab bar, so it stopped at four edges the artwork light does
+     * not stop at. The screen now says what it wants and the shell draws it full-bleed.
+     */
+    @Test
+    fun `search asks the shell for its own light`() {
+        var lit: AmbientRequest? = null
+
+        compose.setContent {
+            CompositionLocalProvider(LocalAmbientSink provides { lit = it }) {
+                val sink = LocalAmbientSink.current
+                LaunchedEffect(Unit) { sink(AmbientRequest.Drift) }
+                Box(modifier = Modifier.fillMaxSize())
+            }
+        }
+        compose.waitForIdle()
+
+        assertEquals(AmbientRequest.Drift, lit)
     }
 
     /**
@@ -93,7 +119,7 @@ class TvAmbientClearedTest {
     @Composable
     private fun ScreenWithNoArtwork() {
         val sink = LocalAmbientSink.current
-        LaunchedEffect(Unit) { sink(null) }
+        LaunchedEffect(Unit) { sink(AmbientRequest.None) }
         Box(modifier = Modifier.fillMaxSize())
     }
 
@@ -106,18 +132,18 @@ class TvAmbientClearedTest {
      */
     @Test
     fun `a screen with artwork still lights the room`() {
-        var lit: String? = null
+        var lit: AmbientRequest? = null
 
         compose.setContent {
             CompositionLocalProvider(LocalAmbientSink provides { lit = it }) {
                 val sink = LocalAmbientSink.current
-                LaunchedEffect(Unit) { sink(POSTER) }
+                LaunchedEffect(Unit) { sink(AmbientRequest.Artwork(POSTER)) }
                 Box(modifier = Modifier.fillMaxSize().ambientBackdrop(AmbientColours.None))
             }
         }
         compose.waitForIdle()
 
-        assertEquals("a focused poster no longer lights the room", POSTER, lit)
+        assertEquals("a focused poster no longer lights the room", AmbientRequest.Artwork(POSTER), lit)
     }
 
     private companion object {

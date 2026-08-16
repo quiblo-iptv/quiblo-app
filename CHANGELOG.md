@@ -17,6 +17,17 @@ Formatted after [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and ve
 
 ### Added
 
+- **Now popular is two rows, and each is a top ten.** Films and series came from two different
+  lists and were drawn as one row of five and five, numbered 1 to 5 twice with a badge to tell the
+  halves apart. They are now **Popular films** and **Popular series**, ten each, numbered once, and
+  the number stands beside the poster where you can read it from the sofa.
+- **A popular title your provider does not carry now says so instead of disappearing.** The row
+  used to quietly drop them, so a top ten arrived with four films in it and no way to tell whether
+  the other six were unpopular or simply absent from your account. Every place is filled: an
+  unavailable title keeps its number, shows its poster dimmed with an "Unavailable" mark, and says
+  **Not available yet** under it when you press it. Nothing is fetched for it and nothing tries to
+  play. As before, none of this exists at all without your own Movie Database key.
+
 ### Changed
 
 - **The ambient light keeps up with the picture.** It read the screen a little under twice a second
@@ -36,6 +47,12 @@ Formatted after [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and ve
   six-second circuit as the highlight going round the search box, turning slowly through the
   colours as they go. It is exactly as bright as a poster's light and it needs nothing from the
   network.
+- **Search's light now fills the screen like every other tab's.** It was drawn on the search
+  screen rather than behind the whole app, so it stopped dead at the margins and left a dark band
+  under the tab bar — a lit rectangle on a dark screen rather than light in a room. It reaches all
+  four corners and passes behind the bar now, exactly as the light from a poster does.
+- **Recently Added holds fifteen.** It held forty, which was chosen as more than anyone would walk
+  through rather than as an answer to "what is new".
 - **Generated profile pictures are faces now.** They were four coloured shapes; they are a face on
   a coloured tile — the same generator library, a different one of its styles. Every profile
   already wearing a generated picture becomes a face the next time the app opens, and it is the

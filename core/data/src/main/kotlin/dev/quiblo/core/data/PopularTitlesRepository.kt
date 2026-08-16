@@ -30,15 +30,30 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 /**
- * One title in the popular row: where it sits, and which of the viewer's own rows it is.
+ * One title in a popular row: where it sits, and whether this provider carries it.
  *
- * [rank] is TMDB's position **within its own kind**, so a row of five films and five series
- * carries the numbers 1–5 twice. That is the honest reading of what was asked for: two lists were
- * fetched and neither says anything about the other, and renumbering them 1–10 would invent an
- * ordering between a film and a series that nobody measured. The poster's Movie or Series badge
- * is what tells the two fives apart.
+ * [rank] is TMDB's position within its own kind, and each kind is now a row of its own — so the
+ * numbers run 1 to 10 down each row rather than 1 to 5 twice across one. Two lists were fetched
+ * and neither says anything about the other; two rows is the shape that says so.
+ *
+ * **[channelId] is null for a title the provider does not carry, and the entry survives anyway.**
+ * The row used to drop those silently, which meant a viewer saw a top ten with four places in it
+ * and no way to tell whether the missing six were unpopular or unavailable. The row now says
+ * which, and a tile with no channel behind it cannot be played — see `FeedRowItem`.
+ *
+ * [title] and [posterUrl] are TMDB's, and are what an unavailable tile is drawn from. A tile that
+ * *is* carried draws the provider's own name and artwork instead, because that is what the
+ * viewer's other devices show.
  */
-data class PopularEntry(val rank: Int, val channelId: Long, val kind: MediaKind)
+data class PopularEntry(
+    val rank: Int,
+    val kind: MediaKind,
+    val channelId: Long?,
+    val title: String,
+    val posterUrl: String?,
+) {
+    val isAvailable: Boolean get() = channelId != null
+}
 
 /**
  * What the world is watching, of the things this viewer can actually play.
@@ -49,14 +64,21 @@ data class PopularEntry(val rank: Int, val channelId: Long, val kind: MediaKind)
  * project's provider account has been blocked twice over requests it did not need, and a
  * metadata service refusing is the same failure with a different host.
  *
- * **The intersection is the feature.** A popular list is not interesting on its own — every
- * streaming service has one and none of them can be played from here. What is interesting is
- * which of those titles the viewer's own provider carries, which is why the answer is always a
- * list of *catalogue rows* and never a list of TMDB records.
+ * **The intersection is annotation, not filtering — and that is `023`'s change.** The row used to
+ * be TMDB's list narrowed to what the provider carries, which read as a top ten with holes in it:
+ * a viewer saw four films where they expected ten and could not tell whether the other six were
+ * unpopular or simply absent from their account. Every title now appears in its place, and the
+ * ones the provider does not carry say so. The catalogue match survives as the thing that decides
+ * whether a tile can be opened at all.
  *
- * **With no key, no cache and nothing matched, there is no row.** Not an empty row with a
- * spinner: no row. That rule is `013` INC-F2's and it applies here for the same reason — a
- * screen is finished when its failure looks right.
+ * **This is still not a content directory.** The list is fetched with the viewer's own Movie
+ * Database key, from a service they signed up to; with no key there is no request, no cache and
+ * no row at all. Quiblo indexes nothing, hosts nothing and offers no way to obtain anything it
+ * cannot already play (`FREEZE.md` §2, §6).
+ *
+ * **With no key and no cache there is no row.** Not an empty row with a spinner: no row. That
+ * rule is `013` INC-F2's and it applies here for the same reason — a screen is finished when its
+ * failure looks right.
  */
 class PopularTitlesRepository(
     private val dao: PopularTitleDao,
@@ -69,10 +91,10 @@ class PopularTitlesRepository(
 ) {
 
     /**
-     * The popular row for this source, newest fetch first refreshed if it is a week old.
+     * Both popular rows for this source, refreshed first if the held lists are a week old.
      *
-     * Returns an empty list wherever there is nothing honest to draw: no key, no answer ever
-     * received, or an answer holding nothing this provider carries.
+     * Films then series, each in rank order, [perKind] of each. Returns an empty list only where
+     * there is nothing honest to draw at all: no key, or no answer ever received.
      */
     suspend fun popular(sourceId: Long, perKind: Int = DEFAULT_PER_KIND): List<PopularEntry> {
         refreshIfStale()
@@ -98,14 +120,20 @@ class PopularTitlesRepository(
                 held.asSequence()
                     .filter { it.kind == kind.name }
                     .sortedBy { it.rank }
-                    .mapNotNull { row ->
-                        val channelId = index.find(row.title, row.year, kind) ?: return@mapNotNull null
-                        PopularEntry(rank = row.rank, channelId = channelId, kind = kind)
-                    }
-                    // Taken *after* the match, so a provider that carries none of TMDB's top
-                    // five still fills the row from further down the list rather than showing
-                    // four gaps.
+                    // Taken by rank, before the match rather than after it. TMDB's top ten is the
+                    // top ten whatever one provider happens to stock, and reaching down to
+                    // eleventh place to fill a gap left by a title the viewer cannot play would
+                    // publish a ranking nobody measured.
                     .take(perKind)
+                    .map { row ->
+                        PopularEntry(
+                            rank = row.rank,
+                            kind = kind,
+                            channelId = index.find(row.title, row.year, kind),
+                            title = row.title,
+                            posterUrl = row.posterUrl,
+                        )
+                    }
                     .toList()
             }
         }
@@ -147,12 +175,13 @@ class PopularTitlesRepository(
 
     private companion object {
         /**
-         * Five of each, which is what was asked for.
+         * Ten of each, in a row of each — a top ten of films and a top ten of series.
          *
-         * Ten tiles is about a screenful on a television at the size the ranked row draws them,
-         * and a viewer walks a row with a D-pad rather than a thumb.
+         * TMDB returns twenty per page and the whole page is already stored, so ten costs
+         * nothing that five did not. A viewer walks a row with a D-pad rather than a thumb, and
+         * ten is about two screenfuls at the size these tiles draw.
          */
-        const val DEFAULT_PER_KIND = 5
+        const val DEFAULT_PER_KIND = 10
 
         /** Films first, then series, which is the order the row is drawn in. */
         val KIND_ORDER = listOf(MediaKind.VOD, MediaKind.SERIES)

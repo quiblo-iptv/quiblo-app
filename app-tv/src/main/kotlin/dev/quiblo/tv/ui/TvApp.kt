@@ -80,8 +80,10 @@ import dev.quiblo.designsystem.ProfileAvatar
 import dev.quiblo.tv.R
 import dev.quiblo.tv.ui.browse.TvForYouScreen
 import dev.quiblo.tv.ui.browse.TvPosterRows
+import dev.quiblo.tv.ui.common.AmbientRequest
 import dev.quiblo.tv.ui.common.LocalAmbientSink
 import dev.quiblo.tv.ui.common.ambientBackdrop
+import dev.quiblo.tv.ui.common.driftingGlow
 import dev.quiblo.tv.ui.common.insistOnFocus
 import dev.quiblo.tv.ui.common.onTap
 import dev.quiblo.tv.ui.common.rememberAmbient
@@ -498,17 +500,22 @@ private fun TvShell(
      * The black stays underneath. This is light added to it, never a replacement for it, so a
      * poster with no usable colour in it leaves the screen exactly as it was.
      */
-    var ambientArtwork: String? by remember { mutableStateOf(null) }
-    val ambient = rememberAmbient(ambientArtwork)
+    var ambientRequest: AmbientRequest by remember { mutableStateOf(AmbientRequest.None) }
+    val ambient = rememberAmbient((ambientRequest as? AmbientRequest.Artwork)?.url)
 
     Box(
         modifier = Modifier
             .fillMaxSize()
             .background(Color.Black)
-            .ambientBackdrop(ambient),
+            .ambientBackdrop(ambient)
+            // Search's own light, drawn here rather than on the search screen — which is what
+            // makes it reach all four edges and pass behind the tab bar, like every other tab's.
+            // See `AmbientRequest`. Applied only while it is wanted, because an infinite
+            // transition that is always composed is a frame's work on every tab.
+            .then(if (ambientRequest is AmbientRequest.Drift) Modifier.driftingGlow() else Modifier),
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
-            CompositionLocalProvider(LocalAmbientSink provides { ambientArtwork = it }) {
+            CompositionLocalProvider(LocalAmbientSink provides { ambientRequest = it }) {
                 TvTopBar(
                     selectedTab = selectedTab,
                     onSelect = onSelectTab,

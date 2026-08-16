@@ -73,6 +73,7 @@ import dev.quiblo.core.model.Programme
 import dev.quiblo.feature.browse.BrowseViewModel
 import dev.quiblo.feature.browse.di.browseParams
 import dev.quiblo.tv.R
+import dev.quiblo.tv.ui.common.AmbientRequest
 import dev.quiblo.tv.ui.common.LocalAmbientSink
 import kotlinx.coroutines.delay
 import org.koin.androidx.compose.koinViewModel
@@ -104,7 +105,7 @@ fun TvLiveScreen(
      * film that was focused two tabs ago.
      */
     val ambientSink = LocalAmbientSink.current
-    LaunchedEffect(Unit) { ambientSink(null) }
+    LaunchedEffect(Unit) { ambientSink(AmbientRequest.None) }
 
     /**
      * The channels, a page at a time.

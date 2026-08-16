@@ -18,16 +18,15 @@
 
 package dev.quiblo.core.data
 
+import dev.quiblo.core.common.SCRIPT_MASK_UNKNOWN
 import dev.quiblo.core.common.TitleScript
 import dev.quiblo.core.common.isInHiddenScript
+import dev.quiblo.core.common.toMask
 import dev.quiblo.core.database.dao.ChannelDao
-import dev.quiblo.core.database.dao.ChannelTitle
-import dev.quiblo.core.database.dao.TitleGenreRow
 import dev.quiblo.core.database.dao.TitleMetadataDao
 import dev.quiblo.core.database.dao.escapeForLike
 import dev.quiblo.core.model.Channel
 import dev.quiblo.core.model.MediaKind
-import dev.quiblo.source.tmdb.TitleIdentity
 import dev.quiblo.source.tmdb.titleIdentity
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
@@ -165,7 +164,7 @@ class SearchRepository(
         // filtered against the same answer even if the setting changes mid-query.
         val hidden = if (options.includeHidden) emptySet() else hiddenScripts.first()
         val ask = Ask(sourceId, term, options.limitPerKind, options.includeHidden, hidden)
-        val results = if (options.genre.isNullOrBlank()) {
+        return if (options.genre.isNullOrBlank()) {
             SearchResults(
                 live = if (options.includeLive) ask.matches(MediaKind.LIVE, term) else emptyList(),
                 movies = ask.matches(MediaKind.VOD, term),
@@ -174,7 +173,6 @@ class SearchRepository(
         } else {
             byGenre(ask, options.genre, options.includeLive)
         }
-        return results.hidingUnreadableScripts(hidden)
     }
 
     /**
@@ -188,9 +186,14 @@ class SearchRepository(
         if (!metadataRepository.isEnabled) return GenreIndex(isMetadataDisabled = true)
 
         val cached = titleMetadataDao.allGenreRows()
-        // The whole catalogue, hidden categories included. This figure answers "how much of what
-        // you own has been described", and a viewer's hiding choices do not change that.
-        val titles = channelDao.titlesForMetadata(sourceId, includeHidden = true)
+
+        // Two counts rather than a pass over the catalogue. This used to clean every film and
+        // series title in Kotlin to find out how many of them the cache knew — the same fifty
+        // thousand regex passes the genre filter was paying, run again the moment the search
+        // screen opened. The cleaned key is a column now, so SQLite counts distinct keys and
+        // counts how many join.
+        val wanted = channelDao.countDistinctTitles(sourceId)
+        val known = channelDao.countDescribedTitles(sourceId)
 
         return withContext(matchDispatcher) {
             val genres = cached
@@ -203,7 +206,7 @@ class SearchRepository(
 
             GenreIndex(
                 genres = genres,
-                coveragePercent = coverage(titles, cached.mapTo(HashSet()) { it.identity() }),
+                coveragePercent = coverage(wanted = wanted, known = known),
             )
         }
     }
@@ -218,26 +221,32 @@ class SearchRepository(
      * Titles that clean away to nothing — a name written entirely in a non-Latin script, a
      * bare language tag — are excluded from both halves. They will never be looked up, so
      * leaving them in the denominator would cap the figure below 100% permanently and make
-     * a complete cache look like a broken one.
+     * a complete cache look like a broken one. Both rules are now in the two `COUNT`s that
+     * supply these numbers rather than in a pass over the whole catalogue here.
+     *
+     * A catalogue mid-backfill reads low: rows with no computed key are excluded, so the figure
+     * climbs as the backfill runs. Under-reporting is the right direction for a number whose
+     * whole job is to say the filter is telling less than the whole truth.
      */
-    private fun coverage(titles: List<ChannelTitle>, cachedKeys: Set<CacheIdentity>): Int {
-        val wanted = titles.asSequence()
-            .mapNotNull { it.name.cacheIdentity(it.kind) }
-            .toSet()
-
-        if (wanted.isEmpty()) return 0
-        val known = wanted.count { it in cachedKeys }
-        return (known * PERCENT / wanted.size).coerceIn(0, PERCENT)
+    private fun coverage(wanted: Int, known: Int): Int {
+        if (wanted <= 0) return 0
+        return (known * PERCENT / wanted).coerceIn(0, PERCENT)
     }
 
     /**
      * One kind's worth of matches, already thinned of anything the viewer cannot read.
      *
-     * **The script filter runs here rather than only on the way out**, and the query overscans to
-     * pay for it. It used to run after the SQL `LIMIT`, which meant hiding a writing system
-     * quietly shortened every page of results: a term matching forty Arabic titles and ten Latin
-     * ones returned forty rows, discarded thirty-nine of them, and showed a viewer one hit for a
-     * search that had plenty.
+     * **The script filter is inside the query now** — a bitmask test against the column `021`
+     * added — so a row the viewer cannot read is not read, not mapped, and not walked character
+     * by character to decide. Before that it ran in Kotlin after the SQL `LIMIT`, which meant
+     * hiding a writing system quietly shortened every page of results: a term matching forty
+     * Arabic titles and ten Latin ones returned forty rows, discarded thirty-nine of them, and
+     * showed a viewer one hit for a search that had plenty.
+     *
+     * The overscan survives, and only for rows written before schema 19. Those carry no mask, the
+     * query cannot decide about them, and [hidingUncomputedScripts] decides in Kotlin — which is
+     * the old shape and needs the old allowance. It is dead weight once
+     * `CatalogueIdentityBackfill` has been through, and free on a fresh install.
      */
     private suspend fun Ask.matches(
         kind: MediaKind,
@@ -250,10 +259,19 @@ class SearchRepository(
         val asked = if (hidden.isEmpty()) keep else keep * SCRIPT_OVERSCAN
         // Escaped so % and _ are searched for rather than acted on. See escapeForLike.
         return channelDao
-            .search(profiles.activeProfileId, sourceId, kind.name, escapeForLike(text), asked, includeHidden)
+            .search(
+                profileId = profiles.activeProfileId,
+                sourceId = sourceId,
+                kind = kind.name,
+                query = escapeForLike(text),
+                limit = asked,
+                includeHidden = includeHidden,
+                hiddenMask = hidden.toMask(),
+                unknownMask = SCRIPT_MASK_UNKNOWN,
+            )
+            .hidingUncomputedScripts(hidden, { it.channel.scriptMask }, { it.channel.name })
             .asSequence()
             .map { it.channel.toDomain(isFavorite = it.isFavorite) }
-            .filterNot { it.name.isInHiddenScript(hidden) }
             .take(keep)
             .toList()
     }
@@ -268,60 +286,46 @@ class SearchRepository(
      * called "CRIME NETWORK HD" comes back for "Crime", which is what a viewer expects, and
      * the alternative is a live column that is always empty.
      */
-    private suspend fun byGenre(ask: Ask, genre: String, includeLive: Boolean): SearchResults {
-        val term = ask.term
-        val limit = ask.limit
-        val cached = titleMetadataDao.allGenreRows()
-        val titles = channelDao.titlesForMetadata(ask.sourceId, ask.includeHidden)
-
-        val wantedIds = withContext(matchDispatcher) {
-            val inGenre = cached.asSequence()
-                .filterNot { it.isMiss }
-                .filter { row -> row.genres.orEmpty().splitGenres().any { it.equals(genre, ignoreCase = true) } }
-                .mapTo(HashSet()) { it.identity() }
-
-            val matching = titles.asSequence()
-                .filter { term.isBlank() || it.name.contains(term, ignoreCase = true) }
-                .filter { title -> title.name.cacheIdentity(title.kind) in inGenre }
-                .toList()
-
-            /*
-             * **A cap per kind, taken before the split rather than after it.**
-             *
-             * This used to be one cap of `limit * 2` over the whole matching sequence, with the
-             * split into columns happening afterwards — and the comment on it said the cap was
-             * shared "so a genre held mostly by series still returns films". It did the opposite.
-             *
-             * `titlesForMetadata` has no `ORDER BY`, so SQLite returns rowid order; rows are
-             * inserted live, then films, then series, so rowid order puts *every* film ahead of
-             * *every* series. On a small catalogue eighty rows reach the series. On a real one
-             * they do not, and the series column is empty — or the films column is, on an account
-             * whose series were inserted first. Which one is empty depends on nothing a viewer
-             * can see, which is why this was reported as random.
-             *
-             * Taking each kind's own cap cannot starve either, whatever order the rows arrive in.
-             */
-            KIND_COLUMNS.flatMap { kind ->
-                matching.asSequence()
-                    .filter { it.kind == kind.name }
-                    .take(limit)
-                    .map { it.id }
-                    .toList()
-            }
-        }
-
-        val rows = if (wantedIds.isEmpty()) {
-            emptyList()
-        } else {
-            channelDao.findAllByIds(profiles.activeProfileId, wantedIds)
-                .map { it.channel.toDomain(isFavorite = it.isFavorite) }
-        }
-
-        return SearchResults(
+    private suspend fun byGenre(ask: Ask, genre: String, includeLive: Boolean): SearchResults =
+        SearchResults(
             live = if (includeLive) ask.liveByGenre(genre) else emptyList(),
-            movies = rows.filter { it.kind == MediaKind.VOD }.take(limit),
-            series = rows.filter { it.kind == MediaKind.SERIES }.take(limit),
+            movies = ask.inGenre(MediaKind.VOD, genre),
+            series = ask.inGenre(MediaKind.SERIES, genre),
         )
+
+    /**
+     * One column of a genre search, as one indexed query.
+     *
+     * **This is what `021` replaced, and the size of it is the point.** The previous version read
+     * every film and series the source carried — fifty thousand rows on this project's own
+     * provider — cleaned each title in Kotlin to a cache key, and intersected that with the
+     * cached genres. Cleaning a title is eight regex passes, so one press of a genre chip was
+     * four hundred thousand regex applications, nothing was kept between presses, and the screen
+     * looked like it had hung. The cleaned key is now a column, so this is a join.
+     *
+     * A cap per kind rather than one shared cap, which was `019`'s fix and is kept: `LIMIT` is
+     * applied per query here, so neither column can starve the other whatever order SQLite
+     * returns rows in.
+     */
+    private suspend fun Ask.inGenre(kind: MediaKind, genre: String): List<Channel> {
+        val asked = if (hidden.isEmpty()) limit else limit * SCRIPT_OVERSCAN
+        return channelDao
+            .searchByGenre(
+                profileId = profiles.activeProfileId,
+                sourceId = sourceId,
+                kind = kind.name,
+                genre = genre,
+                query = escapeForLike(term),
+                limit = asked,
+                includeHidden = includeHidden,
+                hiddenMask = hidden.toMask(),
+                unknownMask = SCRIPT_MASK_UNKNOWN,
+            )
+            .hidingUncomputedScripts(hidden, { it.channel.scriptMask }, { it.channel.name })
+            .asSequence()
+            .map { it.channel.toDomain(isFavorite = it.isFavorite) }
+            .take(limit)
+            .toList()
     }
 
     private suspend fun Ask.liveByGenre(genre: String): List<Channel> =
@@ -350,14 +354,6 @@ class SearchRepository(
     )
 
     private companion object {
-        /**
-         * The two columns a genre search fills from the metadata cache.
-         *
-         * Live is not among them: a television channel has no metadata and never will, so it is
-         * matched on its own name and capped on its own.
-         */
-        val KIND_COLUMNS = listOf(MediaKind.VOD, MediaKind.SERIES)
-
         /**
          * How many live matches are read before the genre word is applied to their names.
          *
@@ -394,6 +390,3 @@ private fun String.splitGenres(): Sequence<String> =
  * says features talk to this layer and nothing else.
  */
 fun String.suggestionKey(): String = titleIdentity().searchTitle
-
-/** The cache row this cached projection stands for, so the two sides join on the whole key. */
-private fun TitleGenreRow.identity() = CacheIdentity(TitleIdentity(searchTitle, year), kind)

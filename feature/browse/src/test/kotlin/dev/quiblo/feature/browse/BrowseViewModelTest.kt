@@ -24,6 +24,7 @@ import dev.quiblo.core.data.ChannelLogoRepository
 import dev.quiblo.core.data.ChannelRepository
 import dev.quiblo.core.data.GuideOutcome
 import dev.quiblo.core.data.GuideRepository
+import dev.quiblo.core.data.PopularEntry
 import dev.quiblo.core.data.PopularTitlesRepository
 import dev.quiblo.core.data.RecentlyAddedFeed
 import dev.quiblo.core.data.RecommendationRepository
@@ -41,6 +42,8 @@ import io.mockk.mockk
 import io.mockk.verify
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -138,70 +141,75 @@ class BrowseViewModelTest {
         verify { guideRepository.observeNowPlaying(SOURCE.id) }
     }
 
+    /**
+     * The guard around guide requests, exercised through the one door there is.
+     *
+     * **The top-of-list prefetch has moved to `TvLiveScreen` and these have moved with it.** It
+     * used to live in this class because this class could see the whole list; the list is paged
+     * now, so the screen is what knows which rows exist. What did *not* move is the guard, and
+     * that is what these assert — a screen calling this ten times must cost ten requests and
+     * never eleven, however many times the same rows are handed back.
+     *
+     * The bound is why any of this is safe: "per visible row" against a 20,000-channel account
+     * is how this project's provider blocked it, twice.
+     */
     @Test
-    fun `a fresh live list asks for the top of itself without anything being focused`() = runTest {
-        // The reported defect. On the television nothing has focus when Live opens, and the
-        // guide was fetched only for a row focus had rested on — so every row drew blank,
-        // indefinitely, for anybody who did not happen to stop on one.
-        every { channelRepository.observeBrowse(any(), any(), any(), any(), any()) } returns
-            flowOf(liveChannels(count = 30))
+    fun `a list handed to the guide twice costs one request per channel`() = runTest {
+        val viewModel = viewModelFor(BrowseFeed(MediaKind.LIVE))
+        val channels = liveChannels(count = 10)
 
-        viewModelFor(BrowseFeed(MediaKind.LIVE)).uiState.drain()
+        channels.forEach(viewModel::onRowVisible)
+        // The same rows again — a page re-emitted, a category changed back, a keystroke.
+        channels.forEach(viewModel::onRowVisible)
+        testDispatcher.scheduler.advanceUntilIdle()
 
         coVerify(exactly = 10) { guideRepository.refreshGuideFor(any()) }
     }
 
     @Test
-    fun `the prefetch is bounded and does not repeat for a list it has already seen`() = runTest {
-        // The bound is the reason this is safe to do at all: "per visible row" against a
-        // 20,000-channel account is how this project's provider blocked it, twice. A list that
-        // re-emits — a write to the table, a keystroke, a category change — must cost nothing.
-        every { channelRepository.observeBrowse(any(), any(), any(), any(), any()) } returns
-            flowOf(liveChannels(count = 500), liveChannels(count = 500))
+    fun `a film is never asked about, because a poster has nowhere to put a programme`() = runTest {
+        val viewModel = viewModelFor(BrowseFeed(MediaKind.VOD))
 
-        viewModelFor(BrowseFeed(MediaKind.LIVE)).uiState.drain()
-
-        coVerify(exactly = 10) { guideRepository.refreshGuideFor(any()) }
-    }
-
-    @Test
-    fun `the films feed prefetches nothing, because a poster has nowhere to put a programme`() = runTest {
-        every { channelRepository.observeBrowse(any(), any(), any(), any(), any()) } returns
-            flowOf(liveChannels(count = 30).map { it.copy(kind = MediaKind.VOD) })
-
-        viewModelFor(BrowseFeed(MediaKind.VOD)).uiState.drain()
+        liveChannels(count = 30).map { it.copy(kind = MediaKind.VOD) }.forEach(viewModel::onRowVisible)
+        testDispatcher.scheduler.advanceUntilIdle()
 
         coVerify(exactly = 0) { guideRepository.refreshGuideFor(any()) }
     }
 
     @Test
     fun `a refusing panel reaches the screen instead of looking like an empty guide`() = runTest {
-        every { channelRepository.observeBrowse(any(), any(), any(), any(), any()) } returns
-            flowOf(liveChannels(count = 3))
         coEvery { guideRepository.refreshGuideFor(any()) } returns GuideOutcome.BLOCKED
 
-        val state = viewModelFor(BrowseFeed(MediaKind.LIVE)).uiState
-        state.drain()
+        val viewModel = viewModelFor(BrowseFeed(MediaKind.LIVE))
+        viewModel.uiState.test {
+            awaitItem()
+            liveChannels(count = 3).forEach(viewModel::onRowVisible)
+            testDispatcher.scheduler.advanceUntilIdle()
+            cancelAndIgnoreRemainingEvents()
+        }
 
-        assertEquals(GuideOutcome.BLOCKED, state.value.guideOutcome)
+        assertEquals(GuideOutcome.BLOCKED, viewModel.uiState.value.guideOutcome)
     }
 
     @Test
     fun `one channel with listings is enough to stop reporting trouble`() = runTest {
         // Most channels on a large account have no listing, and a guide that reported itself
         // broken on meeting the first of them would be wrong about every working account.
-        every { channelRepository.observeBrowse(any(), any(), any(), any(), any()) } returns
-            flowOf(liveChannels(count = 3))
         coEvery { guideRepository.refreshGuideFor(any()) } returnsMany listOf(
             GuideOutcome.EMPTY,
             GuideOutcome.STORED,
             GuideOutcome.EMPTY,
         )
 
-        val state = viewModelFor(BrowseFeed(MediaKind.LIVE)).uiState
-        state.drain()
+        val viewModel = viewModelFor(BrowseFeed(MediaKind.LIVE))
+        viewModel.uiState.test {
+            awaitItem()
+            liveChannels(count = 3).forEach(viewModel::onRowVisible)
+            testDispatcher.scheduler.advanceUntilIdle()
+            cancelAndIgnoreRemainingEvents()
+        }
 
-        assertEquals(GuideOutcome.STORED, state.value.guideOutcome)
+        assertEquals(GuideOutcome.STORED, viewModel.uiState.value.guideOutcome)
     }
 
     private fun liveChannels(count: Int) = (1..count).map { index ->
@@ -214,6 +222,22 @@ class BrowseViewModelTest {
             tvgId = "key-$index",
             providerStreamId = index.toString(),
         )
+    }
+
+    /**
+     * The catalogue feed carries no list of its own, because the paged one is the list.
+     *
+     * Two copies of the same query — one paged for the grid, one whole for the state — would be
+     * the entire cost paging exists to have removed, hidden behind a field nothing reads.
+     */
+    @Test
+    fun `the catalogue scope does not also read the whole kind`() = runTest {
+        val viewModel = viewModelFor(BrowseFeed(MediaKind.VOD))
+
+        viewModel.uiState.drain()
+
+        assertEquals(emptyList<Channel>(), viewModel.uiState.value.items)
+        verify(exactly = 0) { channelRepository.observeBrowse(any(), any(), any(), any(), any()) }
     }
 
     @Test
@@ -246,6 +270,74 @@ class BrowseViewModelTest {
         verify(exactly = 0) { guideRepository.observeNowPlaying(any()) }
         verify(exactly = 0) { historyRepository.observeHistory(any(), any()) }
         verify(exactly = 0) { categoryRepository.observeCategories(any(), any()) }
+    }
+
+    /**
+     * The For You defect: the popular row was built from a key that had not been read yet.
+     *
+     * The metadata key lives in an encrypted store, so reading it is a `MasterKey` build and a
+     * keystore round trip rather than a field access — and the row was built by a flow that ran
+     * exactly once, sampled `apiKey.value`, found null, skipped the fetch and had nothing that
+     * would ever ask again. The fake below is that timing and nothing else: the key is null
+     * until `load()` is awaited, and the popular list is empty for as long as it is null.
+     *
+     * **The `delay` is load-bearing and not a sleep.** Without it the test scheduler runs the
+     * fire-and-forget `load()` in `init` to completion before the feed's first build, and the
+     * race the device loses is one this test would win every time. A store that takes any time
+     * at all to answer is the whole of the defect.
+     *
+     * Red before the fix, and for the reported reason: the row is absent.
+     */
+    @Test
+    fun `the popular row is built after the metadata key has been read, not before`() = runTest {
+        val key = MutableStateFlow<String?>(null)
+        every { metadataRepository.apiKey } returns key
+        coEvery { metadataRepository.load() } coAnswers {
+            delay(KEYSTORE_READ_MILLIS)
+            key.value = "a-key"
+        }
+        coEvery { popularTitles.popular(any(), any()) } answers {
+            if (key.value == null) emptyList() else listOf(POPULAR_ENTRY)
+        }
+        coEvery { channelRepository.channelsByIds(any()) } returns listOf(POPULAR_CHANNEL)
+
+        val viewModel = viewModelFor(BrowseFeed(MediaKind.VOD, BrowseScope.FOR_YOU))
+
+        viewModel.uiState.drain()
+
+        assertEquals(
+            listOf(FeedRowId.NOW_POPULAR),
+            viewModel.uiState.value.extraRows.map { it.id },
+        )
+    }
+
+    /**
+     * The other half: a key pasted into Settings while the tab is open fills the row.
+     *
+     * The same mechanism, and it only works because the row is keyed on the value rather than
+     * built once from it. Without this the fix would be a one-shot with a longer wait.
+     */
+    @Test
+    fun `a key configured while the tab is open fills the popular row`() = runTest {
+        val key = MutableStateFlow<String?>(null)
+        every { metadataRepository.apiKey } returns key
+        coEvery { metadataRepository.load() } returns Unit
+        coEvery { popularTitles.popular(any(), any()) } answers {
+            if (key.value == null) emptyList() else listOf(POPULAR_ENTRY)
+        }
+        coEvery { channelRepository.channelsByIds(any()) } returns listOf(POPULAR_CHANNEL)
+
+        val viewModel = viewModelFor(BrowseFeed(MediaKind.VOD, BrowseScope.FOR_YOU))
+        viewModel.uiState.drain()
+        assertEquals(emptyList<FeedRowId>(), viewModel.uiState.value.extraRows.map { it.id })
+
+        key.value = "pasted-in-settings"
+        viewModel.uiState.drain()
+
+        assertEquals(
+            listOf(FeedRowId.NOW_POPULAR),
+            viewModel.uiState.value.extraRows.map { it.id },
+        )
     }
 
     @Test
@@ -300,5 +392,24 @@ class BrowseViewModelTest {
             url = "http://host.invalid/p.m3u",
             createdAtEpochMillis = 0L,
         )
+
+        /** One catalogue row for the popular list to resolve to, and one entry pointing at it. */
+        val POPULAR_CHANNEL = Channel(
+            id = 91L,
+            sourceId = SOURCE.id,
+            name = "A Popular Film",
+            streamUrl = "http://host.invalid/91",
+            kind = MediaKind.VOD,
+        )
+
+        val POPULAR_ENTRY = PopularEntry(rank = 1, channelId = POPULAR_CHANNEL.id, kind = MediaKind.VOD)
+
+        /**
+         * How long the encrypted store is made to take.
+         *
+         * Virtual time, so it costs nothing to run. Any non-zero value reproduces the defect —
+         * the number stands for "not instant", which is what a `MasterKey` build is.
+         */
+        const val KEYSTORE_READ_MILLIS = 50L
     }
 }

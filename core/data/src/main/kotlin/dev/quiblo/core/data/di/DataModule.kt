@@ -20,6 +20,7 @@ package dev.quiblo.core.data.di
 
 import android.content.Context
 import dev.quiblo.core.data.AndroidPickedSubtitleFiles
+import dev.quiblo.core.data.CatalogueIdentityBackfill
 import dev.quiblo.core.data.CategoryRepository
 import dev.quiblo.core.data.ChannelLogoRepository
 import dev.quiblo.core.data.ChannelRepository
@@ -95,6 +96,8 @@ val dataModule: Module = module {
         )
     }
     single { ScriptFilterRepository(get()) }
+    // Named, like every definition here whose last parameter is a dispatcher with a default.
+    single { CatalogueIdentityBackfill(channelDao = get()) }
     single { WatchHistoryRepository(get(), get()) }
     single { CategoryRepository(get(), get()) }
     // Named, unlike the four positional `get()`s this replaced: the fifth argument is a

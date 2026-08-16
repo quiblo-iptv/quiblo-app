@@ -20,6 +20,7 @@ package dev.quiblo.core.database
 
 import androidx.room.Room
 import androidx.test.platform.app.InstrumentationRegistry
+import dev.quiblo.core.common.SCRIPT_MASK_UNKNOWN
 import dev.quiblo.core.database.entity.CategoryOverrideEntity
 import dev.quiblo.core.database.entity.ChannelEntity
 import dev.quiblo.core.database.entity.SourceEntity
@@ -141,6 +142,10 @@ class HiddenCategorySearchTest {
             query = "Dune",
             limit = 40,
             includeHidden = includeHidden,
+            // Nothing hidden by writing system here: this test is about categories, and the
+            // two filters are deliberately independent.
+            hiddenMask = 0,
+            unknownMask = SCRIPT_MASK_UNKNOWN,
         )
 
     private suspend fun hide(kind: String, category: String) {

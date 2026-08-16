@@ -18,6 +18,7 @@
 
 package dev.quiblo.core.data
 
+import dev.quiblo.core.common.scriptMask
 import dev.quiblo.core.database.dao.CategoryCount
 import dev.quiblo.core.database.entity.ChannelEntity
 import dev.quiblo.core.database.entity.ProgrammeEntity
@@ -30,6 +31,7 @@ import dev.quiblo.core.model.MediaKind
 import dev.quiblo.core.model.Programme
 import dev.quiblo.core.model.Source
 import dev.quiblo.core.model.SourceKind
+import dev.quiblo.source.tmdb.titleIdentity
 
 internal fun SourceEntity.toDomain(): Source = Source(
     id = id,
@@ -67,22 +69,33 @@ internal fun ChannelEntity.toDomain(isFavorite: Boolean = false): Channel = Chan
 /**
  * @param sortIndex preserves the order the provider listed items in. Playlists are often
  *   ordered meaningfully and re-sorting them alphabetically is a surprise, not a feature.
+ *
+ * **Where the cleaned identity and the script mask are worked out.** Once per row, on the way in,
+ * because neither answer can change while the row exists and both used to be recomputed on every
+ * read of every browse page and every press of a genre chip. This is the whole point of `021`:
+ * one import pays what fifty thousand reads were paying.
  */
-internal fun Channel.toEntity(sortIndex: Int): ChannelEntity = ChannelEntity(
-    id = 0L,
-    sourceId = sourceId,
-    name = name,
-    streamUrl = streamUrl,
-    kind = kind.name,
-    tvgId = tvgId,
-    logoUrl = logoUrl,
-    groupTitle = groupTitle,
-    stableKey = stableKey,
-    sortIndex = sortIndex,
-    categoryIndex = categoryIndex,
-    providerStreamId = providerStreamId,
-    addedAtEpochMillis = addedAtEpochMillis,
-)
+internal fun Channel.toEntity(sortIndex: Int): ChannelEntity {
+    val identity = name.titleIdentity()
+    return ChannelEntity(
+        id = 0L,
+        sourceId = sourceId,
+        name = name,
+        streamUrl = streamUrl,
+        kind = kind.name,
+        tvgId = tvgId,
+        logoUrl = logoUrl,
+        groupTitle = groupTitle,
+        stableKey = stableKey,
+        sortIndex = sortIndex,
+        categoryIndex = categoryIndex,
+        providerStreamId = providerStreamId,
+        addedAtEpochMillis = addedAtEpochMillis,
+        searchTitle = identity.searchTitle,
+        identityYear = identity.year,
+        scriptMask = name.scriptMask(),
+    )
+}
 
 internal fun ResumePositionEntity.toDomain(): HistoryEntry = HistoryEntry(
     stableKey = stableKey,

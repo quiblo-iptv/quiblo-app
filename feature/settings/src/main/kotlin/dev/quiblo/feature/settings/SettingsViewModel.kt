@@ -268,6 +268,20 @@ class SettingsViewModel(
         playerSettingsRepository.setShowLiveInSearch(enabled)
     }
 
+    /**
+     * Whether the player lights its black bars from the picture. On unless switched off.
+     *
+     * The initial value here is `true` and not `false`, unlike the switch above, and it matters:
+     * these settings feed a screen the viewer can open mid-film, and starting from the wrong
+     * default would show them a control that is off for the instant before the store answers.
+     */
+    val ambientPlayer: StateFlow<Boolean> = playerSettingsRepository.ambientPlayer
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(SUBSCRIPTION_TIMEOUT_MILLIS), true)
+
+    fun setAmbientPlayer(enabled: Boolean) = viewModelScope.launch {
+        playerSettingsRepository.setAmbientPlayer(enabled)
+    }
+
     /** Writing systems the viewer has hidden from the catalogue and from search (INC-F14). */
     val hiddenScripts: StateFlow<Set<TitleScript>> = scriptFilter.hiddenScripts
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(SUBSCRIPTION_TIMEOUT_MILLIS), emptySet())

@@ -40,6 +40,7 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -72,9 +73,11 @@ import dev.quiblo.tv.ui.browse.TvCategoryList
 import dev.quiblo.tv.ui.browse.TvCategoryRow
 import dev.quiblo.tv.ui.browse.TvRowItem
 import dev.quiblo.tv.ui.common.FIELD_CORNER
+import dev.quiblo.tv.ui.common.LocalAmbientSink
 import dev.quiblo.tv.ui.common.QuibloMark
 import dev.quiblo.tv.ui.common.TvChip
 import dev.quiblo.tv.ui.common.TvTextField
+import dev.quiblo.tv.ui.common.driftingGlow
 import dev.quiblo.tv.ui.common.travellingGlow
 import org.koin.androidx.compose.koinViewModel
 
@@ -105,6 +108,17 @@ fun TvSearchScreen(
     viewModel: SearchViewModel = koinViewModel(key = "tv-search"),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+
+    /*
+     * Puts out whatever the catalogue left lit.
+     *
+     * The shell's backdrop is fed by focused posters, and nothing on this screen is one — so
+     * before `022` arriving here left the colours of a film looked at two tabs ago sitting behind
+     * an empty field. Null is what the sink reads as "no light", and the backdrop's own crossfade
+     * turns that into a fade rather than a snap.
+     */
+    val ambientSink = LocalAmbientSink.current
+    LaunchedEffect(Unit) { ambientSink(null) }
 
     TvSearchPanel(
         state = state,
@@ -193,6 +207,8 @@ internal fun TvSearchPanel(
     Column(
         modifier = modifier
             .fillMaxSize()
+            // The one screen in the app that lights itself. See `driftingGlow`.
+            .driftingGlow()
             .onGloballyPositioned { coordinates ->
                 val panelHeight = coordinates.findRootCoordinates().size.height
                 centreLine = with(density) {

@@ -20,7 +20,6 @@ package dev.quiblo.core.data
 
 import dev.quiblo.core.common.TitleScript
 import dev.quiblo.core.database.dao.ChannelDao
-import dev.quiblo.core.database.dao.ChannelTitle
 import dev.quiblo.core.database.dao.ChannelWithFavorite
 import dev.quiblo.core.database.dao.TitleGenreRow
 import dev.quiblo.core.database.dao.TitleMetadataDao
@@ -72,19 +71,22 @@ class SearchRepositoryTest {
         val results = repository.search(sourceId = SOURCE_ID, query = "   ")
 
         assertTrue(results.isEmpty)
-        coVerify(exactly = 0) { channelDao.search(any(), any(), any(), any(), any(), any()) }
+        coVerify(exactly = 0) { channelDao.search(any(), any(), any(), any(), any(), any(), any(), any()) }
         coVerify(exactly = 0) { channelDao.titlesForMetadata(any(), any()) }
     }
 
     @Test
     @DisplayName("one term, three answers, kept apart")
     fun `searches every kind and keeps the results separate`() = runTest {
-        coEvery { channelDao.search(any(), SOURCE_ID, MediaKind.LIVE.name, "bbc", any(), any()) } returns
-            listOf(row(id = 1L, name = "BBC One", kind = MediaKind.LIVE))
-        coEvery { channelDao.search(any(), SOURCE_ID, MediaKind.VOD.name, "bbc", any(), any()) } returns
-            listOf(row(id = 2L, name = "BBC Earth: A Perfect Planet", kind = MediaKind.VOD))
-        coEvery { channelDao.search(any(), SOURCE_ID, MediaKind.SERIES.name, "bbc", any(), any()) } returns
-            emptyList()
+        coEvery {
+            channelDao.search(any(), SOURCE_ID, MediaKind.LIVE.name, "bbc", any(), any(), any(), any())
+        } returns listOf(row(id = 1L, name = "BBC One", kind = MediaKind.LIVE))
+        coEvery {
+            channelDao.search(any(), SOURCE_ID, MediaKind.VOD.name, "bbc", any(), any(), any(), any())
+        } returns listOf(row(id = 2L, name = "BBC Earth: A Perfect Planet", kind = MediaKind.VOD))
+        coEvery {
+            channelDao.search(any(), SOURCE_ID, MediaKind.SERIES.name, "bbc", any(), any(), any(), any())
+        } returns emptyList()
 
         val results = repository.search(sourceId = SOURCE_ID, query = "bbc")
 
@@ -94,23 +96,26 @@ class SearchRepositoryTest {
         assertEquals(2, results.total)
     }
 
+    /**
+     * A genre asks the database for one genre, and reads nothing else.
+     *
+     * **What this asserts is an absence, and the absence is `021`.** The filter used to read
+     * every film and series the source carried and clean each title in Kotlin to a cache key —
+     * fifty thousand rows and four hundred thousand regex passes per press of a chip, repeated in
+     * full for the next press. The cleaned key is a column now, so the join is SQLite's; what is
+     * left to prove here is that this layer no longer reaches for the catalogue at all.
+     *
+     * The join itself is proved where a join can be proved, against real SQLite, in
+     * `GenreAndScriptQueryTest`.
+     */
     @Test
-    @DisplayName("a genre finds a film whose title carries a year and a quality tag")
-    fun `the genre filter matches through the cleaned title`() = runTest {
-        coEvery { titleMetadataDao.allGenreRows() } returns listOf(
-            // The year is part of the key since #024, and the catalogue row below carries 1996 —
-            // so this pair matching is the whole join under test, not a detail of the fixture.
-            TitleGenreRow("fargo", MediaKind.VOD.name, 1996, "Crime\nDrama", isMiss = false),
-            TitleGenreRow("speed", MediaKind.VOD.name, NO_YEAR, "Action", isMiss = false),
-        )
-        coEvery { channelDao.titlesForMetadata(SOURCE_ID, any()) } returns listOf(
-            // As a panel actually writes them: a year in brackets and a quality marker, none
-            // of which the cache key has.
-            ChannelTitle(id = 10L, name = "Fargo (1996) [FHD]", kind = MediaKind.VOD.name),
-            ChannelTitle(id = 11L, name = "Speed", kind = MediaKind.VOD.name),
-        )
-        coEvery { channelDao.findAllByIds(any(), listOf(10L)) } returns
-            listOf(row(id = 10L, name = "Fargo (1996) [FHD]", kind = MediaKind.VOD))
+    @DisplayName("a genre asks one query per column and never reads the catalogue")
+    fun `the genre filter is one query per kind and no catalogue pass`() = runTest {
+        coEvery {
+            channelDao.searchByGenre(
+                any(), SOURCE_ID, MediaKind.VOD.name, "Crime", any(), any(), any(), any(), any(),
+            )
+        } returns listOf(row(id = 10L, name = "Fargo (1996) [FHD]", kind = MediaKind.VOD))
 
         val results = repository.search(
             sourceId = SOURCE_ID,
@@ -119,9 +124,8 @@ class SearchRepositoryTest {
         )
 
         assertEquals(listOf("Fargo (1996) [FHD]"), results.movies.map { it.name })
-        // The rows are read for the chosen ids only. Reading them all and filtering afterwards
-        // would be the whole browse working set for a screenful of answers.
-        coVerify(exactly = 1) { channelDao.findAllByIds(any(), listOf(10L)) }
+        coVerify(exactly = 0) { channelDao.titlesForMetadata(any(), any()) }
+        coVerify(exactly = 0) { channelDao.findAllByIds(any(), any()) }
     }
 
     @Test
@@ -133,33 +137,45 @@ class SearchRepositoryTest {
             // A miss carries no genres and must not be mistaken for one.
             TitleGenreRow("some unfindable title", MediaKind.VOD.name, NO_YEAR, null, isMiss = true),
         )
-        coEvery { channelDao.titlesForMetadata(SOURCE_ID, any()) } returns emptyList()
+        coEvery { channelDao.countDistinctTitles(SOURCE_ID) } returns 0
+        coEvery { channelDao.countDescribedTitles(SOURCE_ID) } returns 0
 
         val index = repository.genreIndex(SOURCE_ID)
 
         assertEquals(listOf("Action", "Crime", "Drama"), index.genres)
     }
 
+    /**
+     * Coverage is two counts now, not a pass over the catalogue.
+     *
+     * Which titles are counted is SQLite's business and is proved against real SQLite in
+     * `GenreAndScriptQueryTest` — that four qualities of one film are one title, and that a name
+     * which cleans away to nothing is in neither half of the fraction. What is left here is the
+     * arithmetic, and that opening the search screen no longer reads the catalogue to do it.
+     */
     @Test
-    @DisplayName("four copies of one film are one title to look up, not four")
-    fun `coverage counts distinct cleaned titles rather than rows`() = runTest {
+    @DisplayName("coverage is a fraction of counted titles, not a pass over the catalogue")
+    fun `coverage divides the two counts and reads nothing else`() = runTest {
         coEvery { titleMetadataDao.allGenreRows() } returns listOf(
             TitleGenreRow("the matrix", MediaKind.VOD.name, 1999, "Action", isMiss = false),
         )
-        coEvery { channelDao.titlesForMetadata(SOURCE_ID, any()) } returns listOf(
-            ChannelTitle(id = 1L, name = "The Matrix (1999) [4K]", kind = MediaKind.VOD.name),
-            ChannelTitle(id = 2L, name = "The Matrix (1999) [FHD]", kind = MediaKind.VOD.name),
-            ChannelTitle(id = 3L, name = "The Matrix (1999) [SD]", kind = MediaKind.VOD.name),
-            ChannelTitle(id = 4L, name = "Heat (1995)", kind = MediaKind.VOD.name),
-            // Cleans away to nothing, so it can never be looked up and is excluded from both
-            // halves — in the denominator it would cap the figure below 100% for ever.
-            ChannelTitle(id = 5L, name = "|AR|", kind = MediaKind.VOD.name),
-        )
+        coEvery { channelDao.countDistinctTitles(SOURCE_ID) } returns 2
+        coEvery { channelDao.countDescribedTitles(SOURCE_ID) } returns 1
 
         val index = repository.genreIndex(SOURCE_ID)
 
-        // One of the two titles that can be looked up is described.
         assertEquals(50, index.coveragePercent)
+        coVerify(exactly = 0) { channelDao.titlesForMetadata(any(), any()) }
+    }
+
+    /** A source with nothing worth looking up reports nothing, rather than dividing by zero. */
+    @Test
+    fun `coverage of an empty catalogue is zero`() = runTest {
+        coEvery { titleMetadataDao.allGenreRows() } returns emptyList()
+        coEvery { channelDao.countDistinctTitles(SOURCE_ID) } returns 0
+        coEvery { channelDao.countDescribedTitles(SOURCE_ID) } returns 0
+
+        assertEquals(0, repository.genreIndex(SOURCE_ID).coveragePercent)
     }
 
     @Test
@@ -192,7 +208,7 @@ class SearchRepositoryTest {
                 kind = MediaKind.SERIES,
             )
         }
-        coEvery { channelDao.search(any(), SOURCE_ID, any(), "s", any(), any()) } returns mixed
+        coEvery { channelDao.search(any(), SOURCE_ID, any(), "s", any(), any(), any(), any()) } returns mixed
 
         val results = hidingArabic().search(
             sourceId = SOURCE_ID,
@@ -204,20 +220,20 @@ class SearchRepositoryTest {
         assertEquals(10, results.series.size)
         assertTrue(results.series.none { it.name.startsWith("مسلسل") })
         // And it asked the database for more than ten, which is the whole mechanism.
-        coVerify { channelDao.search(any(), SOURCE_ID, MediaKind.SERIES.name, "s", 20, false) }
+        coVerify { channelDao.search(any(), SOURCE_ID, MediaKind.SERIES.name, "s", 20, false, any(), any()) }
     }
 
     @Test
     @DisplayName("one toggle covers hidden categories and hidden scripts alike")
     fun `including hidden searches hidden categories and stops filtering scripts`() = runTest {
-        coEvery { channelDao.search(any(), SOURCE_ID, any(), "a", any(), any()) } returns
+        coEvery { channelDao.search(any(), SOURCE_ID, any(), "a", any(), any(), any(), any()) } returns
             listOf(row(id = 1L, name = "مسلسل الاختيار", kind = MediaKind.SERIES))
 
         val results = hidingArabic()
             .search(sourceId = SOURCE_ID, query = "a", options = SearchOptions(includeHidden = true))
 
         assertEquals(listOf("مسلسل الاختيار"), results.series.map { it.name })
-        coVerify { channelDao.search(any(), SOURCE_ID, MediaKind.SERIES.name, "a", any(), true) }
+        coVerify { channelDao.search(any(), SOURCE_ID, MediaKind.SERIES.name, "a", any(), true, any(), any()) }
     }
 
     @Test
@@ -225,7 +241,7 @@ class SearchRepositoryTest {
     fun `hidden categories are excluded unless asked for`() = runTest {
         repository.search(sourceId = SOURCE_ID, query = "a")
 
-        coVerify { channelDao.search(any(), SOURCE_ID, MediaKind.VOD.name, "a", any(), false) }
+        coVerify { channelDao.search(any(), SOURCE_ID, MediaKind.VOD.name, "a", any(), false, any(), any()) }
     }
 
     /**
@@ -240,24 +256,19 @@ class SearchRepositoryTest {
     @Test
     @DisplayName("a genre held by both kinds fills both columns")
     fun `the genre filter caps each kind on its own`() = runTest {
-        val films = (1..CROWD).map { "Film $it" to MediaKind.VOD }
-        val series = (1..CROWD).map { "Series $it" to MediaKind.SERIES }
-        val catalogue = films + series
-
-        coEvery { titleMetadataDao.allGenreRows() } returns catalogue.map { (name, kind) ->
-            TitleGenreRow(name.lowercase(), kind.name, NO_YEAR, "Crime", isMiss = false)
-        }
-        // In the order SQLite returns them: every film, and only then every series.
-        coEvery { channelDao.titlesForMetadata(SOURCE_ID, any()) } returns
-            catalogue.mapIndexed { index, (name, kind) ->
-                ChannelTitle(id = index.toLong(), name = name, kind = kind.name)
-            }
-        coEvery { channelDao.findAllByIds(any(), any()) } answers {
-            secondArg<List<Long>>().map { id ->
-                val (name, kind) = catalogue[id.toInt()]
-                row(id = id, name = name, kind = kind)
-            }
-        }
+        // A hundred of each, returned in the order SQLite returns them: every film ahead of
+        // every series. The cap is per query now, so neither column can starve the other
+        // whatever that order is — which is `019`'s fix, kept rather than re-derived.
+        coEvery {
+            channelDao.searchByGenre(
+                any(), SOURCE_ID, MediaKind.VOD.name, "Crime", any(), any(), any(), any(), any(),
+            )
+        } answers { (1..CROWD).map { row(id = it.toLong(), name = "Film $it", kind = MediaKind.VOD) } }
+        coEvery {
+            channelDao.searchByGenre(
+                any(), SOURCE_ID, MediaKind.SERIES.name, "Crime", any(), any(), any(), any(), any(),
+            )
+        } answers { (1..CROWD).map { row(id = it.toLong(), name = "Series $it", kind = MediaKind.SERIES) } }
 
         val results = repository.search(
             sourceId = SOURCE_ID,
@@ -279,9 +290,9 @@ class SearchRepositoryTest {
         )
 
         coVerify(exactly = 0) {
-            channelDao.search(any(), any(), MediaKind.LIVE.name, any(), any(), any())
+            channelDao.search(any(), any(), MediaKind.LIVE.name, any(), any(), any(), any(), any())
         }
-        coVerify { channelDao.search(any(), any(), MediaKind.VOD.name, any(), any(), any()) }
+        coVerify { channelDao.search(any(), any(), MediaKind.VOD.name, any(), any(), any(), any(), any()) }
     }
 
     /** The same repository with Arabic hidden, which is the only difference under test. */

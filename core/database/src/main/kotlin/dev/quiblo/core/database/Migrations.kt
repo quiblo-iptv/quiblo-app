@@ -20,6 +20,7 @@ package dev.quiblo.core.database
 
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
+import dev.quiblo.core.common.SCRIPT_MASK_UNKNOWN
 
 /**
  * Schema migrations.
@@ -539,6 +540,48 @@ val MIGRATION_17_18 = object : Migration(17, 18) {
                 `fetchedAtEpochMillis` INTEGER NOT NULL,
                 PRIMARY KEY(`kind`, `rank`)
             )
+            """.trimIndent(),
+        )
+    }
+}
+
+/**
+ * The catalogue learns its own cleaned title and its own writing systems.
+ *
+ * **Three columns and two indexes, and not one row read.** Cleaning a title is eight regex passes
+ * and reading its scripts is a full codepoint walk, so filling fifty thousand rows here would be
+ * ten to twenty seconds of a television frozen on its own splash — a migration runs on the first
+ * access to the database, and every screen is behind it. The value that says "nobody has computed
+ * this yet" is what buys the alternative: rows arrive carrying [SCRIPT_MASK_UNKNOWN] and a blank
+ * identity, `CatalogueIdentityBackfill` fills them in the background afterwards, and every query
+ * that reads them treats an unfilled row exactly as schema 18 did.
+ *
+ * That last part is the property worth stating plainly. A migration that left the columns merely
+ * *empty* would make a hidden writing system stop hiding for as long as the backfill ran — and
+ * "hidden means hidden" is the defect the release before this one was spent fixing. Unknown is a
+ * third value precisely so it can be told apart from "no scripts", and the Kotlin filter is kept
+ * alive for exactly the rows that still carry it.
+ *
+ * The indexes are created here rather than left to the backfill because an index on a column of
+ * identical values costs nothing to build and is wanted the moment the first row is filled.
+ */
+val MIGRATION_18_19 = object : Migration(18, 19) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE `channels` ADD COLUMN `searchTitle` TEXT NOT NULL DEFAULT ''")
+        db.execSQL("ALTER TABLE `channels` ADD COLUMN `identityYear` INTEGER NOT NULL DEFAULT 0")
+        db.execSQL(
+            "ALTER TABLE `channels` ADD COLUMN `scriptMask` INTEGER NOT NULL DEFAULT $SCRIPT_MASK_UNKNOWN",
+        )
+        db.execSQL(
+            """
+            CREATE INDEX IF NOT EXISTS `index_channels_sourceId_kind_scriptMask_sortIndex`
+            ON `channels` (`sourceId`, `kind`, `scriptMask`, `sortIndex`)
+            """.trimIndent(),
+        )
+        db.execSQL(
+            """
+            CREATE INDEX IF NOT EXISTS `index_channels_searchTitle_identityYear_kind`
+            ON `channels` (`searchTitle`, `identityYear`, `kind`)
             """.trimIndent(),
         )
     }

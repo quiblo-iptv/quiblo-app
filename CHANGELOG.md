@@ -15,6 +15,79 @@ Formatted after [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and ve
 
 ## Unreleased
 
+### Added
+
+### Changed
+
+- **The ambient light keeps up with the picture.** It read the screen a little under twice a second
+  and then took most of another second to change, so at worst the glow was around two seconds
+  behind the frame it came from — near enough to look deliberate, far enough to look like two
+  separate things. It now reads four times as often and settles twice as fast, which is close
+  enough to read as the picture's own light. A hard cut is still a fade rather than a flash.
+- **And the light behind the catalogue keeps up with the remote.** It took most of a second to
+  change colour, which was set that way so that holding right along a row would not strobe — but
+  nothing is even asked for until the remote has rested on a tile, so there was never a queue of
+  colours to strobe between. It now settles as quickly as the player's.
+- **Search and Live put out the light the catalogue left on.** The glow behind the app comes from
+  whatever poster the remote is resting on, and neither of those screens has one — so arriving at
+  either of them left the colours of a film you looked at two tabs ago sitting behind an empty
+  search box. They now fade it out on the way in.
+- **And Search lights itself instead.** Two soft pools that travel round the screen on the same
+  six-second circuit as the highlight going round the search box, turning slowly through the
+  colours as they go. It is exactly as bright as a poster's light and it needs nothing from the
+  network.
+- **Generated profile pictures are faces now.** They were four coloured shapes; they are a face on
+  a coloured tile — the same generator library, a different one of its styles. Every profile
+  already wearing a generated picture becomes a face the next time the app opens, and it is the
+  same face on your phone, on the television, and after a restore, because what is stored is still
+  only the seed. Pictures picked from the illustrated set are untouched.
+- **Advanced search answers a genre instead of thinking about it.** Filtering by a genre used to
+  read every film and series on your account and re-clean all of their titles from scratch — fifty
+  thousand of them on a large provider, every single time you pressed a genre, with nothing kept
+  between presses. It looked like the app had hung; it was working, extremely hard, on a question
+  it had already answered once. Each title's cleaned name is now worked out when your playlist is
+  loaded and remembered, so a genre is one indexed lookup.
+- **Hiding a writing system no longer costs anything to read.** The same change underneath: which
+  scripts a title is written in is worked out once and stored, rather than re-read letter by letter
+  for every row of every screen, every time the screen changes. Movies, Series and Live all draw
+  sooner for it, and a title you have hidden is no longer fetched from the database only to be
+  thrown away.
+- **The "how much of your catalogue is described" figure is counted rather than derived**, which
+  was the third thing making the search screen slow to open.
+- **Movies, Series and Live load a screenful rather than a catalogue.** Opening a tab used to read
+  every single title of that kind out of the database — tens of thousands of rows on a large
+  account — build an object for each, and hand the lot to a list that draws about a dozen. It now
+  loads pages as you scroll. On the television the poster grid asks for the first forty titles of
+  each category, which is what a row can show anyway: nobody presses right forty times.
+- **The channel list on the television pages too**, and still asks for the guide of the first ten
+  channels the moment it opens, so the list is not blank until you rest on a row.
+
+One consequence worth knowing: pressing a title now hands the player the titles loaded so far to
+zap along, rather than every title in the catalogue. The old list was only complete because the
+screen was paying to load all of it.
+
+Upgrading keeps your catalogue exactly as it is. The new information is filled in quietly after the
+app starts, and until it is, hiding works exactly as it did before — nothing appears or disappears
+in the meantime.
+- **Back twice on Search closes Quiblo, and it asks first.** Backing out used to hand the press to
+  the system, which puts the app in the background rather than closing it — so the next launch
+  carried on as whoever was watching last, and there was no way to get the "who is watching"
+  screen back. The first press now says "Press back again to close" along the bottom, the second
+  closes, and closing forgets who was watching so the next launch asks.
+
+### Fixed
+
+- **Now popular no longer goes missing on the television.** The row is fetched with your Movie
+  Database key, and the key is kept encrypted — which means reading it takes a moment. For You
+  was built before that moment had passed, found no key, fetched nothing, and had no way to ask
+  again for as long as the tab stayed open. It now waits for the key, and a key pasted into
+  Settings while the tab is open fills the row straight away instead of waiting for a restart.
+- **The settings and profile buttons are highlighted again.** Sometimes the app opened, or came
+  back from Settings, with nothing on the top bar lit and the remote apparently doing nothing — the
+  selected tab kept its underline, which made it look as though the bar was awake when it was not.
+  The app was asking the bar to take focus a moment before the bar existed, and not noticing it had
+  been refused. It now asks again until it lands.
+
 ## 0.18.0
 
 ### Added

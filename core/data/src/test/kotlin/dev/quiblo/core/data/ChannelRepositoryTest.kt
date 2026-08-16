@@ -82,7 +82,7 @@ class ChannelRepositoryTest {
         // the claim testable at all — the mapped value itself carries no evidence of where
         // it was made.
         var upstreamThread = ""
-        every { channelDao.observeBrowse(any(), any(), any(), any(), any(), any()) } returns flow {
+        every { channelDao.observeBrowse(any(), any(), any(), any(), any(), any(), any(), any()) } returns flow {
             upstreamThread = Thread.currentThread().name
             emit(listOf(row(id = 1L, name = "BBC One")))
         }
@@ -131,7 +131,7 @@ class ChannelRepositoryTest {
 
     @Test
     fun `carries the favourite flag through the mapping`() = runTest {
-        every { channelDao.observeBrowse(any(), any(), any(), any(), any(), any()) } returns flow {
+        every { channelDao.observeBrowse(any(), any(), any(), any(), any(), any(), any(), any()) } returns flow {
             emit(
                 listOf(
                     row(id = 1L, name = "BBC One", isFavorite = true),

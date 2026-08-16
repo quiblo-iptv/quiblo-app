@@ -18,12 +18,14 @@
 
 package dev.quiblo.core.database.dao
 
+import androidx.paging.PagingSource
 import androidx.room.Dao
 import androidx.room.Delete
 import androidx.room.Embedded
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import androidx.room.RoomWarnings
 import androidx.room.Transaction
 import androidx.room.Update
 import dev.quiblo.core.database.entity.CategoryOverrideEntity
@@ -151,6 +153,7 @@ interface ChannelDao {
           AND (:groupTitle IS NULL OR c.groupTitle = :groupTitle)
           AND (:query = '' OR c.name LIKE '%' || :query || '%' ESCAPE '\')
           AND (:favoritesOnly = 0 OR f.stableKey IS NOT NULL)
+          AND (c.scriptMask = :unknownMask OR (:hiddenMask & c.scriptMask) = 0)
         ORDER BY c.sortIndex ASC
         """,
     )
@@ -162,6 +165,119 @@ interface ChannelDao {
         groupTitle: String?,
         query: String,
         favoritesOnly: Int,
+        /**
+         * The writing systems the viewer has hidden, as a bitmask. `0` hides nothing.
+         *
+         * A bitwise test in SQL, because the Kotlin filter it replaces ran a regex strip, a full
+         * codepoint walk and a `Set` allocation **per title per emission** of a query that
+         * returns every row of a kind — tens of thousands of them on a real account, recomputed
+         * whenever anything in the feed changed.
+         */
+        hiddenMask: Int,
+        /**
+         * The mask value meaning "nobody has computed this row's scripts yet".
+         *
+         * Rows carrying it are passed through here and filtered in Kotlin, exactly as every row
+         * was before schema 19. That is what lets a catalogue written by an older version keep
+         * hiding what it always hid while `CatalogueIdentityBackfill` works through it, instead
+         * of hiding nothing — or, since unknown has every bit set, hiding everything.
+         */
+        unknownMask: Int,
+    ): Flow<List<ChannelWithFavorite>>
+
+    /**
+     * The browse query again, a page at a time.
+     *
+     * **The same predicates, deliberately — and it is one query written twice for one reason.**
+     * Room cannot return both a `Flow<List<…>>` and a `PagingSource` from one declaration, and
+     * the two consumers genuinely want different things: the television's poster grid groups its
+     * whole answer into category rows, and a flat grid does not. Anything that changes about what
+     * a browse screen shows has to change in both, which is what
+     * `PagedBrowseMatchesUnpagedTest` exists to catch.
+     *
+     * The `LIMIT`/`OFFSET` is Room's, not written here: a `PagingSource` return type is what
+     * makes it generate one.
+     */
+    @Query(
+        """
+        SELECT c.*, (f.stableKey IS NOT NULL) AS isFavorite
+        FROM channels c
+        LEFT JOIN favorites f ON f.sourceId = c.sourceId AND f.stableKey = c.stableKey
+              AND f.profileId = :profileId
+        WHERE c.sourceId = :sourceId
+          AND c.kind = :kind
+          AND (:groupTitle IS NULL OR c.groupTitle = :groupTitle)
+          AND (:query = '' OR c.name LIKE '%' || :query || '%' ESCAPE '\')
+          AND (:favoritesOnly = 0 OR f.stableKey IS NOT NULL)
+          AND (c.scriptMask = :unknownMask OR (:hiddenMask & c.scriptMask) = 0)
+        ORDER BY c.sortIndex ASC
+        """,
+    )
+    @Suppress("LongParameterList")
+    fun pagedBrowse(
+        profileId: Long,
+        sourceId: Long,
+        kind: String,
+        groupTitle: String?,
+        query: String,
+        favoritesOnly: Int,
+        hiddenMask: Int,
+        unknownMask: Int,
+    ): PagingSource<Int, ChannelWithFavorite>
+
+    /**
+     * The first [perCategory] items of every category of one kind, in one query.
+     *
+     * **For the television's poster grid, which cannot be paged and should not be.** That screen
+     * groups its answer into a row per category; a paged list has no whole to group, so Paging is
+     * the wrong tool there. What it was actually doing wrong is simpler: it read *every* row of a
+     * kind — thirty thousand of them on a real account — to draw about forty tiles per row, and
+     * grouped the lot in Kotlin on every emission.
+     *
+     * A window function caps each category before any of it leaves SQLite, so the answer is the
+     * size of what is drawn rather than the size of the catalogue. Nobody walks three thousand
+     * tiles along one row with a D-pad; `BrowseFeed.recentLimit` is the same reasoning already
+     * applied to Recently Added.
+     *
+     * The ordering is the outer query's, not the window's. `ROW_NUMBER` needs its own
+     * `PARTITION BY`, and leaving the result in that order would hand the screen its categories
+     * grouped by name — where the category *order* is the provider's and is read from elsewhere
+     * (`observeCategoriesByKind`). Sorting by `sortIndex` returns it to the order every other
+     * feed uses and lets the grouping in Kotlin stay exactly as it was.
+     *
+     * Window functions need SQLite 3.25; `minSdk` here is 30, which ships 3.28.
+     */
+    @Query(
+        """
+        SELECT * FROM (
+            SELECT c.*, (f.stableKey IS NOT NULL) AS isFavorite,
+                   ROW_NUMBER() OVER (PARTITION BY c.groupTitle ORDER BY c.sortIndex ASC) AS rowInCategory
+            FROM channels c
+            LEFT JOIN favorites f ON f.sourceId = c.sourceId AND f.stableKey = c.stableKey
+                  AND f.profileId = :profileId
+            WHERE c.sourceId = :sourceId
+              AND c.kind = :kind
+              AND (:query = '' OR c.name LIKE '%' || :query || '%' ESCAPE '\')
+              AND (c.scriptMask = :unknownMask OR (:hiddenMask & c.scriptMask) = 0)
+        )
+        WHERE rowInCategory <= :perCategory
+        ORDER BY sortIndex ASC
+        """,
+    )
+    // `rowInCategory` is the window function's own counter and exists only to be compared
+    // against `perCategory` in the outer `WHERE`. Room is right that nothing reads it; it is
+    // not a column that should be mapped, and `@RewriteQueriesToDropUnusedColumns` is not the
+    // answer either — dropping it would take the predicate that uses it with it.
+    @Suppress("LongParameterList")
+    @SuppressWarnings(RoomWarnings.QUERY_MISMATCH)
+    fun observeCategoryRows(
+        profileId: Long,
+        sourceId: Long,
+        kind: String,
+        query: String,
+        perCategory: Int,
+        hiddenMask: Int,
+        unknownMask: Int,
     ): Flow<List<ChannelWithFavorite>>
 
     /** Favourites across every content type, for the dedicated section (AC-FAV-01). */
@@ -206,6 +322,12 @@ interface ChannelDao {
      *
      * The cap is what makes searching a 67,000-channel account safe: a two-letter term
      * matches thousands of rows, and nobody scrolls past the first screenful of them.
+     *
+     * **The cap is now honest, because the script filter is inside the query.** It used to run in
+     * Kotlin after `LIMIT` had already cut the list, so the query overscanned by a fixed multiple
+     * to make up for what the filter would throw away — a guess that was too small on a catalogue
+     * where a hidden script is most of it, and wasted work everywhere else. A row that will be
+     * hidden is no longer read.
      */
     @Query(
         """
@@ -219,6 +341,7 @@ interface ChannelDao {
           AND (:includeHidden OR c.groupTitle NOT IN (
                 SELECT o.originalTitle FROM category_overrides o
                 WHERE o.kind = c.kind AND o.isHidden = 1))
+          AND (c.scriptMask = :unknownMask OR (:hiddenMask & c.scriptMask) = 0)
         ORDER BY c.sortIndex ASC
         LIMIT :limit
         """,
@@ -241,6 +364,68 @@ interface ChannelDao {
          * advanced-search toggle asking for it back.
          */
         includeHidden: Boolean,
+        /** The hidden writing systems as a bitmask, exactly as in [observeBrowse]. */
+        hiddenMask: Int,
+        /** The "not computed yet" mask, exactly as in [observeBrowse]. */
+        unknownMask: Int,
+    ): List<ChannelWithFavorite>
+
+    /**
+     * The films and series in one genre, straight out of the metadata cache.
+     *
+     * **This query is `021`.** The genre filter used to read every film and series a source
+     * carries — fifty thousand rows on this project's own provider — clean each of their titles
+     * in Kotlin to a cache key, and intersect the result with the cached genres. Cleaning a title
+     * is eight regex passes, so a single press of a genre chip was four hundred thousand regex
+     * applications on a television processor, repeated in full for the next press. It was
+     * reported as advanced search hanging. It was not hanging.
+     *
+     * The cleaned key now lives on the row, so this is a join: `title_metadata` is already keyed
+     * by `(searchTitle, kind, year)` and `channels` now carries all three.
+     *
+     * `genres` is a newline-separated list, so a genre is matched by wrapping both sides in
+     * newlines — that is what stops `Drama` matching `Documentary`'s neighbours or a genre whose
+     * name is another's prefix. `LIKE` is case-insensitive for ASCII in SQLite, which is what the
+     * Kotlin `equals(ignoreCase = true)` it replaces did.
+     *
+     * A blank `searchTitle` is excluded. It is the existing "there was nothing here worth looking
+     * up" value, and a hundred junk rows share it — joining on it would file them all under
+     * whatever genre the one cached blank key happens to carry.
+     */
+    @Query(
+        """
+        SELECT c.*, (f.stableKey IS NOT NULL) AS isFavorite
+        FROM channels c
+        INNER JOIN title_metadata m ON m.searchTitle = c.searchTitle
+              AND m.kind = c.kind AND m.year = c.identityYear
+        LEFT JOIN favorites f ON f.sourceId = c.sourceId AND f.stableKey = c.stableKey
+              AND f.profileId = :profileId
+        WHERE c.sourceId = :sourceId
+          AND c.kind = :kind
+          AND c.searchTitle != ''
+          AND m.isMiss = 0
+          AND (:query = '' OR c.name LIKE '%' || :query || '%' ESCAPE '\')
+          AND (char(10) || COALESCE(m.genres, '') || char(10))
+              LIKE '%' || char(10) || :genre || char(10) || '%'
+          AND (:includeHidden OR c.groupTitle NOT IN (
+                SELECT o.originalTitle FROM category_overrides o
+                WHERE o.kind = c.kind AND o.isHidden = 1))
+          AND (c.scriptMask = :unknownMask OR (:hiddenMask & c.scriptMask) = 0)
+        ORDER BY c.sortIndex ASC
+        LIMIT :limit
+        """,
+    )
+    @Suppress("LongParameterList")
+    suspend fun searchByGenre(
+        profileId: Long,
+        sourceId: Long,
+        kind: String,
+        genre: String,
+        query: String,
+        limit: Int,
+        includeHidden: Boolean,
+        hiddenMask: Int,
+        unknownMask: Int,
     ): List<ChannelWithFavorite>
 
     /**
@@ -350,6 +535,74 @@ interface ChannelDao {
         """,
     )
     suspend fun titlesForMetadata(sourceId: Long, includeHidden: Boolean): List<ChannelTitle>
+
+    /**
+     * A batch of rows that predate schema 19 and still carry no computed identity.
+     *
+     * Ordered by id and taken in fixed-size batches rather than read whole, because this runs
+     * against every row of a catalogue that can be sixty-seven thousand deep and the point of
+     * doing it in the background is that it never holds all of them at once.
+     *
+     * No cursor and no offset, and it needs neither: filling a row takes it out of this query's
+     * own predicate, so the next call returns the next unfilled rows on its own. An offset over
+     * a predicate that shrinks underneath it would skip rows, which is the bug this shape cannot
+     * have.
+     */
+    @Query(
+        """
+        SELECT c.id, c.name, c.kind FROM channels c
+        WHERE c.scriptMask = :unknownMask
+        ORDER BY c.id ASC
+        LIMIT :limit
+        """,
+    )
+    suspend fun titlesWithoutIdentity(unknownMask: Int, limit: Int): List<ChannelTitle>
+
+    /** Writes one row's computed identity. See `CatalogueIdentityBackfill`. */
+    @Query(
+        """
+        UPDATE channels
+        SET searchTitle = :searchTitle, identityYear = :identityYear, scriptMask = :scriptMask
+        WHERE id = :id
+        """,
+    )
+    suspend fun setIdentity(id: Long, searchTitle: String, identityYear: Int, scriptMask: Int)
+
+    /** How many rows are still waiting, so the backfill can say when it is finished. */
+    @Query("SELECT COUNT(*) FROM channels WHERE scriptMask = :unknownMask")
+    suspend fun countWithoutIdentity(unknownMask: Int): Int
+
+    /**
+     * How many distinct titles this source has that are worth looking up.
+     *
+     * **Distinct titles, not rows.** A provider that lists one film four times in four qualities
+     * has one title to ask about, and counting rows would report a quarter of the coverage
+     * actually held. Rows whose title cleans away to nothing are excluded from both halves of the
+     * figure: they will never be looked up, so leaving them in would cap it below 100% forever
+     * and make a complete cache look broken.
+     */
+    @Query(
+        """
+        SELECT COUNT(*) FROM (
+            SELECT DISTINCT c.searchTitle, c.identityYear, c.kind FROM channels c
+            WHERE c.sourceId = :sourceId AND c.kind IN ('VOD', 'SERIES') AND c.searchTitle != ''
+        )
+        """,
+    )
+    suspend fun countDistinctTitles(sourceId: Long): Int
+
+    /** How many of those the metadata cache has an answer for, hit or miss. */
+    @Query(
+        """
+        SELECT COUNT(*) FROM (
+            SELECT DISTINCT c.searchTitle, c.identityYear, c.kind FROM channels c
+            INNER JOIN title_metadata m ON m.searchTitle = c.searchTitle
+                  AND m.kind = c.kind AND m.year = c.identityYear
+            WHERE c.sourceId = :sourceId AND c.kind IN ('VOD', 'SERIES') AND c.searchTitle != ''
+        )
+        """,
+    )
+    suspend fun countDescribedTitles(sourceId: Long): Int
 
     /** The full rows behind ids the genre filter has already chosen. */
     @Query(

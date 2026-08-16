@@ -19,6 +19,7 @@
 package dev.quiblo.player
 
 import android.app.Application
+import dev.quiblo.core.data.CatalogueIdentityBackfill
 import dev.quiblo.core.data.ProfileRepository
 import dev.quiblo.player.di.appModules
 import kotlinx.coroutines.CoroutineScope
@@ -62,8 +63,13 @@ class QuibloApplication : Application() {
      */
     private fun beginSession() {
         val profiles: ProfileRepository = getKoin().get()
+        val backfill: CatalogueIdentityBackfill = getKoin().get()
         CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
             profiles.beginSession()
+            // Catalogues written before schema 19 carry no cleaned title and no script mask.
+            // After the first pass this costs one indexed count, and a fresh install never has
+            // work here at all. Nothing waits for it — see [CatalogueIdentityBackfill].
+            backfill.run()
         }
     }
 }

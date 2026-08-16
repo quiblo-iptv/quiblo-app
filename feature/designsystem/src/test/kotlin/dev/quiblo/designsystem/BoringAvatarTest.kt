@@ -18,7 +18,9 @@
 
 package dev.quiblo.designsystem
 
+import androidx.compose.ui.graphics.Color
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
@@ -60,55 +62,98 @@ class BoringAvatarTest {
     }
 
     @Test
-    fun `the four shapes match theirs`() {
-        val shapes = bauhausShapes("Mahmoud#0")
+    fun `the face matches theirs`() {
+        // Every number here came out of their JavaScript, run on this seed. `Mahmoud#0` picks
+        // the darkest entry in the palette, so it also pins `getContrast` choosing white.
+        val face = beamFace("Mahmoud#0")
 
-        assertEquals(BoringPalette[4], shapes[0].colour)
-        assertEquals(21f, shapes[0].translateX)
-        assertEquals(21f, shapes[0].translateY)
-        assertEquals(194f, shapes[0].rotate)
+        assertEquals(BoringPalette[4], face.wrapper)
+        assertEquals(BoringPalette[2], face.background)
+        assertEquals(Color.White, face.face)
+        assertEquals(8f, face.wrapperTranslateX)
+        assertEquals(8f, face.wrapperTranslateY)
+        assertEquals(194f, face.wrapperRotate)
+        assertEquals(1.2f, face.wrapperScale)
+        assertFalse(face.isCircle)
+        assertFalse(face.isMouthOpen)
+        assertEquals(4f, face.eyeSpread)
+        assertEquals(2f, face.mouthSpread)
+        assertEquals(4f, face.faceRotate)
+        assertEquals(4f, face.faceTranslateX)
+        assertEquals(4f, face.faceTranslateY)
+    }
 
-        assertEquals(BoringPalette[0], shapes[1].colour)
-        assertEquals(-18f, shapes[1].translateX)
-        assertEquals(18f, shapes[1].translateY)
-        assertEquals(28f, shapes[1].rotate)
+    /**
+     * The nudge, which is the one branch in the whole generator that is easy to drop.
+     *
+     * A translation under 5 is pushed out by `36 / 9`; one at 5 or above is left alone. `Sara#0`
+     * translates to 2 and 6, so it takes the branch on one axis and not on the other — a port
+     * that applied it to both, or to neither, passes on a seed that happens to agree.
+     */
+    @Test
+    fun `a translation below five is nudged outwards and one above it is not`() {
+        val face = beamFace("Sara#0")
 
-        assertEquals(BoringPalette[1], shapes[2].colour)
-        assertEquals(-6f, shapes[2].translateX)
-        assertEquals(-6f, shapes[2].translateY)
-        assertEquals(222f, shapes[2].rotate)
+        assertEquals(2f, face.wrapperTranslateX)
+        assertEquals(6f, face.wrapperTranslateY)
+    }
 
-        assertEquals(BoringPalette[2], shapes[3].colour)
-        assertEquals(16f, shapes[3].translateX)
-        assertEquals(-16f, shapes[3].translateY)
-        assertEquals(56f, shapes[3].rotate)
+    /**
+     * The face moves on its own beside a tile that has not moved far.
+     *
+     * **The comparison is strictly greater, and `Sara#0` is the seed that says so.** Its tile
+     * translates 2 and 6, and `36 / 6` is exactly 6 — so *neither* axis is past it and the face
+     * takes a translation of its own on both. A port reading `>=` gives the `y` axis 3 instead
+     * of 4, which is a face a unit off its tile on every seed that lands on the boundary.
+     */
+    @Test
+    fun `a face beside a tile that has not moved far takes its own translation`() {
+        val face = beamFace("Sara#0")
+
+        assertEquals(-6f, face.faceTranslateX)
+        assertEquals(4f, face.faceTranslateY)
+    }
+
+    /**
+     * And it follows a tile that has.
+     *
+     * `quiblo#0` translates 9 on both axes, which is past `36 / 6`, so the face follows at half.
+     * This is also the seed that catches the arithmetic being kept in `Int`: it hashes above
+     * 2^30, JavaScript does the rest in doubles and does not wrap, and a port that does puts the
+     * face somewhere else entirely on most real names.
+     */
+    @Test
+    fun `a face on a tile that has moved far follows it at half`() {
+        val face = beamFace("quiblo#0")
+
+        assertEquals(299f, face.wrapperRotate)
+        assertEquals(-9f, face.faceRotate)
+        assertEquals(4.5f, face.faceTranslateX)
+        assertEquals(4.5f, face.faceTranslateY)
     }
 
     @Test
-    fun `a large hash is not wrapped on the way through`() {
-        // "Sara#0" hashes above 2^30, so `hash * 4` for the fourth element overflows a 32-bit
-        // integer. JavaScript computes it in a double and does not wrap. A port that kept
-        // everything in `Int` passes every test written against a short name and draws the last
-        // shape of most real names in the wrong place.
-        val shapes = bauhausShapes("Sara#0")
-
-        assertEquals(-8f, shapes[3].translateX)
-        assertEquals(-8f, shapes[3].translateY)
-        assertEquals(208f, shapes[3].rotate)
+    fun `the contrast rule picks black on a light tile`() {
+        // "Sara#0" lands on the amber, whose luma is above their threshold of 128. A port that
+        // read the colour off Compose's floats instead of its eight-bit channels rounds one of
+        // these five the other way, and the face disappears into its own tile.
+        assertEquals(BoringPalette[2], beamFace("Sara#0").wrapper)
+        assertEquals(Color.Black, beamFace("Sara#0").face)
     }
 
     @Test
-    fun `the bar is a block or a stripe for the whole avatar at once`() {
-        // Read off the unmultiplied hash in their source, so all four agree. One avatar is
-        // never half one thing and half the other.
-        assertTrue(bauhausShapes("a").all { it.isSquare })
-        assertTrue(bauhausShapes("Mahmoud#0").none { it.isSquare })
+    fun `the mouth and the shape are one decision each for the whole avatar`() {
+        // Read off the unmultiplied hash in their source, so a face is never half one thing.
+        assertTrue(beamFace("").isCircle)
+        assertTrue(beamFace("").isMouthOpen)
+        assertFalse(beamFace("Mahmoud#0").isCircle)
+        assertFalse(beamFace("Mahmoud#0").isMouthOpen)
     }
 
     @Test
     fun `the same seed always gives the same avatar`() {
         // The whole promise: a profile's face survives a reinstall, a restore, and the other app.
-        assertEquals(bauhausShapes("Mahmoud#0"), bauhausShapes("Mahmoud#0"))
+        assertEquals(beamFace("Mahmoud#0"), beamFace("Mahmoud#0"))
     }
 
     @Test
@@ -116,7 +161,7 @@ class BoringAvatarTest {
         // The picker offers a dozen seeds that differ by one character. If the generator smeared
         // them together, the chooser would be twelve tiles of the same picture and nobody would
         // report it as a bug — they would just never pick a face.
-        val offered = (0 until 12).map { bauhausShapes("Mahmoud#$it") }
+        val offered = (0 until 12).map { beamFace("Mahmoud#$it") }
 
         assertEquals(offered.size, offered.distinct().size)
     }
@@ -125,10 +170,14 @@ class BoringAvatarTest {
     fun `an empty seed still draws something`() {
         // Not reachable from the television chooser, which substitutes a fallback — but this is
         // a public function and an empty name must not divide by zero or index past the palette.
-        val shapes = bauhausShapes("")
+        val face = beamFace("")
 
-        assertEquals(4, shapes.size)
-        assertTrue(shapes.all { it.colour in BoringPalette })
+        assertTrue(face.wrapper in BoringPalette)
+        assertTrue(face.background in BoringPalette)
+        // Zero on every axis, and the nudge still applied: their branch reads `< 5`, not `!= 0`.
+        assertEquals(4f, face.wrapperTranslateX)
+        assertEquals(0f, face.wrapperRotate)
+        assertEquals(1f, face.wrapperScale)
     }
 
     @Test

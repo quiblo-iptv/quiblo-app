@@ -22,7 +22,7 @@ down at the bottom of `012` is the one this page is built around:
 
 So every row below says **what to look at**, not what was changed.
 
-Last updated: **2026-08-15**.
+Last updated: **2026-08-16**.
 
 ---
 
@@ -753,6 +753,197 @@ use rather than an afternoon.
 | **What to look at** | Install over an existing build |
 | **Passes if** | Every channel, favourite and resume point is where it was, and the tab works |
 | **Why it is here** | Schema 18. The migration adds one empty table and touches nothing, which is exactly the sort of claim that should still be checked once |
+
+---
+
+## A14 — Round `021`: what 0.18.0 broke and what was always slow
+
+**Where:** the television, on the real account. Every row here is about *how long something
+takes* or *whether a row is there at all*, and neither can be answered on a small catalogue —
+which is exactly how the defects in this round reached a release. From
+[`021`](../agile/021_The_Catalogue_Under_Load_of_Quiblo.md).
+
+### A14.1 — For You has all three rows
+
+| | |
+| :---- | :---- |
+| **What to look at** | Kill the app, open it cold with a Movie Database key already configured, and go to For You |
+| **Passes if** | Recently added, Now popular, and — on a profile that has watched something — You may like |
+| **Fails if** | Only Recently added. That is the report, and the fix is about *timing*: the row was built before the encrypted key had been read |
+| **Why it is here** | It must be a **cold** start. Opening the tab a second time in a warm process is the case that always worked |
+
+### A14.2 — a key pasted while the tab is open
+
+| | |
+| :---- | :---- |
+| **What to look at** | With no key configured, open For You, then go to Settings, paste a key, and come back |
+| **Passes if** | Now popular fills in without the app being restarted |
+| **Fails if** | The row stays absent until a relaunch |
+
+### A14.3 — Movies and Series open
+
+| | |
+| :---- | :---- |
+| **What to look at** | From the Live tab, press across to Movies, and time it against the same account in another player |
+| **Passes if** | The first row of posters is there in about the time another player takes |
+| **Fails if** | Seconds of spinner. Say how many — "still slow" cannot be acted on |
+| **Why it is here** | Three separate changes claim this between them, and only a device can say which of them mattered |
+
+### A14.4 — and they hold what they held
+
+| | |
+| :---- | :---- |
+| **What to look at** | Walk right along two or three category rows, to the end of one |
+| **Passes if** | Every row still has its titles, in the provider's order, under the provider's category names in the provider's category order |
+| **Fails if** | A row is short where it was not, categories are alphabetical, or a row ends sooner than it used to |
+| **Why it is here** | Each row is now capped at forty titles in the query. Forty is a deliberate choice, not a bug — but a row that was *shorter* than forty and got shorter still is |
+
+### A14.5 — the channel list, and its guide
+
+| | |
+| :---- | :---- |
+| **What to look at** | Open Live and do not touch the remote |
+| **Passes if** | The list draws quickly, and the first several channels show what is on now without anything being focused |
+| **Fails if** | Every row is blank until you rest on one. That is `017`'s defect returning, and the prefetch it names has moved to this screen |
+
+### A14.6 — scrolling a long list
+
+| | |
+| :---- | :---- |
+| **What to look at** | Hold right/down through a long category or channel list, past a few hundred items |
+| **Passes if** | It keeps up, and nothing flickers or blanks as new pages arrive |
+| **Fails if** | It stalls at regular intervals, or rows appear empty for a moment before filling |
+
+### A14.7 — advanced search answers
+
+| | |
+| :---- | :---- |
+| **What to look at** | Search → Advanced → press Action, with the search box empty. Then press two or three other genres |
+| **Passes if** | Results in about a second, every time, including the second and third press |
+| **Fails if** | A spinner that never resolves. That is the report |
+| **Why it is here** | It needs a **scanned** account. The filter reads the metadata cache, and an unscanned catalogue has nothing to filter by |
+
+### A14.8 — the upgrade, and what hiding does during it
+
+| | |
+| :---- | :---- |
+| **What to look at** | Install over 0.18.0 with a writing system hidden in Settings, then open Movies straight away and again a minute later |
+| **Passes if** | Titles in the hidden script are absent both times, and every channel, favourite and resume point survived |
+| **Fails if** | Hidden titles appear for a while and then vanish, or the catalogue is empty, or nothing is hidden at all |
+| **Why it is here** | Schema 19 adds three columns and fills them in the background afterwards. The whole design of that is that hiding keeps working while it runs, and this is the only way to see it |
+
+### A14.9 — ambient keeps up
+
+| | |
+| :---- | :---- |
+| **What to look at** | Play a 2.35:1 film and watch the black bars through a scene change |
+| **Passes if** | The light in the bars moves with the scene rather than arriving after it |
+| **Fails if** | It still lags visibly, or it flickers on every cut — the second is the risk of making it faster |
+
+### A14.10 — and it has a switch
+
+| | |
+| :---- | :---- |
+| **What to look at** | Settings → Playback → Ambient light. It should read On. Turn it off and play the same film |
+| **Passes if** | The bars are plain black, and the setting is still off after a restart |
+| **Fails if** | The switch reads Off when the screen opens, or turning it off changes nothing |
+
+---
+
+## A15 — Round `022`: the television, made to feel like one thing
+
+**Where:** the television, except `A15.9` and `A15.10`, which need a phone. Six of these are about
+how something *looks* or *feels*, which is the one class of claim a build cannot settle. From
+[`022`](../agile/022_The_Television_Made_To_Feel_Like_One_Thing_of_Quiblo.md).
+
+### A15.1 — the faces
+
+| | |
+| :---- | :---- |
+| **What to look at** | Open the profile chooser on a profile that already had a generated picture |
+| **Passes if** | It is a face on a coloured tile, and it is the *same* face every time the app opens |
+| **Fails if** | Still four coloured shapes, or a different face on each launch — the second would mean the seed is being regenerated rather than read |
+
+### A15.2 — and the chooser offers a dozen different ones
+
+| | |
+| :---- | :---- |
+| **What to look at** | Add a profile, type a name, and look at the row of faces offered |
+| **Passes if** | Twelve visibly different faces — different tiles, different shapes, mouths open and closed |
+| **Fails if** | Several look the same. The arithmetic is pinned by tests, so this is really asking whether *twelve* is enough to look varied at a glance |
+
+### A15.3 — the light behind the catalogue keeps up
+
+| | |
+| :---- | :---- |
+| **What to look at** | Walk along a poster row one press at a time, then hold right through a whole row |
+| **Passes if** | Stepping: the light changes about as fast as the poster does. Holding: one slow drift, no strobing |
+| **Fails if** | It flashes while the D-pad is held. That is the risk this change takes, and the settle is what is supposed to prevent it |
+
+### A15.4 — Search puts out the catalogue's light
+
+| | |
+| :---- | :---- |
+| **What to look at** | Focus a colourful poster on Movies, then press up and left to Search |
+| **Passes if** | The film's colours fade away rather than snapping off or staying |
+| **Fails if** | The old colours are still there behind the search box |
+
+### A15.5 — and lights itself
+
+| | |
+| :---- | :---- |
+| **What to look at** | Sit on Search with an empty box for a minute |
+| **Passes if** | Two soft pools of light moving slowly around, turning colour, going round in step with the highlight travelling round the search box |
+| **Fails if** | It is brighter than a poster's light, or it is fast enough to be distracting, or the room and the box's highlight visibly disagree about where they are |
+
+### A15.6 — the bar is always lit somewhere
+
+| | |
+| :---- | :---- |
+| **What to look at** | Open Settings and come back. **Do it ten times.** Then open a film, come back, ten times |
+| **Passes if** | Every single time, the bar is holding the remote — pressing right moves along it and the gear and face highlight when reached |
+| **Fails if** | Even once the remote appears to do nothing and nothing is highlighted. This is a race, so once in ten is the whole defect |
+
+### A15.7 — two backs close it
+
+| | |
+| :---- | :---- |
+| **What to look at** | On Search, press back once, read the screen, then press back again |
+| **Passes if** | "Press back again to close" along the bottom, then the app closes |
+| **Fails if** | The first press closes it, or the second does not, or the line covers something |
+
+### A15.8 — and it asks who is watching next time
+
+| | |
+| :---- | :---- |
+| **What to look at** | Close it that way, then open it again from the launcher |
+| **Passes if** | The "who is watching" chooser |
+| **Fails if** | It resumes into the same profile. That is the reported half, and it is the half that survives a fix which only closes the activity |
+
+### A15.9 — it installs on a phone
+
+| | |
+| :---- | :---- |
+| **What to look at** | Install the television app on a phone and find it in the launcher |
+| **Passes if** | It installs, appears in the launcher, opens, and turns when the phone turns |
+| **Fails if** | The store or `adb install` refuses it, or it installs and cannot be found, or it stays landscape |
+
+### A15.10 — and it can be driven by a finger
+
+| | |
+| :---- | :---- |
+| **What to look at** | On the phone: tap the tabs, the gear, the profile face, a poster, a channel. Then open Settings and tap into the Movie Database key field |
+| **Passes if** | Every one of them responds, and the keyboard does not cover the field being typed into |
+| **Fails if** | The tabs do nothing, or the keyboard hides the field |
+| **Why it is here** | Expected and accepted: everything is sized for a sofa and will look large, and the ambient light stays dark because it follows focus. Neither is a failure of this ticket |
+
+### A15.11 — and the panel is exactly as it was
+
+| | |
+| :---- | :---- |
+| **What to look at** | Back on the television: open Settings and focus the Movie Database key field |
+| **Passes if** | The list does not move when the keyboard opens |
+| **Fails if** | It shifts or shakes. `A15.9`'s manifest changes and the keyboard inset are the two edits that could have brought `#021` back |
 
 ---
 

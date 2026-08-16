@@ -316,6 +316,19 @@ class PlayerViewModel(
         .onEach(controller::applySubtitleStyle)
         .stateIn(viewModelScope, SharingStarted.Eagerly, SubtitleStyle())
 
+    /**
+     * Whether the player lights its black bars with the colours of the picture.
+     *
+     * On unless switched off, and the default here matches the store's rather than restating it
+     * as `false` — a screen that starts with the feature off and turns it on a frame later is a
+     * flash of black bars at the start of every film.
+     *
+     * Off means the surface is never sampled at all. Same rule as the live-in-search switch: a
+     * feature switched off does not do its work and throw the answer away.
+     */
+    val ambientPlayer: StateFlow<Boolean> = settingsRepository.ambientPlayer
+        .stateIn(viewModelScope, SharingStarted.Eagerly, true)
+
     private fun prepare(item: PlayableItem) {
         prepared = item
         controller.prepare(item)

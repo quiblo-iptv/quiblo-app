@@ -63,7 +63,6 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.compose.SubcomposeAsyncImage
 import dev.quiblo.core.data.MetadataRefresh
@@ -98,12 +97,10 @@ fun MovieDetailScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
-    // Coming back from playback must update the buttons: a film watched to the end still
-    // offered "resume from 1:52" until the screen was left and reopened.
-    LifecycleResumeEffect(Unit) {
-        viewModel.refreshResumePosition()
-        onPauseOrDispose {}
-    }
+    // The resume point is watched rather than re-read on returning to the foreground. A read on
+    // resume raced the player's own write of the position it had just finished with, and lost it
+    // often enough that backing out of a film offered "Play" for something four minutes in. See
+    // `observeResumePosition`.
 
     // No app bar. The screen states the film's name in full, at a readable size, a few
     // pixels below where a title bar would have repeated it — see [DetailOverlayActions].

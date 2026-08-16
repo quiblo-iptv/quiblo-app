@@ -20,6 +20,7 @@ package dev.quiblo.core.data.di
 
 import android.content.Context
 import dev.quiblo.core.data.AndroidPickedSubtitleFiles
+import dev.quiblo.core.data.ApplicationScope
 import dev.quiblo.core.data.CatalogueIdentityBackfill
 import dev.quiblo.core.data.CategoryRepository
 import dev.quiblo.core.data.ChannelLogoRepository
@@ -61,6 +62,9 @@ import org.koin.dsl.module
  * M4 means adding one entry here and one module, with no change to any feature.
  */
 val dataModule: Module = module {
+    // Outlives every screen. See `ApplicationScope` — it exists because a resume point was being
+    // cancelled mid-write by the back press that made it worth writing.
+    single { ApplicationScope() }
 
     single<List<ContentFetcher>> {
         listOf(

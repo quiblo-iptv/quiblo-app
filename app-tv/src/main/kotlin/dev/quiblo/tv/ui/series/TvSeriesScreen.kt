@@ -63,7 +63,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.quiblo.core.data.MERGED_SEASON_NUMBER
 import dev.quiblo.core.data.MetadataRefresh
@@ -119,13 +118,10 @@ fun TvSeriesScreen(
     )
     val state by viewModel.uiState.collectAsStateWithLifecycle()
 
-    // The same staleness as the film screen: this ViewModel outlives the screen, so the
-    // episode a viewer was last on has to be re-read rather than trusted from when the
-    // series was first opened.
-    LifecycleResumeEffect(viewModel) {
-        viewModel.refreshResumePosition()
-        onPauseOrDispose {}
-    }
+    // The resume point is watched rather than re-read on returning to the foreground. A read on
+    // resume raced the player's own write of the position it had just finished with, and lost it
+    // often enough that backing out of a film offered "Play" for something four minutes in. See
+    // `observeResumePosition`.
 
     BackHandler(onBack = onBack)
 

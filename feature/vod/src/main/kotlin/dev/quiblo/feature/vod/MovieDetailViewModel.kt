@@ -154,13 +154,26 @@ class MovieDetailViewModel(
         }
     }
 
-    /** Re-reads the resume point, so returning from playback updates the buttons. */
-    fun refreshResumePosition() {
-        val current = _uiState.value as? MovieDetailUiState.Ready ?: return
+    /**
+     * Watches the resume point, so returning from playback updates the buttons — whenever it lands.
+     *
+     * **This used to be a single read from a lifecycle effect, and that was a race it lost.** The
+     * effect fires the instant this screen returns to the foreground, which on the television is
+     * the same instant the player above it is being disposed and is writing the position it
+     * finished with. Nothing ordered the two. When the read won, the screen offered **Play** for a
+     * film the viewer was four minutes into — and, having read once, it never asked again, so the
+     * only way to correct it was to leave the screen and come back.
+     *
+     * A flow does not order the two either. It removes the need to: a write that lands a hundred
+     * milliseconds late still lands, and the button follows it.
+     */
+    private fun observeResumePosition(channel: Channel) {
         viewModelScope.launch {
-            _uiState.value = current.copy(
-                resumePositionMillis = historyRepository.resumePosition(current.channel.stableKey),
-            )
+            historyRepository.observeResumePosition(channel.stableKey).collect { position ->
+                (_uiState.value as? MovieDetailUiState.Ready)?.let {
+                    _uiState.value = it.copy(resumePositionMillis = position)
+                }
+            }
         }
     }
 
@@ -183,6 +196,7 @@ class MovieDetailViewModel(
             )
 
             observeFavorite(channel)
+            observeResumePosition(channel)
 
             val details = (channelRepository.getVodDetails(channelId) as? VodDetailsResult.Success)?.details
             (_uiState.value as? MovieDetailUiState.Ready)?.let { _uiState.value = it.copy(details = details) }

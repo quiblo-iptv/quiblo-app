@@ -68,7 +68,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.compose.SubcomposeAsyncImage
 import dev.quiblo.core.data.MERGED_SEASON_NUMBER
@@ -106,12 +105,10 @@ fun SeriesDetailScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
-    // Coming back from playback must move the Resume button on, or the screen still offers
-    // the episode that was just finished.
-    LifecycleResumeEffect(Unit) {
-        viewModel.refreshResumePosition()
-        onPauseOrDispose {}
-    }
+    // The resume point is watched rather than re-read on returning to the foreground. A read on
+    // resume raced the player's own write of the position it had just finished with, and lost it
+    // often enough that backing out of a film offered "Play" for something four minutes in. See
+    // `observeResumePosition`.
 
     // No app bar, for the same reason as the film screen: the header states the series'
     // name in full a few pixels below where a title bar would have repeated it.

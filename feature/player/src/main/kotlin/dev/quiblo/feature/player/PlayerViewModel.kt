@@ -20,6 +20,7 @@ package dev.quiblo.feature.player
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import dev.quiblo.core.data.ApplicationScope
 import dev.quiblo.core.data.AttachResult
 import dev.quiblo.core.data.ChannelRepository
 import dev.quiblo.core.data.PlayerSettingsRepository
@@ -40,6 +41,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -59,7 +62,40 @@ class PlayerViewModel(
     private val historyRepository: WatchHistoryRepository,
     private val subtitleRepository: SubtitleRepository,
     private val settingsRepository: PlayerSettingsRepository,
+    /**
+     * Where the resume point is written, and deliberately not [viewModelScope].
+     *
+     * On the phone this ViewModel belongs to its navigation entry, so the back press that makes a
+     * resume point worth writing is the same event that cancels the coroutine writing it. See
+     * [ApplicationScope].
+     */
+    private val applicationScope: ApplicationScope,
 ) : ViewModel() {
+
+    init {
+        /*
+         * A resume point every ten seconds of playback, rather than only when playback stops.
+         *
+         * Stop and dispose were the two moments a position was written, and both assume the app
+         * gets to run afterwards. A process killed for memory while a film is paused, a television
+         * switched off at the wall, a crash: each of those lost everything since the title was
+         * opened, which on a two-hour film is up to two hours of "where was I".
+         *
+         * **Driven by the position rather than by a timer**, and that is the whole of why there is
+         * no clock here. A ten-second timer keeps running while a film is paused, while a viewer
+         * reads the description, and for as long as the screen exists — writing the same number to
+         * the database over and over. Watching the position cross a ten-second boundary writes
+         * exactly when there is something new to say and stops on its own when nothing is moving.
+         *
+         * `rememberPosition` returns immediately for live, for nothing loaded, and for a position
+         * still at zero, so the first crossing of a fresh item costs nothing.
+         */
+        viewModelScope.launch {
+            state.map { it.positionMillis / PERSIST_INTERVAL_MILLIS }
+                .distinctUntilChanged()
+                .collect { rememberPosition() }
+        }
+    }
 
     val state: StateFlow<PlaybackState> = controller.state
 
@@ -395,7 +431,7 @@ class PlayerViewModel(
      */
     private fun rememberPosition() {
         val entry = currentHistoryEntry() ?: return
-        viewModelScope.launch { historyRepository.saveProgress(entry) }
+        applicationScope.launch { historyRepository.saveProgress(entry) }
     }
 
     /**
@@ -425,5 +461,18 @@ class PlayerViewModel(
             seasonNumber = playing.seasonNumber,
             episodeNumber = playing.episodeNumber,
         )
+    }
+
+    private companion object {
+        /**
+         * How often a position is written down while something is playing.
+         *
+         * Ten seconds of *playback*, not of wall clock: the position is what is watched, so a
+         * paused film writes nothing and a film left open on a details screen writes nothing.
+         * Ten is the most a viewer can lose to a process that never gets to run its shutdown, and
+         * it is less than the time it takes to notice. The in-memory position already ticks every
+         * 500ms; this is about how often it reaches the database.
+         */
+        const val PERSIST_INTERVAL_MILLIS = 10_000L
     }
 }

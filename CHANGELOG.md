@@ -113,6 +113,21 @@ in the meantime.
 
 ### Fixed
 
+- **"Resume from" is there when you come back.** Watching four minutes of something and pressing
+  back regularly gave you a **Play** button, as though you had never opened it — and the only way
+  to get the right button was to leave the screen and go back into it. Three things were wrong and
+  all three are fixed. The screen asked where you had got to at the same moment the player was
+  writing it down, and nothing decided which happened first; it now watches the answer instead of
+  asking once, so a position that arrives a moment late still moves the button. On the phone the
+  back press that made the position worth saving was also what cancelled the save; it is now
+  written somewhere the screen going away cannot reach. And a position is written down every ten
+  seconds of playback rather than only when you stop, so a television switched off at the wall or
+  an app killed for memory no longer loses everything since you pressed play.
+- **A film's details sit in the middle of the television screen.** A series fills the screen with
+  its episodes and a film has nothing below its buttons, so a film's details were pressed against
+  the top with the whole lower half of the panel empty. A long description still starts at the top
+  and scrolls exactly as before.
+
 - **Now popular no longer goes missing on the television.** The row is fetched with your Movie
   Database key, and the key is kept encrypted — which means reading it takes a moment. For You
   was built before that moment had passed, found no key, fetched nothing, and had no way to ask

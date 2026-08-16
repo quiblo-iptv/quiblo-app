@@ -21,10 +21,12 @@ package dev.quiblo.tv.ui.detail
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -42,7 +44,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.quiblo.core.data.MetadataRefresh
 import dev.quiblo.core.data.ScanRefusal
@@ -80,17 +81,10 @@ fun TvMovieScreen(
     )
     val state by viewModel.uiState.collectAsStateWithLifecycle()
 
-    // Re-read the resume point every time this screen is shown.
-    //
-    // Not optional, and not merely an optimisation. The ViewModel is keyed per film and
-    // lives as long as the activity, so coming back from the player reuses the instance that
-    // loaded *before* anything had been watched — the position it holds is stale by exactly
-    // the amount the viewer just watched. That is why a film played, backed out of and
-    // reopened still offered Play rather than Resume.
-    LifecycleResumeEffect(viewModel) {
-        viewModel.refreshResumePosition()
-        onPauseOrDispose {}
-    }
+    // The resume point is watched rather than re-read on returning to the foreground. A read on
+    // resume raced the player's own write of the position it had just finished with, and lost it
+    // often enough that backing out of a film offered "Play" for something four minutes in. See
+    // `observeResumePosition`.
 
     BackHandler(onBack = onBack)
 
@@ -142,138 +136,154 @@ private fun Loaded(
         openDetailScreen(scrollState = scrollState, firstAction = firstAction)
     }
 
-    // Scrolls, for the same reason the series screen does: 444dp of usable height is not
-    // enough to guarantee a cover, a plot and a row of actions all fit. A film has no
-    // episode list, so this is a single column rather than a lazy one — but it must still
-    // be reachable when a panel supplies a long description.
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .verticalScroll(scrollState),
-    ) {
-        Row(horizontalArrangement = Arrangement.spacedBy(DETAIL_COLUMN_GAP)) {
-            // The provider own artwork first, and the metadata service only where there is
-            // none. A panel cover is the cover for the thing it is serving.
-            DetailArtwork(
-                url = state.channel.logoUrl?.takeIf { it.isNotBlank() }
-                    ?: state.details?.coverUrl
-                    ?: state.metadata?.posterUrl,
-            )
-
-            Column(modifier = Modifier.fillMaxWidth()) {
-                DetailTitle(state.details?.title ?: state.channel.name)
-
-                DetailFacts(
-                    rating = state.metadata?.rating,
-                    ageRating = state.metadata?.ageRating,
-                    genres = state.metadata.genresOrEmpty()
-                        .ifEmpty { listOfNotNull(state.details?.genre?.takeIf { it.isNotBlank() }) },
-                    // The year rather than the whole date the panel sends. "2021-10-22" is a
-                    // record from a database; a viewer choosing a film wants the year, and the
-                    // day of the month costs the line width that the length now uses.
-                    year = releaseYearIn(state.details?.releaseDate) ?: state.metadata?.releaseYear,
-                    // The panel's own length first, on the same rule as its artwork and its
-                    // plot: it is timing the file it is about to serve, where the service is
-                    // timing whichever cut it holds.
-                    runtime = runtimeLabel(state.details?.durationSeconds)
-                        ?: runtimeLabelFromMinutes(state.metadata?.runtimeMinutes),
+    /*
+     * Scrolls, and centres what does not need to.
+     *
+     * Scrolling is for the same reason the series screen does it: 444dp of usable height is not
+     * enough to guarantee a cover, a plot and a row of actions all fit, and a long description
+     * has to stay reachable. A film has no episode list, so this is a single column rather than a
+     * lazy one.
+     *
+     * **Centring is `023`'s complaint and it only applies to a film.** A series fills the screen
+     * with its episodes; a film has nothing below its actions row, so top-aligning it left the
+     * whole lower half of the panel empty with the content pressed against the ceiling. The
+     * minimum height is the viewport's, so a short film's details sit in the middle of the screen
+     * and a long one's start at the top and scroll exactly as before — one rule, not a branch on
+     * how much text a provider happened to send.
+     */
+    BoxWithConstraints(modifier = modifier.fillMaxSize()) {
+        val viewportHeight = maxHeight
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .verticalScroll(scrollState)
+                .defaultMinSize(minHeight = viewportHeight),
+            verticalArrangement = Arrangement.Center,
+        ) {
+            Row(horizontalArrangement = Arrangement.spacedBy(DETAIL_COLUMN_GAP)) {
+                // The provider own artwork first, and the metadata service only where there is
+                // none. A panel cover is the cover for the thing it is serving.
+                DetailArtwork(
+                    url = state.channel.logoUrl?.takeIf { it.isNotBlank() }
+                        ?: state.details?.coverUrl
+                        ?: state.metadata?.posterUrl,
                 )
 
-                DetailOverview(
-                    // The panel own description wins: it describes the thing being served,
-                    // where the metadata service describes whatever title matched the name.
-                    overview = state.details?.overview?.takeIf { it.isNotBlank() }
-                        ?: state.metadata?.overview,
-                    isEnriching = state.isEnriching,
-                    author = state.metadata?.author,
-                    authorLabel = state.metadata?.authorLabel?.name
-                        ?.lowercase()?.replaceFirstChar(Char::uppercase),
-                    cast = state.metadata?.topCast.orEmpty(),
-                )
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    DetailTitle(state.details?.title ?: state.channel.name)
 
-                // Wraps rather than overflows — see the note on the series screen. With four
-                // controls the last one ran off the edge and was cut mid-word (#014), and a
-                // shorter label only postpones that until somebody translates it.
-                FlowRow(
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp),
-                    modifier = Modifier
-                        .padding(top = 14.dp)
-                        .focusGroup(),
-                ) {
-                    // Resume first when there is one, because it is what a returning viewer
-                    // came for. Start from the beginning stays beside it rather than being
-                    // buried: rewatching should not mean resuming and then seeking back.
-                    if (state.canResume) {
-                        DetailButton(
-                            label = stringResource(R.string.tv_detail_resume),
-                            onClick = { onPlay(state.resumePositionMillis) },
-                            isPrimary = true,
-                            modifier = Modifier.focusRequester(firstAction),
-                        )
-                        DetailButton(
-                            label = stringResource(R.string.tv_detail_from_start),
-                            onClick = { onPlay(0L) },
-                        )
-                    } else {
-                        DetailButton(
-                            label = stringResource(R.string.tv_detail_play),
-                            onClick = { onPlay(null) },
-                            isPrimary = true,
-                            modifier = Modifier.focusRequester(firstAction),
-                        )
-                    }
-
-                    DetailButton(
-                        label = stringResource(
-                            if (state.isFavorite) {
-                                R.string.tv_detail_unfavourite
-                            } else {
-                                R.string.tv_detail_favourite
-                            },
-                        ),
-                        onClick = onToggleFavorite,
+                    DetailFacts(
+                        rating = state.metadata?.rating,
+                        ageRating = state.metadata?.ageRating,
+                        genres = state.metadata.genresOrEmpty()
+                            .ifEmpty { listOfNotNull(state.details?.genre?.takeIf { it.isNotBlank() }) },
+                        // The year rather than the whole date the panel sends. "2021-10-22" is a
+                        // record from a database; a viewer choosing a film wants the year, and the
+                        // day of the month costs the line width that the length now uses.
+                        year = releaseYearIn(state.details?.releaseDate) ?: state.metadata?.releaseYear,
+                        // The panel's own length first, on the same rule as its artwork and its
+                        // plot: it is timing the file it is about to serve, where the service is
+                        // timing whichever cut it holds.
+                        runtime = runtimeLabel(state.details?.durationSeconds)
+                            ?: runtimeLabelFromMinutes(state.metadata?.runtimeMinutes),
                     )
 
-                    // Only when there is a position to forget. The phone has offered this
-                    // since its detail screens were built and the television never did — the
-                    // parity gap `agile/004` generalised, found again (#014).
-                    if (state.canResume) {
-                        DetailButton(
-                            label = stringResource(R.string.tv_detail_remove_history),
-                            onClick = onRemoveFromHistory,
-                        )
-                    }
+                    DetailOverview(
+                        // The panel own description wins: it describes the thing being served,
+                        // where the metadata service describes whatever title matched the name.
+                        overview = state.details?.overview?.takeIf { it.isNotBlank() }
+                            ?: state.metadata?.overview,
+                        isEnriching = state.isEnriching,
+                        author = state.metadata?.author,
+                        authorLabel = state.metadata?.authorLabel?.name
+                            ?.lowercase()?.replaceFirstChar(Char::uppercase),
+                        cast = state.metadata?.topCast.orEmpty(),
+                    )
 
-                    // Last in the row on purpose. It is the least used control here and the
-                    // one a viewer reaches for only when the screen already looks wrong, so
-                    // it must not sit between Play and the favourite (AC-TV-01's ordering is
-                    // about what a remote walks past to reach what it wants).
-                    if (state.canRefreshMetadata) {
+                    // Wraps rather than overflows — see the note on the series screen. With four
+                    // controls the last one ran off the edge and was cut mid-word (#014), and a
+                    // shorter label only postpones that until somebody translates it.
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                        modifier = Modifier
+                            .padding(top = 14.dp)
+                            .focusGroup(),
+                    ) {
+                        // Resume first when there is one, because it is what a returning viewer
+                        // came for. Start from the beginning stays beside it rather than being
+                        // buried: rewatching should not mean resuming and then seeking back.
+                        if (state.canResume) {
+                            DetailButton(
+                                label = stringResource(R.string.tv_detail_resume),
+                                onClick = { onPlay(state.resumePositionMillis) },
+                                isPrimary = true,
+                                modifier = Modifier.focusRequester(firstAction),
+                            )
+                            DetailButton(
+                                label = stringResource(R.string.tv_detail_from_start),
+                                onClick = { onPlay(0L) },
+                            )
+                        } else {
+                            DetailButton(
+                                label = stringResource(R.string.tv_detail_play),
+                                onClick = { onPlay(null) },
+                                isPrimary = true,
+                                modifier = Modifier.focusRequester(firstAction),
+                            )
+                        }
+
                         DetailButton(
                             label = stringResource(
-                                if (state.isEnriching) {
-                                    R.string.tv_detail_refresh_working
+                                if (state.isFavorite) {
+                                    R.string.tv_detail_unfavourite
                                 } else {
-                                    R.string.tv_detail_refresh
+                                    R.string.tv_detail_favourite
                                 },
                             ),
-                            onClick = onRefreshMetadata,
+                            onClick = onToggleFavorite,
+                        )
+
+                        // Only when there is a position to forget. The phone has offered this
+                        // since its detail screens were built and the television never did — the
+                        // parity gap `agile/004` generalised, found again (#014).
+                        if (state.canResume) {
+                            DetailButton(
+                                label = stringResource(R.string.tv_detail_remove_history),
+                                onClick = onRemoveFromHistory,
+                            )
+                        }
+
+                        // Last in the row on purpose. It is the least used control here and the
+                        // one a viewer reaches for only when the screen already looks wrong, so
+                        // it must not sit between Play and the favourite (AC-TV-01's ordering is
+                        // about what a remote walks past to reach what it wants).
+                        if (state.canRefreshMetadata) {
+                            DetailButton(
+                                label = stringResource(
+                                    if (state.isEnriching) {
+                                        R.string.tv_detail_refresh_working
+                                    } else {
+                                        R.string.tv_detail_refresh
+                                    },
+                                ),
+                                onClick = onRefreshMetadata,
+                            )
+                        }
+                    }
+
+                    state.refreshResult?.let { result ->
+                        Text(
+                            text = stringResource(result.messageRes()),
+                            color = if (result is MetadataRefresh.Refused) {
+                                Color(0xFFFF8A80)
+                            } else {
+                                Color.White.copy(alpha = 0.75f)
+                            },
+                            fontSize = 14.sp,
+                            modifier = Modifier.padding(top = 10.dp),
                         )
                     }
-                }
-
-                state.refreshResult?.let { result ->
-                    Text(
-                        text = stringResource(result.messageRes()),
-                        color = if (result is MetadataRefresh.Refused) {
-                            Color(0xFFFF8A80)
-                        } else {
-                            Color.White.copy(alpha = 0.75f)
-                        },
-                        fontSize = 14.sp,
-                        modifier = Modifier.padding(top = 10.dp),
-                    )
                 }
             }
         }

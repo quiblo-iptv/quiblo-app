@@ -687,6 +687,22 @@ interface ResumePositionDao {
     suspend fun positionFor(profileId: Long, stableKey: String): Long?
 
     /**
+     * The same, as a flow.
+     *
+     * **What this replaces is a race.** A detail screen read the position once, from a lifecycle
+     * effect that fires the instant it returns to the foreground — which on the television is the
+     * same instant the player above it is being disposed and is writing the position it just
+     * finished with. Nothing ordered the two, so a viewer who pressed back was regularly offered
+     * "Play" for something they were four minutes into, with no way to ask again short of leaving
+     * the screen and coming back.
+     *
+     * A flow removes the ordering question rather than answering it: a write that lands late is
+     * still a write, and the button changes when it does.
+     */
+    @Query("SELECT positionMillis FROM resume_positions WHERE profileId = :profileId AND stableKey = :stableKey")
+    fun observePositionFor(profileId: Long, stableKey: String): Flow<Long?>
+
+    /**
      * The most recently watched of [stableKeys], for resuming a series where it was left.
      *
      * Ordered by when it was watched rather than by position: the furthest-through episode
@@ -697,6 +713,13 @@ interface ResumePositionDao {
             "ORDER BY updatedAtEpochMillis DESC LIMIT 1",
     )
     suspend fun mostRecentOf(profileId: Long, stableKeys: List<String>): ResumePositionEntity?
+
+    /** The same, as a flow, for the same reason [observePositionFor] is one. */
+    @Query(
+        "SELECT * FROM resume_positions WHERE profileId = :profileId AND stableKey IN (:stableKeys) " +
+            "ORDER BY updatedAtEpochMillis DESC LIMIT 1",
+    )
+    fun observeMostRecentOf(profileId: Long, stableKeys: List<String>): Flow<ResumePositionEntity?>
 
     /**
      * Everything watched of one kind, most recent first.

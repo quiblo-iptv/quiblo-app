@@ -25,6 +25,7 @@ import dev.quiblo.core.data.AttachResult
 import dev.quiblo.core.data.ChannelRepository
 import dev.quiblo.core.data.PlayerSettingsRepository
 import dev.quiblo.core.data.SubtitleRepository
+import dev.quiblo.core.data.WatchEventRepository
 import dev.quiblo.core.data.WatchHistoryRepository
 import dev.quiblo.core.media.PlayableItem
 import dev.quiblo.core.media.PlaybackState
@@ -36,6 +37,7 @@ import dev.quiblo.core.model.PlayerSettings
 import dev.quiblo.core.model.SubtitleFile
 import dev.quiblo.core.model.SubtitleOrigin
 import dev.quiblo.core.model.SubtitleStyle
+import dev.quiblo.core.model.WatchOrigin
 import dev.quiblo.source.api.VodDetailsResult
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -56,6 +58,10 @@ import kotlinx.coroutines.launch
  * Note what this class does not import: nothing from Media3 or ExoPlayer. It talks only
  * to [PlayerController] (docs/FREEZE.md §4.4).
  */
+// Seven collaborators, and the seventh is the watch log — a different question from the resume
+// point beside it: one is "where was I", the other is "what did I choose, and how often". Merging
+// them into one repository would put two tables with two lifetimes behind one name.
+@Suppress("LongParameterList")
 class PlayerViewModel(
     private val controller: PlayerController,
     private val channelRepository: ChannelRepository,
@@ -70,7 +76,14 @@ class PlayerViewModel(
      * [ApplicationScope].
      */
     private val applicationScope: ApplicationScope,
+    private val watchEvents: WatchEventRepository,
 ) : ViewModel() {
+
+    /** Where the viewer was when they chose what is playing. Set by [load]. */
+    private var chosenFrom: WatchOrigin = WatchOrigin.ROW
+
+    /** Whether this sitting has already been written down. See [recordOccasion]. */
+    private var recorded = false
 
     init {
         /*
@@ -213,6 +226,8 @@ class PlayerViewModel(
         customUrl: String? = null,
         customTitle: String? = null,
         startPositionMillis: Long? = null,
+        /** Where the viewer was when they chose this. Recorded once, when playback ends. */
+        origin: WatchOrigin = WatchOrigin.ROW,
         /**
          * Which episode this is, when it is one.
          *
@@ -226,6 +241,8 @@ class PlayerViewModel(
         val request = LoadRequest(channelId, customUrl, startPositionMillis)
         if (loadedRequest == request) return
         loadedRequest = request
+        chosenFrom = origin
+        recorded = false
 
         viewModelScope.launch {
             val channel = channelRepository.findById(channelId) ?: return@launch
@@ -414,12 +431,52 @@ class PlayerViewModel(
     fun onStopped() {
         controller.pause()
         rememberPosition()
+        recordOccasion()
     }
 
     override fun onCleared() {
         rememberPosition()
+        recordOccasion()
         controller.release()
         super.onCleared()
+    }
+
+    /**
+     * Writes down that this was watched, once per sitting.
+     *
+     * **Once**, which is what makes "how many times" mean how many times rather than how long: a
+     * row per position write would turn a two-hour film into seven hundred viewings. The guard is
+     * cleared by [load], so opening the same title again tomorrow is a second occasion and opening
+     * it twice in one screen's lifetime is not.
+     *
+     * Live is never recorded, for the same reason it is never given a resume point: a channel is
+     * not something anybody continues, and a suggestion built from one would be a suggestion built
+     * from what happened to be on.
+     */
+    @Suppress("ReturnCount")
+    private fun recordOccasion() {
+        if (recorded) return
+        val current = state.value
+        val item = current.item?.takeIf { !it.isLive } ?: return
+        val playing = playing ?: return
+        val fraction = if (current.durationMillis > 0L) {
+            (current.positionMillis.toDouble() / current.durationMillis).coerceIn(0.0, 1.0)
+        } else {
+            0.0
+        }
+        if (fraction <= 0.0 && current.positionMillis <= 0L) return
+
+        recorded = true
+        applicationScope.launch {
+            watchEvents.record(
+                sourceId = playing.sourceId,
+                stableKey = item.id,
+                kind = playing.kind,
+                title = playing.title,
+                fraction = fraction,
+                origin = chosenFrom,
+            )
+        }
     }
 
     /**

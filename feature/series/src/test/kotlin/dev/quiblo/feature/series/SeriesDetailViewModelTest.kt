@@ -22,6 +22,7 @@ import dev.quiblo.core.data.ChannelRepository
 import dev.quiblo.core.data.SeriesPreference
 import dev.quiblo.core.data.SeriesPreferenceRepository
 import dev.quiblo.core.data.TitleMetadataRepository
+import dev.quiblo.core.data.TitleOpinionRepository
 import dev.quiblo.core.data.WatchHistoryRepository
 import dev.quiblo.core.model.Channel
 import dev.quiblo.core.model.Episode
@@ -58,6 +59,7 @@ class SeriesDetailViewModelTest {
     private val preferences: SeriesPreferenceRepository = mockk(relaxed = true) {
         every { observe(any()) } returns flowOf(SeriesPreference())
     }
+    private val opinions: TitleOpinionRepository = mockk(relaxed = true)
 
     private val testDispatcher = StandardTestDispatcher()
     private val channelRepository: ChannelRepository = mockk()
@@ -124,6 +126,7 @@ class SeriesDetailViewModelTest {
             metadataRepository = metadataRepository,
             historyRepository = historyRepository,
             preferences = preferences,
+            opinions = opinions,
         )
         testDispatcher.scheduler.advanceUntilIdle()
 
@@ -145,6 +148,7 @@ class SeriesDetailViewModelTest {
             metadataRepository = metadataRepository,
             historyRepository = historyRepository,
             preferences = preferences,
+            opinions = opinions,
         )
         testDispatcher.scheduler.advanceUntilIdle()
 
@@ -168,6 +172,7 @@ class SeriesDetailViewModelTest {
             metadataRepository = metadataRepository,
             historyRepository = historyRepository,
             preferences = preferences,
+            opinions = opinions,
         )
         testDispatcher.scheduler.advanceUntilIdle()
         viewModel.removeFromHistory()
@@ -195,6 +200,7 @@ class SeriesDetailViewModelTest {
             metadataRepository = metadataRepository,
             historyRepository = historyRepository,
             preferences = preferences,
+            opinions = opinions,
         )
         testDispatcher.scheduler.advanceUntilIdle()
 
@@ -214,6 +220,7 @@ class SeriesDetailViewModelTest {
             metadataRepository = metadataRepository,
             historyRepository = historyRepository,
             preferences = preferences,
+            opinions = opinions,
         )
         testDispatcher.scheduler.advanceUntilIdle()
 
@@ -236,6 +243,7 @@ class SeriesDetailViewModelTest {
             metadataRepository = metadataRepository,
             historyRepository = historyRepository,
             preferences = preferences,
+            opinions = opinions,
         )
         testDispatcher.scheduler.advanceUntilIdle()
 
@@ -256,6 +264,7 @@ class SeriesDetailViewModelTest {
             metadataRepository = metadataRepository,
             historyRepository = historyRepository,
             preferences = preferences,
+            opinions = opinions,
         )
         testDispatcher.scheduler.advanceUntilIdle()
 

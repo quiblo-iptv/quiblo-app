@@ -68,6 +68,7 @@ import dev.quiblo.core.data.MERGED_SEASON_NUMBER
 import dev.quiblo.core.data.MetadataRefresh
 import dev.quiblo.core.model.Channel
 import dev.quiblo.core.model.Episode
+import dev.quiblo.core.model.Opinion
 import dev.quiblo.core.model.Season
 import dev.quiblo.feature.browse.runtimeLabel
 import dev.quiblo.feature.series.SeriesDetailUiState
@@ -143,6 +144,7 @@ fun TvSeriesScreen(
                 onToggleFavorite = viewModel::toggleFavorite,
                 onRemoveFromHistory = viewModel::removeFromHistory,
                 onRefreshMetadata = viewModel::refreshMetadata,
+                onRate = viewModel::rate,
                 onMerged = viewModel::setMerged,
                 onDescending = viewModel::setDescending,
                 focusEpisodeId = focusEpisodeId,
@@ -158,6 +160,7 @@ private fun Loaded(
     onToggleFavorite: () -> Unit,
     onRemoveFromHistory: () -> Unit,
     onRefreshMetadata: () -> Unit,
+    onRate: (Opinion) -> Unit,
     onMerged: (Boolean) -> Unit,
     onDescending: (Boolean) -> Unit,
     focusEpisodeId: String?,
@@ -243,6 +246,7 @@ private fun Loaded(
                 onToggleFavorite = onToggleFavorite,
                 onRemoveFromHistory = onRemoveFromHistory,
                 onRefreshMetadata = onRefreshMetadata,
+                onRate = onRate,
             )
         }
 
@@ -343,6 +347,7 @@ private fun SeriesHeader(
     onToggleFavorite: () -> Unit,
     onRemoveFromHistory: () -> Unit,
     onRefreshMetadata: () -> Unit,
+    onRate: (Opinion) -> Unit,
 ) {
     Row(horizontalArrangement = Arrangement.spacedBy(DETAIL_COLUMN_GAP)) {
         DetailArtwork(
@@ -386,6 +391,7 @@ private fun SeriesHeader(
                 onToggleFavorite = onToggleFavorite,
                 onRemoveFromHistory = onRemoveFromHistory,
                 onRefreshMetadata = onRefreshMetadata,
+                onRate = onRate,
             )
         }
     }
@@ -394,6 +400,7 @@ private fun SeriesHeader(
 /** Resume, play or start again, favouriting and forgetting — the row the remote lands on. */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
+@Suppress("LongParameterList")
 private fun SeriesActions(
     state: SeriesDetailUiState.Success,
     firstAction: FocusRequester,
@@ -401,6 +408,7 @@ private fun SeriesActions(
     onToggleFavorite: () -> Unit,
     onRemoveFromHistory: () -> Unit,
     onRefreshMetadata: () -> Unit,
+    onRate: (Opinion) -> Unit,
 ) {
     val hasResume = state.resumeEpisode != null
 
@@ -451,6 +459,24 @@ private fun SeriesActions(
                 },
             ),
             onClick = onToggleFavorite,
+        )
+
+        // What the viewer thought — about the series, not the episode. Nobody has an opinion
+        // about episode four of season two separately from the show, and a thumbs-down on one
+        // episode that removed the whole series from suggestions would answer a question that
+        // was not asked.
+        DetailButton(
+            label = stringResource(
+                if (state.opinion == Opinion.UP) R.string.tv_detail_liked else R.string.tv_detail_like,
+            ),
+            onClick = { onRate(Opinion.UP) },
+        )
+
+        DetailButton(
+            label = stringResource(
+                if (state.opinion == Opinion.DOWN) R.string.tv_detail_disliked else R.string.tv_detail_dislike,
+            ),
+            onClick = { onRate(Opinion.DOWN) },
         )
 
         // Only when there is something to remove. A control that would do nothing is the

@@ -35,6 +35,8 @@ import dev.quiblo.core.database.dao.ResumePositionDao
 import dev.quiblo.core.database.dao.SeriesPreferenceDao
 import dev.quiblo.core.database.dao.SourceDao
 import dev.quiblo.core.database.dao.TitleMetadataDao
+import dev.quiblo.core.database.dao.TitleOpinionDao
+import dev.quiblo.core.database.dao.WatchEventDao
 import dev.quiblo.core.database.entity.CategoryOverrideEntity
 import dev.quiblo.core.database.entity.ChannelEntity
 import dev.quiblo.core.database.entity.ChannelLogoEntity
@@ -48,6 +50,8 @@ import dev.quiblo.core.database.entity.ResumePositionEntity
 import dev.quiblo.core.database.entity.SeriesPreferenceEntity
 import dev.quiblo.core.database.entity.SourceEntity
 import dev.quiblo.core.database.entity.TitleMetadataEntity
+import dev.quiblo.core.database.entity.TitleOpinionEntity
+import dev.quiblo.core.database.entity.WatchEventEntity
 
 /**
  * The current schema version.
@@ -57,7 +61,7 @@ import dev.quiblo.core.database.entity.TitleMetadataEntity
  * constant, so the version the app ships and the version the upgrade path is tested against
  * cannot drift apart.
  */
-const val SCHEMA_VERSION = 21
+const val SCHEMA_VERSION = 22
 
 /**
  * Every migration, in order, in one place.
@@ -88,12 +92,17 @@ val ALL_MIGRATIONS = arrayOf(
     MIGRATION_18_19,
     MIGRATION_19_20,
     MIGRATION_20_21,
+    MIGRATION_21_22,
 )
 
 /**
  * The single local database. There is no remote counterpart and never will be
  * (docs/FREEZE.md §2).
  */
+// Fifteen accessors, one per table, and that is what the count is: a database class is exactly as
+// large as the number of tables it holds, and splitting it to satisfy a threshold would put one
+// schema behind two names.
+@Suppress("TooManyFunctions")
 @Database(
     entities = [
         SourceEntity::class,
@@ -109,6 +118,8 @@ val ALL_MIGRATIONS = arrayOf(
         PickedSubtitleEntity::class,
         PopularTitleEntity::class,
         FeedRowEntity::class,
+        WatchEventEntity::class,
+        TitleOpinionEntity::class,
     ],
     version = SCHEMA_VERSION,
     exportSchema = true,
@@ -140,6 +151,10 @@ abstract class QuibloDatabase : RoomDatabase() {
     abstract fun popularTitleDao(): PopularTitleDao
 
     abstract fun feedRowDao(): FeedRowDao
+
+    abstract fun watchEventDao(): WatchEventDao
+
+    abstract fun titleOpinionDao(): TitleOpinionDao
 
     companion object {
         const val NAME = "quiblo.db"

@@ -20,6 +20,7 @@ package dev.quiblo.feature.vod
 
 import dev.quiblo.core.data.ChannelRepository
 import dev.quiblo.core.data.TitleMetadataRepository
+import dev.quiblo.core.data.TitleOpinionRepository
 import dev.quiblo.core.data.WatchHistoryRepository
 import dev.quiblo.core.model.Channel
 import dev.quiblo.core.model.MediaKind
@@ -62,6 +63,7 @@ class MovieDetailResumeTest {
     private val channelRepository: ChannelRepository = mockk(relaxed = true)
     private val metadataRepository: TitleMetadataRepository = mockk(relaxed = true)
     private val historyRepository: WatchHistoryRepository = mockk(relaxed = true)
+    private val opinions: TitleOpinionRepository = mockk(relaxed = true)
 
     /** The database, as the screen sees it: a value that can change after the screen has read it. */
     private val resumePosition = MutableStateFlow(0L)
@@ -88,7 +90,7 @@ class MovieDetailResumeTest {
      */
     @Test
     fun `a position written after the screen has settled still turns Play into Resume`() = runTest {
-        val viewModel = MovieDetailViewModel(CHANNEL.id, channelRepository, metadataRepository, historyRepository)
+        val viewModel = viewModel()
         advanceUntilIdle()
         assertFalse(viewModel.ready().canResume, "there was nothing watched yet")
 
@@ -109,7 +111,7 @@ class MovieDetailResumeTest {
     @Test
     fun `a position removed while the screen is open takes Resume away`() = runTest {
         resumePosition.value = FOUR_MINUTES
-        val viewModel = MovieDetailViewModel(CHANNEL.id, channelRepository, metadataRepository, historyRepository)
+        val viewModel = viewModel()
         advanceUntilIdle()
         assertTrue(viewModel.ready().canResume)
 
@@ -122,7 +124,7 @@ class MovieDetailResumeTest {
     /** Under ten seconds is not a resume point: it would drop the viewer back at the start. */
     @Test
     fun `a few seconds in is still Play`() = runTest {
-        val viewModel = MovieDetailViewModel(CHANNEL.id, channelRepository, metadataRepository, historyRepository)
+        val viewModel = viewModel()
         advanceUntilIdle()
 
         resumePosition.value = 4_000L
@@ -130,6 +132,14 @@ class MovieDetailResumeTest {
 
         assertFalse(viewModel.ready().canResume)
     }
+
+    private fun viewModel() = MovieDetailViewModel(
+        channelId = CHANNEL.id,
+        channelRepository = channelRepository,
+        metadataRepository = metadataRepository,
+        historyRepository = historyRepository,
+        opinions = opinions,
+    )
 
     private fun MovieDetailViewModel.ready() = uiState.value as MovieDetailUiState.Ready
 

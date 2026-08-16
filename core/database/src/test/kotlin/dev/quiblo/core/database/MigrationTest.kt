@@ -388,6 +388,42 @@ class MigrationTest {
         }
     }
 
+    /**
+     * The log and the opinions arrive empty, and the metadata cache gains two columns unfilled.
+     *
+     * Null rather than a default on both columns, and the two nulls mean different things that are
+     * deliberately not distinguished: "not fetched since this column existed" and "the service does
+     * not know". The first is refilled by the ordinary fourteen-day metadata refresh and the second
+     * never will be, and nothing downstream needs to tell them apart — every signal is written to
+     * be worth zero when its input is missing rather than to guess.
+     */
+    @Test
+    fun `21 to 22 adds the watch log and the opinions, empty`() {
+        helper.createDatabase(DB_NAME, 21).use { old ->
+            old.execSQL(
+                "INSERT INTO `title_metadata` (`searchTitle`, `kind`, `year`, `fetchedAtEpochMillis`, " +
+                    "`isMiss`, `isPartial`, `genres`) VALUES ('dune', 'VOD', 2021, 5, 0, 0, 'Science Fiction')",
+            )
+        }
+
+        val db = helper.runMigrationsAndValidate(DB_NAME, 22, true, MIGRATION_21_22)
+
+        db.query("SELECT COUNT(*) FROM `watch_events`").use { cursor ->
+            assertTrue(cursor.moveToFirst())
+            assertEquals(0, cursor.getInt(0))
+        }
+        db.query("SELECT COUNT(*) FROM `title_opinions`").use { cursor ->
+            assertTrue(cursor.moveToFirst())
+            assertEquals(0, cursor.getInt(0))
+        }
+        db.query("SELECT `genres`, `originalLanguage`, `popularity` FROM `title_metadata`").use { cursor ->
+            assertTrue("the metadata cache did not survive the upgrade", cursor.moveToFirst())
+            assertEquals("Science Fiction", cursor.getString(0))
+            assertTrue("a language nobody has fetched must not read as a language", cursor.isNull(1))
+            assertTrue("a popularity nobody has fetched must not read as zero", cursor.isNull(2))
+        }
+    }
+
     @Test
     fun `10 to 11 adopts existing favourites rather than dropping them`() {
         // The opposite promise to the one above, and the one that matters more: this is the

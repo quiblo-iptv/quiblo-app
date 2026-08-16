@@ -25,11 +25,13 @@ import dev.quiblo.core.data.MetadataRefresh
 import dev.quiblo.core.data.SeriesPreference
 import dev.quiblo.core.data.SeriesPreferenceRepository
 import dev.quiblo.core.data.TitleMetadataRepository
+import dev.quiblo.core.data.TitleOpinionRepository
 import dev.quiblo.core.data.WatchHistoryRepository
 import dev.quiblo.core.data.arrangedBy
 import dev.quiblo.core.model.Channel
 import dev.quiblo.core.model.Episode
 import dev.quiblo.core.model.MediaKind
+import dev.quiblo.core.model.Opinion
 import dev.quiblo.core.model.Season
 import dev.quiblo.core.model.SeriesDetails
 import dev.quiblo.core.model.TitleMetadata
@@ -104,6 +106,8 @@ sealed interface SeriesDetailUiState {
          * screen opened and would not reflect a tap made on this screen.
          */
         val isFavorite: Boolean = false,
+        /** What this viewer said about the series, if anything. See `TitleOpinionRepository`. */
+        val opinion: Opinion = Opinion.NONE,
     ) : SeriesDetailUiState
     data class Error(val error: SourceError) : SeriesDetailUiState
 }
@@ -114,6 +118,7 @@ class SeriesDetailViewModel(
     private val metadataRepository: TitleMetadataRepository,
     private val historyRepository: WatchHistoryRepository,
     private val preferences: SeriesPreferenceRepository,
+    private val opinions: TitleOpinionRepository,
 ) : ViewModel() {
 
     private var isRefreshing = false
@@ -156,9 +161,35 @@ class SeriesDetailViewModel(
                     )
 
                     observeFavorite(channel)
+                    observeOpinion(channel)
                     observeResumePosition(episodes.map { it.streamUrl })
                     observePreference(channel.stableKey)
                     enrich(channel)
+                }
+            }
+        }
+    }
+
+    /**
+     * Records what the viewer thought of the series, or takes it back.
+     *
+     * The series rather than the episode: nobody has an opinion about episode four of season two
+     * separately from the show, and a thumbs-down on one episode that removed the whole series
+     * from suggestions would be answering a question that was not asked.
+     */
+    fun rate(opinion: Opinion) {
+        val current = _uiState.value as? SeriesDetailUiState.Success ?: return
+        viewModelScope.launch {
+            val next = if (current.opinion == opinion) Opinion.NONE else opinion
+            opinions.set(current.channel.name, MediaKind.SERIES, next)
+        }
+    }
+
+    private fun observeOpinion(channel: Channel) {
+        viewModelScope.launch {
+            opinions.observe(channel.name).collect { opinion ->
+                (_uiState.value as? SeriesDetailUiState.Success)?.let {
+                    _uiState.value = it.copy(opinion = opinion)
                 }
             }
         }

@@ -22,6 +22,7 @@ import dev.quiblo.core.data.ApplicationScope
 import dev.quiblo.core.data.ChannelRepository
 import dev.quiblo.core.data.PlayerSettingsRepository
 import dev.quiblo.core.data.SubtitleRepository
+import dev.quiblo.core.data.WatchEventRepository
 import dev.quiblo.core.data.WatchHistoryRepository
 import dev.quiblo.core.media.PlayableItem
 import dev.quiblo.core.media.PlaybackState
@@ -76,6 +77,7 @@ class PlayerResumeWriteTest {
     private val historyRepository: WatchHistoryRepository = mockk(relaxed = true)
     private val subtitleRepository: SubtitleRepository = mockk(relaxed = true)
     private val settingsRepository: PlayerSettingsRepository = mockk(relaxed = true)
+    private val watchEvents: WatchEventRepository = mockk(relaxed = true)
 
     private val playbackState = MutableStateFlow(PlaybackState())
     private val saved = mutableListOf<HistoryEntry>()
@@ -178,6 +180,7 @@ class PlayerResumeWriteTest {
             // The real one is backed by Dispatchers.IO and outlives everything. Here it is
             // unconfined, which is what makes it distinguishable from the screen's own scope.
             applicationScope = ApplicationScope(CoroutineScope(UnconfinedTestDispatcher())),
+            watchEvents = watchEvents,
         )
         viewModel.load(channelId = channel.id)
         advanceUntilIdle()

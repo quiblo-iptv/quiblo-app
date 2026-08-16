@@ -397,6 +397,8 @@ private fun TitleMetadataEntity.toMetadata() = TitleMetadata(
     backdropUrl = backdropUrl,
     releaseYear = releaseYear,
     runtimeMinutes = runtimeMinutes,
+    originalLanguage = originalLanguage,
+    popularity = popularity,
     isPartial = isPartial,
 )
 
@@ -414,6 +416,8 @@ private fun TitleMetadata.toEntity(identity: TitleIdentity, kind: String, fetche
     backdropUrl = backdropUrl,
     releaseYear = releaseYear,
     runtimeMinutes = runtimeMinutes,
+    originalLanguage = originalLanguage,
+    popularity = popularity,
     fetchedAtEpochMillis = fetchedAt,
     isMiss = false,
     isPartial = isPartial,

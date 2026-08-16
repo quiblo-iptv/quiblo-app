@@ -64,6 +64,9 @@ class BackupRepositoryTest {
         override fun observeIsFavorite(profileId: Long, sourceId: Long, stableKey: String): Flow<Boolean> =
             flowOf(rows.any { it.sourceId == sourceId && it.stableKey == stableKey })
 
+        override suspend fun keysFor(profileId: Long, sourceId: Long): List<String> =
+            rows.filter { it.sourceId == sourceId }.map { it.stableKey }
+
         override suspend fun add(favorite: FavoriteEntity) {
             rows += favorite
         }

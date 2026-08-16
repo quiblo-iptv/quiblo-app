@@ -39,6 +39,8 @@ import dev.quiblo.core.data.SourceRepository
 import dev.quiblo.core.data.SubtitleRepository
 import dev.quiblo.core.data.TitleMetadataRepository
 import dev.quiblo.core.data.TitleMetadataScanner
+import dev.quiblo.core.data.TitleOpinionRepository
+import dev.quiblo.core.data.WatchEventRepository
 import dev.quiblo.core.data.WatchHistoryRepository
 import dev.quiblo.core.data.backup.BackupRepository
 import dev.quiblo.core.model.SourceKind
@@ -150,11 +152,17 @@ val dataModule: Module = module {
             metadata = get(),
         )
     }
+    single { WatchEventRepository(dao = get(), profiles = get()) }
+    single { TitleOpinionRepository(dao = get(), profiles = get()) }
     single {
         RecommendationRepository(
             history = get(),
+            profiles = get(),
+            watchEvents = get(),
+            opinions = get(),
             titleMetadataDao = get(),
             channelDao = get(),
+            favoriteDao = get(),
         )
     }
     single {

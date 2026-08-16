@@ -597,6 +597,7 @@ private fun PlayerViewModel.load(request: TvPlaybackRequest) = when (request) {
     is TvPlaybackRequest.Film -> load(
         channelId = request.channel.id,
         startPositionMillis = request.startPositionMillis,
+        origin = request.origin,
     )
 
     is TvPlaybackRequest.Episode -> load(
@@ -606,6 +607,7 @@ private fun PlayerViewModel.load(request: TvPlaybackRequest) = when (request) {
         startPositionMillis = request.startPositionMillis,
         seasonNumber = request.seasonNumber,
         episodeNumber = request.episodeNumber,
+        origin = request.origin,
     )
 }
 

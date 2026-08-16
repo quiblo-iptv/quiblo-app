@@ -19,6 +19,7 @@
 package dev.quiblo.tv.ui.player
 
 import dev.quiblo.core.model.Channel
+import dev.quiblo.core.model.WatchOrigin
 import dev.quiblo.core.model.Episode as SeriesEpisode
 
 /**
@@ -39,6 +40,15 @@ sealed interface TvPlaybackRequest {
 
     /** The catalogue row behind this request. For an [Episode], the series itself. */
     val channel: Channel
+
+    /**
+     * Where the viewer was when they chose this.
+     *
+     * Carried rather than derived, because it is the one thing about a choice that nothing
+     * downstream can recover: by the time the player has a stream URL, a title typed into a
+     * search box and the first tile of a row look identical. See `WatchOrigin`.
+     */
+    val origin: WatchOrigin get() = WatchOrigin.ROW
 
     /** What to announce on screen when this starts. An episode is named, not its series. */
     val noticeTitle: String
@@ -89,6 +99,7 @@ sealed interface TvPlaybackRequest {
          * them would make "start from the beginning" impossible to express.
          */
         val startPositionMillis: Long? = null,
+        override val origin: WatchOrigin = WatchOrigin.ROW,
     ) : TvPlaybackRequest
 
     /**
@@ -133,6 +144,7 @@ sealed interface TvPlaybackRequest {
          */
         val run: List<SeriesEpisode> = emptyList(),
         val runIndex: Int = 0,
+        override val origin: WatchOrigin = WatchOrigin.ROW,
     ) : TvPlaybackRequest {
 
         /** True when there is an episode after this one to offer at the end of it. */

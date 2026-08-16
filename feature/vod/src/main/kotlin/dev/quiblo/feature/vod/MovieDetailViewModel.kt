@@ -23,9 +23,11 @@ import androidx.lifecycle.viewModelScope
 import dev.quiblo.core.data.ChannelRepository
 import dev.quiblo.core.data.MetadataRefresh
 import dev.quiblo.core.data.TitleMetadataRepository
+import dev.quiblo.core.data.TitleOpinionRepository
 import dev.quiblo.core.data.WatchHistoryRepository
 import dev.quiblo.core.model.Channel
 import dev.quiblo.core.model.MediaKind
+import dev.quiblo.core.model.Opinion
 import dev.quiblo.core.model.TitleMetadata
 import dev.quiblo.core.model.VodDetails
 import dev.quiblo.source.api.VodDetailsResult
@@ -84,6 +86,13 @@ sealed interface MovieDetailUiState {
          * arrived, which reads as a wrong answer rather than a pending one.
          */
         val isEnriching: Boolean = false,
+        /**
+         * What this viewer said about the film, if anything.
+         *
+         * Two buttons rather than five stars, and [Opinion.NONE] is the absence of an answer
+         * rather than a middle one — see `TitleOpinionRepository`.
+         */
+        val opinion: Opinion = Opinion.NONE,
     ) : MovieDetailUiState {
 
         val canResume: Boolean get() = resumePositionMillis > RESUME_THRESHOLD_MILLIS
@@ -112,6 +121,7 @@ class MovieDetailViewModel(
     private val channelRepository: ChannelRepository,
     private val metadataRepository: TitleMetadataRepository,
     private val historyRepository: WatchHistoryRepository,
+    private val opinions: TitleOpinionRepository,
 ) : ViewModel() {
 
     private var isRefreshing = false
@@ -197,6 +207,7 @@ class MovieDetailViewModel(
 
             observeFavorite(channel)
             observeResumePosition(channel)
+            observeOpinion(channel)
 
             val details = (channelRepository.getVodDetails(channelId) as? VodDetailsResult.Success)?.details
             (_uiState.value as? MovieDetailUiState.Ready)?.let { _uiState.value = it.copy(details = details) }
@@ -224,6 +235,31 @@ class MovieDetailViewModel(
      * A separate coroutine from [load] because it never completes, and putting a
      * `collect` in the middle of that function would stop everything after it from running.
      */
+    /**
+     * Records what the viewer thought, or takes it back.
+     *
+     * Pressing the button that is already lit clears the opinion, because the alternative is a
+     * viewer who mis-tapped having no way to say "I did not mean that" — and an opinion nobody
+     * can withdraw is one nobody gives.
+     */
+    fun rate(opinion: Opinion) {
+        val current = _uiState.value as? MovieDetailUiState.Ready ?: return
+        viewModelScope.launch {
+            val next = if (current.opinion == opinion) Opinion.NONE else opinion
+            opinions.set(current.channel.name, MediaKind.VOD, next)
+        }
+    }
+
+    private fun observeOpinion(channel: Channel) {
+        viewModelScope.launch {
+            opinions.observe(channel.name).collect { opinion ->
+                (_uiState.value as? MovieDetailUiState.Ready)?.let {
+                    _uiState.value = it.copy(opinion = opinion)
+                }
+            }
+        }
+    }
+
     private fun observeFavorite(channel: Channel) {
         viewModelScope.launch {
             channelRepository.observeIsFavorite(channel).collect { isFavorite ->

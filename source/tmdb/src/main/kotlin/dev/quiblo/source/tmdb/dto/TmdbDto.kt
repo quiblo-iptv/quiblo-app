@@ -67,6 +67,16 @@ internal data class SearchResult(
      * rather than two.
      */
     @SerialName("genre_ids") val genreIds: List<Int> = emptyList(),
+    /**
+     * The language it was made in, and how much of the world is watching it.
+     *
+     * Both arrive in every payload already parsed here and were discarded until `025`. They cost
+     * nothing to keep — no extra request, no extra round trip — and between them they are what
+     * tells a K-drama from an American series, anime from a cartoon, and a rare title from one
+     * everybody has heard of.
+     */
+    @SerialName("original_language") val originalLanguage: String? = null,
+    val popularity: Double? = null,
 )
 
 /** `/genre/movie/list` and `/genre/tv/list`: the whole vocabulary, in one call each. */
@@ -85,6 +95,8 @@ internal data class MovieDetailsDto(
     /** Whole minutes. Zero and null both mean the service does not know. */
     val runtime: Int? = null,
     @SerialName("release_date") val releaseDate: String? = null,
+    @SerialName("original_language") val originalLanguage: String? = null,
+    val popularity: Double? = null,
 )
 
 /**
@@ -107,6 +119,8 @@ internal data class TvDetailsDto(
     @SerialName("created_by") val createdBy: List<CreatorDto> = emptyList(),
     @SerialName("content_ratings") val contentRatings: ContentRatingsDto? = null,
     @SerialName("first_air_date") val firstAirDate: String? = null,
+    @SerialName("original_language") val originalLanguage: String? = null,
+    val popularity: Double? = null,
 )
 
 @Serializable
@@ -163,6 +177,8 @@ internal fun MovieDetailsDto.toMetadata(): TitleMetadata = TitleMetadata(
     releaseYear = releaseYearIn(releaseDate),
     // Zero is how the service says "unknown", exactly as it does for a score.
     runtimeMinutes = runtime?.takeIf { it > 0 },
+    originalLanguage = originalLanguage?.takeIf { it.isNotBlank() },
+    popularity = popularity?.takeIf { it > 0.0 },
 )
 
 /**
@@ -186,6 +202,8 @@ internal fun TvDetailsDto.toMetadata(): TitleMetadata = TitleMetadata(
     // Left null on purpose. TMDB offers an average episode length for a series and it is not
     // the length of anything a viewer is about to watch.
     runtimeMinutes = null,
+    originalLanguage = originalLanguage?.takeIf { it.isNotBlank() },
+    popularity = popularity?.takeIf { it > 0.0 },
 )
 
 /**
@@ -206,6 +224,8 @@ internal fun SearchResult.toPartialMetadata(genreNames: Map<Int, String>): Title
     // A search hit carries no runtime at all, for either kind. That is what makes this record
     // partial, and a detail screen upgrades it.
     runtimeMinutes = null,
+    originalLanguage = originalLanguage?.takeIf { it.isNotBlank() },
+    popularity = popularity?.takeIf { it > 0.0 },
     isPartial = true,
 )
 

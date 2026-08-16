@@ -19,33 +19,50 @@
 package dev.quiblo.core.data
 
 import dev.quiblo.core.database.dao.ChannelDao
+import dev.quiblo.core.database.dao.FavoriteDao
+import dev.quiblo.core.database.dao.TitleFactRow
 import dev.quiblo.core.database.dao.TitleMetadataDao
 import dev.quiblo.core.model.HistoryEntry
 import dev.quiblo.core.model.MediaKind
+import dev.quiblo.core.model.Opinion
+import dev.quiblo.core.model.WatchOrigin
 import dev.quiblo.source.tmdb.titleIdentity
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
+import java.util.Calendar
+import java.util.TimeZone
 
 /**
  * The "You May Like" row: what to suggest, and why.
  *
- * Everything difficult about this feature is in [Recommender], which is pure arithmetic and
- * tested as such. This class is the plumbing around it — read the history, read the genres, match
- * the two against the catalogue by cleaned title, hand the result over — and it is written so
- * that the plumbing has no opinions of its own to get wrong.
+ * Everything difficult about this feature is in [Recommender], which is pure arithmetic and tested
+ * as such. This class is the plumbing around it — read the history, read the log, read the cache,
+ * match the three against the catalogue by cleaned title, hand the result over — and it is written
+ * so that the plumbing has no opinions of its own to get wrong.
  *
  * **Per profile.** Watch history already is, and a suggestion row that was not would leak one
  * person's viewing to another, which is the failure profiles exist to prevent (`AC-PROF-02`).
  *
- * **Silent when it knows nothing.** No history, no metadata key, or an unscanned catalogue all
- * produce an empty list, and the row above draws nothing rather than an empty shelf.
+ * **Silent when it knows nothing, and silent for a while after that.** No history, no metadata
+ * key, an unscanned catalogue, or a viewer who has simply not watched enough yet: all of them
+ * produce an empty list, and the row above draws nothing rather than an empty shelf. The last of
+ * those is `025`'s cold start and it is deliberate — see [Recommender].
  */
+// Nine collaborators, and each is a different question the scorer needs answered: what was
+// watched, by whom, how often, what they said about it, what the catalogue describes, what it
+// holds, what they favourited, which thread to work on, and the clock. A holder around them would
+// rename the list rather than shorten it — and would hide which of them a change touches.
+@Suppress("LongParameterList")
 class RecommendationRepository(
     private val history: WatchHistoryRepository,
+    private val profiles: ProfileRepository,
+    private val watchEvents: WatchEventRepository,
+    private val opinions: TitleOpinionRepository,
     private val titleMetadataDao: TitleMetadataDao,
     private val channelDao: ChannelDao,
+    private val favoriteDao: FavoriteDao,
     /** Sixty thousand titles cleaned and matched. Not the caller's thread. */
     private val matchDispatcher: CoroutineDispatcher = Dispatchers.Default,
     private val now: () -> Long = System::currentTimeMillis,
@@ -53,11 +70,12 @@ class RecommendationRepository(
 
     suspend fun suggestions(sourceId: Long, limit: Int = Recommender.DEFAULT_LIMIT): List<Suggestion> {
         val watched = watchedTitles(sourceId)
-        val genreRows = titleMetadataDao.allGenreRows().filterNot { it.isMiss }
+        val factRows = titleMetadataDao.allFactRows()
 
-        // Two ways there is nothing honest to say: nobody has watched anything on this profile,
-        // or nothing in the catalogue has been described yet. Both draw no row at all.
-        if (watched.isEmpty() || genreRows.isEmpty()) return emptyList()
+        // Two ways there is nothing honest to say: nobody has watched anything on this profile, or
+        // nothing in the catalogue has been described yet. Both draw no row at all. The third —
+        // "not enough yet" — is the scorer's own, because it is a judgement rather than an absence.
+        if (watched.isEmpty() || factRows.isEmpty()) return emptyList()
 
         // Hidden categories are left out here, unlike the popular row. A suggestion is the app
         // proposing something unprompted, and proposing out of a shelf the viewer has put away
@@ -65,23 +83,29 @@ class RecommendationRepository(
         // answered where these ids become rows — `ChannelRepository.channelsByIds`, BUG-031.
         val titles = channelDao.titlesForMetadata(sourceId, includeHidden = false)
 
+        val plays = watchEvents.playsByStableKey(sourceId)
+        val hours = watchEvents.usualHourByStableKey(sourceId)
+        val origins = watchEvents.strongestOriginByStableKey(sourceId)
+        val opinionsByTitle = opinions.all()
+        val favourites = favoriteDao.keysFor(profiles.activeProfileId, sourceId).toSet()
+
         return withContext(matchDispatcher) {
-            val genresByTitle = genreRows.associateBy(
+            val factsByTitle = factRows.associateBy(
                 { it.searchTitle to it.kind },
-                { it.genres.orEmpty().splitToGenres() },
+                { it.toFacts() },
             )
 
             val candidates = titles.mapNotNull { row ->
                 val kind = row.kind.toMediaKindOrNull() ?: return@mapNotNull null
                 val identity = row.name.titleIdentity().takeIf { it.searchTitle.isNotBlank() }
                     ?: return@mapNotNull null
-                val genres = genresByTitle[identity.searchTitle to row.kind].orEmpty()
-                if (genres.isEmpty()) return@mapNotNull null
+                val facts = factsByTitle[identity.searchTitle to row.kind] ?: return@mapNotNull null
+                if (facts.genres.isEmpty()) return@mapNotNull null
                 CandidateTitle(
                     channelId = row.id,
                     kind = kind,
                     title = identity.searchTitle,
-                    genres = genres,
+                    facts = facts,
                 )
             }
 
@@ -89,16 +113,22 @@ class RecommendationRepository(
                 watched = watched.mapNotNull { entry ->
                     val identity = entry.title.titleIdentity().takeIf { it.searchTitle.isNotBlank() }
                         ?: return@mapNotNull null
-                    val genres = genresByTitle[identity.searchTitle to entry.kind.name].orEmpty()
                     WatchedTitle(
                         title = identity.searchTitle,
-                        genres = genres,
+                        kind = entry.kind,
+                        facts = factsByTitle[identity.searchTitle to entry.kind.name] ?: TitleFacts(),
                         fraction = entry.watchedFraction(),
                         watchedAtEpochMillis = entry.watchedAtEpochMillis,
+                        plays = plays[entry.stableKey] ?: 1,
+                        hourOfDay = hours[entry.stableKey] ?: hourOf(entry.watchedAtEpochMillis),
+                        origin = origins[entry.stableKey] ?: WatchOrigin.ROW,
+                        isFavourite = entry.stableKey in favourites,
+                        opinion = opinionsByTitle[identity.searchTitle] ?: Opinion.NONE,
                     )
                 },
                 candidates = candidates,
                 now = now(),
+                hourOfDay = hourOf(now()),
                 limit = limit,
             )
         }
@@ -138,10 +168,27 @@ class RecommendationRepository(
     private fun HistoryEntry.watchedFraction(): Double =
         if (durationMillis <= 0L) 1.0 else (positionMillis.toDouble() / durationMillis).coerceIn(0.0, 1.0)
 
+    /** The local hour a moment falls in, which is the only form the time-of-day signal uses. */
+    private fun hourOf(epochMillis: Long): Int =
+        Calendar.getInstance(TimeZone.getDefault())
+            .apply { timeInMillis = epochMillis }
+            .get(Calendar.HOUR_OF_DAY)
+
     private companion object {
         val HISTORY_KINDS = listOf(MediaKind.VOD, MediaKind.SERIES)
     }
 }
+
+/** The cache's row as the scorer wants it. */
+private fun TitleFactRow.toFacts() = TitleFacts(
+    genres = genres.orEmpty().splitToGenres(),
+    keywords = keywordsOf(overview),
+    language = originalLanguage?.takeIf { it.isNotBlank() },
+    releaseYear = releaseYear ?: year.takeIf { it > 0 },
+    runtimeMinutes = runtimeMinutes,
+    rating = rating,
+    popularity = popularity,
+)
 
 /**
  * The cache's newline-separated genre string, as a list.
@@ -151,3 +198,65 @@ class RecommendationRepository(
  */
 private fun String.splitToGenres(): List<String> =
     split('\n').map { it.trim() }.filter { it.isNotEmpty() }
+
+/**
+ * The words in a description worth comparing two titles by.
+ *
+ * **From the overview this app already stores, and not from a keyword endpoint.** TMDB has one,
+ * and using it would be one request per title across a sixty-thousand-title catalogue — this
+ * project's provider account has been blocked twice over requests it did not need, and there is no
+ * reason to learn that lesson again against a second host.
+ *
+ * Lowercased, stripped of punctuation, short words and stop words dropped. No stemming: an English
+ * stemmer applied to a catalogue that is half Arabic and half French produces confident nonsense,
+ * and the rarity weighting in [Recommender] already discounts the words that vary by inflection
+ * most. What survives is nouns — *pirate*, *assassin*, *ninja*, *heist* — which is exactly what
+ * makes one adventure story different from another.
+ */
+internal fun keywordsOf(overview: String?): Set<String> {
+    if (overview.isNullOrBlank()) return emptySet()
+    return overview.lowercase()
+        // Split on a regex of separators rather than a spread of chars: a spread copies its array
+        // on every call, and this runs once per catalogue title.
+        .split(WORD_SEPARATORS)
+        .asSequence()
+        .map { it.trim('\'', '’') }
+        .filter { it.length >= MINIMUM_KEYWORD_LENGTH }
+        .filterNot { it in STOP_WORDS }
+        .filterNot { it.all(Char::isDigit) }
+        .take(MAX_KEYWORDS)
+        .toSet()
+}
+
+private val WORD_SEPARATORS = Regex("[\\s.,;:!?\"()\\[\\]{}\\-\u2014/\\\\\u2026]+")
+
+private const val MINIMUM_KEYWORD_LENGTH = 4
+
+/**
+ * A ceiling on how many words one description contributes.
+ *
+ * A synopsis is a paragraph; a plot summary somebody pasted in is a page. Without a cap the second
+ * would overlap with everything by sheer volume, which is the same failure as not weighting by
+ * rarity at all.
+ */
+private const val MAX_KEYWORDS = 40
+
+/**
+ * Words a description shares with half the catalogue.
+ *
+ * English only, and short on purpose. The rarity weighting does most of this work already — a word
+ * in every second overview scores near zero whether or not it is on this list — so the list exists
+ * to keep the *sets* small rather than to correct the scores. Adding a language's worth of stop
+ * words here would be a maintenance burden for a rounding error.
+ */
+private val STOP_WORDS = setOf(
+    "about", "after", "again", "against", "their", "there", "these", "those", "which", "while",
+    "with", "from", "into", "over", "under", "between", "before", "being", "been", "have", "has",
+    "had", "that", "this", "they", "them", "then", "than", "when", "what", "will", "would",
+    "could", "should", "must", "must", "only", "also", "just", "more", "most", "some", "such",
+    "very", "much", "many", "each", "every", "other", "another", "himself", "herself", "itself",
+    "themselves", "story", "series", "film", "movie", "season", "episode", "episodes", "based",
+    "life", "lives", "years", "year", "time", "world", "people", "young", "family", "friends",
+    "back", "away", "down", "through", "where", "who", "whose", "him", "her", "his", "she",
+    "must", "find", "finds", "help", "helps", "make", "makes", "take", "takes", "come", "comes",
+)

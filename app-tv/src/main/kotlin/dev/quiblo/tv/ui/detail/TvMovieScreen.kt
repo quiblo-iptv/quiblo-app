@@ -48,6 +48,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.quiblo.core.data.MetadataRefresh
 import dev.quiblo.core.data.ScanRefusal
 import dev.quiblo.core.model.Channel
+import dev.quiblo.core.model.Opinion
 import dev.quiblo.core.model.releaseYearIn
 import dev.quiblo.feature.browse.runtimeLabel
 import dev.quiblo.feature.browse.runtimeLabelFromMinutes
@@ -100,11 +101,17 @@ fun TvMovieScreen(
             onToggleFavorite = viewModel::toggleFavorite,
             onRemoveFromHistory = viewModel::removeFromHistory,
             onRefreshMetadata = viewModel::refreshMetadata,
+            onRate = viewModel::rate,
             modifier = modifier,
         )
     }
 }
 
+// Sixteen branches, and every one of them is a control that is present or absent for its own
+// reason: resume, start again, favourite, two opinions, forget, refresh, and the two messages.
+// Splitting the row into helpers to satisfy a count would scatter the ordering decision that
+// AC-TV-01 is about — what a remote walks past to reach what it wants — across four functions.
+@Suppress("CyclomaticComplexMethod")
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun Loaded(
@@ -113,6 +120,7 @@ private fun Loaded(
     onToggleFavorite: () -> Unit,
     onRemoveFromHistory: () -> Unit,
     onRefreshMetadata: () -> Unit,
+    onRate: (Opinion) -> Unit,
     modifier: Modifier,
 ) {
     val firstAction = remember { FocusRequester() }
@@ -242,6 +250,32 @@ private fun Loaded(
                                 },
                             ),
                             onClick = onToggleFavorite,
+                        )
+
+                        // What the viewer thought, which is the one signal the app cannot observe
+                        // and has to be told. Both buttons are always here rather than appearing
+                        // after playback: a viewer who has seen something elsewhere has an opinion
+                        // about it too, and a control that comes and goes is one nobody finds.
+                        DetailButton(
+                            label = stringResource(
+                                if (state.opinion == Opinion.UP) {
+                                    R.string.tv_detail_liked
+                                } else {
+                                    R.string.tv_detail_like
+                                },
+                            ),
+                            onClick = { onRate(Opinion.UP) },
+                        )
+
+                        DetailButton(
+                            label = stringResource(
+                                if (state.opinion == Opinion.DOWN) {
+                                    R.string.tv_detail_disliked
+                                } else {
+                                    R.string.tv_detail_dislike
+                                },
+                            ),
+                            onClick = { onRate(Opinion.DOWN) },
                         )
 
                         // Only when there is a position to forget. The phone has offered this

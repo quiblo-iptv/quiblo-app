@@ -17,6 +17,21 @@ Formatted after [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and ve
 
 ### Added
 
+- **You may like actually looks at what you watched.** It scored on genre and nothing else, which
+  is why watching One Piece produced The Boys, The Umbrella Academy and a dubbed Arabic family
+  drama: at the level of "series, Action & Adventure" those are the same thing. It now weighs
+  thirteen things — including whether something is **anime** rather than merely animated, what
+  language it was made in, the words in its description, how many times you watched it, at what
+  hour, whether you searched for it or took it off a shelf, whether it is a favourite, and what you
+  said about it. Each of your strongest few titles proposes its own four, so somebody who watches
+  anime and one cookery programme gets suggestions from both rather than from the average of them.
+- **And it waits until it has something to say.** Below five titles watched, three of them most of
+  the way through, the row is not drawn at all. One thing watched cannot produce four honest
+  suggestions, and a confident wrong answer is worse than no answer.
+- **You can say what you thought.** A thumbs up and a thumbs down on every film and series, on both
+  apps. Pressing the lit one again takes it back. A thumbs down stops that title suggesting
+  anything and stops it being suggested; a thumbs up makes it count for more. Nothing leaves the
+  device — there is nowhere for it to go.
 - **Quiblo keeps your catalogue up to date on its own.** Until now the only way a new film reached
   the app was somebody opening Settings and pressing Refresh, so "Recently added" was really
   answering "what has your provider added since you last thought to check". It now syncs every four

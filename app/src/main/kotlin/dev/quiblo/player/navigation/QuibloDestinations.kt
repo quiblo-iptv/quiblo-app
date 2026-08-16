@@ -65,6 +65,14 @@ data class MovieDetailRoute(val channelId: Long)
 @Serializable
 data class PlayerRoute(
     val channelId: Long,
+    /**
+     * Where the viewer was when they chose this, as a `WatchOrigin` name.
+     *
+     * A string because a navigation route is serialized, and because the enum lives in a module
+     * this one does not otherwise need. Carried rather than derived: by the time the player has a
+     * stream URL, a title typed into a search box and the first tile of a row look identical.
+     */
+    val origin: String = "ROW",
     val streamUrl: String? = null,
     val title: String? = null,
     /**

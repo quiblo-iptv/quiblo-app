@@ -386,6 +386,26 @@ data class TitleMetadataEntity(
      * anything a viewer is about to watch, and putting it on screen would state it as one.
      */
     val runtimeMinutes: Int? = null,
+    /**
+     * The language the title was made in, as TMDB's two-letter code.
+     *
+     * Already in every payload this app parses and discarded until `025`. It is what tells a
+     * K-drama from an American series and — with Animation — anime from a cartoon, which is the
+     * distinction the suggestions row was most obviously missing.
+     *
+     * Null means "not fetched since this column existed" as well as "the service does not know",
+     * and the two are deliberately not distinguished: the ordinary fourteen-day refresh refills
+     * the first, and nothing will ever refill the second.
+     */
+    val originalLanguage: String? = null,
+    /**
+     * How much of the world is watching this, as TMDB reports it.
+     *
+     * Not a rating. It is closer to attention than to quality, and it is here to tell a rare
+     * title from a common one — somebody who watches things nobody has heard of is saying
+     * something, and a row that only ever offers the top of the charts cannot hear it.
+     */
+    val popularity: Double? = null,
     /** When this was fetched, so a stale entry can be refreshed rather than kept forever. */
     val fetchedAtEpochMillis: Long,
     /**
@@ -590,4 +610,64 @@ data class FeedRowEntity(
      * date is what says whether a cause has been watched again since.
      */
     val builtAtEpochMillis: Long,
+)
+
+/**
+ * One occasion on which something was watched.
+ *
+ * **Kept as events rather than folded into `resume_positions`, which holds one row per title.**
+ * That shape answers "where was I" and cannot answer how often something was watched, at what hour,
+ * or what the viewer was doing when they chose it. All three are facts about an occasion, and the
+ * suggestions row wants all three: a film watched five times is a comfort film, an hour is a
+ * pattern, and a title typed into a search box was wanted rather than accepted.
+ *
+ * **It is a log, so it is bounded.** A household watching every evening writes a few hundred rows
+ * a year, which is nothing — but nothing that only grows should be written without saying where it
+ * stops, so `WatchEventRepository` trims it.
+ *
+ * Per profile, like everything about viewing.
+ */
+@Entity(
+    tableName = "watch_events",
+    foreignKeys = [
+        ForeignKey(
+            entity = ProfileEntity::class,
+            parentColumns = ["id"],
+            childColumns = ["profileId"],
+            onDelete = ForeignKey.CASCADE,
+        ),
+    ],
+    indices = [Index("profileId", "sourceId", "startedAtEpochMillis"), Index("profileId", "stableKey")],
+)
+data class WatchEventEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0L,
+    val profileId: Long,
+    val sourceId: Long,
+    /** The provider's identity, so an event survives a refresh exactly as a favourite does. */
+    val stableKey: String,
+    val kind: String,
+    val title: String,
+    val startedAtEpochMillis: Long,
+    val fraction: Double,
+    /** A `WatchOrigin` name. */
+    val origin: String,
+)
+
+/**
+ * What one viewer thinks of one title.
+ *
+ * Keyed by the cleaned title rather than by a channel id or a stable key, and that is deliberate:
+ * an opinion is about the film, not about the row a provider happens to be serving it from. A
+ * viewer who dislikes something should not be asked again when their provider re-lists it under a
+ * different key, and should not be shown it again on a second account.
+ */
+@Entity(tableName = "title_opinions", primaryKeys = ["profileId", "titleKey"])
+data class TitleOpinionEntity(
+    val profileId: Long,
+    /** The cleaned title, from `titleIdentity()`. */
+    val titleKey: String,
+    val kind: String,
+    /** An `Opinion` name. `NONE` is not stored — an absent row is the absence of an opinion. */
+    val opinion: String,
+    val decidedAtEpochMillis: Long,
 )

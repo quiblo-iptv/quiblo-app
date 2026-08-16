@@ -24,6 +24,7 @@ import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.toRoute
+import dev.quiblo.core.model.WatchOrigin
 import dev.quiblo.feature.favorites.FavoritesScreen
 import dev.quiblo.feature.live.LiveScreen
 import dev.quiblo.feature.player.PlayerScreen
@@ -97,7 +98,15 @@ fun QuibloNavHost(
                 },
             )
         }
-        composable<FavoritesRoute> { FavoritesScreen(onItemClick = play) }
+        composable<FavoritesRoute> {
+            // Opening something out of favourites is a choice made twice, and the scorer weighs it
+            // that way. Everything else on this screen goes through `play`, which is the row case.
+            FavoritesScreen(
+                onItemClick = { channel ->
+                    navController.navigate(PlayerRoute(channel.id, origin = WatchOrigin.FAVOURITE.name))
+                },
+            )
+        }
         composable<SourcesRoute> { SourcesScreen() }
         composable<SettingsRoute> { SettingsScreen() }
         composable<PlayerRoute> { entry ->
@@ -109,6 +118,9 @@ fun QuibloNavHost(
                 startPositionMillis = route.startPositionMillis,
                 seasonNumber = route.seasonNumber,
                 episodeNumber = route.episodeNumber,
+                // Unknown names fall back to the ordinary case rather than crashing a player: a
+                // route is a serialized string, and a signal is not worth a stack trace.
+                origin = runCatching { WatchOrigin.valueOf(route.origin) }.getOrDefault(WatchOrigin.ROW),
                 onBack = { navController.popBackStack() },
             )
         }

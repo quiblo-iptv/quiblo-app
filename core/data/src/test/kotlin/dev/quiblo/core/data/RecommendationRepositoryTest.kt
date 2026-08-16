@@ -20,11 +20,13 @@ package dev.quiblo.core.data
 
 import dev.quiblo.core.database.dao.ChannelDao
 import dev.quiblo.core.database.dao.ChannelTitle
-import dev.quiblo.core.database.dao.TitleGenreRow
+import dev.quiblo.core.database.dao.FavoriteDao
+import dev.quiblo.core.database.dao.TitleFactRow
 import dev.quiblo.core.database.dao.TitleMetadataDao
 import dev.quiblo.core.model.HistoryEntry
 import dev.quiblo.core.model.MediaKind
 import io.mockk.coEvery
+import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
@@ -48,10 +50,18 @@ class RecommendationRepositoryTest {
     private val titleMetadataDao: TitleMetadataDao = mockk()
     private val channelDao: ChannelDao = mockk()
 
+    private val watchEvents: WatchEventRepository = mockk(relaxed = true)
+    private val opinions: TitleOpinionRepository = mockk(relaxed = true)
+    private val favoriteDao: FavoriteDao = mockk(relaxed = true)
+
     private val repository = RecommendationRepository(
         history = history,
+        profiles = fakeProfiles(),
+        watchEvents = watchEvents,
+        opinions = opinions,
         titleMetadataDao = titleMetadataDao,
         channelDao = channelDao,
+        favoriteDao = favoriteDao,
         matchDispatcher = Dispatchers.Unconfined,
         now = { NOW },
     )
@@ -66,20 +76,20 @@ class RecommendationRepositoryTest {
     @Test
     fun `a profile that has watched nothing is offered nothing`() = runTest {
         watched()
-        coEvery { titleMetadataDao.allGenreRows() } returns listOf(genreRow("dune", "Science Fiction"))
+        coEvery { titleMetadataDao.allFactRows() } returns listOf(factRow("dune", "Science Fiction"))
 
         assertTrue(repository.suggestions(SOURCE_ID).isEmpty())
     }
 
     @Test
     fun `a catalogue nobody has described yet is offered nothing`() = runTest {
-        watched(entry("One Piece", MediaKind.SERIES))
-        coEvery { titleMetadataDao.allGenreRows() } returns emptyList()
+        watched(*learned())
+        coEvery { titleMetadataDao.allFactRows() } returns emptyList()
 
         assertTrue(repository.suggestions(SOURCE_ID).isEmpty())
         // And it does not read the catalogue to find that out: sixty thousand rows for an answer
         // already known is the cost this early return exists to avoid.
-        coEvery { channelDao.titlesForMetadata(any(), any()) } returns emptyList()
+        coVerify(exactly = 0) { channelDao.titlesForMetadata(any(), any()) }
     }
 
     /**
@@ -91,18 +101,19 @@ class RecommendationRepositoryTest {
      */
     @Test
     fun `suggestions never come out of a hidden category`() = runTest {
-        watched(entry("One Piece", MediaKind.SERIES))
-        coEvery { titleMetadataDao.allGenreRows() } returns listOf(
-            genreRow("one piece", "Animation", kind = MediaKind.SERIES),
-            genreRow("naruto", "Animation", kind = MediaKind.SERIES),
-        )
+        watched(*learned())
+        coEvery { titleMetadataDao.allFactRows() } returns
+            learned().map { factRow(it.title.lowercase(), "Animation", kind = MediaKind.SERIES) } +
+            factRow("naruto", "Animation", kind = MediaKind.SERIES)
+        // The hidden ones are simply not in this answer: the exclusion is the query's, and what is
+        // asserted here is that this is the query asked.
         coEvery { channelDao.titlesForMetadata(SOURCE_ID, includeHidden = false) } returns
             listOf(ChannelTitle(id = 9L, name = "Naruto", kind = MediaKind.SERIES.name))
 
         val suggestions = repository.suggestions(SOURCE_ID)
 
         assertEquals(listOf(9L), suggestions.map { it.channelId })
-        assertEquals("one piece", suggestions.single().becauseOf)
+        coVerify(exactly = 0) { channelDao.titlesForMetadata(SOURCE_ID, includeHidden = true) }
     }
 
     @Test
@@ -130,17 +141,28 @@ class RecommendationRepositoryTest {
         kind = kind,
         title = title,
         artworkUrl = null,
-        positionMillis = 60_000,
+        positionMillis = 110_000,
         durationMillis = 120_000,
         watchedAtEpochMillis = watchedAt,
     )
 
-    private fun genreRow(searchTitle: String, genres: String, kind: MediaKind = MediaKind.VOD) = TitleGenreRow(
+    /** Enough watched titles for the scorer to answer at all. See `Recommender`'s cold start. */
+    private fun learned(): Array<HistoryEntry> =
+        (1..Recommender.MINIMUM_DISTINCT_TITLES)
+            .map { entry("Watched $it", MediaKind.SERIES, watchedAt = NOW - it * 1_000L) }
+            .toTypedArray()
+
+    private fun factRow(searchTitle: String, genres: String, kind: MediaKind = MediaKind.VOD) = TitleFactRow(
         searchTitle = searchTitle,
         kind = kind.name,
         year = 0,
         genres = genres,
-        isMiss = false,
+        overview = null,
+        originalLanguage = "ja",
+        popularity = null,
+        rating = null,
+        releaseYear = null,
+        runtimeMinutes = null,
     )
 
     private companion object {

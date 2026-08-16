@@ -34,6 +34,7 @@ val seriesModule: Module = module {
             metadataRepository = get(),
             historyRepository = get(),
             preferences = get(),
+            opinions = get(),
         )
     }
 }

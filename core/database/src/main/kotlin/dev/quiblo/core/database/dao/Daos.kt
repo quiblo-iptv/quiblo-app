@@ -41,6 +41,8 @@ import dev.quiblo.core.database.entity.ResumePositionEntity
 import dev.quiblo.core.database.entity.SeriesPreferenceEntity
 import dev.quiblo.core.database.entity.SourceEntity
 import dev.quiblo.core.database.entity.TitleMetadataEntity
+import dev.quiblo.core.database.entity.TitleOpinionEntity
+import dev.quiblo.core.database.entity.WatchEventEntity
 import kotlinx.coroutines.flow.Flow
 
 @Dao
@@ -100,6 +102,20 @@ fun escapeForLike(query: String): String = query
 data class ChannelWithFavorite(
     @Embedded val channel: ChannelEntity,
     val isFavorite: Boolean,
+)
+
+/** What the suggestions scorer reads about one title. See [TitleMetadataDao.allFactRows]. */
+data class TitleFactRow(
+    val searchTitle: String,
+    val kind: String,
+    val year: Int,
+    val genres: String?,
+    val overview: String?,
+    val originalLanguage: String?,
+    val popularity: Double?,
+    val rating: Double?,
+    val releaseYear: Int?,
+    val runtimeMinutes: Int?,
 )
 
 /** A stored channel's identity, for deciding what a re-sync should keep. */
@@ -837,6 +853,10 @@ interface FavoriteDao {
     )
     fun observeIsFavorite(profileId: Long, sourceId: Long, stableKey: String): Flow<Boolean>
 
+    /** Every favourited identity for one viewer and one source, for the scorer. */
+    @Query("SELECT stableKey FROM favorites WHERE profileId = :profileId AND sourceId = :sourceId")
+    suspend fun keysFor(profileId: Long, sourceId: Long): List<String>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun add(favorite: FavoriteEntity)
 
@@ -974,6 +994,24 @@ interface TitleMetadataDao {
      */
     @Query("SELECT searchTitle, kind, year, genres, isMiss FROM title_metadata")
     suspend fun allGenreRows(): List<TitleGenreRow>
+
+    /**
+     * Everything the scorer reasons over, for the whole cache, in one read.
+     *
+     * A projection rather than the rows themselves: the suggestions pass considers every described
+     * title a provider carries, and the two heaviest columns — the cast list and the two artwork
+     * URLs — are exactly the ones it never looks at. The overview *is* read, because the words in
+     * it are one of the signals.
+     */
+    @Query(
+        """
+        SELECT searchTitle, kind, year, genres, overview, originalLanguage, popularity,
+               rating, releaseYear, runtimeMinutes
+        FROM title_metadata
+        WHERE isMiss = 0
+        """,
+    )
+    suspend fun allFactRows(): List<TitleFactRow>
 
     /** Every key the cache holds, with its age, for the scan to skip what it already knows. */
     @Query("SELECT searchTitle, kind, year, fetchedAtEpochMillis FROM title_metadata")
@@ -1200,4 +1238,86 @@ interface FeedRowDao {
     /** Everything for one source, for when the catalogue underneath it has been replaced. */
     @Query("DELETE FROM feed_rows WHERE sourceId = :sourceId")
     suspend fun clearForSource(sourceId: Long)
+}
+
+/** How often one title has been watched, and when it was last started. */
+data class WatchCount(
+    val stableKey: String,
+    val plays: Int,
+    val lastStartedAtEpochMillis: Long,
+)
+
+/**
+ * The log of what was watched, when, and from where.
+ *
+ * Every query here is bounded. A log is the one shape of table that grows without anything on
+ * screen getting bigger, so nothing reads all of it and the repository trims it.
+ */
+@Dao
+interface WatchEventDao {
+
+    @Insert
+    suspend fun insert(event: WatchEventEntity)
+
+    /** The most recent events, newest first. The window a scorer reasons over. */
+    @Query(
+        """
+        SELECT * FROM watch_events
+        WHERE profileId = :profileId AND sourceId = :sourceId
+        ORDER BY startedAtEpochMillis DESC
+        LIMIT :limit
+        """,
+    )
+    suspend fun recent(profileId: Long, sourceId: Long, limit: Int): List<WatchEventEntity>
+
+    /**
+     * How many times each title has been watched, and when it was last started.
+     *
+     * A repeat viewing is the strongest thing this app observes and it is invisible in a table
+     * that keeps one row per title. Counted in SQL rather than by reading the log into Kotlin,
+     * because the answer is one row per title and the log is not.
+     */
+    @Query(
+        """
+        SELECT stableKey, COUNT(*) AS plays, MAX(startedAtEpochMillis) AS lastStartedAtEpochMillis
+        FROM watch_events
+        WHERE profileId = :profileId AND sourceId = :sourceId AND fraction >= :minimumFraction
+        GROUP BY stableKey
+        """,
+    )
+    suspend fun playCounts(profileId: Long, sourceId: Long, minimumFraction: Double): List<WatchCount>
+
+    /** How many distinct titles this profile has watched, for the cold-start rule. */
+    @Query(
+        """
+        SELECT COUNT(DISTINCT stableKey) FROM watch_events
+        WHERE profileId = :profileId AND sourceId = :sourceId AND fraction >= :minimumFraction
+        """,
+    )
+    suspend fun distinctTitles(profileId: Long, sourceId: Long, minimumFraction: Double): Int
+
+    /** Drops everything older than [before], so a log cannot grow without limit. */
+    @Query("DELETE FROM watch_events WHERE startedAtEpochMillis < :before")
+    suspend fun deleteOlderThan(before: Long)
+
+    @Query("DELETE FROM watch_events WHERE profileId = :profileId AND stableKey = :stableKey")
+    suspend fun deleteFor(profileId: Long, stableKey: String)
+}
+
+/** Thumbs up and thumbs down, one per title per viewer. */
+@Dao
+interface TitleOpinionDao {
+
+    @Query("SELECT * FROM title_opinions WHERE profileId = :profileId")
+    suspend fun allFor(profileId: Long): List<TitleOpinionEntity>
+
+    @Query("SELECT * FROM title_opinions WHERE profileId = :profileId AND titleKey = :titleKey")
+    fun observeFor(profileId: Long, titleKey: String): Flow<TitleOpinionEntity?>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsert(opinion: TitleOpinionEntity)
+
+    /** Clearing an opinion removes the row: absence is what "no opinion" is stored as. */
+    @Query("DELETE FROM title_opinions WHERE profileId = :profileId AND titleKey = :titleKey")
+    suspend fun clear(profileId: Long, titleKey: String)
 }

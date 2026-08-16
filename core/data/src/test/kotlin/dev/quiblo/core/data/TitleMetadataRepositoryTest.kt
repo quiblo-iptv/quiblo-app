@@ -19,6 +19,7 @@
 package dev.quiblo.core.data
 
 import dev.quiblo.core.database.dao.CachedTitleKey
+import dev.quiblo.core.database.dao.TitleFactRow
 import dev.quiblo.core.database.dao.TitleGenreRow
 import dev.quiblo.core.database.dao.TitleMetadataDao
 import dev.quiblo.core.database.entity.TitleMetadataEntity
@@ -190,6 +191,21 @@ class TitleMetadataRepositoryTest {
 
         override suspend fun allGenreRows(): List<TitleGenreRow> = rows.values.map {
             TitleGenreRow(it.searchTitle, it.kind, it.year, it.genres, it.isMiss)
+        }
+
+        override suspend fun allFactRows(): List<TitleFactRow> = rows.values.filterNot { it.isMiss }.map {
+            TitleFactRow(
+                searchTitle = it.searchTitle,
+                kind = it.kind,
+                year = it.year,
+                genres = it.genres,
+                overview = it.overview,
+                originalLanguage = it.originalLanguage,
+                popularity = it.popularity,
+                rating = it.rating,
+                releaseYear = it.releaseYear,
+                runtimeMinutes = it.runtimeMinutes,
+            )
         }
 
         override suspend fun upsert(entity: TitleMetadataEntity) {

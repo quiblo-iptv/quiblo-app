@@ -1034,6 +1034,78 @@ this week's popular titles, which is most of them.
 
 ---
 
+## A17 — Round `024`: the work that runs on its own, and two defects
+
+**Where:** both apps. From [`024`](../agile/024_The_Work_That_Runs_On_Its_Own_of_Quiblo.md).
+`A17.1` and `A17.2` are the two a viewer reported; the rest are about work nobody watches, which
+is the hardest class of thing to certify and the reason these are written down at all.
+
+### A17.1 — Resume is there when you come back
+
+| | |
+| :---- | :---- |
+| **What to look at** | Play a film for a minute, press back, look at the button. Repeat five times on the television and five on the phone |
+| **Passes if** | **Resume from 1:0x** every single time, immediately, with no flicker of "Play" first |
+| **Fails if** | It says Play even once. **Five times each is the point**: this was a race, and a race that is lost one time in five looks fixed if you try it twice |
+
+### A17.2 — and after the app is killed
+
+| | |
+| :---- | :---- |
+| **What to look at** | Play something for two minutes. Kill the app from the recents list — do not press back. Reopen and go to the title |
+| **Passes if** | It offers to resume from somewhere in the last ten seconds of what you watched |
+| **Fails if** | It offers Play, or a position from when you started. This is the ten-second write, and killing the app is the only way to exercise it |
+
+### A17.3 — a film's details are in the middle
+
+| | |
+| :---- | :---- |
+| **What to look at** | Open a film with a short description on the television, then one with a long one |
+| **Passes if** | The short one sits centred vertically; the long one starts at the top and scrolls as it always did |
+| **Fails if** | The short one is still pressed against the top, or the long one has lost its top |
+
+### A17.4 — the catalogue syncs on its own
+
+| | |
+| :---- | :---- |
+| **What to look at** | Leave the app installed and untouched for five days, then open For You. **Owner: whoever can leave a device alone that long** |
+| **Passes if** | Recently added holds titles the provider added while you were away |
+| **Fails if** | The row is unchanged from five days ago. Check the provider actually added something before calling this a failure |
+
+### A17.5 — and it does not renumber everything while it does
+
+| | |
+| :---- | :---- |
+| **What to look at** | Before the wait: note three titles in Recently added and favourite one. After it: look again |
+| **Passes if** | The three are still there, in the same order, with the same relative dates, and the favourite is still a favourite |
+| **Fails if** | Recently added is suddenly the whole catalogue. That is the merge having become a rebuild, and it is the single failure this round's design exists to prevent |
+
+### A17.6 — a title the provider dropped goes
+
+| | |
+| :---- | :---- |
+| **What to look at** | Harder to arrange: needs a provider that removes something. Search for a title you know has gone after a sync |
+| **Passes if** | It is not in the catalogue |
+| **Fails if** | It is still listed and pressing it plays nothing |
+
+### A17.7 — popular changes without being asked
+
+| | |
+| :---- | :---- |
+| **What to look at** | With a Movie Database key set, note the popular rows. Leave it two days without opening For You, then open it |
+| **Passes if** | The rows have moved on |
+| **Fails if** | Identical after two days. TMDB's weekly lists do change, so identical rows mean the check did not run |
+
+### A17.8 — and none of it happens without a key
+
+| | |
+| :---- | :---- |
+| **What to look at** | On an installation with no Movie Database key, leave it several days and watch the battery figures for Quiblo |
+| **Passes if** | No repeated wake-ups, and no popular row |
+| **Fails if** | Regular activity with nothing to show for it. A worker that treats "no key" as a failure retries forever, which is the loop this asserts is absent |
+
+---
+
 ---
 
 ## C — Deferred measurements, in writing

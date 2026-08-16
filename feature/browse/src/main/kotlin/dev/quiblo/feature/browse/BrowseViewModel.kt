@@ -25,15 +25,20 @@ import androidx.paging.cachedIn
 import dev.quiblo.core.data.CategoryRepository
 import dev.quiblo.core.data.ChannelLogoRepository
 import dev.quiblo.core.data.ChannelRepository
+import dev.quiblo.core.data.FeedRowCacheRepository
 import dev.quiblo.core.data.GuideOutcome
 import dev.quiblo.core.data.GuideRepository
+import dev.quiblo.core.data.PopularEntry
 import dev.quiblo.core.data.PopularTitlesRepository
 import dev.quiblo.core.data.RecommendationRepository
 import dev.quiblo.core.data.SourceRepository
+import dev.quiblo.core.data.Suggestion
 import dev.quiblo.core.data.TitleMetadataRepository
 import dev.quiblo.core.data.WatchHistoryRepository
 import dev.quiblo.core.model.Category
 import dev.quiblo.core.model.Channel
+import dev.quiblo.core.model.FeedRowEntry
+import dev.quiblo.core.model.FeedRowId
 import dev.quiblo.core.model.HistoryEntry
 import dev.quiblo.core.model.MediaKind
 import dev.quiblo.core.model.Programme
@@ -129,16 +134,6 @@ data class BrowseUiState(
      */
     val extraRows: List<FeedRow> = emptyList(),
 )
-
-/**
- * Which of the For You rows this is. The screen turns it into a heading.
- *
- * Popular is two rows rather than one. The two lists come from different endpoints and neither
- * says anything about the other, so a single row of five films and five series had to number
- * itself 1–5 twice and lean on a badge to tell the halves apart. Two rows of ten say the same
- * thing without the badge and without the repeated numbers.
- */
-enum class FeedRowId { POPULAR_MOVIES, POPULAR_SERIES, YOU_MAY_LIKE }
 
 /**
  * One extra row, and enough about each tile to draw it.
@@ -335,6 +330,7 @@ class BrowseViewModel(
     private val channelLogoRepository: ChannelLogoRepository,
     private val popularTitles: PopularTitlesRepository,
     private val recommendations: RecommendationRepository,
+    private val feedRowCache: FeedRowCacheRepository,
     /** Injected like every repository's, rather than read off the wall clock inline. */
     private val now: () -> Long = System::currentTimeMillis,
 ) : ViewModel() {
@@ -542,12 +538,58 @@ class BrowseViewModel(
             flowOf(emptyList())
         } else {
             flow {
-                emit(emptyList())
+                // Last night's rows, drawn straight away. Everything below this line is minutes
+                // of arithmetic on a large account, and the whole reason the rows are kept is
+                // that a viewer should not watch an empty shelf while it happens.
+                emit(cachedExtraRows(sourceId))
                 metadataRepository.load()
                 // No `distinctUntilChanged`: `apiKey` is a StateFlow and already conflates.
                 emitAll(metadataRepository.apiKey.map { buildExtraRows(sourceId) })
             }
         }
+
+    /**
+     * The rows as they were last worked out, with their titles resolved against the catalogue now.
+     *
+     * Titles are looked up by the provider's stable key rather than by row id, because a refresh
+     * reassigns every id in the catalogue. Anything that no longer resolves is simply absent,
+     * which on the popular rows means the tile is drawn as unavailable — because to this viewer,
+     * now, it is.
+     */
+    private suspend fun cachedExtraRows(sourceId: Long): List<FeedRow> {
+        val cached = feedRowCache.cached(sourceId)
+        if (cached.isEmpty()) return emptyList()
+
+        val wanted = cached.values.flatten().mapNotNull { it.stableKey }.distinct()
+        val byKey = channelRepository.channelsByStableKeys(sourceId, wanted).associateBy { it.stableKey }
+
+        return FeedRowId.entries.mapNotNull { rowId ->
+            val items = cached[rowId].orEmpty().mapNotNull { it.toItem(byKey) }
+            FeedRow(rowId, items).takeIf { items.isNotEmpty() }
+        }
+    }
+
+    /**
+     * One remembered entry as a tile.
+     *
+     * A ranking keeps its place whether or not the title resolves — that is the whole of what an
+     * unavailable tile is. A suggestion does not: suggesting something that cannot be opened is
+     * the app proposing a title it has no way to play.
+     */
+    private fun FeedRowEntry.toItem(byKey: Map<String, Channel>): FeedRowItem? {
+        val channel = stableKey?.let { byKey[it] }
+        return when {
+            channel != null -> FeedRowItem.Playable(channel = channel, rank = rank, caption = becauseOf)
+            rowId.isRanked -> FeedRowItem.Unavailable(
+                key = "${rowId.name}-$rank",
+                title = title,
+                kind = kind,
+                posterUrl = posterUrl,
+                rank = rank,
+            )
+            else -> null
+        }
+    }
 
     private suspend fun buildExtraRows(sourceId: Long): List<FeedRow> {
         val popular = popularTitles.popular(sourceId)
@@ -589,6 +631,8 @@ class BrowseViewModel(
             .filterIsInstance<FeedRowItem.Playable>()
             .forEach { requestPreview(it.channel.stableKey, it.channel.name, it.channel.kind) }
 
+        rememberRows(sourceId, popular, suggestions, byId)
+
         return buildList {
             popularRows[MediaKind.VOD]?.takeIf { it.isNotEmpty() }
                 ?.let { add(FeedRow(FeedRowId.POPULAR_MOVIES, it)) }
@@ -596,6 +640,63 @@ class BrowseViewModel(
                 ?.let { add(FeedRow(FeedRowId.POPULAR_SERIES, it)) }
             if (suggestionRow.isNotEmpty()) add(FeedRow(FeedRowId.YOU_MAY_LIKE, suggestionRow))
         }
+    }
+
+    /**
+     * Writes down what was just worked out, so the next open draws it immediately.
+     *
+     * The two kinds of row are remembered differently on purpose. **A ranking is replaced**: it is
+     * one answer arrived at all at once, and appending to last week's top ten would give a list of
+     * twenty in which the number means two different things. **Suggestions are appended to**: the
+     * same history scored twice a fortnight apart returns mostly the same titles in a different
+     * order, and a shelf that reshuffles itself for no visible reason is one nobody learns the
+     * shape of. What is there stays where it is; anything new goes on the end.
+     *
+     * Nothing here is awaited by the row above it. A cache that failed to write would cost the
+     * next open the time this open already spent, which is not a reason to keep a viewer waiting.
+     */
+    private suspend fun rememberRows(
+        sourceId: Long,
+        popular: List<PopularEntry>,
+        suggestions: List<Suggestion>,
+        byId: Map<Long, Channel>,
+    ) {
+        FeedRowId.entries.filter { it.isRanked }.forEach { rowId ->
+            val kind = if (rowId == FeedRowId.POPULAR_MOVIES) MediaKind.VOD else MediaKind.SERIES
+            val entries = popular.filter { it.kind == kind }.mapIndexed { index, entry ->
+                FeedRowEntry(
+                    rowId = rowId,
+                    position = index,
+                    stableKey = entry.channelId?.let { byId[it]?.stableKey },
+                    title = entry.title,
+                    posterUrl = entry.posterUrl,
+                    kind = entry.kind,
+                    rank = entry.rank,
+                )
+            }
+            if (entries.isNotEmpty()) feedRowCache.replace(sourceId, rowId, entries)
+        }
+
+        if (suggestions.isEmpty()) return
+        feedRowCache.append(
+            sourceId = sourceId,
+            rowId = FeedRowId.YOU_MAY_LIKE,
+            fresh = suggestions.mapIndexed { index, suggestion ->
+                FeedRowEntry(
+                    rowId = FeedRowId.YOU_MAY_LIKE,
+                    position = index,
+                    stableKey = byId[suggestion.channelId]?.stableKey,
+                    // The provider's own name, which is what the tile draws. A suggestion whose
+                    // channel did not resolve is dropped rather than remembered under a blank.
+                    title = byId[suggestion.channelId]?.name.orEmpty(),
+                    kind = suggestion.kind,
+                    becauseOf = suggestion.becauseOf,
+                )
+            },
+            watchedSince = recommendations.lastWatchedByTitle(sourceId),
+            stillInCatalogue = byId.values.map { it.stableKey }.toSet(),
+            limit = SUGGESTION_ROW_LIMIT,
+        )
     }
 
     /**
@@ -941,6 +1042,16 @@ class BrowseViewModel(
          */
         const val RECENT_WINDOW_MILLIS = 30L * 24 * 60 * 60 * 1000
         const val MAX_CONCURRENT_GUIDE_FETCHES = 3
+
+        /**
+         * How long the remembered suggestions row may grow to.
+         *
+         * It is appended to rather than replaced, so it needs a ceiling or a household that opens
+         * the app every evening for a year has a row a thousand tiles long. Twenty is what the
+         * scorer returns in one pass, which makes the cap "about one pass' worth of the best of
+         * them" rather than a number chosen for its own sake.
+         */
+        const val SUGGESTION_ROW_LIMIT = 20
 
         /**
          * Four at a time against the metadata service.

@@ -22,6 +22,7 @@ import app.cash.turbine.test
 import dev.quiblo.core.data.CategoryRepository
 import dev.quiblo.core.data.ChannelLogoRepository
 import dev.quiblo.core.data.ChannelRepository
+import dev.quiblo.core.data.FeedRowCacheRepository
 import dev.quiblo.core.data.GuideOutcome
 import dev.quiblo.core.data.GuideRepository
 import dev.quiblo.core.data.PopularEntry
@@ -32,6 +33,7 @@ import dev.quiblo.core.data.SourceRepository
 import dev.quiblo.core.data.TitleMetadataRepository
 import dev.quiblo.core.data.WatchHistoryRepository
 import dev.quiblo.core.model.Channel
+import dev.quiblo.core.model.FeedRowId
 import dev.quiblo.core.model.MediaKind
 import dev.quiblo.core.model.Source
 import dev.quiblo.core.model.SourceKind
@@ -79,6 +81,7 @@ class BrowseViewModelTest {
     private val metadataRepository: TitleMetadataRepository = mockk(relaxed = true)
     private val historyRepository: WatchHistoryRepository = mockk(relaxed = true)
     private val channelLogoRepository: ChannelLogoRepository = mockk(relaxed = true)
+    private val feedRowCache: FeedRowCacheRepository = mockk(relaxed = true)
 
     @BeforeEach
     fun setUp() {
@@ -379,6 +382,7 @@ class BrowseViewModelTest {
         channelLogoRepository = channelLogoRepository,
         popularTitles = popularTitles,
         recommendations = recommendations,
+        feedRowCache = feedRowCache,
     )
 
     private companion object {

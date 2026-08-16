@@ -19,6 +19,7 @@
 package dev.quiblo.core.data
 
 import dev.quiblo.core.database.dao.ChannelDao
+import dev.quiblo.core.database.dao.FeedRowDao
 import dev.quiblo.core.database.dao.SourceDao
 import dev.quiblo.core.model.Source
 import dev.quiblo.core.model.SourceKind
@@ -50,6 +51,7 @@ sealed interface RefreshOutcome {
 class SourceRepository(
     private val sourceDao: SourceDao,
     private val channelDao: ChannelDao,
+    private val feedRowDao: FeedRowDao,
     private val mediaSources: Map<SourceKind, MediaSource>,
     private val credentialStore: CredentialStore,
     private val now: () -> Long = System::currentTimeMillis,
@@ -128,6 +130,11 @@ class SourceRepository(
         // Credentials are not in the database, so the cascade cannot reach them. Clearing
         // them explicitly is what stops a removed account leaving material behind.
         credentialStore.clear(sourceId)
+        // Nor can it reach the remembered For You rows: that table has no foreign key, because a
+        // cache of arithmetic is not owned by the thing it was computed from and a cascade would
+        // have been the third reason it could disappear. Cleared here, explicitly, for the same
+        // reason the credentials are.
+        feedRowDao.clearForSource(sourceId)
         // Channels and favourites cascade via the foreign key.
         sourceDao.deleteById(sourceId)
     }

@@ -24,6 +24,7 @@ import dev.quiblo.core.data.CatalogueIdentityBackfill
 import dev.quiblo.core.data.CategoryRepository
 import dev.quiblo.core.data.ChannelLogoRepository
 import dev.quiblo.core.data.ChannelRepository
+import dev.quiblo.core.data.FeedRowCacheRepository
 import dev.quiblo.core.data.GuideRepository
 import dev.quiblo.core.data.LocalFileContentFetcher
 import dev.quiblo.core.data.PlayerSettingsRepository
@@ -76,7 +77,18 @@ val dataModule: Module = module {
         )
     }
 
-    single { SourceRepository(get(), get(), get(), get()) }
+    // Named rather than positional. Koin resolves by type and does not type-check the order, so a
+    // fifth `get()` added to a positional list is a silent mis-wiring waiting for the day two
+    // parameters share a type.
+    single {
+        SourceRepository(
+            sourceDao = get(),
+            channelDao = get(),
+            feedRowDao = get(),
+            mediaSources = get(),
+            credentialStore = get(),
+        )
+    }
     single { ProfileRepository(profileDao = get(), profileStore = get()) }
     single { SeriesPreferenceRepository(dao = get(), profiles = get()) }
     // Named, and deliberately so. This class takes three collaborators followed by four
@@ -139,6 +151,12 @@ val dataModule: Module = module {
             history = get(),
             titleMetadataDao = get(),
             channelDao = get(),
+        )
+    }
+    single {
+        FeedRowCacheRepository(
+            dao = get(),
+            profiles = get(),
         )
     }
 }

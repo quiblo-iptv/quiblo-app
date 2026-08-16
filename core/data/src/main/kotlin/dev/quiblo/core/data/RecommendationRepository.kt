@@ -115,6 +115,19 @@ class RecommendationRepository(
         HISTORY_KINDS.flatMap { kind -> history.observeHistory(sourceId, kind).first() }
 
     /**
+     * When each watched title was last played, by title.
+     *
+     * The key is the same title a [Suggestion] names as its cause, which is what lets the cached
+     * suggestions row tell that a cause has been watched again since the suggestion was made.
+     * Watching something a second time is the strongest signal this app collects, and a row that
+     * kept a fortnight-old answer in front of what that signal produced would be ignoring it.
+     */
+    suspend fun lastWatchedByTitle(sourceId: Long): Map<String, Long> =
+        watchedTitles(sourceId)
+            .groupBy { it.title }
+            .mapValues { (_, entries) -> entries.maxOf { it.watchedAtEpochMillis } }
+
+    /**
      * How much of a title was watched, from 0 to 1.
      *
      * A duration of zero means the player never learned one — a stream that reports no length, or

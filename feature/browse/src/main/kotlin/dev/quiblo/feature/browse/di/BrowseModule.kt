@@ -47,6 +47,7 @@ val browseModule: Module = module {
             channelLogoRepository = get(),
             popularTitles = get(),
             recommendations = get(),
+            feedRowCache = get(),
         )
     }
 

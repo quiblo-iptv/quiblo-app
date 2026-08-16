@@ -603,3 +603,33 @@ val MIGRATION_19_20 = object : Migration(19, 20) {
         db.execSQL("ALTER TABLE `category_overrides` ADD COLUMN `userOrder` INTEGER DEFAULT NULL")
     }
 }
+
+/**
+ * 20 to 21: the For You rows are remembered.
+ *
+ * A new empty table and nothing else read or rewritten. There is nothing of the viewer's in it —
+ * every row is arithmetic that can be done again — so an installation upgrading through this
+ * loses nothing and simply recomputes its rows once, exactly as it did on every open before.
+ */
+val MIGRATION_20_21 = object : Migration(20, 21) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS `feed_rows` (
+                `profileId` INTEGER NOT NULL,
+                `sourceId` INTEGER NOT NULL,
+                `rowId` TEXT NOT NULL,
+                `position` INTEGER NOT NULL,
+                `stableKey` TEXT,
+                `title` TEXT NOT NULL,
+                `posterUrl` TEXT,
+                `kind` TEXT NOT NULL,
+                `rank` INTEGER,
+                `becauseOf` TEXT,
+                `builtAtEpochMillis` INTEGER NOT NULL,
+                PRIMARY KEY(`profileId`, `sourceId`, `rowId`, `position`)
+            )
+            """.trimIndent(),
+        )
+    }
+}

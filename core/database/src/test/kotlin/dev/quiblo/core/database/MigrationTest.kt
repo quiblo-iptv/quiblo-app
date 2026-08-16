@@ -340,6 +340,54 @@ class MigrationTest {
         }
     }
 
+    /**
+     * The remembered For You rows arrive empty, and nothing else moves.
+     *
+     * There is nothing of the viewer's in this table — every row in it is arithmetic that can be
+     * done again — so an installation upgrading through this simply recomputes its rows once,
+     * exactly as it did on every open before. What is asserted is the other half: that adding it
+     * leaves the catalogue and the viewer's own edits where they were.
+     */
+    @Test
+    fun `20 to 21 adds the remembered rows, empty`() {
+        helper.createDatabase(DB_NAME, 20).use { old ->
+            old.execSQL(
+                "INSERT INTO `sources` (`id`, `name`, `kind`, `url`, `createdAtEpochMillis`) " +
+                    "VALUES (1, 'A panel', 'XTREAM', 'https://example.invalid', 0)",
+            )
+            // Schema 19's identity columns are NOT NULL, so a row written at 20 supplies them.
+            old.execSQL(
+                "INSERT INTO `channels` (`id`, `sourceId`, `name`, `streamUrl`, `kind`, " +
+                    "`groupTitle`, `stableKey`, `sortIndex`, `searchTitle`, `identityYear`, `scriptMask`) " +
+                    "VALUES (1, 1, 'Dune', 'https://example.invalid/1', 'VOD', 'Films', 'key-1', 0, 'dune', 0, 1)",
+            )
+            old.execSQL(
+                "INSERT INTO `profiles` (`id`, `name`, `isGuest`, `createdAtEpochMillis`) " +
+                    "VALUES (1, 'A viewer', 0, 0)",
+            )
+            old.execSQL(
+                "INSERT INTO `resume_positions` (`profileId`, `stableKey`, `positionMillis`, " +
+                    "`updatedAtEpochMillis`, `sourceId`, `kind`, `title`, `durationMillis`) " +
+                    "VALUES (1, 'key-1', 90000, 5, 1, 'VOD', 'Dune', 7200000)",
+            )
+        }
+
+        val db = helper.runMigrationsAndValidate(DB_NAME, 21, true, MIGRATION_20_21)
+
+        db.query("SELECT COUNT(*) FROM `feed_rows`").use { cursor ->
+            assertTrue(cursor.moveToFirst())
+            assertEquals(0, cursor.getInt(0))
+        }
+        db.query("SELECT `name` FROM `channels`").use { cursor ->
+            assertTrue("the catalogue did not survive the upgrade", cursor.moveToFirst())
+            assertEquals("Dune", cursor.getString(0))
+        }
+        db.query("SELECT `positionMillis` FROM `resume_positions`").use { cursor ->
+            assertTrue("a resume point did not survive the upgrade", cursor.moveToFirst())
+            assertEquals(90_000, cursor.getInt(0))
+        }
+    }
+
     @Test
     fun `10 to 11 adopts existing favourites rather than dropping them`() {
         // The opposite promise to the one above, and the one that matters more: this is the

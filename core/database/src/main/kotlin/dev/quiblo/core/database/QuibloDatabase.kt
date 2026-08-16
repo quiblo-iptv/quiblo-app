@@ -26,6 +26,7 @@ import dev.quiblo.core.database.dao.CategoryOverrideDao
 import dev.quiblo.core.database.dao.ChannelDao
 import dev.quiblo.core.database.dao.ChannelLogoDao
 import dev.quiblo.core.database.dao.FavoriteDao
+import dev.quiblo.core.database.dao.FeedRowDao
 import dev.quiblo.core.database.dao.PickedSubtitleDao
 import dev.quiblo.core.database.dao.PopularTitleDao
 import dev.quiblo.core.database.dao.ProfileDao
@@ -38,6 +39,7 @@ import dev.quiblo.core.database.entity.CategoryOverrideEntity
 import dev.quiblo.core.database.entity.ChannelEntity
 import dev.quiblo.core.database.entity.ChannelLogoEntity
 import dev.quiblo.core.database.entity.FavoriteEntity
+import dev.quiblo.core.database.entity.FeedRowEntity
 import dev.quiblo.core.database.entity.PickedSubtitleEntity
 import dev.quiblo.core.database.entity.PopularTitleEntity
 import dev.quiblo.core.database.entity.ProfileEntity
@@ -55,7 +57,7 @@ import dev.quiblo.core.database.entity.TitleMetadataEntity
  * constant, so the version the app ships and the version the upgrade path is tested against
  * cannot drift apart.
  */
-const val SCHEMA_VERSION = 20
+const val SCHEMA_VERSION = 21
 
 /**
  * Every migration, in order, in one place.
@@ -85,6 +87,7 @@ val ALL_MIGRATIONS = arrayOf(
     MIGRATION_17_18,
     MIGRATION_18_19,
     MIGRATION_19_20,
+    MIGRATION_20_21,
 )
 
 /**
@@ -105,6 +108,7 @@ val ALL_MIGRATIONS = arrayOf(
         SeriesPreferenceEntity::class,
         PickedSubtitleEntity::class,
         PopularTitleEntity::class,
+        FeedRowEntity::class,
     ],
     version = SCHEMA_VERSION,
     exportSchema = true,
@@ -134,6 +138,8 @@ abstract class QuibloDatabase : RoomDatabase() {
     abstract fun pickedSubtitleDao(): PickedSubtitleDao
 
     abstract fun popularTitleDao(): PopularTitleDao
+
+    abstract fun feedRowDao(): FeedRowDao
 
     companion object {
         const val NAME = "quiblo.db"

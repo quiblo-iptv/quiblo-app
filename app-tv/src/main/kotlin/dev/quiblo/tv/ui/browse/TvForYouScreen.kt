@@ -36,9 +36,9 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.quiblo.core.model.Channel
+import dev.quiblo.core.model.FeedRowId
 import dev.quiblo.feature.browse.BrowseViewModel
 import dev.quiblo.feature.browse.FeedRow
-import dev.quiblo.feature.browse.FeedRowId
 import dev.quiblo.feature.browse.FeedRowItem
 import dev.quiblo.feature.browse.di.forYouParams
 import dev.quiblo.tv.R

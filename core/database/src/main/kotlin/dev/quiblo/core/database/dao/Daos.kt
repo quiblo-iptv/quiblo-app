@@ -32,6 +32,7 @@ import dev.quiblo.core.database.entity.CategoryOverrideEntity
 import dev.quiblo.core.database.entity.ChannelEntity
 import dev.quiblo.core.database.entity.ChannelLogoEntity
 import dev.quiblo.core.database.entity.FavoriteEntity
+import dev.quiblo.core.database.entity.FeedRowEntity
 import dev.quiblo.core.database.entity.PickedSubtitleEntity
 import dev.quiblo.core.database.entity.PopularTitleEntity
 import dev.quiblo.core.database.entity.ProfileEntity
@@ -632,6 +633,28 @@ interface ChannelDao {
     @Query("SELECT * FROM channels WHERE sourceId = :sourceId AND stableKey = :stableKey LIMIT 1")
     suspend fun findByStableKey(sourceId: Long, stableKey: String): ChannelEntity?
 
+    /**
+     * The same, for a whole remembered row at once.
+     *
+     * One query rather than one per tile: a cached For You row is up to forty titles, and forty
+     * round trips to answer one question is how a cache stops being faster than the thing it
+     * replaced.
+     */
+    @Query(
+        """
+        SELECT c.*, (f.stableKey IS NOT NULL) AS isFavorite
+        FROM channels c
+        LEFT JOIN favorites f ON f.sourceId = c.sourceId AND f.stableKey = c.stableKey
+              AND f.profileId = :profileId
+        WHERE c.sourceId = :sourceId AND c.stableKey IN (:stableKeys)
+        """,
+    )
+    suspend fun findAllByStableKeys(
+        profileId: Long,
+        sourceId: Long,
+        stableKeys: List<String>,
+    ): List<ChannelWithFavorite>
+
     @Query("DELETE FROM channels WHERE sourceId = :sourceId")
     suspend fun deleteForSource(sourceId: Long)
 
@@ -1055,4 +1078,45 @@ interface PopularTitleDao {
 
     @Query("DELETE FROM popular_titles")
     suspend fun clear()
+}
+
+/**
+ * The remembered For You rows.
+ *
+ * Whole rows at a time. A row is one answer — a ranking, or a set of suggestions — and half of one
+ * is not a smaller answer, it is a wrong one.
+ */
+@Dao
+interface FeedRowDao {
+
+    @Query(
+        """
+        SELECT * FROM feed_rows
+        WHERE profileId = :profileId AND sourceId = :sourceId
+        ORDER BY rowId ASC, position ASC
+        """,
+    )
+    suspend fun rowsFor(profileId: Long, sourceId: Long): List<FeedRowEntity>
+
+    @Query("DELETE FROM feed_rows WHERE profileId = :profileId AND sourceId = :sourceId AND rowId = :rowId")
+    suspend fun clearRow(profileId: Long, sourceId: Long, rowId: String)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertAll(entries: List<FeedRowEntity>)
+
+    /**
+     * Swaps one row's remembered contents for a new set, in one transaction.
+     *
+     * A row half-written is a row drawn with a gap in the middle of a ranking, and the whole point
+     * of keeping it is that it can be drawn before anything has been recomputed.
+     */
+    @Transaction
+    suspend fun replaceRow(profileId: Long, sourceId: Long, rowId: String, entries: List<FeedRowEntity>) {
+        clearRow(profileId, sourceId, rowId)
+        insertAll(entries)
+    }
+
+    /** Everything for one source, for when the catalogue underneath it has been replaced. */
+    @Query("DELETE FROM feed_rows WHERE sourceId = :sourceId")
+    suspend fun clearForSource(sourceId: Long)
 }

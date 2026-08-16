@@ -58,6 +58,18 @@ Formatted after [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and ve
   screen rather than behind the whole app, so it stopped dead at the margins and left a dark band
   under the tab bar — a lit rectangle on a dark screen rather than light in a room. It reaches all
   four corners and passes behind the bar now, exactly as the light from a poster does.
+- **For You draws last night's rows the moment it opens.** Now popular and You may like were both
+  worked out from scratch every time the tab was opened — a whole catalogue matched against a
+  popular list, and a scoring pass over every film and series you have — while you watched an empty
+  shelf. Both are remembered now and drawn straight away, then quietly brought up to date behind
+  what is on screen. They are remembered per profile, so nobody sees anybody else's.
+- **You may like grows rather than reshuffling.** The same viewing scored twice a fortnight apart
+  gives mostly the same titles in a different order, and a shelf that rearranges itself for no
+  visible reason is one nobody learns the shape of. What is there stays where it is and new
+  suggestions arrive on the end. Two things do leave it: a suggestion whose cause you have watched
+  again since — a second viewing is the strongest thing you can tell it, and it should move that
+  title's suggestions rather than leave a fortnight-old answer in front of them — and a suggestion
+  your provider no longer carries.
 - **Recently Added holds fifteen.** It held forty, which was chosen as more than anyone would walk
   through rather than as an answer to "what is new".
 - **Generated profile pictures are faces now.** They were four coloured shapes; they are a face on

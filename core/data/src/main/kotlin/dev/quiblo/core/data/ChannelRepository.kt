@@ -263,6 +263,25 @@ class ChannelRepository(
      * both rows that come through here — the two rows on For You that propose something the
      * viewer did not ask for, which is the worst place in the app for the setting to be ignored.
      */
+    /**
+     * The same, for the remembered rows, which hold provider identities rather than row ids.
+     *
+     * A cached row cannot hold ids: a refresh deletes every row of a source and reinserts it with
+     * a new one, so an id remembered last night resolves to nothing tonight — and on the popular
+     * rows "resolves to nothing" is drawn as unavailable, which would turn a refresh into a top
+     * ten claiming the provider carries none of it.
+     *
+     * The script filter applies here for the same reason it applies to [channelsByIds].
+     */
+    suspend fun channelsByStableKeys(sourceId: Long, stableKeys: List<String>): List<Channel> =
+        if (stableKeys.isEmpty()) {
+            emptyList()
+        } else {
+            channelDao.findAllByStableKeys(profiles.activeProfileId, sourceId, stableKeys)
+                .hidingUnreadableScripts(hiddenScripts.first(), { it.channel.scriptMask }, { it.channel.name })
+                .map { it.channel.toDomain(isFavorite = it.isFavorite) }
+        }
+
     suspend fun channelsByIds(ids: List<Long>): List<Channel> =
         if (ids.isEmpty()) {
             emptyList()

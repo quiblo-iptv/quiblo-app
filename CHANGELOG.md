@@ -17,6 +17,17 @@ Formatted after [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and ve
 
 ### Added
 
+- **Quiblo keeps your catalogue up to date on its own.** Until now the only way a new film reached
+  the app was somebody opening Settings and pressing Refresh, so "Recently added" was really
+  answering "what has your provider added since you last thought to check". It now syncs every four
+  days in the background, and it *merges* rather than rebuilding: a title that is still there keeps
+  its place and the date it first appeared, a title that has just arrived is dated now, and one your
+  provider has dropped goes. That last part is what gives an M3U playlist a recently-added row at
+  all — an M3U carries no dates, so the only honest answer is when Quiblo first saw it.
+- **And it checks what is popular every forty hours.** That check used to happen only when you
+  opened For You, which made "what is popular now" a question about how often you opened a tab. It
+  still costs at most two requests in that window, and still nothing at all without your own Movie
+  Database key.
 - **You can put your categories in your own order.** Settings has had "hide" and "rename" since it
   had a category list; it now has move up and move down as well, on the phone and on the
   television. The order you set is the order Live, Movies, Series and Favourites draw their rows

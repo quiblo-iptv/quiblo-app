@@ -79,9 +79,9 @@ class PopularTitlesRepositoryTest {
     }
 
     @Test
-    @DisplayName("two requests, and only when the held answer is a week old")
+    @DisplayName("two requests, and only when the held answer is forty hours old")
     fun `a fresh list is not refetched`() = runTest {
-        coEvery { dao.oldestFetchedAt() } returns NOW - SIX_DAYS
+        coEvery { dao.oldestFetchedAt() } returns NOW - THIRTY_HOURS
         coEvery { dao.all() } returns emptyList()
 
         repository.popular(SOURCE_ID)
@@ -90,8 +90,8 @@ class PopularTitlesRepositoryTest {
     }
 
     @Test
-    fun `a week-old list is refetched, once per catalogue`() = runTest {
-        coEvery { dao.oldestFetchedAt() } returns NOW - EIGHT_DAYS
+    fun `a stale list is refetched, once per catalogue`() = runTest {
+        coEvery { dao.oldestFetchedAt() } returns NOW - FIFTY_HOURS
         coEvery { client.popular(any(), any()) } returns TmdbPopular.Titles(listOf(popular(1, "Dune")))
         coEvery { dao.all() } returns emptyList()
 
@@ -110,7 +110,7 @@ class PopularTitlesRepositoryTest {
     @Test
     @DisplayName("a refused week leaves last week's answer standing")
     fun `a refusal is never written down`() = runTest {
-        coEvery { dao.oldestFetchedAt() } returns NOW - EIGHT_DAYS
+        coEvery { dao.oldestFetchedAt() } returns NOW - FIFTY_HOURS
         coEvery { client.popular(any(), any()) } returns
             TmdbPopular.Refused(TmdbAnswer.Refused(TmdbRefusal.RATE_LIMITED))
         coEvery { dao.all() } returns listOf(entity(kind = MediaKind.VOD, rank = 1, title = "Dune"))
@@ -216,7 +216,7 @@ class PopularTitlesRepositoryTest {
     private companion object {
         const val SOURCE_ID = 3L
         const val NOW = 1_770_000_000_000L
-        const val SIX_DAYS = 6L * 24 * 60 * 60 * 1000
-        const val EIGHT_DAYS = 8L * 24 * 60 * 60 * 1000
+        const val THIRTY_HOURS = 30L * 60 * 60 * 1000
+        const val FIFTY_HOURS = 50L * 60 * 60 * 1000
     }
 }

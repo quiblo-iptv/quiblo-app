@@ -4,7 +4,8 @@
   Copyright (C) 2026 The Quiblo Authors
   Licensed under the GNU General Public License v3.0 or later. See LICENSE.
 -->
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
 
     <!--
       AC-NFR-04: INTERNET and network state only. No storage permission (SAF is used
@@ -36,6 +37,25 @@
             </intent-filter>
         </activity>
 
-    </application>
+    
+        <!--
+          WorkManager is initialised on demand rather than by androidx.startup.
+          `androidx.startup` runs its initializers from a ContentProvider, which the system
+          creates *before* Application.onCreate — so a default initializer would ask this app for
+          its WorkManager configuration before Koin has been started, and the configuration is
+          resolved from Koin. Removing the initializer makes the first `WorkManager.getInstance`
+          the moment of initialisation, which is inside `beginSession`, after the graph exists.
+        -->
+        <provider
+            android:name="androidx.startup.InitializationProvider"
+            android:authorities="${applicationId}.androidx-startup"
+            android:exported="false"
+            tools:node="merge">
+            <meta-data
+                android:name="androidx.work.WorkManagerInitializer"
+                android:value="androidx.startup"
+                tools:node="remove" />
+        </provider>
+</application>
 
 </manifest>

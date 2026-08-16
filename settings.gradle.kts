@@ -91,3 +91,10 @@ include(":feature:series")
 include(":feature:player")
 include(":feature:favorites")
 include(":feature:settings")
+//
+// :feature:sync holds the scheduled work: the four-day catalogue sync and the popular-list check.
+// It is in the feature layer rather than in :core: deliberately. WorkManager is Android's
+// scheduler and nothing else has one — FREEZE.md §4.1 requires that a desktop or webOS frontend
+// be able to consume :core:* untouched, and a :core: module that names WorkManager would force
+// the platform's scheduler on a platform that does not have it. It carries no Compose.
+include(":feature:sync")

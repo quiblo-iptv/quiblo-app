@@ -115,6 +115,9 @@ dependencies {
     implementation(projects.feature.player)
     implementation(projects.feature.favorites)
     implementation(projects.feature.settings)
+    implementation(projects.feature.sync)
+    // The Application implements Configuration.Provider, so the API is on this module's surface.
+    implementation(libs.work.runtime)
 
     implementation(platform(libs.compose.bom))
     implementation(libs.compose.ui)

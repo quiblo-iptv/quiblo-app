@@ -28,6 +28,7 @@ import dev.quiblo.feature.player.di.playerModule
 import dev.quiblo.feature.series.di.seriesModule
 import dev.quiblo.feature.settings.di.settingsModule
 import dev.quiblo.feature.sources.di.sourcesModule
+import dev.quiblo.feature.sync.di.syncModule
 import dev.quiblo.feature.vod.di.vodModule
 import org.koin.core.module.Module
 
@@ -52,4 +53,5 @@ val tvModules: List<Module> = listOf(
     playerModule,
     settingsModule,
     vodModule,
+    syncModule,
 )

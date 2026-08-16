@@ -58,11 +58,12 @@ data class PopularEntry(
 /**
  * What the world is watching, of the things this viewer can actually play.
  *
- * **Two requests a week, and no more.** TMDB's popular lists are fetched at most once every seven
- * days and held in the database between times, so a household that opens the app every evening
- * still costs two requests across the whole week. That restraint is not politeness: this
- * project's provider account has been blocked twice over requests it did not need, and a
- * metadata service refusing is the same failure with a different host.
+ * **Two requests every forty hours, and no more.** TMDB's popular lists are fetched at most once
+ * in that window and held in the database between times, so a household that opens the app every
+ * evening costs nothing extra — and the interval is what a scheduled check and a viewer arriving
+ * are both guarded by, so the two cannot between them cost two fetches. That restraint is not
+ * politeness: this project's provider account has been blocked twice over requests it did not
+ * need, and a metadata service refusing is the same failure with a different host.
  *
  * **The intersection is annotation, not filtering — and that is `023`'s change.** The row used to
  * be TMDB's list narrowed to what the provider carries, which read as a top ten with holes in it:
@@ -91,7 +92,7 @@ class PopularTitlesRepository(
 ) {
 
     /**
-     * Both popular rows for this source, refreshed first if the held lists are a week old.
+     * Both popular rows for this source, refreshed first if the held lists are stale.
      *
      * Films then series, each in rank order, [perKind] of each. Returns an empty list only where
      * there is nothing honest to draw at all: no key, or no answer ever received.
@@ -140,27 +141,38 @@ class PopularTitlesRepository(
     }
 
     /**
-     * Fetches both lists if the held ones are a week old, and does nothing otherwise.
+     * Fetches both lists if the held ones are stale, and does nothing otherwise.
      *
-     * A refusal leaves whatever is held exactly as it was and is never written down — the same
-     * rule [TitleMetadataRepository] follows, and for a longer-lived reason here: a cached
-     * refusal would stand for a week rather than a fortnight of one title.
+     * Public because a scheduled worker calls it — the check used to happen only when somebody
+     * opened For You, which made "what is popular now" a question about how often the viewer
+     * opened a tab. It is still guarded by the same interval, so the worker asking and a viewer
+     * arriving cannot between them cost two fetches.
+     *
+     * **A refusal leaves whatever is held exactly as it was and is never written down** — the same
+     * rule [TitleMetadataRepository] follows, and for a longer-lived reason here: a cached refusal
+     * would stand for the whole interval rather than a fortnight of one title.
+     *
+     * @return whether anything was fetched. False covers "no key", "not stale yet" and "refused",
+     *   which the caller treats identically: none of them is a reason to disturb what is held.
      */
-    private suspend fun refreshIfStale() {
-        val apiKey = metadata.apiKey.value?.takeIf { it.isNotBlank() } ?: return
+    suspend fun refreshIfStale(): Boolean {
+        val apiKey = metadata.apiKey.value?.takeIf { it.isNotBlank() } ?: return false
 
         val fetchedAt = dao.oldestFetchedAt()
-        if (fetchedAt != null && now() - fetchedAt < REFRESH_INTERVAL_MILLIS) return
+        if (fetchedAt != null && now() - fetchedAt < REFRESH_INTERVAL_MILLIS) return false
 
+        var fetched = false
         KIND_ORDER.forEach { kind ->
             val tmdbKind = kind.toTmdbKind() ?: return@forEach
             when (val answer = client.popular(apiKey, tmdbKind)) {
                 is TmdbPopular.Refused -> Unit
                 is TmdbPopular.Titles -> if (answer.entries.isNotEmpty()) {
                     dao.replaceKind(kind.name, answer.entries.map { it.toEntity(kind) })
+                    fetched = true
                 }
             }
         }
+        return fetched
     }
 
     private fun PopularTitle.toEntity(kind: MediaKind) = PopularTitleEntity(
@@ -187,11 +199,18 @@ class PopularTitlesRepository(
         val KIND_ORDER = listOf(MediaKind.VOD, MediaKind.SERIES)
 
         /**
-         * How long a fetched list stands.
+         * How long a fetched list stands: forty hours.
          *
-         * A week, because that is roughly how fast the answer changes and because it puts the
-         * cost of this feature at two requests every seven days however often the app is opened.
+         * It was a week, on the argument that a week is roughly how fast the answer changes and
+         * that it put the cost at two requests every seven days however often the app was opened.
+         * The second half of that argument is what the scheduled check replaces — the cost no
+         * longer depends on how often anybody opens a tab — and the first half was generous: a
+         * weekly list that is six days old is a list from before the weekend.
+         *
+         * Forty hours is a little under two days, so a household that watches every evening sees
+         * the row change about every other one. It costs two requests in that window and no more:
+         * the worker asking and a viewer arriving are both guarded by this same interval.
          */
-        const val REFRESH_INTERVAL_MILLIS = 7L * 24 * 60 * 60 * 1000
+        const val REFRESH_INTERVAL_MILLIS = 40L * 60 * 60 * 1000
     }
 }

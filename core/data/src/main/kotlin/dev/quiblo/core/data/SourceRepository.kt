@@ -92,8 +92,15 @@ class SourceRepository(
         return refresh(sourceId)
     }
 
-    /** Reloads a source, replacing its stored content only if the load succeeds. */
-    suspend fun refresh(sourceId: Long): RefreshOutcome {
+    /**
+     * Reloads a source, replacing its stored content only if the load succeeds.
+     *
+     * @param merge fold the answer into what is stored rather than swapping it. See
+     *   [ChannelDao.mergeForSource]. Off for a refresh somebody asked for and is watching happen;
+     *   on for the scheduled one, which must not renumber a catalogue nobody is looking at or
+     *   declare a whole M3U playlist to be new every four days.
+     */
+    suspend fun refresh(sourceId: Long, merge: Boolean = false): RefreshOutcome {
         val source = sourceDao.findById(sourceId)?.toDomain()
         val mediaSource = source?.let { mediaSources[it.kind] }
 
@@ -103,9 +110,12 @@ class SourceRepository(
             mediaSource == null ->
                 RefreshOutcome.Failure(SourceError.Unknown("No handler for ${source.kind}"))
 
-            else -> store(sourceId, mediaSource.load(SourceRequest(sourceId, source.url)))
+            else -> store(sourceId, mediaSource.load(SourceRequest(sourceId, source.url)), merge)
         }
     }
+
+    /** Every source there is, for the scheduled sync, which is not driven by a screen. */
+    suspend fun allSourceIds(): List<Long> = sourceDao.allOnce().map { it.id }
 
     /**
      * Commits a successful load.
@@ -113,18 +123,23 @@ class SourceRepository(
      * A failed load leaves the previously stored channels untouched, so losing the
      * network does not empty a list the user was already looking at (AC-DATA-05).
      */
-    private suspend fun store(sourceId: Long, result: SourceResult): RefreshOutcome = when (result) {
-        is SourceResult.Failure -> RefreshOutcome.Failure(result.error)
+    private suspend fun store(sourceId: Long, result: SourceResult, merge: Boolean): RefreshOutcome =
+        when (result) {
+            is SourceResult.Failure -> RefreshOutcome.Failure(result.error)
 
-        is SourceResult.Success -> {
-            val entities = result.channels.mapIndexed { index, channel ->
-                channel.toEntity(sortIndex = index)
+            is SourceResult.Success -> {
+                val entities = result.channels.mapIndexed { index, channel ->
+                    channel.toEntity(sortIndex = index)
+                }
+                if (merge) {
+                    channelDao.mergeForSource(sourceId, entities, now())
+                } else {
+                    channelDao.replaceForSource(sourceId, entities)
+                }
+                sourceDao.markRefreshed(sourceId, now())
+                RefreshOutcome.Success(sourceId, result.report)
             }
-            channelDao.replaceForSource(sourceId, entities)
-            sourceDao.markRefreshed(sourceId, now())
-            RefreshOutcome.Success(sourceId, result.report)
         }
-    }
 
     suspend fun deleteSource(sourceId: Long) {
         // Credentials are not in the database, so the cascade cannot reach them. Clearing

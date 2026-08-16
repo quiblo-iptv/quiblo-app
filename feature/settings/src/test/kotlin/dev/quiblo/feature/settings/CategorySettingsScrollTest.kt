@@ -130,6 +130,7 @@ class CategorySettingsScrollTest {
                         onSelectKind = {},
                         onSetHidden = { _, _ -> },
                         onRename = { _, _ -> },
+                        onMove = { _, _ -> },
                     )
                 }
                 item { Text(SENTINEL) }

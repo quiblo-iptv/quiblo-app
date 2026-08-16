@@ -938,6 +938,15 @@ interface CategoryOverrideDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(entity: CategoryOverrideEntity)
 
+    /**
+     * Every row of one kind at once, for a reorder.
+     *
+     * One transaction rather than a write per category: moving a shelf rewrites the position of
+     * all of them, and a partial write would leave a list ordered by two different rules.
+     */
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertAll(entities: List<CategoryOverrideEntity>)
+
     @Query("DELETE FROM category_overrides WHERE kind = :kind AND originalTitle = :originalTitle")
     suspend fun clear(kind: String, originalTitle: String)
 }

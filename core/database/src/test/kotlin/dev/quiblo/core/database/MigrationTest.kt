@@ -312,6 +312,34 @@ class MigrationTest {
         }
     }
 
+    /**
+     * A category can be moved, and an upgrade moves none of them.
+     *
+     * The column is nullable and arrives null, which is the whole point: "never moved" has to stay
+     * distinguishable from "moved to the front", because everything unmoved falls back to the
+     * provider's own order. A `NOT NULL DEFAULT 0` here would have declared every category on
+     * every existing installation to be in first place, and the browse order would have become
+     * whatever `ORDER BY` did with ninety identical zeroes.
+     */
+    @Test
+    fun `19 to 20 adds the category position, unset`() {
+        helper.createDatabase(DB_NAME, 19).use { old ->
+            old.execSQL(
+                "INSERT INTO `category_overrides` (`kind`, `originalTitle`, `customName`, `isHidden`) " +
+                    "VALUES ('VOD', 'AR-Channels', 'Arabic', 1)",
+            )
+        }
+
+        val db = helper.runMigrationsAndValidate(DB_NAME, 20, true, MIGRATION_19_20)
+
+        db.query("SELECT `customName`, `isHidden`, `userOrder` FROM `category_overrides`").use { cursor ->
+            assertTrue("the viewer's category edits did not survive the upgrade", cursor.moveToFirst())
+            assertEquals("Arabic", cursor.getString(0))
+            assertEquals(1, cursor.getInt(1))
+            assertTrue("an upgraded category must say 'never moved', not 'moved to the front'", cursor.isNull(2))
+        }
+    }
+
     @Test
     fun `10 to 11 adopts existing favourites rather than dropping them`() {
         // The opposite promise to the one above, and the one that matters more: this is the

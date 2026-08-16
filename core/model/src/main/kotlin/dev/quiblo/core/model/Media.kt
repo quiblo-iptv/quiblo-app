@@ -83,6 +83,15 @@ data class Category(
     /** A local rename, or null to use the provider's name. Never sent anywhere. */
     val customName: String? = null,
     val isHidden: Boolean = false,
+    /**
+     * Where the viewer has put this category, or null if they have not moved it.
+     *
+     * Ordered categories come first, in this order; everything else keeps the provider's own
+     * order behind them. Null rather than a default position because "not moved" and "moved to
+     * the top" are different facts, and only one of them should survive a provider reshuffling
+     * its own list.
+     */
+    val userOrder: Int? = null,
 ) {
     /** What to put on screen. */
     val displayTitle: String get() = customName?.takeIf { it.isNotBlank() } ?: title

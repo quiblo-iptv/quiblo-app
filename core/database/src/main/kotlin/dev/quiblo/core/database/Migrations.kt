@@ -586,3 +586,20 @@ val MIGRATION_18_19 = object : Migration(18, 19) {
         )
     }
 }
+
+/**
+ * 19 to 20: a category can be moved.
+ *
+ * One nullable column on the table that already holds the other two local edits. Nullable is the
+ * whole design: `NULL` means "this viewer never moved this one", which is a different fact from
+ * "they moved it to position zero" and has to stay different, because the browse order falls back
+ * to the provider's own for everything unmoved.
+ *
+ * Nothing is read and nothing is rewritten. An installation upgrading through this has exactly
+ * the category order it had before, because every row arrives with no position.
+ */
+val MIGRATION_19_20 = object : Migration(19, 20) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE `category_overrides` ADD COLUMN `userOrder` INTEGER DEFAULT NULL")
+    }
+}

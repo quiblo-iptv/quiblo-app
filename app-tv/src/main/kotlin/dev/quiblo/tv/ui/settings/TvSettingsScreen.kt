@@ -50,6 +50,8 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -398,6 +400,7 @@ fun TvSettingsScreen(
                 kind = categoryKind,
                 onToggleHidden = { viewModel.setCategoryHidden(it, !it.isHidden) },
                 onRename = { category, name -> viewModel.renameCategory(category, name) },
+                onMove = { category, by -> viewModel.moveCategory(category, by) },
             )
         }
 
@@ -832,6 +835,7 @@ internal fun CategoryBox(
     kind: MediaKind,
     onToggleHidden: (Category) -> Unit,
     onRename: (Category, String?) -> Unit,
+    onMove: (Category, Int) -> Unit,
 ) {
     // Switching kind closes the box. The list underneath is a different list, and reopening is
     // one press — cheaper than landing focus somewhere in a list that has just been replaced.
@@ -936,6 +940,8 @@ internal fun CategoryBox(
                 category = category,
                 onToggleHidden = { onToggleHidden(category) },
                 onRename = { onRename(category, it) },
+                onMoveUp = { onMove(category, -1) }.takeIf { index > 0 },
+                onMoveDown = { onMove(category, 1) }.takeIf { index < categories.lastIndex },
                 firstControl = rows.takeIf { index == 0 },
             )
         }
@@ -996,10 +1002,15 @@ private fun CategorySummary(
 }
 
 @Composable
+@Suppress("LongParameterList")
 private fun CategoryEditRow(
     category: Category,
     onToggleHidden: () -> Unit,
     onRename: (String?) -> Unit,
+    /** Null at the top of the list, where there is nowhere to go. */
+    onMoveUp: (() -> Unit)?,
+    /** Null at the bottom, likewise. */
+    onMoveDown: (() -> Unit)?,
     /**
      * Put on the pencil, which is the first thing a remote can land on in this row.
      *
@@ -1062,6 +1073,26 @@ private fun CategoryEditRow(
                     isSelected = category.isHidden,
                     onClick = onToggleHidden,
                 )
+
+                // Drawn only where there is somewhere to go. A control that takes a press and
+                // does nothing is worse on a remote than a control that is not there: the viewer
+                // cannot see it is disabled from three metres, so they press it twice.
+                onMoveUp?.let {
+                    IconChip(
+                        icon = Icons.Filled.KeyboardArrowUp,
+                        contentDescription = stringResource(R.string.tv_settings_move_up),
+                        isActive = false,
+                        onClick = it,
+                    )
+                }
+                onMoveDown?.let {
+                    IconChip(
+                        icon = Icons.Filled.KeyboardArrowDown,
+                        contentDescription = stringResource(R.string.tv_settings_move_down),
+                        isActive = false,
+                        onClick = it,
+                    )
+                }
             }
         }
 

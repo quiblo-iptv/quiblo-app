@@ -438,6 +438,18 @@ data class CategoryOverrideEntity(
     /** Null means "use the provider's name". Absence and a blank rename are the same thing. */
     val customName: String? = null,
     val isHidden: Boolean = false,
+    /**
+     * Where the viewer moved this category to, or null if they never did.
+     *
+     * A third kind of local edit, alongside hiding and renaming, and keyed the same way for the
+     * same reason: a provider's own category order changes between refreshes, and a position
+     * stored against anything but the provider's title would reattach to the wrong shelf.
+     *
+     * Nullable rather than defaulted, so a viewer who has ordered three categories out of ninety
+     * gets three moved categories rather than a list in which the other eighty-seven have all
+     * silently agreed to be equal.
+     */
+    val userOrder: Int? = null,
 )
 
 /**

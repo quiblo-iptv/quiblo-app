@@ -168,6 +168,8 @@
     <string name="tv_settings_rename_field">Rename to</string>
     <string name="tv_settings_apply">Apply</string>
     <string name="tv_settings_hide">Hide</string>
+    <string name="tv_settings_move_up">Move up</string>
+    <string name="tv_settings_move_down">Move down</string>
     <string name="tv_settings_show">Show</string>
     <string name="tv_settings_tmdb">Film and series information</string>
     <string name="tv_settings_tmdb_detail">Optional. Adds plots, cast and scores from The Movie Database.</string>

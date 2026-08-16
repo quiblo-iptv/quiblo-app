@@ -166,6 +166,7 @@ fun SettingsScreen(
                 onSelectKind = viewModel::selectCategoryKind,
                 onSetHidden = viewModel::setCategoryHidden,
                 onRename = viewModel::renameCategory,
+                onMove = viewModel::moveCategory,
             )
         }
 

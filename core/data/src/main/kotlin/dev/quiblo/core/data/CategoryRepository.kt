@@ -66,7 +66,46 @@ class CategoryRepository(
                 originalTitle = originalTitle,
                 customName = existing?.customName,
                 isHidden = hidden,
+                userOrder = existing?.userOrder,
             ),
+        )
+    }
+
+    /**
+     * Moves one category one place, and writes down where every category now sits.
+     *
+     * **The whole visible order is written, not only the row that moved.** A single moved row
+     * would carry a position while its neighbours carried none, and the comparison between "third"
+     * and "not moved" has no answer — so the first move would scatter the list rather than shift
+     * one shelf by one place. Stamping the order the viewer is looking at makes the result the
+     * list they saw with two rows exchanged, which is the only outcome that reads as a move.
+     *
+     * Hidden categories are stamped too, so that showing one again puts it back where it was
+     * rather than at the end.
+     *
+     * @param ordered every category of this kind, in the order it is currently drawn, hidden
+     *   ones included.
+     * @param by how far to move it: -1 for up one place, 1 for down one.
+     */
+    suspend fun moveCategory(kind: MediaKind, originalTitle: String, ordered: List<String>, by: Int) {
+        val from = ordered.indexOf(originalTitle).takeIf { it >= 0 } ?: return
+        val to = (from + by).coerceIn(0, ordered.lastIndex)
+        if (to == from) return
+
+        val moved = ordered.toMutableList().apply { add(to, removeAt(from)) }
+        val existing = categoryOverrideDao.observeForKind(kind.name).first().associateBy { it.originalTitle }
+
+        categoryOverrideDao.upsertAll(
+            moved.mapIndexed { index, title ->
+                val override = existing[title]
+                CategoryOverrideEntity(
+                    kind = kind.name,
+                    originalTitle = title,
+                    customName = override?.customName,
+                    isHidden = override?.isHidden == true,
+                    userOrder = index,
+                )
+            },
         )
     }
 
@@ -74,9 +113,9 @@ class CategoryRepository(
         val cleaned = customName?.trim()?.takeIf { it.isNotBlank() }
         val existing = currentOverride(kind, originalTitle)
 
-        // A row that neither renames nor hides is noise. Removing it keeps the table a
+        // A row that neither renames, hides nor moves is noise. Removing it keeps the table a
         // record of deliberate edits rather than of every category ever looked at.
-        if (cleaned == null && existing?.isHidden != true) {
+        if (cleaned == null && existing?.isHidden != true && existing?.userOrder == null) {
             categoryOverrideDao.clear(kind.name, originalTitle)
             return
         }
@@ -87,6 +126,7 @@ class CategoryRepository(
                 originalTitle = originalTitle,
                 customName = cleaned,
                 isHidden = existing?.isHidden == true,
+                userOrder = existing?.userOrder,
             ),
         )
     }
@@ -94,14 +134,29 @@ class CategoryRepository(
     private suspend fun currentOverride(kind: MediaKind, originalTitle: String) =
         categoryOverrideDao.observeForKind(kind.name).first().firstOrNull { it.originalTitle == originalTitle }
 
+    private companion object {
+        /** Where a category the viewer has never moved sorts: after every one they have. */
+        const val UNMOVED = Int.MAX_VALUE
+    }
+
     private fun withOverrides(sourceId: Long, kind: MediaKind): Flow<List<Category>> = combine(
         channelDao.observeCategoriesByKind(sourceId, kind.name),
         categoryOverrideDao.observeForKind(kind.name),
     ) { counts, overrides ->
         val byTitle = overrides.associateBy { it.originalTitle }
-        counts.map { it.toDomain(sourceId) }.map { category ->
-            val override = byTitle[category.title]
-            category.copy(customName = override?.customName, isHidden = override?.isHidden == true)
-        }
+        counts.map { it.toDomain(sourceId) }
+            .map { category ->
+                val override = byTitle[category.title]
+                category.copy(
+                    customName = override?.customName,
+                    isHidden = override?.isHidden == true,
+                    userOrder = override?.userOrder,
+                )
+            }
+            // Moved categories first, in the order they were moved into; everything else keeps
+            // the provider's own order behind them. A stable sort, so the query's order — the
+            // provider's category list, then its stream order — survives untouched for every
+            // category the viewer has never touched.
+            .sortedBy { it.userOrder ?: UNMOVED }
     }
 }

@@ -17,6 +17,13 @@ Formatted after [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and ve
 
 ### Added
 
+- **You can put your categories in your own order.** Settings has had "hide" and "rename" since it
+  had a category list; it now has move up and move down as well, on the phone and on the
+  television. The order you set is the order Live, Movies, Series and Favourites draw their rows
+  in, on both apps. Categories you have not moved stay in your provider's own order, behind the
+  ones you have — so ordering three shelves out of ninety moves three shelves and leaves the rest
+  alone. Your order survives a refresh, because it is stored against your provider's own name for
+  the category rather than against anything that gets renumbered.
 - **Now popular is two rows, and each is a top ten.** Films and series came from two different
   lists and were drawn as one row of five and five, numbered 1 to 5 twice with a badge to tell the
   halves apart. They are now **Popular films** and **Popular series**, ten each, numbered once, and

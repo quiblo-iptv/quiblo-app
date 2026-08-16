@@ -210,6 +210,7 @@ class TvCategoryBoxFocusEscapeTest {
                         kind = MediaKind.VOD,
                         onToggleHidden = {},
                         onRename = { _, _ -> },
+                        onMove = { _, _ -> },
                     )
                 }
 

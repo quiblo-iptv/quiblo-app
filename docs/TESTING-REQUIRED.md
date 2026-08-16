@@ -1106,6 +1106,87 @@ is the hardest class of thing to certify and the reason these are written down a
 
 ---
 
+## A18 — Round `025`: the suggestions row, rebuilt
+
+**Where:** both apps, and mostly the television, where the row lives. From
+[`025`](../agile/025_What_You_May_Like_of_Quiblo.md). **Every ticket here needs a real watch
+history**, which is days of use rather than an afternoon — there is no way to compress a scorer
+whose whole subject is what somebody actually watched.
+
+### A18.1 — it says nothing until it knows something
+
+| | |
+| :---- | :---- |
+| **What to look at** | A fresh profile. Watch one thing through, then open For You |
+| **Passes if** | There is no **You may like** row at all — not an empty one, not a spinner |
+| **Fails if** | A row appears. One watched title cannot produce four honest suggestions, and this is the whole of the "wait and learn" ask |
+
+### A18.2 — and then it does
+
+| | |
+| :---- | :---- |
+| **What to look at** | On the same profile, watch five different things most of the way through |
+| **Passes if** | The row appears, and every tile says which of your own titles put it there |
+| **Fails if** | Still nothing after five, or a tile with no reason under it |
+
+### A18.3 — the complaint itself
+
+| | |
+| :---- | :---- |
+| **What to look at** | On a profile whose viewing is mostly anime, read the whole row |
+| **Passes if** | The suggestions are recognisably like what was watched — other anime, other shows of the same sort |
+| **Fails if** | Superhero dramas, talk shows, or dubbed titles in a language nothing watched was in. **This is the reported defect** and it is the one judgement a test cannot make |
+
+### A18.4 — a language you do not watch
+
+| | |
+| :---- | :---- |
+| **What to look at** | A profile that watches only English or only Arabic |
+| **Passes if** | The row is mostly in that language |
+| **Fails if** | It is a mix with no pattern. Note this is separate from hiding a writing system, which is `A16`'s and is absolute |
+
+### A18.5 — thumbs, on both apps
+
+| | |
+| :---- | :---- |
+| **What to look at** | Open a film's details on the phone and on the television. Press the thumbs-up, then press it again |
+| **Passes if** | It fills, then empties. The same on the series screen |
+| **Fails if** | It cannot be taken back, or the two apps disagree about the same title |
+
+### A18.6 — and a thumbs down is heard
+
+| | |
+| :---- | :---- |
+| **What to look at** | Thumbs-down something the row was suggesting, or something like it. Leave For You and come back |
+| **Passes if** | That title is gone from the row, and nothing else is suggested *because of* it |
+| **Fails if** | It is still there. Note the row is remembered between opens (`A16.5`), so this may take one rebuild to show |
+
+### A18.7 — a comfort film
+
+| | |
+| :---- | :---- |
+| **What to look at** | Watch the same film three or four times over a week |
+| **Passes if** | Suggestions like it move up the row |
+| **Fails if** | Watching something repeatedly changes nothing at all |
+
+### A18.8 — the row does not become one genre
+
+| | |
+| :---- | :---- |
+| **What to look at** | Read the whole row on a profile with varied viewing |
+| **Passes if** | Several tastes are represented, not four of the strongest one |
+| **Fails if** | Twenty thrillers |
+
+### A18.9 — nothing is sent anywhere
+
+| | |
+| :---- | :---- |
+| **What to look at** | Watch several things, rate a few, then check the network — a router log, or a proxy |
+| **Passes if** | Traffic goes only to your own provider and to The Movie Database |
+| **Fails if** | Anything else at all. `FREEZE.md` §4.5, and the reason a scorer was chosen over a service |
+
+---
+
 ---
 
 ## C — Deferred measurements, in writing

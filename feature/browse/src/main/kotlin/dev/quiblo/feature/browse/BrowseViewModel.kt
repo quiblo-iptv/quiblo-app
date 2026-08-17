@@ -610,6 +610,7 @@ class BrowseViewModel(
                     FeedRowItem.Playable(channel = channel, rank = entry.rank)
                 } else {
                     FeedRowItem.Unavailable(
+                        // not display text: a list key, so a film and a series at the same rank cannot reuse a row.
                         key = "${entry.kind.name}-${entry.rank}",
                         title = entry.title,
                         kind = entry.kind,

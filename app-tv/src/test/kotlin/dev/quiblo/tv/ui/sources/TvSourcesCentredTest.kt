@@ -95,9 +95,12 @@ class TvSourcesCentredTest {
             every { observeSources() } returns flowOf(emptyList())
         }
 
-        compose.setContent {
-            TvSourcesScreen(onBack = {}, viewModel = SourcesViewModel(repository))
-        }
+        // Built outside `setContent`, not inside it. A ViewModel constructed in a composable is
+        // rebuilt on every recomposition, which lint refuses on sight — and it is right to: the
+        // screen would lose whatever the ViewModel was holding at the first redraw.
+        val viewModel = SourcesViewModel(repository)
+
+        compose.setContent { TvSourcesScreen(onBack = {}, viewModel = viewModel) }
         compose.waitForIdle()
     }
 

@@ -461,3 +461,83 @@ anywhere, and the phone player is untouched — it gets the same controls after 
 build has been watched on a panel, which is why the new preference is offered on the television's
 settings screen only. A setting shown on an app it does not affect is the hollow-feature shape
 this project has deleted nine of.
+
+---
+
+### Amendment 11 — three permissions, two of them consequences and one of them a decision (2026-08-17)
+
+**Ships in.** `0.20.0`
+**Release class.** Minor — nothing stored changes and no capability is withdrawn.
+
+**Decision.** Three permissions appear in the merged manifests that AC-NFR-04 did not name.
+They are examined here because the criterion says a third permission fails until it is, and
+because two of them arrived without anybody deciding anything.
+
+#### `FOREGROUND_SERVICE` and `RECEIVE_BOOT_COMPLETED` — contributed, both applications
+
+Neither is declared by this project. Both are merged in by WorkManager, which round `024`
+adopted for the four-day catalogue sync and the forty-hour popular check. They are what
+`androidx.work` needs to survive a reboot and to run its longer jobs, and there is no way to
+take the library's scheduling without taking them.
+
+**They are named rather than argued with**, because the decision that produced them was the one
+to schedule background work at all, and that was made and recorded in `agile/024`. What is worth
+writing down is that **neither is used by anything Quiblo wrote**: no service of ours runs in the
+foreground, and nothing of ours listens for boot. If that ever stops being true it is a new
+decision and belongs in a new amendment.
+
+**This should have been caught in `024` and was not**, because `024` was never pushed — the gate
+that fails on an unnamed permission had never seen the branch. Three rounds of work sat behind a
+check that had not run.
+
+#### `REQUEST_INSTALL_PACKAGES` — declared, television only
+
+This one is ours and it is a decision. Round `026` gives the television Settings a **Check for
+updates** row: it reads this project's own GitHub releases page, downloads the newer
+`quiblo-tv-` APK, verifies the published SHA-256, and hands the file to the system installer.
+Without this permission the last step is refused before the viewer ever sees the installer's own
+prompt.
+
+**Why it is worth the cost.** Quiblo is distributed as an APK from a releases page and a
+television has no store to update it from. An app that cannot say "you are three versions
+behind" is an app that never gets updated — which on a player is a security position, not just a
+convenience one.
+
+**Four constraints, all of them decisions:**
+
+1. **The phone does not get it.** The permission is declared in `app-tv` only, and the gate is
+   scoped so that the same permission appearing in the phone's merged manifest still fails. A
+   sideloaded phone has the same problem and does not yet have this answer; when it does, it is
+   an amendment, not a copy.
+2. **Nothing is checked unprompted.** No launch check, no schedule, no worker. The check runs on
+   a button press and on nothing else, which is what keeps §4.5 true: the app contacts the hosts
+   a viewer named, and its own releases page only while somebody is standing in front of it
+   asking.
+3. **Nothing is installed unverified.** The `.sha256` the release lane publishes beside every APK
+   is fetched first, and a file that does not match it is **deleted** rather than kept, renamed
+   aside, or offered with a warning. A release publishing no checksum is refused outright: every
+   release this lane has made carries one, so a release without one is a release something has
+   gone wrong with, and "are you sure?" on a television is a button people press.
+4. **The permission only lets Quiblo ask.** Android's own "allow installs from this source?"
+   prompt is the consent that matters and cannot be skipped or pre-answered. Where a set refuses
+   outright, the app says so and names the downloaded file rather than failing silently.
+
+**The open question this leaves.** `REQUEST_INSTALL_PACKAGES` is store-restricted. Quiblo is not
+in a store today; if it is ever submitted to one, this declaration needs a policy answer or the
+television build needs a flavour without it. That is recorded here rather than discovered at
+submission.
+
+**AC-NFR-04 is restated** in `ACCEPTANCE.md` to name all five, and to say which application each
+belongs to:
+
+> **AC-NFR-04** — This project declares `INTERNET` and `ACCESS_NETWORK_STATE` on both
+> applications, and `REQUEST_INSTALL_PACKAGES` on the television only. Each merged manifest
+> additionally contains `WAKE_LOCK` (Media3), `<applicationId>.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION`
+> (androidx.core), and `FOREGROUND_SERVICE` and `RECEIVE_BOOT_COMPLETED` (WorkManager) — those
+> four and no others. No storage permission (SAF instead), no location, no contacts, no camera,
+> no microphone. `REQUEST_INSTALL_PACKAGES` in the phone's merged manifest fails this criterion.
+> A permission from any source that is not on this list fails it until it is examined and named
+> in `FREEZE.md`.
+
+**What does not change.** Every non-goal in §2 stands, nothing is sent anywhere, and no
+telemetry, account or server of ours is added by any of this.

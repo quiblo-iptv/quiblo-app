@@ -15,8 +15,6 @@ Formatted after [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and ve
 
 ## Unreleased
 
-## 0.19.0
-
 ### Added
 
 - **The television asks for your playlist on the first screen, instead of leaving you to find
@@ -92,23 +90,6 @@ Formatted after [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and ve
   empty beside it. It is a centred column now. Save carries the same travelling light that Search
   and Play have — dimmer than Search's, because Search is the only thing on its screen and Save
   sits beside a form you are still filling in.
-- **The ambient light keeps up with the picture.** It read the screen a little under twice a second
-  and then took most of another second to change, so at worst the glow was around two seconds
-  behind the frame it came from — near enough to look deliberate, far enough to look like two
-  separate things. It now reads four times as often and settles twice as fast, which is close
-  enough to read as the picture's own light. A hard cut is still a fade rather than a flash.
-- **And the light behind the catalogue keeps up with the remote.** It took most of a second to
-  change colour, which was set that way so that holding right along a row would not strobe — but
-  nothing is even asked for until the remote has rested on a tile, so there was never a queue of
-  colours to strobe between. It now settles as quickly as the player's.
-- **Search and Live put out the light the catalogue left on.** The glow behind the app comes from
-  whatever poster the remote is resting on, and neither of those screens has one — so arriving at
-  either of them left the colours of a film you looked at two tabs ago sitting behind an empty
-  search box. They now fade it out on the way in.
-- **And Search lights itself instead.** Two soft pools that travel round the screen on the same
-  six-second circuit as the highlight going round the search box, turning slowly through the
-  colours as they go. It is exactly as bright as a poster's light and it needs nothing from the
-  network.
 - **Search's light now fills the screen like every other tab's.** It was drawn on the search
   screen rather than behind the whole app, so it stopped dead at the margins and left a dark band
   under the tab bar — a lit rectangle on a dark screen rather than light in a room. It reaches all
@@ -127,6 +108,54 @@ Formatted after [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and ve
   your provider no longer carries.
 - **Recently Added holds fifteen.** It held forty, which was chosen as more than anyone would walk
   through rather than as an answer to "what is new".
+### Fixed
+
+- **"Resume from" is there when you come back.** Watching four minutes of something and pressing
+  back regularly gave you a **Play** button, as though you had never opened it — and the only way
+  to get the right button was to leave the screen and go back into it. Three things were wrong and
+  all three are fixed. The screen asked where you had got to at the same moment the player was
+  writing it down, and nothing decided which happened first; it now watches the answer instead of
+  asking once, so a position that arrives a moment late still moves the button. On the phone the
+  back press that made the position worth saving was also what cancelled the save; it is now
+  written somewhere the screen going away cannot reach. And a position is written down every ten
+  seconds of playback rather than only when you stop, so a television switched off at the wall or
+  an app killed for memory no longer loses everything since you pressed play.
+- **A film's details sit in the middle of the television screen.** A series fills the screen with
+  its episodes and a film has nothing below its buttons, so a film's details were pressed against
+  the top with the whole lower half of the panel empty. A long description still starts at the top
+  and scrolls exactly as before.
+
+- **Hiding a writing system now applies to For You as well.** Now popular and You may like were the
+  two rows that ignored the setting entirely: hide Arabic, and the catalogue, the search results and
+  Recently Added would all respect it while those two carried on proposing Arabic titles. They were
+  the worst two rows to get it wrong in, because they are the ones that offer something you did not
+  ask for. Both now honour it. A row can come out shorter than its usual length when a hidden title
+  would have filled a place — the alternative was letting the setting decide which titles count as
+  popular, which is a different claim entirely.
+
+## 0.19.0
+
+### Added
+
+### Changed
+
+- **The ambient light keeps up with the picture.** It read the screen a little under twice a second
+  and then took most of another second to change, so at worst the glow was around two seconds
+  behind the frame it came from — near enough to look deliberate, far enough to look like two
+  separate things. It now reads four times as often and settles twice as fast, which is close
+  enough to read as the picture's own light. A hard cut is still a fade rather than a flash.
+- **And the light behind the catalogue keeps up with the remote.** It took most of a second to
+  change colour, which was set that way so that holding right along a row would not strobe — but
+  nothing is even asked for until the remote has rested on a tile, so there was never a queue of
+  colours to strobe between. It now settles as quickly as the player's.
+- **Search and Live put out the light the catalogue left on.** The glow behind the app comes from
+  whatever poster the remote is resting on, and neither of those screens has one — so arriving at
+  either of them left the colours of a film you looked at two tabs ago sitting behind an empty
+  search box. They now fade it out on the way in.
+- **And Search lights itself instead.** Two soft pools that travel round the screen on the same
+  six-second circuit as the highlight going round the search box, turning slowly through the
+  colours as they go. It is exactly as bright as a poster's light and it needs nothing from the
+  network.
 - **Generated profile pictures are faces now.** They were four coloured shapes; they are a face on
   a coloured tile — the same generator library, a different one of its styles. Every profile
   already wearing a generated picture becomes a face the next time the app opens, and it is the
@@ -168,21 +197,6 @@ in the meantime.
 
 ### Fixed
 
-- **"Resume from" is there when you come back.** Watching four minutes of something and pressing
-  back regularly gave you a **Play** button, as though you had never opened it — and the only way
-  to get the right button was to leave the screen and go back into it. Three things were wrong and
-  all three are fixed. The screen asked where you had got to at the same moment the player was
-  writing it down, and nothing decided which happened first; it now watches the answer instead of
-  asking once, so a position that arrives a moment late still moves the button. On the phone the
-  back press that made the position worth saving was also what cancelled the save; it is now
-  written somewhere the screen going away cannot reach. And a position is written down every ten
-  seconds of playback rather than only when you stop, so a television switched off at the wall or
-  an app killed for memory no longer loses everything since you pressed play.
-- **A film's details sit in the middle of the television screen.** A series fills the screen with
-  its episodes and a film has nothing below its buttons, so a film's details were pressed against
-  the top with the whole lower half of the panel empty. A long description still starts at the top
-  and scrolls exactly as before.
-
 - **Now popular no longer goes missing on the television.** The row is fetched with your Movie
   Database key, and the key is kept encrypted — which means reading it takes a moment. For You
   was built before that moment had passed, found no key, fetched nothing, and had no way to ask
@@ -193,13 +207,6 @@ in the meantime.
   selected tab kept its underline, which made it look as though the bar was awake when it was not.
   The app was asking the bar to take focus a moment before the bar existed, and not noticing it had
   been refused. It now asks again until it lands.
-- **Hiding a writing system now applies to For You as well.** Now popular and You may like were the
-  two rows that ignored the setting entirely: hide Arabic, and the catalogue, the search results and
-  Recently Added would all respect it while those two carried on proposing Arabic titles. They were
-  the worst two rows to get it wrong in, because they are the ones that offer something you did not
-  ask for. Both now honour it. A row can come out shorter than its usual length when a hidden title
-  would have filled a place — the alternative was letting the setting decide which titles count as
-  popular, which is a different claim entirely.
 
 ## 0.18.0
 

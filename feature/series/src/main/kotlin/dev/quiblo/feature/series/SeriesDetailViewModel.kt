@@ -25,11 +25,13 @@ import dev.quiblo.core.data.MetadataRefresh
 import dev.quiblo.core.data.SeriesPreference
 import dev.quiblo.core.data.SeriesPreferenceRepository
 import dev.quiblo.core.data.TitleMetadataRepository
+import dev.quiblo.core.data.TitleOpinionRepository
 import dev.quiblo.core.data.WatchHistoryRepository
 import dev.quiblo.core.data.arrangedBy
 import dev.quiblo.core.model.Channel
 import dev.quiblo.core.model.Episode
 import dev.quiblo.core.model.MediaKind
+import dev.quiblo.core.model.Opinion
 import dev.quiblo.core.model.Season
 import dev.quiblo.core.model.SeriesDetails
 import dev.quiblo.core.model.TitleMetadata
@@ -104,6 +106,8 @@ sealed interface SeriesDetailUiState {
          * screen opened and would not reflect a tap made on this screen.
          */
         val isFavorite: Boolean = false,
+        /** What this viewer said about the series, if anything. See `TitleOpinionRepository`. */
+        val opinion: Opinion = Opinion.NONE,
     ) : SeriesDetailUiState
     data class Error(val error: SourceError) : SeriesDetailUiState
 }
@@ -114,6 +118,7 @@ class SeriesDetailViewModel(
     private val metadataRepository: TitleMetadataRepository,
     private val historyRepository: WatchHistoryRepository,
     private val preferences: SeriesPreferenceRepository,
+    private val opinions: TitleOpinionRepository,
 ) : ViewModel() {
 
     private var isRefreshing = false
@@ -156,8 +161,35 @@ class SeriesDetailViewModel(
                     )
 
                     observeFavorite(channel)
+                    observeOpinion(channel)
+                    observeResumePosition(episodes.map { it.streamUrl })
                     observePreference(channel.stableKey)
                     enrich(channel)
+                }
+            }
+        }
+    }
+
+    /**
+     * Records what the viewer thought of the series, or takes it back.
+     *
+     * The series rather than the episode: nobody has an opinion about episode four of season two
+     * separately from the show, and a thumbs-down on one episode that removed the whole series
+     * from suggestions would be answering a question that was not asked.
+     */
+    fun rate(opinion: Opinion) {
+        val current = _uiState.value as? SeriesDetailUiState.Success ?: return
+        viewModelScope.launch {
+            val next = if (current.opinion == opinion) Opinion.NONE else opinion
+            opinions.set(current.channel.name, MediaKind.SERIES, next)
+        }
+    }
+
+    private fun observeOpinion(channel: Channel) {
+        viewModelScope.launch {
+            opinions.observe(channel.name).collect { opinion ->
+                (_uiState.value as? SeriesDetailUiState.Success)?.let {
+                    _uiState.value = it.copy(opinion = opinion)
                 }
             }
         }
@@ -193,22 +225,29 @@ class SeriesDetailViewModel(
     }
 
     /**
-     * Re-reads the resume point, so coming back from playback moves the Resume button on.
+     * Watches the resume point, so coming back from playback moves the Resume button on.
      *
-     * A full reload would go back to the provider for an episode list that has not changed
-     * in the four minutes since it was fetched — the sort of request that gets an account
-     * throttled. Only the position can have changed, so only the position is re-read.
+     * Only the position, never the episode list: a full reload would go back to the provider for
+     * a list that has not changed in the four minutes since it was fetched, which is the sort of
+     * request that gets an account throttled.
+     *
+     * **A flow rather than a read on returning to the foreground**, and that is the fix for the
+     * defect where backing out of an episode offered **Play** for something four minutes in. The
+     * screen used to read once, from a lifecycle effect that fires at the same moment the player
+     * above it is being disposed and writing the position it finished with — and this screen's
+     * read is the heavier of the two, over every episode's key, which widened the window it lost
+     * in. Nothing here waits on that ordering now.
      */
-    fun refreshResumePosition() {
-        val current = _uiState.value as? SeriesDetailUiState.Success ?: return
+    private fun observeResumePosition(episodeKeys: List<String>) {
         viewModelScope.launch {
-            val episodes = current.details.seasons.flatMap { it.episodes }
-            val watched = historyRepository.mostRecentlyWatched(episodes.map { it.streamUrl })
-            (_uiState.value as? SeriesDetailUiState.Success)?.let {
-                _uiState.value = it.copy(
-                    resumeEpisode = watched?.let { (key, _) -> episodes.firstOrNull { e -> e.streamUrl == key } },
-                    resumePositionMillis = watched?.second ?: 0L,
-                )
+            historyRepository.observeMostRecentlyWatched(episodeKeys).collect { watched ->
+                (_uiState.value as? SeriesDetailUiState.Success)?.let { current ->
+                    val episodes = current.details.seasons.flatMap { it.episodes }
+                    _uiState.value = current.copy(
+                        resumeEpisode = watched?.let { (key, _) -> episodes.firstOrNull { it.streamUrl == key } },
+                        resumePositionMillis = watched?.second ?: 0L,
+                    )
+                }
             }
         }
     }

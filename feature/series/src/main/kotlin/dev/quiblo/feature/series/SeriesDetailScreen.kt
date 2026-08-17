@@ -42,7 +42,11 @@ import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Replay
+import androidx.compose.material.icons.filled.ThumbDown
+import androidx.compose.material.icons.filled.ThumbUp
 import androidx.compose.material.icons.filled.Tv
+import androidx.compose.material.icons.outlined.ThumbDown
+import androidx.compose.material.icons.outlined.ThumbUp
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -50,6 +54,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconToggleButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
@@ -68,7 +73,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.compose.SubcomposeAsyncImage
 import dev.quiblo.core.data.MERGED_SEASON_NUMBER
@@ -77,6 +81,7 @@ import dev.quiblo.core.data.ScanRefusal
 import dev.quiblo.core.data.SeriesPreference
 import dev.quiblo.core.model.Channel
 import dev.quiblo.core.model.Episode
+import dev.quiblo.core.model.Opinion
 import dev.quiblo.core.model.Season
 import dev.quiblo.core.model.SeriesDetails
 import dev.quiblo.core.model.TitleMetadata
@@ -106,12 +111,10 @@ fun SeriesDetailScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
-    // Coming back from playback must move the Resume button on, or the screen still offers
-    // the episode that was just finished.
-    LifecycleResumeEffect(Unit) {
-        viewModel.refreshResumePosition()
-        onPauseOrDispose {}
-    }
+    // The resume point is watched rather than re-read on returning to the foreground. A read on
+    // resume raced the player's own write of the position it had just finished with, and lost it
+    // often enough that backing out of a film offered "Play" for something four minutes in. See
+    // `observeResumePosition`.
 
     // No app bar, for the same reason as the film screen: the header states the series'
     // name in full a few pixels below where a title bar would have repeated it.
@@ -135,6 +138,7 @@ fun SeriesDetailScreen(
                     state = state,
                     onEpisodeClick = onEpisodeClick,
                     onRemoveFromHistory = viewModel::removeFromHistory,
+                    onRate = viewModel::rate,
                     onRefreshMetadata = viewModel::refreshMetadata,
                     onMerged = viewModel::setMerged,
                     onDescending = viewModel::setDescending,
@@ -158,6 +162,29 @@ fun SeriesDetailScreen(
  * same button as "play", and a "remove from history" for a series with no history is a
  * control that can only ever do nothing.
  */
+@Composable
+private fun OpinionButtons(opinion: Opinion, onRate: (Opinion) -> Unit) {
+    Row(
+        modifier = Modifier.padding(horizontal = 16.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        // Pressing the filled one again takes the answer back: an opinion nobody can withdraw is
+        // one nobody gives.
+        IconToggleButton(checked = opinion == Opinion.UP, onCheckedChange = { onRate(Opinion.UP) }) {
+            Icon(
+                imageVector = if (opinion == Opinion.UP) Icons.Filled.ThumbUp else Icons.Outlined.ThumbUp,
+                contentDescription = stringResource(R.string.series_like),
+            )
+        }
+        IconToggleButton(checked = opinion == Opinion.DOWN, onCheckedChange = { onRate(Opinion.DOWN) }) {
+            Icon(
+                imageVector = if (opinion == Opinion.DOWN) Icons.Filled.ThumbDown else Icons.Outlined.ThumbDown,
+                contentDescription = stringResource(R.string.series_dislike),
+            )
+        }
+    }
+}
+
 @Composable
 private fun ResumeActions(
     episode: Episode,
@@ -274,6 +301,7 @@ private fun SeriesDetailContent(
     state: SeriesDetailUiState.Success,
     onEpisodeClick: (Episode, Channel, Long?) -> Unit,
     onRemoveFromHistory: () -> Unit,
+    onRate: (Opinion) -> Unit,
     onRefreshMetadata: () -> Unit,
     onMerged: (Boolean) -> Unit,
     onDescending: (Boolean) -> Unit,
@@ -301,6 +329,11 @@ private fun SeriesDetailContent(
         item {
             SeriesHeader(channel = channel, details = details, metadata = state.metadata)
         }
+
+        // Always here, unlike the resume controls: somebody who watched this series elsewhere has
+        // an opinion about it too, and a control that comes and goes is one nobody finds. It is
+        // about the series rather than an episode — see `SeriesDetailViewModel.rate`.
+        item { OpinionButtons(opinion = state.opinion, onRate = onRate) }
 
         item {
             RefreshMetadata(

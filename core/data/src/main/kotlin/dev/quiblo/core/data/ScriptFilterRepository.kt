@@ -21,6 +21,7 @@ package dev.quiblo.core.data
 import dev.quiblo.core.common.SCRIPT_MASK_UNKNOWN
 import dev.quiblo.core.common.TitleScript
 import dev.quiblo.core.common.isInHiddenScript
+import dev.quiblo.core.common.toMask
 import dev.quiblo.core.datastore.PlayerSettingsStore
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
@@ -90,4 +91,34 @@ internal fun <T> List<T>.hidingUncomputedScripts(
 ): List<T> {
     if (hidden.isEmpty()) return this
     return filterNot { maskOf(it) == SCRIPT_MASK_UNKNOWN && nameOf(it).isInHiddenScript(hidden) }
+}
+
+/**
+ * The whole filter, for a list a query did not filter at all.
+ *
+ * The browse and search paths hand the mask to SQL and only mop up the rows written before
+ * schema 19, which is what [hidingUncomputedScripts] is for. A list fetched by id has had no
+ * such predicate applied — the ids were chosen by a service's popularity list or by a scoring
+ * function, neither of which knows what this viewer reads — so every row still has to be
+ * decided here.
+ *
+ * A row with a computed mask is decided by the mask; a row without one is decided by its name,
+ * exactly as every row was before the column existed. An empty hidden set returns the list
+ * untouched.
+ */
+internal fun <T> List<T>.hidingUnreadableScripts(
+    hidden: Set<TitleScript>,
+    maskOf: (T) -> Int,
+    nameOf: (T) -> String,
+): List<T> {
+    if (hidden.isEmpty()) return this
+    val hiddenMask = hidden.toMask()
+    return filterNot { item ->
+        val mask = maskOf(item)
+        if (mask == SCRIPT_MASK_UNKNOWN) {
+            nameOf(item).isInHiddenScript(hidden)
+        } else {
+            mask and hiddenMask != 0
+        }
+    }
 }

@@ -586,3 +586,111 @@ val MIGRATION_18_19 = object : Migration(18, 19) {
         )
     }
 }
+
+/**
+ * 19 to 20: a category can be moved.
+ *
+ * One nullable column on the table that already holds the other two local edits. Nullable is the
+ * whole design: `NULL` means "this viewer never moved this one", which is a different fact from
+ * "they moved it to position zero" and has to stay different, because the browse order falls back
+ * to the provider's own for everything unmoved.
+ *
+ * Nothing is read and nothing is rewritten. An installation upgrading through this has exactly
+ * the category order it had before, because every row arrives with no position.
+ */
+val MIGRATION_19_20 = object : Migration(19, 20) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE `category_overrides` ADD COLUMN `userOrder` INTEGER DEFAULT NULL")
+    }
+}
+
+/**
+ * 20 to 21: the For You rows are remembered.
+ *
+ * A new empty table and nothing else read or rewritten. There is nothing of the viewer's in it —
+ * every row is arithmetic that can be done again — so an installation upgrading through this
+ * loses nothing and simply recomputes its rows once, exactly as it did on every open before.
+ */
+val MIGRATION_20_21 = object : Migration(20, 21) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS `feed_rows` (
+                `profileId` INTEGER NOT NULL,
+                `sourceId` INTEGER NOT NULL,
+                `rowId` TEXT NOT NULL,
+                `position` INTEGER NOT NULL,
+                `stableKey` TEXT,
+                `title` TEXT NOT NULL,
+                `posterUrl` TEXT,
+                `kind` TEXT NOT NULL,
+                `rank` INTEGER,
+                `becauseOf` TEXT,
+                `builtAtEpochMillis` INTEGER NOT NULL,
+                PRIMARY KEY(`profileId`, `sourceId`, `rowId`, `position`)
+            )
+            """.trimIndent(),
+        )
+    }
+}
+
+/**
+ * 21 to 22: what was watched, when, and what the viewer thought of it.
+ *
+ * Two new empty tables and three columns on the metadata cache. Nothing is read and nothing is
+ * rewritten, so an upgrade costs an installation nothing — and the suggestions row simply has no
+ * events to reason about until somebody watches something, which is the same state a fresh install
+ * is in and is handled by the same cold-start rule.
+ *
+ * The three columns are `originalLanguage`, `popularity` and `overview` keywords' source — all
+ * three already arrive in the metadata payloads this app parses and were being discarded. They
+ * default to null rather than to a value, because "we have not fetched this since the column
+ * existed" and "the service does not know" have to stay distinguishable: the first is refilled by
+ * the ordinary fourteen-day refresh, and the second never will be.
+ */
+val MIGRATION_21_22 = object : Migration(21, 22) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS `watch_events` (
+                `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                `profileId` INTEGER NOT NULL,
+                `sourceId` INTEGER NOT NULL,
+                `stableKey` TEXT NOT NULL,
+                `kind` TEXT NOT NULL,
+                `title` TEXT NOT NULL,
+                `startedAtEpochMillis` INTEGER NOT NULL,
+                `fraction` REAL NOT NULL,
+                `origin` TEXT NOT NULL,
+                FOREIGN KEY(`profileId`) REFERENCES `profiles`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE
+            )
+            """.trimIndent(),
+        )
+        db.execSQL(
+            """
+            CREATE INDEX IF NOT EXISTS `index_watch_events_profileId_sourceId_startedAtEpochMillis`
+            ON `watch_events` (`profileId`, `sourceId`, `startedAtEpochMillis`)
+            """.trimIndent(),
+        )
+        db.execSQL(
+            """
+            CREATE INDEX IF NOT EXISTS `index_watch_events_profileId_stableKey`
+            ON `watch_events` (`profileId`, `stableKey`)
+            """.trimIndent(),
+        )
+        db.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS `title_opinions` (
+                `profileId` INTEGER NOT NULL,
+                `titleKey` TEXT NOT NULL,
+                `kind` TEXT NOT NULL,
+                `opinion` TEXT NOT NULL,
+                `decidedAtEpochMillis` INTEGER NOT NULL,
+                PRIMARY KEY(`profileId`, `titleKey`)
+            )
+            """.trimIndent(),
+        )
+        db.execSQL("ALTER TABLE `title_metadata` ADD COLUMN `originalLanguage` TEXT DEFAULT NULL")
+        db.execSQL("ALTER TABLE `title_metadata` ADD COLUMN `popularity` REAL DEFAULT NULL")
+    }
+}

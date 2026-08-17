@@ -76,12 +76,15 @@ import dev.quiblo.core.data.ProfileRepository
 import dev.quiblo.core.datastore.ConsentStore
 import dev.quiblo.core.model.Channel
 import dev.quiblo.core.model.MediaKind
+import dev.quiblo.core.model.WatchOrigin
 import dev.quiblo.designsystem.ProfileAvatar
 import dev.quiblo.tv.R
 import dev.quiblo.tv.ui.browse.TvForYouScreen
 import dev.quiblo.tv.ui.browse.TvPosterRows
+import dev.quiblo.tv.ui.common.AmbientRequest
 import dev.quiblo.tv.ui.common.LocalAmbientSink
 import dev.quiblo.tv.ui.common.ambientBackdrop
+import dev.quiblo.tv.ui.common.driftingGlow
 import dev.quiblo.tv.ui.common.insistOnFocus
 import dev.quiblo.tv.ui.common.onTap
 import dev.quiblo.tv.ui.common.rememberAmbient
@@ -223,7 +226,7 @@ private fun TvAppBehindConsent(onExit: () -> Unit) {
                 }
             },
             onOpenSettings = { backStack.add(TvOverlay.Settings) },
-            onOpen = { items, index -> overlayFor(items, index)?.let(backStack::add) },
+            onOpen = { items, index, origin -> overlayFor(items, index, origin)?.let(backStack::add) },
             onOpenChannel = { channel -> backStack.add(detailFor(channel)) },
             // The same sign-out Settings offers, one press closer. Both land on the chooser,
             // because there is only one thing "switch profile" can mean.
@@ -318,6 +321,7 @@ private fun TvOverlayScreen(
                             // same number and handing over the wrong one would put the
                             // viewer one episode out for the rest of the series.
                             runIndex = run.indexOfFirst { it.id == episode.id }.coerceAtLeast(0),
+                            origin = overlay.origin,
                         ),
                     ),
                 )
@@ -331,7 +335,15 @@ private fun TvOverlayScreen(
             // A null position means "whatever was stored", which is what the player does
             // with a film by default; zero means the viewer chose to start again.
             onPlay = { startAt ->
-                onPush(TvOverlay.Playing(TvPlaybackRequest.Film(overlay.channel, startPositionMillis = startAt)))
+                onPush(
+                    TvOverlay.Playing(
+                        TvPlaybackRequest.Film(
+                            channel = overlay.channel,
+                            startPositionMillis = startAt,
+                            origin = overlay.origin,
+                        ),
+                    ),
+                )
             },
             onBack = onPop,
             modifier = Modifier.padding(SCREEN_PADDING),
@@ -372,19 +384,21 @@ private fun TvOverlayScreen(
  * Null when the index does not exist, which leaves the viewer where they are rather than
  * opening a screen about nothing.
  */
-private fun overlayFor(items: List<Channel>, index: Int): TvOverlay? {
+private fun overlayFor(items: List<Channel>, index: Int, origin: WatchOrigin): TvOverlay? {
     val channel = items.getOrNull(index) ?: return null
     return when (channel.kind) {
         MediaKind.LIVE -> TvOverlay.Playing(TvPlaybackRequest.Live(channel, items, index))
-        MediaKind.VOD -> TvOverlay.Movie(channel)
-        MediaKind.SERIES -> TvOverlay.Series(channel)
+        MediaKind.VOD -> TvOverlay.Movie(channel, origin)
+        MediaKind.SERIES -> TvOverlay.Series(channel, origin = origin)
     }
 }
 
 /** Where a title already begun is picked up: its own screen, never the player directly. */
 private fun detailFor(channel: Channel): TvOverlay = when (channel.kind) {
-    MediaKind.SERIES -> TvOverlay.Series(channel)
-    else -> TvOverlay.Movie(channel)
+    // Reached from continue-watching, which is a different sort of choice: the viewer is picking
+    // something up rather than deciding on it.
+    MediaKind.SERIES -> TvOverlay.Series(channel, origin = WatchOrigin.CONTINUE)
+    else -> TvOverlay.Movie(channel, origin = WatchOrigin.CONTINUE)
 }
 
 /**
@@ -403,9 +417,14 @@ private sealed interface TvOverlay {
      * want opposite things: opening shows the title and artwork with nothing scrolled (#015),
      * returning puts the remote back where it was (#020).
      */
-    data class Series(val channel: Channel, val focusEpisodeId: String? = null) : TvOverlay
+    data class Series(
+        val channel: Channel,
+        val focusEpisodeId: String? = null,
+        /** Where the viewer was when they chose this. See `WatchOrigin`. */
+        val origin: WatchOrigin = WatchOrigin.ROW,
+    ) : TvOverlay
 
-    data class Movie(val channel: Channel) : TvOverlay
+    data class Movie(val channel: Channel, val origin: WatchOrigin = WatchOrigin.ROW) : TvOverlay
     data object Settings : TvOverlay
     data object Sources : TvOverlay
 }
@@ -416,7 +435,7 @@ private fun TvShell(
     selectedTab: Int,
     onSelectTab: (Int) -> Unit,
     onOpenSettings: () -> Unit,
-    onOpen: (List<Channel>, Int) -> Unit,
+    onOpen: (List<Channel>, Int, WatchOrigin) -> Unit,
     onOpenChannel: (Channel) -> Unit,
     onSwitchProfile: () -> Unit,
     /**
@@ -498,17 +517,22 @@ private fun TvShell(
      * The black stays underneath. This is light added to it, never a replacement for it, so a
      * poster with no usable colour in it leaves the screen exactly as it was.
      */
-    var ambientArtwork: String? by remember { mutableStateOf(null) }
-    val ambient = rememberAmbient(ambientArtwork)
+    var ambientRequest: AmbientRequest by remember { mutableStateOf(AmbientRequest.None) }
+    val ambient = rememberAmbient((ambientRequest as? AmbientRequest.Artwork)?.url)
 
     Box(
         modifier = Modifier
             .fillMaxSize()
             .background(Color.Black)
-            .ambientBackdrop(ambient),
+            .ambientBackdrop(ambient)
+            // Search's own light, drawn here rather than on the search screen — which is what
+            // makes it reach all four edges and pass behind the tab bar, like every other tab's.
+            // See `AmbientRequest`. Applied only while it is wanted, because an infinite
+            // transition that is always composed is a frame's work on every tab.
+            .then(if (ambientRequest is AmbientRequest.Drift) Modifier.driftingGlow() else Modifier),
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
-            CompositionLocalProvider(LocalAmbientSink provides { ambientArtwork = it }) {
+            CompositionLocalProvider(LocalAmbientSink provides { ambientRequest = it }) {
                 TvTopBar(
                     selectedTab = selectedTab,
                     onSelect = onSelectTab,
@@ -528,28 +552,37 @@ private fun TvShell(
                         .focusGroup(),
                 ) {
                     when (TvTab.entries[selectedTab]) {
-                        TvTab.SEARCH -> TvSearchScreen(onOpen = onOpen)
+                        // Each tab says where the viewer was, because that is the one thing
+                        // about a choice nothing downstream can recover: a title typed into a
+                        // search box was wanted, and the first tile of a row was offered.
+                        TvTab.SEARCH -> TvSearchScreen(
+                            onOpen = { items, index -> onOpen(items, index, WatchOrigin.SEARCH) },
+                        )
 
-                        TvTab.LIVE -> TvLiveScreen(onPlay = onOpen)
+                        TvTab.LIVE -> TvLiveScreen(
+                            onPlay = { items, index -> onOpen(items, index, WatchOrigin.ROW) },
+                        )
 
-                        TvTab.FOR_YOU -> TvForYouScreen(onPlay = onOpen)
+                        TvTab.FOR_YOU -> TvForYouScreen(
+                            onPlay = { items, index -> onOpen(items, index, WatchOrigin.ROW) },
+                        )
 
                         TvTab.MOVIES -> TvPosterRows(
                             kind = MediaKind.VOD,
-                            onPlay = onOpen,
+                            onPlay = { items, index -> onOpen(items, index, WatchOrigin.ROW) },
                             onResume = onOpenChannel,
                         )
 
                         TvTab.SERIES -> TvPosterRows(
                             kind = MediaKind.SERIES,
-                            onPlay = onOpen,
+                            onPlay = { items, index -> onOpen(items, index, WatchOrigin.ROW) },
                             onResume = onOpenChannel,
                         )
 
                         TvTab.FAVOURITES -> TvPosterRows(
                             kind = MediaKind.VOD,
                             favouritesOnly = true,
-                            onPlay = onOpen,
+                            onPlay = { items, index -> onOpen(items, index, WatchOrigin.FAVOURITE) },
                             onResume = onOpenChannel,
                         )
                     }

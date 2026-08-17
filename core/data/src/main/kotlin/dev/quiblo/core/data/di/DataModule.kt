@@ -20,10 +20,12 @@ package dev.quiblo.core.data.di
 
 import android.content.Context
 import dev.quiblo.core.data.AndroidPickedSubtitleFiles
+import dev.quiblo.core.data.ApplicationScope
 import dev.quiblo.core.data.CatalogueIdentityBackfill
 import dev.quiblo.core.data.CategoryRepository
 import dev.quiblo.core.data.ChannelLogoRepository
 import dev.quiblo.core.data.ChannelRepository
+import dev.quiblo.core.data.FeedRowCacheRepository
 import dev.quiblo.core.data.GuideRepository
 import dev.quiblo.core.data.LocalFileContentFetcher
 import dev.quiblo.core.data.PlayerSettingsRepository
@@ -37,6 +39,8 @@ import dev.quiblo.core.data.SourceRepository
 import dev.quiblo.core.data.SubtitleRepository
 import dev.quiblo.core.data.TitleMetadataRepository
 import dev.quiblo.core.data.TitleMetadataScanner
+import dev.quiblo.core.data.TitleOpinionRepository
+import dev.quiblo.core.data.WatchEventRepository
 import dev.quiblo.core.data.WatchHistoryRepository
 import dev.quiblo.core.data.backup.BackupRepository
 import dev.quiblo.core.model.SourceKind
@@ -60,6 +64,9 @@ import org.koin.dsl.module
  * M4 means adding one entry here and one module, with no change to any feature.
  */
 val dataModule: Module = module {
+    // Outlives every screen. See `ApplicationScope` — it exists because a resume point was being
+    // cancelled mid-write by the back press that made it worth writing.
+    single { ApplicationScope() }
 
     single<List<ContentFetcher>> {
         listOf(
@@ -76,7 +83,18 @@ val dataModule: Module = module {
         )
     }
 
-    single { SourceRepository(get(), get(), get(), get()) }
+    // Named rather than positional. Koin resolves by type and does not type-check the order, so a
+    // fifth `get()` added to a positional list is a silent mis-wiring waiting for the day two
+    // parameters share a type.
+    single {
+        SourceRepository(
+            sourceDao = get(),
+            channelDao = get(),
+            feedRowDao = get(),
+            mediaSources = get(),
+            credentialStore = get(),
+        )
+    }
     single { ProfileRepository(profileDao = get(), profileStore = get()) }
     single { SeriesPreferenceRepository(dao = get(), profiles = get()) }
     // Named, and deliberately so. This class takes three collaborators followed by four
@@ -134,11 +152,23 @@ val dataModule: Module = module {
             metadata = get(),
         )
     }
+    single { WatchEventRepository(dao = get(), profiles = get()) }
+    single { TitleOpinionRepository(dao = get(), profiles = get()) }
     single {
         RecommendationRepository(
             history = get(),
+            profiles = get(),
+            watchEvents = get(),
+            opinions = get(),
             titleMetadataDao = get(),
             channelDao = get(),
+            favoriteDao = get(),
+        )
+    }
+    single {
+        FeedRowCacheRepository(
+            dao = get(),
+            profiles = get(),
         )
     }
 }

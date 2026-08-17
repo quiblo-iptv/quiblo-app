@@ -116,6 +116,9 @@ dependencies {
     implementation(projects.feature.series)
     implementation(projects.feature.player)
     implementation(projects.feature.settings)
+    implementation(projects.feature.sync)
+    // The Application implements Configuration.Provider, so the API is on this module's surface.
+    implementation(libs.work.runtime)
 
     implementation(platform(libs.compose.bom))
     implementation(libs.compose.ui)
@@ -144,6 +147,10 @@ dependencies {
     testImplementation(libs.compose.ui.test.junit4)
     testImplementation(libs.robolectric)
     testImplementation(libs.androidx.test.junit)
+    // The consent flow's last page is driven by a real `SourcesViewModel`, so its repository
+    // has to be stubbed: a stubbed ViewModel would stub the state machine under test.
+    testImplementation(libs.mockk)
+    testImplementation(libs.kotlinx.coroutines.test)
     testRuntimeOnly(libs.junit.vintage.engine)
     debugImplementation(libs.compose.ui.test.manifest)
 }

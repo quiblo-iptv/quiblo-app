@@ -91,6 +91,8 @@
     <string name="settings_categories_count">%1$d items</string>
     <string name="settings_categories_renamed_from">Provider name: %1$s</string>
     <string name="settings_categories_rename">Rename</string>
+    <string name="settings_categories_move_up">Move up</string>
+    <string name="settings_categories_move_down">Move down</string>
     <string name="settings_categories_new_name">Name</string>
     <string name="settings_categories_rename_hint">Your provider calls this "%1$s". Renaming changes only what you see.</string>
     <string name="settings_categories_save">Save</string>

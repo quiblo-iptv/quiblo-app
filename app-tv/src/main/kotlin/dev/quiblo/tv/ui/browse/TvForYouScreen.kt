@@ -25,7 +25,10 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -33,9 +36,10 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.quiblo.core.model.Channel
+import dev.quiblo.core.model.FeedRowId
 import dev.quiblo.feature.browse.BrowseViewModel
 import dev.quiblo.feature.browse.FeedRow
-import dev.quiblo.feature.browse.FeedRowId
+import dev.quiblo.feature.browse.FeedRowItem
 import dev.quiblo.feature.browse.di.forYouParams
 import dev.quiblo.tv.R
 import org.koin.androidx.compose.koinViewModel
@@ -87,9 +91,21 @@ fun TvForYouScreen(
     val recentTitle = stringResource(
         if (state.orderedByDate) R.string.tv_row_recently_added else R.string.tv_row_latest_in_playlist,
     )
-    val popularTitle = stringResource(R.string.tv_row_now_popular)
+    val popularMoviesTitle = stringResource(R.string.tv_row_popular_movies)
+    val popularSeriesTitle = stringResource(R.string.tv_row_popular_series)
     val suggestionsTitle = stringResource(R.string.tv_row_you_may_like)
     val becauseTemplate = stringResource(R.string.tv_because_you_watched, CAUSE_PLACEHOLDER)
+    val notAvailable = stringResource(R.string.tv_not_available_yet)
+
+    /*
+     * Which unavailable tile has been pressed, if any.
+     *
+     * One at a time, and it is the tile's own key rather than a boolean, so pressing a second
+     * unavailable tile moves the sentence rather than lighting two of them. It is deliberately
+     * not remembered across a tab change: it answers a press, and a press is over when the
+     * viewer leaves.
+     */
+    var pressedUnavailable by rememberSaveable { mutableStateOf<String?>(null) }
 
     /*
      * The three rows, and one flat list behind them.
@@ -100,11 +116,19 @@ fun TvForYouScreen(
      * recorded while building rather than recovered with `indexOf` — the same reason [TvRowItem]
      * carries one at all.
      */
-    val screen = remember(state.items, state.extraRows, recentTitle, popularTitle, suggestionsTitle) {
+    val screen = remember(state.items, state.extraRows, recentTitle, suggestionsTitle, pressedUnavailable) {
         forYouRows(
             recent = state.items,
             extras = state.extraRows,
-            headings = ForYouHeadings(recentTitle, popularTitle, suggestionsTitle, becauseTemplate),
+            headings = ForYouHeadings(
+                recent = recentTitle,
+                popularMovies = popularMoviesTitle,
+                popularSeries = popularSeriesTitle,
+                suggestions = suggestionsTitle,
+                because = becauseTemplate,
+                notAvailable = notAvailable,
+            ),
+            pressedUnavailable = pressedUnavailable,
         )
     }
     val rows = screen.first
@@ -135,10 +159,20 @@ fun TvForYouScreen(
             rows = rows,
             ratings = state.ratings,
             onVisible = viewModel::onPosterVisible,
-            onItemClick = { item -> onPlay(screen.second, item.flatIndex) },
+            // A tile with nothing behind it answers instead of opening. No dialog: this app has
+            // none, and a modal to say "not yet" would be the heaviest possible way to say it.
+            onItemClick = { item ->
+                if (item.tile.channel == null) {
+                    pressedUnavailable = item.tile.key
+                } else {
+                    pressedUnavailable = null
+                    onPlay(screen.second, item.flatIndex)
+                }
+            },
             modifier = modifier,
             posters = state.posters,
-            // Every row here mixes films and series, so every tile has to say which it is.
+            // Recently Added mixes films and series, so its tiles have to say which they are.
+            // The two popular rows are headed by their kind and say it once instead.
             showKindBadge = true,
         )
     }
@@ -160,40 +194,59 @@ private fun forYouRows(
     recent: List<Channel>,
     extras: List<FeedRow>,
     headings: ForYouHeadings,
+    pressedUnavailable: String?,
 ): Pair<List<TvCategoryRow>, List<Channel>> {
-    val recentTitle = headings.recent
-    val popularTitle = headings.popular
-    val suggestionsTitle = headings.suggestions
-    val because = headings.because
     val flat = mutableListOf<Channel>()
     val rows = buildList {
         if (recent.isNotEmpty()) {
             add(
                 TvCategoryRow(
-                    title = recentTitle,
+                    title = headings.recent,
                     items = recent.map { channel -> TvRowItem(channel, flat.size).also { flat += channel } },
                 ),
             )
         }
         extras.forEach { row ->
-            val ranked = row.id == FeedRowId.NOW_POPULAR
+            val ranked = row.id != FeedRowId.YOU_MAY_LIKE
             add(
                 TvCategoryRow(
-                    title = if (ranked) popularTitle else suggestionsTitle,
-                    items = row.items.map { item ->
-                        TvRowItem(
-                            channel = item.channel,
-                            flatIndex = flat.size,
-                            rank = item.rank,
-                            caption = item.caption?.let { because.replace(CAUSE_PLACEHOLDER, it) },
-                        ).also { flat += item.channel }
-                    },
+                    title = headings.forRow(row.id),
+                    items = row.items.map { item -> item.toTile(flat, headings, pressedUnavailable) },
                     style = if (ranked) TvRowStyle.RANKED else TvRowStyle.POSTER,
                 ),
             )
         }
     }
     return rows to flat.toList()
+}
+
+/**
+ * One row item as a tile, adding its channel to the flat list only when it has one.
+ *
+ * The flat list is what the player is handed to zap along, so a title that cannot be played has
+ * no place in it — and its `flatIndex` is therefore meaningless, which is why the screen checks
+ * for a channel before using one.
+ */
+private fun FeedRowItem.toTile(
+    flat: MutableList<Channel>,
+    headings: ForYouHeadings,
+    pressedUnavailable: String?,
+): TvRowItem = when (this) {
+    is FeedRowItem.Playable -> TvRowItem(
+        channel = channel,
+        flatIndex = flat.size,
+        rank = rank,
+        caption = caption?.let { headings.because.replace(CAUSE_PLACEHOLDER, it) },
+    ).also { flat += channel }
+
+    is FeedRowItem.Unavailable -> TvRowItem(
+        tile = TvTile(key = key, name = title, kind = kind, artworkUrl = posterUrl, channel = null),
+        flatIndex = -1,
+        rank = rank,
+        // The answer to a press, written into the line every tile of a ranked row already
+        // reserves. Nothing appears or disappears when it is set, so nothing resizes.
+        caption = headings.notAvailable.takeIf { key == pressedUnavailable },
+    )
 }
 
 /**
@@ -205,11 +258,20 @@ private fun forYouRows(
  */
 private data class ForYouHeadings(
     val recent: String,
-    val popular: String,
+    val popularMovies: String,
+    val popularSeries: String,
     val suggestions: String,
     /** The "Because you watched X" sentence, with [CAUSE_PLACEHOLDER] where the title goes. */
     val because: String,
-)
+    /** What a tile says when it is pressed and there is nothing behind it. */
+    val notAvailable: String,
+) {
+    fun forRow(id: FeedRowId): String = when (id) {
+        FeedRowId.POPULAR_MOVIES -> popularMovies
+        FeedRowId.POPULAR_SERIES -> popularSeries
+        FeedRowId.YOU_MAY_LIKE -> suggestions
+    }
+}
 
 /** Stands in for the caused title inside the formatted string, so the row can fill it per tile. */
 private const val CAUSE_PLACEHOLDER = "\u0000cause\u0000"

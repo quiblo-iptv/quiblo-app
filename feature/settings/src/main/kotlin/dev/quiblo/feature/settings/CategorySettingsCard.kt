@@ -26,9 +26,11 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -77,6 +79,7 @@ internal fun CategorySettingsCard(
     onSelectKind: (MediaKind) -> Unit,
     onSetHidden: (Category, Boolean) -> Unit,
     onRename: (Category, String?) -> Unit,
+    onMove: (Category, Int) -> Unit,
 ) {
     // Rename state lives inside the card: it is category-specific and nothing outside the
     // card needs to know about it.
@@ -128,11 +131,16 @@ internal fun CategorySettingsCard(
                         .border(1.dp, MaterialTheme.colorScheme.outlineVariant, shape)
                         .clip(shape),
                 ) {
-                    items(items = categories, key = { it.title }) { category ->
+                    itemsIndexed(items = categories, key = { _, category -> category.title }) { index, category ->
                         CategoryRow(
                             category = category,
                             onToggle = { onSetHidden(category, !category.isHidden) },
                             onRename = { renaming = category },
+                            // Buttons rather than a drag. A drag inside a list that is itself
+                            // inside a scrolling settings page is two gestures competing for the
+                            // same finger, and this card already speaks in buttons and switches.
+                            onMoveUp = { onMove(category, -1) }.takeIf { index > 0 },
+                            onMoveDown = { onMove(category, 1) }.takeIf { index < categories.lastIndex },
                         )
                     }
                 }
@@ -153,7 +161,15 @@ internal fun CategorySettingsCard(
 }
 
 @Composable
-private fun CategoryRow(category: Category, onToggle: () -> Unit, onRename: () -> Unit) {
+private fun CategoryRow(
+    category: Category,
+    onToggle: () -> Unit,
+    onRename: () -> Unit,
+    /** Null at the top of the list, where there is nowhere to go. */
+    onMoveUp: (() -> Unit)?,
+    /** Null at the bottom, likewise. */
+    onMoveDown: (() -> Unit)?,
+) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -180,6 +196,22 @@ private fun CategoryRow(category: Category, onToggle: () -> Unit, onRename: () -
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
+            )
+        }
+
+        // Disabled rather than absent at the ends of the list, so the row's controls stay in
+        // the same places all the way down and nothing shifts sideways as you scroll.
+        IconButton(onClick = { onMoveUp?.invoke() }, enabled = onMoveUp != null) {
+            Icon(
+                imageVector = Icons.Filled.KeyboardArrowUp,
+                contentDescription = stringResource(R.string.settings_categories_move_up),
+            )
+        }
+
+        IconButton(onClick = { onMoveDown?.invoke() }, enabled = onMoveDown != null) {
+            Icon(
+                imageVector = Icons.Filled.KeyboardArrowDown,
+                contentDescription = stringResource(R.string.settings_categories_move_down),
             )
         }
 

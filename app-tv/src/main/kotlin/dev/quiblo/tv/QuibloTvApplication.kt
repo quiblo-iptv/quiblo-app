@@ -19,8 +19,10 @@
 package dev.quiblo.tv
 
 import android.app.Application
+import androidx.work.Configuration
 import dev.quiblo.core.data.CatalogueIdentityBackfill
 import dev.quiblo.core.data.ProfileRepository
+import dev.quiblo.feature.sync.SyncScheduler
 import dev.quiblo.tv.di.tvModules
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -39,7 +41,18 @@ import org.koin.mp.KoinPlatform.getKoin
  * check. Anything added here that opens a socket is a design regression
  * (docs/FREEZE.md §4.5, AC-NFR-03).
  */
-class QuibloTvApplication : Application() {
+class QuibloTvApplication : Application(), Configuration.Provider {
+
+    /**
+     * WorkManager's configuration, resolved from the graph.
+     *
+     * Read on demand rather than by `androidx.startup`, which runs from a ContentProvider before
+     * `onCreate` — before Koin exists. The manifest removes that initializer for exactly this
+     * reason, so the first `WorkManager.getInstance` is what initialises it, from inside
+     * [beginSession].
+     */
+    override val workManagerConfiguration: Configuration
+        get() = getKoin().get()
 
     override fun onCreate() {
         super.onCreate()
@@ -68,6 +81,13 @@ class QuibloTvApplication : Application() {
     private fun beginSession() {
         val profiles: ProfileRepository = getKoin().get()
         val backfill: CatalogueIdentityBackfill = getKoin().get()
+
+        // Registered on every launch and kept on every launch. `ExistingPeriodicWorkPolicy.KEEP`
+        // is what makes that safe: `UPDATE` would restart the interval each time the app opened,
+        // so a household that opens Quiblo every evening would never reach four days and the sync
+        // would silently never run — for exactly the viewers who use the app most.
+        getKoin().get<SyncScheduler>().schedule()
+
         CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
             profiles.beginSession()
             // Catalogues written before schema 19 carry no cleaned title and no script mask.

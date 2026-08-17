@@ -20,10 +20,12 @@ package dev.quiblo.feature.player
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import dev.quiblo.core.data.ApplicationScope
 import dev.quiblo.core.data.AttachResult
 import dev.quiblo.core.data.ChannelRepository
 import dev.quiblo.core.data.PlayerSettingsRepository
 import dev.quiblo.core.data.SubtitleRepository
+import dev.quiblo.core.data.WatchEventRepository
 import dev.quiblo.core.data.WatchHistoryRepository
 import dev.quiblo.core.media.PlayableItem
 import dev.quiblo.core.media.PlaybackState
@@ -35,11 +37,14 @@ import dev.quiblo.core.model.PlayerSettings
 import dev.quiblo.core.model.SubtitleFile
 import dev.quiblo.core.model.SubtitleOrigin
 import dev.quiblo.core.model.SubtitleStyle
+import dev.quiblo.core.model.WatchOrigin
 import dev.quiblo.source.api.VodDetailsResult
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -53,13 +58,32 @@ import kotlinx.coroutines.launch
  * Note what this class does not import: nothing from Media3 or ExoPlayer. It talks only
  * to [PlayerController] (docs/FREEZE.md §4.4).
  */
+// Seven collaborators, and the seventh is the watch log — a different question from the resume
+// point beside it: one is "where was I", the other is "what did I choose, and how often". Merging
+// them into one repository would put two tables with two lifetimes behind one name.
+@Suppress("LongParameterList")
 class PlayerViewModel(
     private val controller: PlayerController,
     private val channelRepository: ChannelRepository,
     private val historyRepository: WatchHistoryRepository,
     private val subtitleRepository: SubtitleRepository,
     private val settingsRepository: PlayerSettingsRepository,
+    /**
+     * Where the resume point is written, and deliberately not [viewModelScope].
+     *
+     * On the phone this ViewModel belongs to its navigation entry, so the back press that makes a
+     * resume point worth writing is the same event that cancels the coroutine writing it. See
+     * [ApplicationScope].
+     */
+    private val applicationScope: ApplicationScope,
+    private val watchEvents: WatchEventRepository,
 ) : ViewModel() {
+
+    /** Where the viewer was when they chose what is playing. Set by [load]. */
+    private var chosenFrom: WatchOrigin = WatchOrigin.ROW
+
+    /** Whether this sitting has already been written down. See [recordOccasion]. */
+    private var recorded = false
 
     val state: StateFlow<PlaybackState> = controller.state
 
@@ -177,6 +201,8 @@ class PlayerViewModel(
         customUrl: String? = null,
         customTitle: String? = null,
         startPositionMillis: Long? = null,
+        /** Where the viewer was when they chose this. Recorded once, when playback ends. */
+        origin: WatchOrigin = WatchOrigin.ROW,
         /**
          * Which episode this is, when it is one.
          *
@@ -190,6 +216,8 @@ class PlayerViewModel(
         val request = LoadRequest(channelId, customUrl, startPositionMillis)
         if (loadedRequest == request) return
         loadedRequest = request
+        chosenFrom = origin
+        recorded = false
 
         viewModelScope.launch {
             val channel = channelRepository.findById(channelId) ?: return@launch
@@ -378,12 +406,52 @@ class PlayerViewModel(
     fun onStopped() {
         controller.pause()
         rememberPosition()
+        recordOccasion()
     }
 
     override fun onCleared() {
         rememberPosition()
+        recordOccasion()
         controller.release()
         super.onCleared()
+    }
+
+    /**
+     * Writes down that this was watched, once per sitting.
+     *
+     * **Once**, which is what makes "how many times" mean how many times rather than how long: a
+     * row per position write would turn a two-hour film into seven hundred viewings. The guard is
+     * cleared by [load], so opening the same title again tomorrow is a second occasion and opening
+     * it twice in one screen's lifetime is not.
+     *
+     * Live is never recorded, for the same reason it is never given a resume point: a channel is
+     * not something anybody continues, and a suggestion built from one would be a suggestion built
+     * from what happened to be on.
+     */
+    @Suppress("ReturnCount")
+    private fun recordOccasion() {
+        if (recorded) return
+        val current = state.value
+        val item = current.item?.takeIf { !it.isLive } ?: return
+        val playing = playing ?: return
+        val fraction = if (current.durationMillis > 0L) {
+            (current.positionMillis.toDouble() / current.durationMillis).coerceIn(0.0, 1.0)
+        } else {
+            0.0
+        }
+        if (fraction <= 0.0 && current.positionMillis <= 0L) return
+
+        recorded = true
+        applicationScope.launch {
+            watchEvents.record(
+                sourceId = playing.sourceId,
+                stableKey = item.id,
+                kind = playing.kind,
+                title = playing.title,
+                fraction = fraction,
+                origin = chosenFrom,
+            )
+        }
     }
 
     /**
@@ -395,7 +463,7 @@ class PlayerViewModel(
      */
     private fun rememberPosition() {
         val entry = currentHistoryEntry() ?: return
-        viewModelScope.launch { historyRepository.saveProgress(entry) }
+        applicationScope.launch { historyRepository.saveProgress(entry) }
     }
 
     /**
@@ -425,5 +493,51 @@ class PlayerViewModel(
             seasonNumber = playing.seasonNumber,
             episodeNumber = playing.episodeNumber,
         )
+    }
+
+    /*
+     * A resume point every ten seconds of playback, rather than only when playback stops.
+     *
+     * Stop and dispose were the two moments a position was written, and both assume the app gets
+     * to run afterwards. A process killed for memory while a film is paused, a television switched
+     * off at the wall, a crash: each of those lost everything since the title was opened, which on
+     * a two-hour film is up to two hours of "where was I".
+     *
+     * **Driven by the position rather than by a timer**, and that is the whole of why there is no
+     * clock here. A ten-second timer keeps running while a film is paused, while a viewer reads a
+     * description, and for as long as the screen exists — writing the same number to the database
+     * over and over. Watching the position cross a ten-second boundary writes exactly when there
+     * is something new to say and stops on its own when nothing is moving.
+     *
+     * `rememberPosition` returns immediately for live, for nothing loaded, and for a position
+     * still at zero, so the first crossing of a fresh item costs nothing.
+     *
+     * **This block is last in the class, and that is load-bearing.** `viewModelScope` dispatches on
+     * `Dispatchers.Main.immediate`, which on the main thread runs the body *now* rather than after
+     * the constructor returns — so an `init` placed above a property it reads collects a null and
+     * takes the app down the moment anything is played. It was placed above `state`, and it did.
+     * Kotlin runs initialisers in declaration order; anything this touches has to be declared
+     * before it. `PlayerStartsCollectingImmediatelyTest` is the guard, and it fails when this block
+     * moves back up.
+     */
+    init {
+        viewModelScope.launch {
+            controller.state.map { it.positionMillis / PERSIST_INTERVAL_MILLIS }
+                .distinctUntilChanged()
+                .collect { rememberPosition() }
+        }
+    }
+
+    private companion object {
+        /**
+         * How often a position is written down while something is playing.
+         *
+         * Ten seconds of *playback*, not of wall clock: the position is what is watched, so a
+         * paused film writes nothing and a film left open on a details screen writes nothing.
+         * Ten is the most a viewer can lose to a process that never gets to run its shutdown, and
+         * it is less than the time it takes to notice. The in-memory position already ticks every
+         * 500ms; this is about how often it reaches the database.
+         */
+        const val PERSIST_INTERVAL_MILLIS = 10_000L
     }
 }

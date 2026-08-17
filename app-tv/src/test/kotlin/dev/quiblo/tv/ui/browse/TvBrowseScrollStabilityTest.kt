@@ -123,13 +123,19 @@ class TvBrowseScrollStabilityTest {
     }
 
     /**
-     * The same, for the two shapes the For You tab added.
+     * The same, for the shapes the For You tab added.
      *
-     * **The rank is an overlay and the caption's line is reserved for the whole row**, and both
-     * of those were chosen for exactly this reason. A numeral standing outside the poster would
-     * make a tile's width depend on how many digits its number has; a caption drawn only on the
-     * tiles that have one would make a tile's height depend on its own content. Either is a
-     * focused tile whose reported rectangle differs from its neighbour's, which is #008.
+     * **The rank stands outside the poster in a gutter of fixed width, and the caption's line is
+     * reserved for the whole row.** Both are chosen for exactly this reason. A gutter that wrapped
+     * its figure would make a tile's width depend on how many digits its number has; a caption
+     * drawn only on the tiles that have one would make a tile's height depend on its own content.
+     * Either is a focused tile whose reported rectangle differs from its neighbour's, which is
+     * #008.
+     *
+     * This row is twenty-four tiles long, so walking it crosses 9 to 10 — the press where a
+     * wrapped gutter would change width under the remote. That crossing is the case `023` added
+     * this shape for, and it is why the row is not shortened to match the ten a real popular row
+     * holds.
      *
      * The note inside `TvPoster` says a label that grows a line will start the loop again. This
      * is the test that note points at.
@@ -137,6 +143,18 @@ class TvBrowseScrollStabilityTest {
     @Test
     fun `a ranked row is no less still`() {
         assertHoldsStill(rowIndex = 1, style = TvRowStyle.RANKED)
+    }
+
+    /**
+     * And a ranked row holding titles the provider does not carry.
+     *
+     * An unavailable tile draws a badge where the kind badge goes, a dimmed poster, and a dimmed
+     * numeral — all of them overlays or colour, none of them layout. If any of that ever becomes
+     * a size, this is what fails.
+     */
+    @Test
+    fun `a ranked row with unavailable tiles in it is no less still`() {
+        assertHoldsStill(rowIndex = 1, style = TvRowStyle.RANKED, unavailableEvery = 3)
     }
 
     @Test
@@ -162,17 +180,24 @@ class TvBrowseScrollStabilityTest {
      * television does: the first row already passes it, and before the fix the second row
      * misses it by about six dp, arriving in a twitch on each of the first several presses.
      */
+    @Suppress("LongParameterList")
     private fun assertHoldsStill(
         rowIndex: Int,
         showKindBadge: Boolean = false,
         style: TvRowStyle = TvRowStyle.POSTER,
         captioned: Boolean = false,
         captionGapEvery: Int = 0,
+        unavailableEvery: Int = 0,
     ) {
         val trace = traceWhileWalkingAlong(
             rowIndex,
             showKindBadge = showKindBadge,
-            rows = catalogue(style = style, captioned = captioned, captionGapEvery = captionGapEvery),
+            rows = catalogue(
+                style = style,
+                captioned = captioned,
+                captionGapEvery = captionGapEvery,
+                unavailableEvery = unavailableEvery,
+            ),
         )
         val settled = trace.first()
         val drift = trace.maxOf { abs(it - settled) }
@@ -333,21 +358,35 @@ class TvBrowseScrollStabilityTest {
         captioned: Boolean = false,
         /** Every nth tile gets no caption, so a row can be walked across a gap in one. */
         captionGapEvery: Int = 0,
+        /** Every nth tile has no channel behind it, as a popular title the provider lacks. */
+        unavailableEvery: Int = 0,
     ): List<TvCategoryRow> = (0 until ROWS).map { row ->
         TvCategoryRow(
             title = rowTitle(row),
             style = style,
             items = (0 until POSTERS_PER_ROW).map { column ->
                 val index = row * POSTERS_PER_ROW + column
+                val unavailable = unavailableEvery > 0 && column % unavailableEvery == 0
+                val channel = Channel(
+                    id = index.toLong(),
+                    sourceId = 1L,
+                    name = posterTitle(row, column),
+                    streamUrl = "https://example.invalid/${row}_$column",
+                    kind = MediaKind.VOD,
+                    groupTitle = rowTitle(row),
+                )
                 TvRowItem(
-                    channel = Channel(
-                        id = index.toLong(),
-                        sourceId = 1L,
-                        name = posterTitle(row, column),
-                        streamUrl = "https://example.invalid/${row}_$column",
-                        kind = MediaKind.VOD,
-                        groupTitle = rowTitle(row),
-                    ),
+                    tile = if (unavailable) {
+                        TvTile(
+                            key = "unavailable-$index",
+                            name = posterTitle(row, column),
+                            kind = MediaKind.VOD,
+                            artworkUrl = null,
+                            channel = null,
+                        )
+                    } else {
+                        TvTile(channel)
+                    },
                     flatIndex = index,
                     rank = if (style == TvRowStyle.RANKED) column + 1 else null,
                     caption = when {

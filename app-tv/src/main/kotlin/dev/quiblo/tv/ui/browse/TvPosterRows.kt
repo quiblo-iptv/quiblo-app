@@ -28,6 +28,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -53,8 +54,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
@@ -74,6 +75,7 @@ import dev.quiblo.feature.browse.di.browseParams
 import dev.quiblo.feature.browse.di.categoryRowsParams
 import dev.quiblo.feature.browse.labelRes
 import dev.quiblo.tv.R
+import dev.quiblo.tv.ui.common.AmbientRequest
 import dev.quiblo.tv.ui.common.LocalAmbientSink
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -287,13 +289,52 @@ internal enum class TvRowStyle {
     POSTER,
 
     /**
-     * A poster with its position drawn large across the artwork.
+     * A poster with its position drawn large beside it, in a gutter of its own.
      *
-     * The Now Popular row, and the reason it looks like the numbered rows on a commercial
+     * The two popular rows, and the reason they look like the numbered rows on a commercial
      * service: the number *is* the content there, and a row of ten identical posters says
      * nothing a viewer can read from a sofa.
+     *
+     * **The gutter is a fixed width and that is not a style choice.** The numeral used to be
+     * drawn inside the artwork precisely so that a tile's width could not depend on how many
+     * digits its number had — a tile that measures differently from its neighbour is defect
+     * #008, and the note inside [TvPoster] records what finding that cost. Standing the figure
+     * outside the poster is what was asked for, and a constant-width gutter is the one shape
+     * that gives it without giving #008 back: `1` and `10` occupy the same rectangle.
+     *
+     * A ranked row also always reserves its caption line, whether or not any tile is using it,
+     * for the same reason — see [TvPoster]'s `showCaption`.
      */
     RANKED,
+}
+
+/**
+ * What one tile draws, whether or not there is anything behind it to play.
+ *
+ * Almost every tile in the app is a catalogue row and says so — [channel] is set and the four
+ * fields above it are read off it. The exception is a popular title this provider does not carry:
+ * it keeps its place in the ranking, draws from what the metadata service said, and has nothing
+ * to open.
+ *
+ * The distinction is a null [channel] rather than a boolean beside one, so there is no way to
+ * write a tile that claims to be playable and has no stream.
+ */
+internal data class TvTile(
+    /** Unique within its row. A catalogue row's stable key, or the ranking's own position. */
+    val key: String,
+    val name: String,
+    val kind: MediaKind,
+    /** What the provider or the metadata service supplied. Null falls through to the placeholder. */
+    val artworkUrl: String?,
+    val channel: Channel?,
+) {
+    constructor(channel: Channel) : this(
+        key = channel.stableKey,
+        name = channel.name,
+        kind = channel.kind,
+        artworkUrl = channel.logoUrl,
+        channel = channel,
+    )
 }
 
 /**
@@ -302,9 +343,12 @@ internal enum class TvRowStyle {
  * The index is carried rather than recovered. Finding it with `indexOf` meant a linear scan
  * of every item in the catalogue on each press — unnoticeable on a short list, and on a
  * large one a pause between pressing a film and anything happening.
+ *
+ * [flatIndex] means nothing for a tile with no channel: there is no position in a list of things
+ * to play for something that cannot be played.
  */
 internal data class TvRowItem(
-    val channel: Channel,
+    val tile: TvTile,
     val flatIndex: Int,
     /** Where this title sits in the list it came from. Only [TvRowStyle.RANKED] draws it. */
     val rank: Int? = null,
@@ -316,7 +360,11 @@ internal data class TvRowItem(
      * whether or not that tile has one, so the row measures the same all the way along.
      */
     val caption: String? = null,
-)
+) {
+    /** The ordinary tile: a catalogue row, drawn from itself. */
+    constructor(channel: Channel, flatIndex: Int, rank: Int? = null, caption: String? = null) :
+        this(TvTile(channel), flatIndex, rank, caption)
+}
 
 /**
  * Groups the catalogue into rows, recording each item's flat position as it goes.
@@ -389,23 +437,30 @@ private fun CategoryRow(
         // No content padding, and no spacing beyond what the items carry themselves. Both
         // used to live here; both now live inside the poster. See `Poster`.
         LazyRow {
-            items(items = items, key = { it.channel.id }) { item ->
+            items(items = items, key = { it.tile.key }) { item ->
                 // Per poster on screen, not per category: a category row can hold hundreds
                 // of films, and only the handful the remote has actually reached are
-                // displaying a score to fetch.
-                LaunchedEffect(item.channel.id) { onVisible(item.channel) }
+                // displaying a score to fetch. A tile with no catalogue row behind it has
+                // nothing to ask about.
+                item.tile.channel?.let { channel ->
+                    LaunchedEffect(channel.id) { onVisible(channel) }
+                }
                 TvPoster(
-                    channel = item.channel,
-                    rating = ratings[item.channel.stableKey],
-                    fallbackArtworkUrl = posters[item.channel.stableKey],
+                    tile = item.tile,
+                    rating = ratings[item.tile.key],
+                    fallbackArtworkUrl = posters[item.tile.key],
                     showKindBadge = showKindBadge,
                     onClick = { onItemClick(item) },
                     rank = item.rank.takeIf { style == TvRowStyle.RANKED },
                     // Reserved for the whole row, not only for the tiles that have one. A tile
                     // one line taller than its neighbour is a tile whose bounds differ from its
                     // neighbour's, which is where #008 came from.
+                    //
+                    // A ranked row reserves it unconditionally, because that is where the answer
+                    // to pressing an unavailable tile is written: a line that appears on one tile
+                    // when it is pressed would resize that tile mid-row.
                     caption = item.caption,
-                    showCaption = items.any { it.caption != null },
+                    showCaption = style == TvRowStyle.RANKED || items.any { it.caption != null },
                 )
             }
         }
@@ -425,7 +480,7 @@ private fun CategoryRow(
  */
 @Composable
 internal fun TvPoster(
-    channel: Channel,
+    tile: TvTile,
     rating: Double?,
     onClick: () -> Unit,
     /**
@@ -454,9 +509,10 @@ internal fun TvPoster(
     // A live channel's artwork is a small wide logo, not a poster. Cropping one to 2:3
     // shows a corner of a logo — the exact mistake PLAN-TV.md §3.3 exists to avoid — so a
     // live item keeps its whole logo inside the same tile instead.
-    val isLogo = channel.kind == MediaKind.LIVE
-    val artworkUrl = channel.logoUrl?.takeIf { it.isNotBlank() }
+    val isLogo = tile.kind == MediaKind.LIVE
+    val artworkUrl = tile.artworkUrl?.takeIf { it.isNotBlank() }
         ?: fallbackArtworkUrl?.takeIf { it.isNotBlank() }
+    val isPlayable = tile.channel != null
     val interactionSource = remember { MutableInteractionSource() }
     val isFocused by interactionSource.collectIsFocusedAsState()
 
@@ -466,7 +522,7 @@ internal fun TvPoster(
     // `TvBrowseScrollStabilityTest`. See `LocalAmbientSink`.
     val ambientSink = LocalAmbientSink.current
     LaunchedEffect(isFocused, artworkUrl) {
-        if (isFocused) ambientSink(artworkUrl)
+        if (isFocused) ambientSink(AmbientRequest.Artwork(artworkUrl))
     }
 
     val scale by animateFloatAsState(
@@ -482,145 +538,161 @@ internal fun TvPoster(
      * This padding is *not* what stopped the shake, though it was twice believed to be. The
      * shake is the modifier order two lines below, and the note there says why.
      */
-    Box(
-        modifier = Modifier.padding(
-            horizontal = FOCUS_GROWTH_HORIZONTAL,
-            vertical = FOCUS_GROWTH,
-        ),
-    ) {
-        Column(
-            modifier = Modifier
-                .width(POSTER_WIDTH)
-                /*
-                 * `clickable` before `graphicsLayer`, and the order is the whole of #008.
-                 *
-                 * A modifier chain applies outside-in, so anything to the right of
-                 * `graphicsLayer` sits inside that layer — and `clickable` used to, which put
-                 * the *focusable* node inside the animating scale. A focus node's bounds are
-                 * resolved through every layer between it and the scrollable above it, so for
-                 * the length of the scale animation this poster reported a rectangle that
-                 * grew a little every frame.
-                 *
-                 * The vertical list reads exactly that rectangle to decide whether the
-                 * focused thing is on screen. From the second row down the answer is "only
-                 * just", so it scrolls until the poster is flush with the bottom edge — and
-                 * flush is the one position where the next frame's growth immediately puts it
-                 * out of view again. Press right, and the whole catalogue twitches upward
-                 * while the new poster inflates. Hold the remote down and it does that on
-                 * every repeat. That is the wobble, and it is why the **first row never
-                 * shook**: a poster there fits with room to spare, so the list never scrolls
-                 * and there is no equilibrium to fall off.
-                 *
-                 * With the focusable outside the layer its bounds are a constant 150dp box
-                 * whatever the scale is doing. The poster still grows; nothing is asked to
-                 * chase it, and every poster in a row now reports the same rectangle as its
-                 * neighbours — so moving along a row gives the vertical list nothing to
-                 * react to at all.
-                 *
-                 * Measured, not reasoned: `TvBrowseScrollStabilityTest` walks the remote
-                 * along a row and reads the catalogue's position off every frame. Before this
-                 * line it moved 11px on the second row and 12px on the fourth while the first
-                 * stayed at zero, which is the asymmetry that was reported from the sofa.
-                 * After it, all three are flat.
-                 *
-                 * Note for anyone changing this tile: the resting position is still *flush*
-                 * with the viewport edge, which tolerates nothing. Anything that makes a
-                 * focused poster's measured bounds vary — a focus-dependent size, a border
-                 * that takes up layout, a label that grows a line — will start the loop
-                 * again. The test is what will tell you.
-                 */
-                .clickable(interactionSource = interactionSource, indication = null, onClick = onClick)
-                .graphicsLayer {
-                    scaleX = scale
-                    scaleY = scale
-                },
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        // The gutter is drawn for every tile of a ranked row and for no tile of any other, so a
+        // row's tiles all measure the same. Its width is fixed rather than wrapped around the
+        // figure: `1` and `10` are different widths and a tile whose width depends on its own
+        // content is where #008 came from.
+        rank?.let { RankGutter(rank = it, dimmed = !isPlayable) }
+
+        Box(
+            modifier = Modifier.padding(
+                horizontal = FOCUS_GROWTH_HORIZONTAL,
+                vertical = FOCUS_GROWTH,
+            ),
         ) {
-            Box(
+            Column(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .aspectRatio(POSTER_ASPECT_RATIO)
-                    .clip(RoundedCornerShape(8.dp))
-                    .border(
-                        width = if (isFocused) 3.dp else 0.dp,
-                        color = if (isFocused) Color.White else Color.Transparent,
-                        shape = RoundedCornerShape(8.dp),
-                    ),
+                    .width(POSTER_WIDTH)
+                    /*
+                     * `clickable` before `graphicsLayer`, and the order is the whole of #008.
+                     *
+                     * A modifier chain applies outside-in, so anything to the right of
+                     * `graphicsLayer` sits inside that layer — and `clickable` used to, which put
+                     * the *focusable* node inside the animating scale. A focus node's bounds are
+                     * resolved through every layer between it and the scrollable above it, so for
+                     * the length of the scale animation this poster reported a rectangle that
+                     * grew a little every frame.
+                     *
+                     * The vertical list reads exactly that rectangle to decide whether the
+                     * focused thing is on screen. From the second row down the answer is "only
+                     * just", so it scrolls until the poster is flush with the bottom edge — and
+                     * flush is the one position where the next frame's growth immediately puts it
+                     * out of view again. Press right, and the whole catalogue twitches upward
+                     * while the new poster inflates. Hold the remote down and it does that on
+                     * every repeat. That is the wobble, and it is why the **first row never
+                     * shook**: a poster there fits with room to spare, so the list never scrolls
+                     * and there is no equilibrium to fall off.
+                     *
+                     * With the focusable outside the layer its bounds are a constant 150dp box
+                     * whatever the scale is doing. The poster still grows; nothing is asked to
+                     * chase it, and every poster in a row now reports the same rectangle as its
+                     * neighbours — so moving along a row gives the vertical list nothing to
+                     * react to at all.
+                     *
+                     * Measured, not reasoned: `TvBrowseScrollStabilityTest` walks the remote
+                     * along a row and reads the catalogue's position off every frame. Before this
+                     * line it moved 11px on the second row and 12px on the fourth while the first
+                     * stayed at zero, which is the asymmetry that was reported from the sofa.
+                     * After it, all three are flat.
+                     *
+                     * Note for anyone changing this tile: the resting position is still *flush*
+                     * with the viewport edge, which tolerates nothing. Anything that makes a
+                     * focused poster's measured bounds vary — a focus-dependent size, a border
+                     * that takes up layout, a label that grows a line — will start the loop
+                     * again. The test is what will tell you.
+                     */
+                    .clickable(interactionSource = interactionSource, indication = null, onClick = onClick)
+                    .graphicsLayer {
+                        scaleX = scale
+                        scaleY = scale
+                    },
             ) {
-                if (artworkUrl == null) {
-                    ArtworkPlaceholder()
-                } else {
-                    SubcomposeAsyncImage(
-                        model = artworkUrl,
-                        contentDescription = null,
-                        contentScale = if (isLogo) ContentScale.Fit else ContentScale.Crop,
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(if (isLogo) LOGO_PADDING else 0.dp),
-                        loading = { ArtworkPlaceholder() },
-                        error = { ArtworkPlaceholder() },
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .aspectRatio(POSTER_ASPECT_RATIO)
+                        .clip(RoundedCornerShape(8.dp))
+                        .border(
+                            width = if (isFocused) 3.dp else 0.dp,
+                            color = if (isFocused) Color.White else Color.Transparent,
+                            shape = RoundedCornerShape(8.dp),
+                        ),
+                ) {
+                    if (artworkUrl == null) {
+                        ArtworkPlaceholder()
+                    } else {
+                        SubcomposeAsyncImage(
+                            model = artworkUrl,
+                            contentDescription = null,
+                            contentScale = if (isLogo) ContentScale.Fit else ContentScale.Crop,
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(if (isLogo) LOGO_PADDING else 0.dp)
+                                // Dimmed rather than greyed. A title the provider does not carry
+                                // is still the title it is, and a viewer reading a top ten should
+                                // recognise the poster — it is the reason the place is filled at
+                                // all. The badge is what says it cannot be opened.
+                                .alpha(if (isPlayable) 1f else UNAVAILABLE_ARTWORK_ALPHA),
+                            loading = { ArtworkPlaceholder() },
+                            error = { ArtworkPlaceholder() },
+                        )
+                    }
+
+                    PosterOverlays(
+                        kind = tile.kind,
+                        rating = rating,
+                        showKindBadge = showKindBadge,
+                        isPlayable = isPlayable,
                     )
                 }
 
-                PosterOverlays(
-                    kind = channel.kind,
-                    rating = rating,
-                    rank = rank,
-                    showKindBadge = showKindBadge,
-                )
-            }
-
-            // No marquee. This was once thought to be the fix for the shake and it was not —
-            // the shake was the modifier order above, and the recording that seemed to
-            // implicate a marquee had truncated early, so its "idle" tail still had key
-            // presses in it.
-            //
-            // It stays gone on its own merits: on a ten-foot display a title that never stops
-            // moving is harder to read than one politely truncated.
-            Text(
-                text = channel.name,
-                color = Color.White.copy(alpha = if (isFocused) 1f else 0.7f),
-                fontSize = 14.sp,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier
-                    .padding(top = 8.dp)
-                    .fillMaxWidth(),
-            )
-
-            // A fixed line, present or blank, for every tile in a row that has any. Its height
-            // is set rather than left to the text, so an empty one and a full one measure alike.
-            if (showCaption) {
+                // No marquee. This was once thought to be the fix for the shake and it was not —
+                // the shake was the modifier order above, and the recording that seemed to
+                // implicate a marquee had truncated early, so its "idle" tail still had key
+                // presses in it.
+                //
+                // It stays gone on its own merits: on a ten-foot display a title that never stops
+                // moving is harder to read than one politely truncated.
                 Text(
-                    text = caption.orEmpty(),
-                    color = Color.White.copy(alpha = 0.55f),
-                    fontSize = 11.sp,
-                    lineHeight = CAPTION_LINE_HEIGHT,
+                    text = tile.name,
+                    color = Color.White.copy(alpha = if (isFocused) 1f else 0.7f),
+                    fontSize = 14.sp,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier
-                        .padding(top = 2.dp)
-                        .height(CAPTION_HEIGHT)
+                        .padding(top = 8.dp)
                         .fillMaxWidth(),
                 )
+
+                // A fixed line, present or blank, for every tile in a row that has any. Its height
+                // is set rather than left to the text, so an empty one and a full one measure alike.
+                if (showCaption) {
+                    Text(
+                        text = caption.orEmpty(),
+                        color = Color.White.copy(alpha = 0.55f),
+                        fontSize = 11.sp,
+                        lineHeight = CAPTION_LINE_HEIGHT,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier
+                            .padding(top = 2.dp)
+                            .height(CAPTION_HEIGHT)
+                            .fillMaxWidth(),
+                    )
+                }
             }
         }
     }
 }
 
 /**
- * Everything drawn *on* the artwork: the score, the kind, the rank.
+ * Everything drawn *on* the artwork: the score, and the kind or the fact that it is unavailable.
  *
- * All three are overlays and none of them takes up layout. **That is the rule this composable
- * exists to keep in one place**: a label in the column below would change the tile's measured
- * height, and a focused tile whose bounds move is defect #008 all over again — the long note on
- * the modifier order in [TvPoster] is the record of what finding that cost.
+ * All of them are overlays and none takes up layout. **That is the rule this composable exists to
+ * keep in one place**: a label in the column below would change the tile's measured height, and a
+ * focused tile whose bounds move is defect #008 all over again — the long note on the modifier
+ * order in [TvPoster] is the record of what finding that cost.
+ *
+ * The rank is the one thing that used to be here and is no longer: it now stands outside the
+ * poster, in a gutter of fixed width. See [RankGutter].
  */
 @Composable
 private fun BoxScope.PosterOverlays(
     kind: MediaKind,
     rating: Double?,
-    rank: Int?,
     showKindBadge: Boolean,
+    isPlayable: Boolean,
 ) {
     // Top left, where the phone's card puts it, so the two apps agree about what a poster
     // looks like.
@@ -631,24 +703,14 @@ private fun BoxScope.PosterOverlays(
         )
     }
 
-    // Opposite corner from the score.
-    if (showKindBadge) {
-        kindLabel(kind)?.let { label ->
-            KindBadge(
-                label = label,
-                modifier = Modifier.align(Alignment.TopEnd).padding(6.dp),
-            )
-        }
-    }
-
-    // Inside the artwork rather than beside it, which is the one decision that matters here. A
-    // numeral in the layout — the shape a commercial service uses, with the figure standing
-    // outside the poster — would make this tile wider than every other tile in the app, and its
-    // width would depend on whether the number had one digit or two.
-    rank?.let {
-        RankNumeral(
-            rank = it,
-            modifier = Modifier.align(Alignment.BottomStart).fillMaxWidth(),
+    // Opposite corner from the score, and one badge or the other rather than both. "Unavailable"
+    // is the more useful of the two facts by a distance, and stacking a second plate in the same
+    // corner is how a poster becomes unreadable from a sofa.
+    val badge = if (isPlayable) kindLabel(kind).takeIf { showKindBadge } else stringResource(R.string.tv_unavailable)
+    badge?.let { label ->
+        KindBadge(
+            label = label,
+            modifier = Modifier.align(Alignment.TopEnd).padding(6.dp),
         )
     }
 }
@@ -707,32 +769,35 @@ private fun kindLabel(kind: MediaKind): String? = when (kind) {
 }
 
 /**
- * The position, drawn large across the bottom of the artwork.
+ * The position, drawn large beside the poster in a gutter of its own.
  *
- * A gradient under it rather than a plate, because the figure is far too big for one and the
- * point of it is that it reads from across a room: the poster fades to black at its foot and the
- * numeral sits in the dark part. Nothing here takes up layout — see the note at the call site.
+ * **The width is [RANK_GUTTER_WIDTH] whatever the figure is**, and that constant is the whole
+ * safety of this shape. The numeral used to be drawn inside the artwork for exactly this reason:
+ * a tile as wide as its own number is one that measures differently from its neighbours, and a
+ * focused tile whose bounds differ from its neighbour's is defect #008 — see the note inside
+ * [TvPoster]. The figure is centred in the gutter and is allowed to be clipped by it rather than
+ * allowed to widen it, which is why nothing here wraps its content.
+ *
+ * The gutter takes up layout, unlike everything in [PosterOverlays]. That is safe because it is
+ * outside the animating scale and identical on every tile of the row: it moves the poster along
+ * and changes nothing about what the poster measures.
  */
 @Composable
-private fun RankNumeral(rank: Int, modifier: Modifier = Modifier) {
+private fun RankGutter(rank: Int, dimmed: Boolean, modifier: Modifier = Modifier) {
     Box(
         modifier = modifier
-            .height(RANK_SCRIM_HEIGHT)
-            .background(
-                Brush.verticalGradient(
-                    listOf(Color.Transparent, Color.Black.copy(alpha = RANK_SCRIM_ALPHA)),
-                ),
-            ),
-        contentAlignment = Alignment.BottomStart,
+            .width(RANK_GUTTER_WIDTH)
+            .height(RANK_GUTTER_HEIGHT),
+        contentAlignment = Alignment.Center,
     ) {
         Text(
             text = rank.toString(),
-            color = Color.White,
+            color = Color.White.copy(alpha = if (dimmed) RANK_DIMMED_ALPHA else 1f),
             fontSize = RANK_SIZE,
             lineHeight = RANK_SIZE,
             fontWeight = FontWeight.Black,
             maxLines = 1,
-            modifier = Modifier.padding(start = 6.dp, bottom = 2.dp),
+            softWrap = false,
         )
     }
 }
@@ -741,8 +806,20 @@ private const val KIND_BADGE_ALPHA = 0.6f
 
 /** Big enough to be the thing a viewer reads first, which is the whole point of the row. */
 private val RANK_SIZE = 56.sp
-private val RANK_SCRIM_HEIGHT = 72.dp
-private const val RANK_SCRIM_ALPHA = 0.75f
+
+/**
+ * Wide enough for two digits at [RANK_SIZE], and the same for one.
+ *
+ * Fixed rather than measured. A gutter that wrapped its figure would make tile 1 narrower than
+ * tile 10, and unequal tiles in a row is #008 — see [RankGutter].
+ */
+private val RANK_GUTTER_WIDTH = 68.dp
+
+/** A number standing for something that cannot be opened is still a number, but a quieter one. */
+private const val RANK_DIMMED_ALPHA = 0.45f
+
+/** Recognisable, plainly not available. See the note at the call site. */
+private const val UNAVAILABLE_ARTWORK_ALPHA = 0.4f
 
 /** One line, at a fixed height so a tile without a caption measures like one with. */
 private val CAPTION_HEIGHT = 15.dp
@@ -750,6 +827,9 @@ private val CAPTION_LINE_HEIGHT = 13.sp
 
 private val POSTER_WIDTH = 150.dp
 private const val POSTER_ASPECT_RATIO = 2f / 3f
+
+/** The poster's own height, so the figure sits beside the artwork rather than beside the title. */
+private val RANK_GUTTER_HEIGHT = POSTER_WIDTH / POSTER_ASPECT_RATIO
 private const val FOCUSED_SCALE = 1.1f
 private val LOGO_PADDING = 12.dp
 

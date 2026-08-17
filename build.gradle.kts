@@ -43,16 +43,18 @@ tasks.register("detektAll") {
 /**
  * Aggregate entry point used by CI: `./gradlew coverageAll`.
  *
- * Only the parser modules are covered, because AC-NFR-07 only asks for the parsers. They
- * are also the only modules where a coverage number means anything: they are pure
- * functions over text, so a covered line is genuinely an exercised line. Applying the same
- * gate to UI modules would measure how much Compose got instantiated, not how much
+ * The parser modules are covered because AC-NFR-07 asks for them, at 80. `:core:data` joined them
+ * in `023` at Amendment 10's own floor of 70 — the matching, the scoring, the merge rules and the
+ * caches there are pure functions over rows, which is the same reason the parsers are measured.
+ *
+ * The UI modules are still not, and that is the same decision it always was: a covered line in a
+ * Compose module measures how much of the framework got instantiated rather than how much
  * behaviour got tested, and the number would be gamed within a week.
  */
 tasks.register("coverageAll") {
     group = "verification"
-    description = "Verifies parser coverage against the AC-NFR-07 threshold."
-    dependsOn(":source:m3u:koverVerify", ":source:xtream:koverVerify")
+    description = "Verifies parser and core-data coverage against their thresholds."
+    dependsOn(":source:m3u:koverVerify", ":source:xtream:koverVerify", ":core:data:koverVerify")
 }
 
 /*

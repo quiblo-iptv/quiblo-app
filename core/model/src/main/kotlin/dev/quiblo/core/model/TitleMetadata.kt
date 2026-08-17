@@ -64,6 +64,10 @@ data class TitleMetadata(
      * is not a fact worth putting on a screen as though it were one.
      */
     val runtimeMinutes: Int? = null,
+    /** TMDB's two-letter code for the language it was made in. Null where it is not known. */
+    val originalLanguage: String? = null,
+    /** How much of the world is watching it. Attention rather than quality — see the entity. */
+    val popularity: Double? = null,
     /**
      * True when only the cheap half was fetched — a score and artwork, no cast or plot.
      *

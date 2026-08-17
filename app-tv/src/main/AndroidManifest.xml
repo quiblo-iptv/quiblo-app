@@ -4,10 +4,23 @@
   Copyright (C) 2026 The Quiblo Authors
   Licensed under the GNU General Public License v3.0 or later. See LICENSE.
 -->
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
 
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
+    <!--
+      Settings → Check for updates fetches the release APK from this project's own GitHub
+      releases and hands it to the system installer. Without this the intent is refused before
+      the viewer ever sees the installer's own "allow from this source?" prompt, which is the
+      consent that actually matters — this permission only lets Quiblo ask.
+
+      **It is a store-restricted permission**, and it is declared because Quiblo is distributed
+      as an APK from its releases page. A television has no store to update it from, so an app
+      that cannot tell a viewer they are three versions behind never gets updated at all.
+    -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
     <!--
       A television has no touchscreen and Android assumes one unless told otherwise, so
@@ -90,6 +103,42 @@
             </intent-filter>
         </activity>
 
-    </application>
+    
+        <!--
+          WorkManager is initialised on demand rather than by androidx.startup.
+          `androidx.startup` runs its initializers from a ContentProvider, which the system
+          creates *before* Application.onCreate — so a default initializer would ask this app for
+          its WorkManager configuration before Koin has been started, and the configuration is
+          resolved from Koin. Removing the initializer makes the first `WorkManager.getInstance`
+          the moment of initialisation, which is inside `beginSession`, after the graph exists.
+        -->
+        <provider
+            android:name="androidx.startup.InitializationProvider"
+            android:authorities="${applicationId}.androidx-startup"
+            android:exported="false"
+            tools:node="merge">
+            <meta-data
+                android:name="androidx.work.WorkManagerInitializer"
+                android:value="androidx.startup"
+                tools:node="remove" />
+        </provider>
+
+        <!--
+          The downloaded APK is handed to the system installer as a content:// URI, because a
+          file:// one has been refused since Android 7. `grantUriPermissions` plus the read flag
+          on the intent is what lets the installer — a different app — open a file inside this
+          app's own storage, and nothing else can: the provider is not exported and the paths
+          file names exactly one directory.
+        -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.updates"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/update_paths" />
+        </provider>
+</application>
 
 </manifest>

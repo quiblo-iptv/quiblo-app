@@ -51,6 +51,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.flowOn
@@ -249,6 +250,48 @@ class ChannelRepository(
             .flowOn(browseDispatcher)
 
     /**
+     * The playable rows behind a set of ids, for the feeds that choose by id rather than by query.
+     *
+     * The popular row and the suggestions row both work out *which* titles they want somewhere
+     * else — one against a service's list, one against a scoring function — and then need the
+     * catalogue rows for them. One read for both, because the two lists overlap more often than
+     * not and two queries for one question is two chances to disagree about a favourite.
+     *
+     * **The script filter applies here, and its absence was BUG-031.** Every other catalogue feed
+     * hands the hidden mask to its query; this one has no query to hand it to, because the ids
+     * were already chosen. So a viewer who had hidden Arabic was still offered Arabic titles by
+     * both rows that come through here — the two rows on For You that propose something the
+     * viewer did not ask for, which is the worst place in the app for the setting to be ignored.
+     */
+    /**
+     * The same, for the remembered rows, which hold provider identities rather than row ids.
+     *
+     * A cached row cannot hold ids: a refresh deletes every row of a source and reinserts it with
+     * a new one, so an id remembered last night resolves to nothing tonight — and on the popular
+     * rows "resolves to nothing" is drawn as unavailable, which would turn a refresh into a top
+     * ten claiming the provider carries none of it.
+     *
+     * The script filter applies here for the same reason it applies to [channelsByIds].
+     */
+    suspend fun channelsByStableKeys(sourceId: Long, stableKeys: List<String>): List<Channel> =
+        if (stableKeys.isEmpty()) {
+            emptyList()
+        } else {
+            channelDao.findAllByStableKeys(profiles.activeProfileId, sourceId, stableKeys)
+                .hidingUnreadableScripts(hiddenScripts.first(), { it.channel.scriptMask }, { it.channel.name })
+                .map { it.channel.toDomain(isFavorite = it.isFavorite) }
+        }
+
+    suspend fun channelsByIds(ids: List<Long>): List<Channel> =
+        if (ids.isEmpty()) {
+            emptyList()
+        } else {
+            channelDao.findAllByIds(profiles.activeProfileId, ids)
+                .hidingUnreadableScripts(hiddenScripts.first(), { it.channel.scriptMask }, { it.channel.name })
+                .map { it.channel.toDomain(isFavorite = it.isFavorite) }
+        }
+
+    /**
      * The newest films and series a provider has added, in one list — and how that "newest" was
      * arrived at, because the two answers are not equally strong.
      *
@@ -265,22 +308,6 @@ class ChannelRepository(
      * @param limit how many to keep. The caller's cap, not a page size — nothing pages this.
      * @param sinceEpochMillis the oldest date that still counts as new. The caller owns the clock.
      */
-    /**
-     * The playable rows behind a set of ids, for the feeds that choose by id rather than by query.
-     *
-     * The popular row and the suggestions row both work out *which* titles they want somewhere
-     * else — one against a service's list, one against a scoring function — and then need the
-     * catalogue rows for them. One read for both, because the two lists overlap more often than
-     * not and two queries for one question is two chances to disagree about a favourite.
-     */
-    suspend fun channelsByIds(ids: List<Long>): List<Channel> =
-        if (ids.isEmpty()) {
-            emptyList()
-        } else {
-            channelDao.findAllByIds(profiles.activeProfileId, ids)
-                .map { it.channel.toDomain(isFavorite = it.isFavorite) }
-        }
-
     fun observeRecentlyAdded(sourceId: Long, limit: Int, sinceEpochMillis: Long): Flow<RecentlyAddedFeed> =
         combine(
             profiles.activeProfile,

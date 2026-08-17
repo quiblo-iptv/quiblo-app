@@ -23,9 +23,11 @@ import androidx.lifecycle.viewModelScope
 import dev.quiblo.core.data.ChannelRepository
 import dev.quiblo.core.data.MetadataRefresh
 import dev.quiblo.core.data.TitleMetadataRepository
+import dev.quiblo.core.data.TitleOpinionRepository
 import dev.quiblo.core.data.WatchHistoryRepository
 import dev.quiblo.core.model.Channel
 import dev.quiblo.core.model.MediaKind
+import dev.quiblo.core.model.Opinion
 import dev.quiblo.core.model.TitleMetadata
 import dev.quiblo.core.model.VodDetails
 import dev.quiblo.source.api.VodDetailsResult
@@ -84,6 +86,13 @@ sealed interface MovieDetailUiState {
          * arrived, which reads as a wrong answer rather than a pending one.
          */
         val isEnriching: Boolean = false,
+        /**
+         * What this viewer said about the film, if anything.
+         *
+         * Two buttons rather than five stars, and [Opinion.NONE] is the absence of an answer
+         * rather than a middle one — see `TitleOpinionRepository`.
+         */
+        val opinion: Opinion = Opinion.NONE,
     ) : MovieDetailUiState {
 
         val canResume: Boolean get() = resumePositionMillis > RESUME_THRESHOLD_MILLIS
@@ -112,6 +121,7 @@ class MovieDetailViewModel(
     private val channelRepository: ChannelRepository,
     private val metadataRepository: TitleMetadataRepository,
     private val historyRepository: WatchHistoryRepository,
+    private val opinions: TitleOpinionRepository,
 ) : ViewModel() {
 
     private var isRefreshing = false
@@ -154,13 +164,26 @@ class MovieDetailViewModel(
         }
     }
 
-    /** Re-reads the resume point, so returning from playback updates the buttons. */
-    fun refreshResumePosition() {
-        val current = _uiState.value as? MovieDetailUiState.Ready ?: return
+    /**
+     * Watches the resume point, so returning from playback updates the buttons — whenever it lands.
+     *
+     * **This used to be a single read from a lifecycle effect, and that was a race it lost.** The
+     * effect fires the instant this screen returns to the foreground, which on the television is
+     * the same instant the player above it is being disposed and is writing the position it
+     * finished with. Nothing ordered the two. When the read won, the screen offered **Play** for a
+     * film the viewer was four minutes into — and, having read once, it never asked again, so the
+     * only way to correct it was to leave the screen and come back.
+     *
+     * A flow does not order the two either. It removes the need to: a write that lands a hundred
+     * milliseconds late still lands, and the button follows it.
+     */
+    private fun observeResumePosition(channel: Channel) {
         viewModelScope.launch {
-            _uiState.value = current.copy(
-                resumePositionMillis = historyRepository.resumePosition(current.channel.stableKey),
-            )
+            historyRepository.observeResumePosition(channel.stableKey).collect { position ->
+                (_uiState.value as? MovieDetailUiState.Ready)?.let {
+                    _uiState.value = it.copy(resumePositionMillis = position)
+                }
+            }
         }
     }
 
@@ -183,6 +206,8 @@ class MovieDetailViewModel(
             )
 
             observeFavorite(channel)
+            observeResumePosition(channel)
+            observeOpinion(channel)
 
             val details = (channelRepository.getVodDetails(channelId) as? VodDetailsResult.Success)?.details
             (_uiState.value as? MovieDetailUiState.Ready)?.let { _uiState.value = it.copy(details = details) }
@@ -210,6 +235,31 @@ class MovieDetailViewModel(
      * A separate coroutine from [load] because it never completes, and putting a
      * `collect` in the middle of that function would stop everything after it from running.
      */
+    /**
+     * Records what the viewer thought, or takes it back.
+     *
+     * Pressing the button that is already lit clears the opinion, because the alternative is a
+     * viewer who mis-tapped having no way to say "I did not mean that" — and an opinion nobody
+     * can withdraw is one nobody gives.
+     */
+    fun rate(opinion: Opinion) {
+        val current = _uiState.value as? MovieDetailUiState.Ready ?: return
+        viewModelScope.launch {
+            val next = if (current.opinion == opinion) Opinion.NONE else opinion
+            opinions.set(current.channel.name, MediaKind.VOD, next)
+        }
+    }
+
+    private fun observeOpinion(channel: Channel) {
+        viewModelScope.launch {
+            opinions.observe(channel.name).collect { opinion ->
+                (_uiState.value as? MovieDetailUiState.Ready)?.let {
+                    _uiState.value = it.copy(opinion = opinion)
+                }
+            }
+        }
+    }
+
     private fun observeFavorite(channel: Channel) {
         viewModelScope.launch {
             channelRepository.observeIsFavorite(channel).collect { isFavorite ->

@@ -127,6 +127,9 @@ class TvPlayerControlsReachableTest {
     fun `down from the transport reaches the options row`() {
         setUp()
 
+        // Two presses since `026`: the timeline sits between the rows and is the first thing
+        // below the transport. The options row is still exactly one press further down.
+        press(Key.DirectionDown)
         press(Key.DirectionDown)
 
         compose.onNodeWithContentDescription(SUBTITLES).assertIsFocused()
@@ -136,6 +139,7 @@ class TvPlayerControlsReachableTest {
     fun `the options row walks along all of itself`() {
         setUp()
         press(Key.DirectionDown)
+        press(Key.DirectionDown)
 
         press(Key.DirectionRight)
         compose.onNodeWithContentDescription(AUDIO).assertIsFocused()
@@ -144,15 +148,18 @@ class TvPlayerControlsReachableTest {
         compose.onNodeWithContentDescription(FIT).assertIsFocused()
     }
 
-    /** And back up again, to the button the remote started on. */
+    /** And back up again, through the timeline, to the button the remote started on. */
     @Test
     fun `up from the options row returns to play and pause`() {
         setUp()
         press(Key.DirectionDown)
+        press(Key.DirectionDown)
         press(Key.DirectionRight)
 
         press(Key.DirectionUp)
+        compose.onNodeWithContentDescription(TIMELINE).assertIsFocused()
 
+        press(Key.DirectionUp)
         compose.onNodeWithContentDescription(PAUSE).assertIsFocused()
     }
 
@@ -175,6 +182,7 @@ class TvPlayerControlsReachableTest {
             ),
         )
 
+        press(Key.DirectionDown)
         press(Key.DirectionDown)
 
         compose.onNodeWithContentDescription(FIT).assertIsFocused()
@@ -280,6 +288,7 @@ class TvPlayerControlsReachableTest {
     private val noActions = TvControlActions(
         playPause = {},
         skip = {},
+        seekTo = {},
         nextEpisode = {},
         previousEpisode = {},
         openAudio = {},
@@ -301,5 +310,6 @@ class TvPlayerControlsReachableTest {
         const val SUBTITLES = "Subtitles"
         const val AUDIO = "Audio"
         const val FIT = "Picture fit: FIT"
+        const val TIMELINE = "Timeline. Left and right to move through, then wait."
     }
 }

@@ -28,6 +28,8 @@
     <string name="series_season_label">Season %1$d</string>
     <string name="series_resume">Resume S%1$d E%2$d · %3$s</string>
     <string name="series_start_over">Start from beginning</string>
+    <string name="series_like">I liked this</string>
+    <string name="series_dislike">Not for me</string>
     <string name="series_remove_history">Remove from history</string>
     <string name="series_refresh_metadata">Refresh information</string>
     <string name="series_refresh_working">Asking the metadata service…</string>

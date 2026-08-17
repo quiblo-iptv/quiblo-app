@@ -364,7 +364,32 @@ const val PLAYER_CROSSFADE_MILLIS = 300
  * Null when nothing focused has a picture, which is a live channel with no logo. The shell reads
  * that as "no light", not as "keep the last".
  */
-val LocalAmbientSink = staticCompositionLocalOf<(String?) -> Unit> { {} }
+val LocalAmbientSink = staticCompositionLocalOf<(AmbientRequest) -> Unit> { {} }
+
+/**
+ * What a screen wants behind it.
+ *
+ * Three answers rather than a nullable URL, because Search's answer was never expressible as one
+ * and was therefore drawn somewhere else — on the screen's own `Column`, which sits inside the
+ * shell's 48dp inset and below the tab bar. `drawBehind` clips to the node it is on and the pools
+ * are sized as fractions of it, so the glow came out inset on three sides, cut off flat under the
+ * bar, and smaller than the artwork light every other tab gets. It read as a lit rectangle on a
+ * dark screen rather than as light in a room.
+ *
+ * Saying what is wanted and letting the shell draw it is what fixes that, and it is the same
+ * shape the artwork light already had: one full-bleed layer at the root, fed from wherever.
+ */
+sealed interface AmbientRequest {
+
+    /** No light. Live, which has only wordmarks to take a colour from. */
+    data object None : AmbientRequest
+
+    /** The screen's own light, from nothing. Search. See [Modifier.driftingGlow]. */
+    data object Drift : AmbientRequest
+
+    /** The colours of this picture. Every row of posters. Null is [None] by another name. */
+    data class Artwork(val url: String?) : AmbientRequest
+}
 
 /**
  * The colours of the artwork at [url].

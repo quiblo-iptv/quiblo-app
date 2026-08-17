@@ -306,19 +306,26 @@ jobs:
       - name: Assemble
         run: ./gradlew assemble --stacktrace
 
-      # AC-NFR-04, as restated by FREEZE.md Amendment 7.
+      # AC-NFR-04, as restated by FREEZE.md Amendment 11.
       #
       # An application does not choose what its dependencies merge into its manifest, so the
-      # criterion permits exactly two contributed permissions and names them. That is only a
-      # criterion if a third one fails something — otherwise it is a clause that forgives
-      # anything, which is the shape of guard this project has been caught by before.
+      # criterion names every permitted permission. That is only a criterion if an unnamed one
+      # fails something — otherwise it is a clause that forgives anything, which is the shape of
+      # guard this project has been caught by before.
+      #
+      # `FOREGROUND_SERVICE` and `RECEIVE_BOOT_COMPLETED` are WorkManager's, from the scheduled
+      # sync in `024`. `REQUEST_INSTALL_PACKAGES` is ours and is **television only** — the check
+      # for updates needs it, and the phone has no answer of that shape yet. It is a second
+      # pattern rather than an entry in the shared list precisely so that the same permission
+      # appearing in the phone's manifest still fails this gate.
       #
       # Read off the merged manifests rather than the sources: the sources are what we
       # declare, and the whole point is what arrives without us declaring it.
       - name: Permissions in the merged manifests (AC-NFR-04)
         run: |
           set -euo pipefail
-          ALLOWED='^(android\.permission\.(INTERNET|ACCESS_NETWORK_STATE|WAKE_LOCK)|dev\.quiblo\.(player|tv)(\.debug)?\.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION)$'
+          ALLOWED='^(android\.permission\.(INTERNET|ACCESS_NETWORK_STATE|WAKE_LOCK|FOREGROUND_SERVICE|RECEIVE_BOOT_COMPLETED)|dev\.quiblo\.(player|tv)(\.debug)?\.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION)$'
+          TV_ONLY='^android\.permission\.REQUEST_INSTALL_PACKAGES$'
           # Test variants are excluded deliberately, not for convenience: the unit-test
           # manifest merges REORDER_TASKS from the test runner, and nothing in it is packaged
           # into an APK a user installs. The criterion is about what ships.
@@ -332,8 +339,15 @@ jobs:
           for m in $MANIFESTS; do
             while IFS= read -r p; do
               [ -z "$p" ] && continue
-              if ! printf '%s' "$p" | grep -qE "$ALLOWED"; then
-                echo "::error file=$m::Unexpected permission '$p'. AC-NFR-04 names the two permitted contributed permissions; a third needs examining and naming in FREEZE.md Amendment 7."
+              # The television's own list is the shared one plus the installer permission. The
+              # phone's is the shared one alone, which is what makes "television only" a fact
+              # rather than a sentence in a document.
+              case "$m" in
+                app-tv/*) PERMITTED="$ALLOWED|$TV_ONLY" ;;
+                *) PERMITTED="$ALLOWED" ;;
+              esac
+              if ! printf '%s' "$p" | grep -qE "$PERMITTED"; then
+                echo "::error file=$m::Unexpected permission '$p'. AC-NFR-04 names every permitted permission; anything else needs examining and naming in FREEZE.md."
                 UNEXPECTED=$((UNEXPECTED + 1))
               fi
             done < <(grep -oE 'uses-permission android:name="[^"]*"' "$m" | sed 's/.*name="//; s/"$//' | sort -u)

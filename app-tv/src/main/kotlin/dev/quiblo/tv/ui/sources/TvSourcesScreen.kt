@@ -19,24 +19,16 @@
 package dev.quiblo.tv.ui.sources
 
 import androidx.activity.compose.BackHandler
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -49,10 +41,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.input.key.key
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -62,7 +52,7 @@ import dev.quiblo.core.model.SourceKind
 import dev.quiblo.feature.sources.AddSourceState
 import dev.quiblo.feature.sources.SourcesViewModel
 import dev.quiblo.tv.R
-import dev.quiblo.tv.ui.common.TvTextField
+import dev.quiblo.tv.ui.common.TvFocusRow
 import dev.quiblo.tv.ui.common.tryRequestFocus
 import org.koin.androidx.compose.koinViewModel
 
@@ -76,6 +66,12 @@ import org.koin.androidx.compose.koinViewModel
  *
  * Opened from Settings rather than from the tab bar, so it carries its own heading and its
  * own way out: what used to name this screen was the tab that selected it.
+ *
+ * **The column is centred and has a width of its own.** It used to start at the left edge and
+ * run to sixty per cent of whatever the panel happened to be, which put a form full of long
+ * URLs against the bezel of a fifty-inch television and left half the screen empty beside it.
+ * A fixed [FORM_WIDTH] inside a centred parent is a column; a fraction of an unknown panel is
+ * a guess.
  */
 @Composable
 fun TvSourcesScreen(
@@ -121,19 +117,22 @@ fun TvSourcesScreen(
                 // whatever they had typed.
                 BackHandler { showForm = false }
 
-                AddSourceForm(
-                    focusRequester = focusRequester,
-                    // The form closes only when the save was actually accepted. It used to
-                    // close either way, so a rejected save left no source, no message, and
-                    // nothing to distinguish it from never having pressed Save.
-                    onAddM3u = { name, url ->
-                        viewModel.addM3uSource(name, url).also { showForm = !it }
-                    },
-                    onAddXtream = { name, url, user, pass ->
-                        viewModel.addXtreamSource(name, url, user, pass).also { showForm = !it }
-                    },
-                    onCancel = { showForm = false },
-                )
+                CentredColumn {
+                    TvAddSourceForm(
+                        focusRequester = focusRequester,
+                        // The form closes only when the save was actually accepted. It used to
+                        // close either way, so a rejected save left no source, no message, and
+                        // nothing to distinguish it from never having pressed Save.
+                        onAddM3u = { name, url ->
+                            viewModel.addM3uSource(name, url).also { showForm = !it }
+                        },
+                        onAddXtream = { name, url, user, pass ->
+                            viewModel.addXtreamSource(name, url, user, pass).also { showForm = !it }
+                        },
+                        onCancel = { showForm = false },
+                        modifier = Modifier.width(FORM_WIDTH),
+                    )
+                }
             }
 
             else -> SourceList(
@@ -146,6 +145,24 @@ fun TvSourcesScreen(
                 onDismissResult = viewModel::dismissResult,
             )
         }
+    }
+}
+
+/**
+ * Puts one column of [FORM_WIDTH] in the middle of the panel.
+ *
+ * A `Box` with a centred child rather than padding worked out from the screen width: padding
+ * has to be recomputed for every panel and is wrong on all the ones nobody measured.
+ */
+@Composable
+private fun CentredColumn(content: @Composable () -> Unit) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(top = 8.dp),
+        contentAlignment = Alignment.TopCenter,
+    ) {
+        content()
     }
 }
 
@@ -173,14 +190,20 @@ private fun SourceList(
     onDelete: (Long) -> Unit,
     onDismissResult: () -> Unit,
 ) {
-    LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    LazyColumn(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+        modifier = Modifier.fillMaxSize(),
+    ) {
         item {
             Text(
                 text = stringResource(R.string.tv_sources_title),
                 color = Color.White,
                 fontSize = 30.sp,
                 fontWeight = FontWeight.SemiBold,
-                modifier = Modifier.padding(bottom = 18.dp),
+                modifier = Modifier
+                    .width(FORM_WIDTH)
+                    .padding(bottom = 18.dp),
             )
         }
 
@@ -191,10 +214,12 @@ private fun SourceList(
         item {
             // The one control this screen always has, so it is where focus lands when the
             // screen appears or comes back from the form.
-            FocusRow(
+            TvFocusRow(
                 label = stringResource(R.string.tv_sources_add),
                 onClick = onAdd,
-                modifier = Modifier.focusRequester(focusRequester),
+                modifier = Modifier
+                    .width(FORM_WIDTH)
+                    .focusRequester(focusRequester),
             )
         }
 
@@ -207,7 +232,9 @@ private fun SourceList(
                 Text(
                     text = stringResource(R.string.tv_sources_empty),
                     color = Color.White.copy(alpha = 0.55f),
-                    modifier = Modifier.padding(top = 24.dp),
+                    modifier = Modifier
+                        .width(FORM_WIDTH)
+                        .padding(top = 24.dp),
                 )
             }
         }
@@ -222,12 +249,16 @@ private fun ResultBanner(addState: AddSourceState, onDismiss: () -> Unit) {
         else -> return
     }
 
-    FocusRow(label = message, onClick = onDismiss)
+    TvFocusRow(label = message, onClick = onDismiss, modifier = Modifier.width(FORM_WIDTH))
 }
 
 @Composable
 private fun SourceRow(source: Source, onRefresh: () -> Unit, onDelete: () -> Unit) {
-    Column(modifier = Modifier.padding(top = 8.dp)) {
+    Column(
+        modifier = Modifier
+            .width(FORM_WIDTH)
+            .padding(top = 8.dp),
+    ) {
         Text(
             text = source.name,
             color = Color.White,
@@ -248,12 +279,12 @@ private fun SourceRow(source: Source, onRefresh: () -> Unit, onDelete: () -> Uni
         )
 
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            FocusRow(
+            TvFocusRow(
                 label = stringResource(R.string.tv_sources_refresh),
                 onClick = onRefresh,
                 modifier = Modifier.width(BUTTON_WIDTH),
             )
-            FocusRow(
+            TvFocusRow(
                 label = stringResource(R.string.tv_sources_delete),
                 onClick = onDelete,
                 modifier = Modifier.width(BUTTON_WIDTH),
@@ -261,139 +292,3 @@ private fun SourceRow(source: Source, onRefresh: () -> Unit, onDelete: () -> Uni
         }
     }
 }
-
-/**
- * A focusable, pressable row.
- *
- * Everything a remote can act on looks the same on purpose: a viewer should be able to tell
- * what is actionable without learning a vocabulary of shapes.
- */
-@Composable
-private fun FocusRow(label: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
-    val interactionSource = remember { MutableInteractionSource() }
-    val isFocused by interactionSource.collectIsFocusedAsState()
-
-    Box(
-        modifier = modifier
-            .fillMaxWidth()
-            .background(
-                color = if (isFocused) Color.White.copy(alpha = 0.16f) else Color.White.copy(alpha = 0.06f),
-                shape = RoundedCornerShape(10.dp),
-            )
-            .border(
-                width = if (isFocused) 2.dp else 0.dp,
-                color = if (isFocused) Color.White.copy(alpha = 0.85f) else Color.Transparent,
-                shape = RoundedCornerShape(10.dp),
-            )
-            .clickable(interactionSource = interactionSource, indication = null, onClick = onClick)
-            .padding(horizontal = 20.dp, vertical = 14.dp),
-    ) {
-        Text(
-            text = label,
-            color = Color.White.copy(alpha = if (isFocused) 1f else 0.75f),
-            fontSize = 17.sp,
-        )
-    }
-}
-
-/**
- * The add-source form.
- *
- * Xtream and M3U in one form rather than a mode toggle: the fields a user leaves empty say
- * which they meant. A URL alone is a playlist; a URL with a username and password is an
- * account. That removes a control from a screen where every control costs a D-pad press.
- */
-@Composable
-private fun AddSourceForm(
-    focusRequester: FocusRequester,
-    onAddM3u: (String, String) -> Boolean,
-    onAddXtream: (String, String, String, String) -> Boolean,
-    onCancel: () -> Unit,
-) {
-    var name by remember { mutableStateOf("") }
-    var url by remember { mutableStateOf("") }
-    var username by remember { mutableStateOf("") }
-    var password by remember { mutableStateOf("") }
-
-    // Set when a save was refused, so the refusal says something. A form that simply does
-    // nothing when Save is pressed is indistinguishable from a broken button.
-    var wasRejected by remember { mutableStateOf(false) }
-
-    val canSubmit = url.isNotBlank()
-
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(top = 8.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        Text(
-            text = stringResource(R.string.tv_sources_form_hint),
-            color = Color.White.copy(alpha = 0.6f),
-            style = MaterialTheme.typography.bodyMedium,
-        )
-
-        if (wasRejected) {
-            Text(
-                text = stringResource(R.string.tv_sources_incomplete),
-                color = MaterialTheme.colorScheme.error,
-                style = MaterialTheme.typography.bodyMedium,
-            )
-        }
-
-        TvTextField(
-            value = name,
-            onValueChange = { name = it },
-            label = stringResource(R.string.tv_sources_name),
-            modifier = Modifier
-                .fillMaxWidth(FIELD_WIDTH_FRACTION)
-                .focusRequester(focusRequester),
-        )
-        TvTextField(
-            value = url,
-            onValueChange = { url = it },
-            label = stringResource(R.string.tv_sources_url),
-            keyboardType = KeyboardType.Uri,
-            modifier = Modifier.fillMaxWidth(FIELD_WIDTH_FRACTION),
-        )
-        TvTextField(
-            value = username,
-            onValueChange = { username = it },
-            label = stringResource(R.string.tv_sources_username),
-            modifier = Modifier.fillMaxWidth(FIELD_WIDTH_FRACTION),
-        )
-        TvTextField(
-            value = password,
-            onValueChange = { password = it },
-            label = stringResource(R.string.tv_sources_password),
-            isPassword = true,
-            isLast = true,
-            modifier = Modifier.fillMaxWidth(FIELD_WIDTH_FRACTION),
-        )
-
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            FocusRow(
-                label = stringResource(R.string.tv_sources_save),
-                onClick = {
-                    val accepted = when {
-                        !canSubmit -> false
-                        // Neither credential given means a playlist; either one given means
-                        // an account, and an account needs both.
-                        username.isBlank() && password.isBlank() -> onAddM3u(name, url)
-                        else -> onAddXtream(name, url, username, password)
-                    }
-                    wasRejected = !accepted
-                },
-                modifier = Modifier.width(BUTTON_WIDTH),
-            )
-            FocusRow(
-                label = stringResource(R.string.tv_sources_cancel),
-                onClick = onCancel,
-                modifier = Modifier.width(BUTTON_WIDTH),
-            )
-        }
-    }
-}
-
-private val BUTTON_WIDTH = 220.dp
-private const val FIELD_WIDTH_FRACTION = 0.6f

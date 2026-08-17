@@ -19,6 +19,7 @@
 plugins {
     id("quiblo.android.core")
     alias(libs.plugins.kotlin.serialization)
+    alias(libs.plugins.kover)
 }
 
 android {
@@ -45,3 +46,36 @@ dependencies {
     implementation(libs.ktor.client.core)
     implementation(libs.kotlinx.serialization.json)
 }
+
+/*
+ * Amendment 10's floor, on the module the arithmetic lives in.
+ *
+ * `coverageAll` covered the two parser modules and nothing else, on the argument that a covered
+ * line in a parser is genuinely an exercised line while a covered line in a Compose module
+ * measures how much of the framework got instantiated. That argument is right about UI and wrong
+ * about this module: the matching, the scoring, the merge rules and the caches here are pure
+ * functions over rows, exactly like a parser, and they are where every round since `020` has put
+ * its decisions.
+ *
+ * The bound is 70 rather than the parsers' 80 because 70 is the floor Amendment 10 actually sets,
+ * and a number chosen above what the rule asks for is a number somebody will lower quietly. It is
+ * a floor to be raised deliberately, not a target to sit on.
+ *
+ * The dependency-injection module is excluded. It is a list of constructor calls with no branch in
+ * it, and the only way to execute one is to stand up Koin — which measures Koin.
+ */
+kover {
+    reports {
+        filters {
+            excludes {
+                classes("dev.quiblo.core.data.di.*")
+            }
+        }
+        verify {
+            rule {
+                minBound(70)
+            }
+        }
+    }
+}
+

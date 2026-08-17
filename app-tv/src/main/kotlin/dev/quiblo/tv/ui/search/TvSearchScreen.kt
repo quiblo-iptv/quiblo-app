@@ -72,12 +72,12 @@ import dev.quiblo.tv.R
 import dev.quiblo.tv.ui.browse.TvCategoryList
 import dev.quiblo.tv.ui.browse.TvCategoryRow
 import dev.quiblo.tv.ui.browse.TvRowItem
+import dev.quiblo.tv.ui.common.AmbientRequest
 import dev.quiblo.tv.ui.common.FIELD_CORNER
 import dev.quiblo.tv.ui.common.LocalAmbientSink
 import dev.quiblo.tv.ui.common.QuibloMark
 import dev.quiblo.tv.ui.common.TvChip
 import dev.quiblo.tv.ui.common.TvTextField
-import dev.quiblo.tv.ui.common.driftingGlow
 import dev.quiblo.tv.ui.common.travellingGlow
 import org.koin.androidx.compose.koinViewModel
 
@@ -110,15 +110,19 @@ fun TvSearchScreen(
     val state by viewModel.uiState.collectAsStateWithLifecycle()
 
     /*
-     * Puts out whatever the catalogue left lit.
+     * Puts out whatever the catalogue left lit, and asks for this screen's own light instead.
      *
      * The shell's backdrop is fed by focused posters, and nothing on this screen is one — so
      * before `022` arriving here left the colours of a film looked at two tabs ago sitting behind
-     * an empty field. Null is what the sink reads as "no light", and the backdrop's own crossfade
-     * turns that into a fade rather than a snap.
+     * an empty field. The backdrop's own crossfade turns that into a fade rather than a snap.
+     *
+     * `023` moved the drifting glow itself to the shell as well. It used to be a modifier on this
+     * screen's own `Column`, which sits inside the shell's 48dp inset and below the tab bar — and
+     * `drawBehind` clips to the node it is drawn on, so the light stopped dead at three padded
+     * edges and under the bar while every other tab's ran to the corners.
      */
     val ambientSink = LocalAmbientSink.current
-    LaunchedEffect(Unit) { ambientSink(null) }
+    LaunchedEffect(Unit) { ambientSink(AmbientRequest.Drift) }
 
     TvSearchPanel(
         state = state,
@@ -207,8 +211,6 @@ internal fun TvSearchPanel(
     Column(
         modifier = modifier
             .fillMaxSize()
-            // The one screen in the app that lights itself. See `driftingGlow`.
-            .driftingGlow()
             .onGloballyPositioned { coordinates ->
                 val panelHeight = coordinates.findRootCoordinates().size.height
                 centreLine = with(density) {

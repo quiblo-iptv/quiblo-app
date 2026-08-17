@@ -75,6 +75,7 @@ components ship.
 - `androidx.compose.ui:ui-util-android`
 - `androidx.compose:compose-bom`
 - `androidx.concurrent:concurrent-futures`
+- `androidx.concurrent:concurrent-futures-ktx`
 - `androidx.core:core`
 - `androidx.core:core-ktx`
 - `androidx.core:core-viewtree`
@@ -117,6 +118,7 @@ components ship.
 - `androidx.lifecycle:lifecycle-runtime-compose-android`
 - `androidx.lifecycle:lifecycle-runtime-ktx`
 - `androidx.lifecycle:lifecycle-runtime-ktx-android`
+- `androidx.lifecycle:lifecycle-service`
 - `androidx.lifecycle:lifecycle-viewmodel`
 - `androidx.lifecycle:lifecycle-viewmodel-android`
 - `androidx.lifecycle:lifecycle-viewmodel-compose`
@@ -174,6 +176,7 @@ components ship.
 - `androidx.sqlite:sqlite-framework-android`
 - `androidx.startup:startup-runtime`
 - `androidx.tracing:tracing`
+- `androidx.tracing:tracing-ktx`
 - `androidx.transition:transition`
 - `androidx.tv:tv-material`
 - `androidx.vectordrawable:vectordrawable`
@@ -183,6 +186,8 @@ components ship.
 - `androidx.window:window`
 - `androidx.window:window-core`
 - `androidx.window:window-core-android`
+- `androidx.work:work-runtime`
+- `androidx.work:work-runtime-ktx`
 - `co.touchlab:stately-concurrency`
 - `co.touchlab:stately-concurrency-jvm`
 - `co.touchlab:stately-concurrent-collections`

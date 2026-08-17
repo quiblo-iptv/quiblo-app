@@ -14,6 +14,9 @@
     <string name="movie_resume">Resume from %1$s</string>
     <string name="movie_start_over">Start from beginning</string>
     <string name="movie_remove_history">Remove from history</string>
+    <!-- Two buttons rather than five stars. Pressing the filled one again takes the answer back. -->
+    <string name="movie_like">I liked this</string>
+    <string name="movie_dislike">Not for me</string>
     <!-- Superseded by the shared runtime_* strings in :feature:browse, which write "1h 52m"
          rather than "112 min" and are used by both apps. Kept rather than removed: it is a
          translated string, and a translation deleted is a translation to be done again. -->

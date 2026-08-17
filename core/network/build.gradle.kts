@@ -18,6 +18,10 @@
 
 plugins {
     id("quiblo.android.core")
+    // The update check reads GitHub's release payload into a four-field model. The dependency
+    // was already here; without the plugin `@Serializable` compiles and generates nothing, and
+    // every decode fails at runtime as if the payload were malformed.
+    alias(libs.plugins.kotlin.serialization)
 }
 
 android {

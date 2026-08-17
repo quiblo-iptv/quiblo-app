@@ -175,6 +175,21 @@ class SettingsViewModel(
         categoryRepository.renameCategory(categoryKind.value, category.title, name)
     }
 
+    /**
+     * Moves a category one place, up or down.
+     *
+     * The order handed down is the one on screen, taken from the same flow the list is drawn
+     * from, so what is written is the list the viewer was looking at with two rows exchanged.
+     */
+    fun moveCategory(category: Category, by: Int) = viewModelScope.launch {
+        categoryRepository.moveCategory(
+            kind = categoryKind.value,
+            originalTitle = category.title,
+            ordered = categories.value.map { it.title },
+            by = by,
+        )
+    }
+
     init {
         viewModelScope.launch { metadataRepository.load() }
     }

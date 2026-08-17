@@ -19,6 +19,9 @@ datastore = "1.2.1"
 securityCrypto = "1.1.0"
 media3 = "1.10.1"
 tvMaterial = "1.0.1"
+# Scheduled background work. The platform's own answer to "every four days", and the only one
+# that survives a reboot and respects doze.
+work = "2.11.0"
 
 # Libraries
 koin = "4.2.2"
@@ -71,6 +74,8 @@ room-ktx = { module = "androidx.room:room-ktx", version.ref = "room" }
 room-compiler = { module = "androidx.room:room-compiler", version.ref = "room" }
 room-testing = { module = "androidx.room:room-testing", version.ref = "room" }
 room-paging = { module = "androidx.room:room-paging", version.ref = "room" }
+work-runtime = { module = "androidx.work:work-runtime-ktx", version.ref = "work" }
+work-testing = { module = "androidx.work:work-testing", version.ref = "work" }
 
 # --- Paging ---
 paging-compose = { module = "androidx.paging:paging-compose", version.ref = "paging" }

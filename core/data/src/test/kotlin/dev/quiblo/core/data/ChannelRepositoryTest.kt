@@ -18,11 +18,14 @@
 
 package dev.quiblo.core.data
 
+import dev.quiblo.core.common.SCRIPT_MASK_UNKNOWN
+import dev.quiblo.core.common.TitleScript
 import dev.quiblo.core.database.dao.ChannelDao
 import dev.quiblo.core.database.dao.ChannelWithFavorite
 import dev.quiblo.core.database.dao.FavoriteDao
 import dev.quiblo.core.database.entity.ChannelEntity
 import dev.quiblo.core.model.MediaKind
+import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
@@ -178,7 +181,78 @@ class ChannelRepositoryTest {
         assertFalse(feed.orderedByDate, "list order was presented as a date order")
     }
 
-    private fun row(id: Long, name: String, isFavorite: Boolean = true) = ChannelWithFavorite(
+    /**
+     * BUG-031: the two rows on For You ignored the hidden-script setting entirely.
+     *
+     * Every other catalogue feed hands the mask to its query. This one has no query to hand it
+     * to — the popular row and the suggestions row choose their ids elsewhere and come here only
+     * to be turned into playable rows — so the filter was simply absent, and a viewer who had
+     * hidden Arabic was still offered Arabic titles by the two rows that propose things
+     * unprompted.
+     */
+    @Test
+    fun `rows fetched by id drop the writing systems this viewer hid`() = runTest {
+        val filtered = ChannelRepository(
+            channelDao = channelDao,
+            favoriteDao = favoriteDao,
+            profiles = fakeProfiles(),
+            browseDispatcher = mappingDispatcher,
+            hiddenScripts = flowOf(setOf(TitleScript.Arabic)),
+        )
+        coEvery { channelDao.findAllByIds(any(), any()) } returns listOf(
+            row(id = 1L, name = "Dune", scriptMask = TitleScript.Latin.bit),
+            row(id = 2L, name = "عيلة 8 نجوم", scriptMask = TitleScript.Arabic.bit),
+        )
+
+        val items = filtered.channelsByIds(listOf(1L, 2L))
+
+        assertEquals(listOf("Dune"), items.map { it.name })
+    }
+
+    /**
+     * The same list, for a catalogue written before schema 19.
+     *
+     * Those rows carry `SCRIPT_MASK_UNKNOWN`, which has every bit set — deciding them by the mask
+     * would hide the whole catalogue. They are decided by their name instead, exactly as every
+     * row was before the column existed, and a backfill mid-flight must not change the answer.
+     */
+    @Test
+    fun `rows with no computed mask are still decided by their name`() = runTest {
+        val filtered = ChannelRepository(
+            channelDao = channelDao,
+            favoriteDao = favoriteDao,
+            profiles = fakeProfiles(),
+            browseDispatcher = mappingDispatcher,
+            hiddenScripts = flowOf(setOf(TitleScript.Arabic)),
+        )
+        coEvery { channelDao.findAllByIds(any(), any()) } returns listOf(
+            row(id = 1L, name = "Dune"),
+            row(id = 2L, name = "عيلة 8 نجوم"),
+        )
+
+        val items = filtered.channelsByIds(listOf(1L, 2L))
+
+        assertEquals(listOf("Dune"), items.map { it.name })
+    }
+
+    @Test
+    fun `hiding nothing leaves the list untouched`() = runTest {
+        coEvery { channelDao.findAllByIds(any(), any()) } returns listOf(
+            row(id = 1L, name = "Dune", scriptMask = TitleScript.Latin.bit),
+            row(id = 2L, name = "عيلة 8 نجوم", scriptMask = TitleScript.Arabic.bit),
+        )
+
+        val items = repository.channelsByIds(listOf(1L, 2L))
+
+        assertEquals(2, items.size)
+    }
+
+    private fun row(
+        id: Long,
+        name: String,
+        isFavorite: Boolean = true,
+        scriptMask: Int = SCRIPT_MASK_UNKNOWN,
+    ) = ChannelWithFavorite(
         channel = ChannelEntity(
             id = id,
             sourceId = SOURCE_ID,
@@ -188,6 +262,7 @@ class ChannelRepositoryTest {
             groupTitle = "News",
             stableKey = "key-$id",
             sortIndex = id.toInt(),
+            scriptMask = scriptMask,
         ),
         isFavorite = isFavorite,
     )

@@ -25,5 +25,15 @@ import org.koin.dsl.module
 
 /** Wiring owned by `:feature:vod`. Aggregated by `:app`. */
 val vodModule: Module = module {
-    viewModel { (channelId: Long) -> MovieDetailViewModel(channelId, get(), get(), get()) }
+    // Named rather than positional: Koin resolves by type and does not type-check the order, so a
+    // fifth `get()` on a positional list is a silent mis-wiring waiting to happen.
+    viewModel { (channelId: Long) ->
+        MovieDetailViewModel(
+            channelId = channelId,
+            channelRepository = get(),
+            metadataRepository = get(),
+            historyRepository = get(),
+            opinions = get(),
+        )
+    }
 }

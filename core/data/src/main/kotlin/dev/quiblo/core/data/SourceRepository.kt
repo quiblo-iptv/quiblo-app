@@ -19,6 +19,7 @@
 package dev.quiblo.core.data
 
 import dev.quiblo.core.database.dao.ChannelDao
+import dev.quiblo.core.database.dao.FeedRowDao
 import dev.quiblo.core.database.dao.SourceDao
 import dev.quiblo.core.model.Source
 import dev.quiblo.core.model.SourceKind
@@ -50,6 +51,7 @@ sealed interface RefreshOutcome {
 class SourceRepository(
     private val sourceDao: SourceDao,
     private val channelDao: ChannelDao,
+    private val feedRowDao: FeedRowDao,
     private val mediaSources: Map<SourceKind, MediaSource>,
     private val credentialStore: CredentialStore,
     private val now: () -> Long = System::currentTimeMillis,
@@ -90,8 +92,15 @@ class SourceRepository(
         return refresh(sourceId)
     }
 
-    /** Reloads a source, replacing its stored content only if the load succeeds. */
-    suspend fun refresh(sourceId: Long): RefreshOutcome {
+    /**
+     * Reloads a source, replacing its stored content only if the load succeeds.
+     *
+     * @param merge fold the answer into what is stored rather than swapping it. See
+     *   [ChannelDao.mergeForSource]. Off for a refresh somebody asked for and is watching happen;
+     *   on for the scheduled one, which must not renumber a catalogue nobody is looking at or
+     *   declare a whole M3U playlist to be new every four days.
+     */
+    suspend fun refresh(sourceId: Long, merge: Boolean = false): RefreshOutcome {
         val source = sourceDao.findById(sourceId)?.toDomain()
         val mediaSource = source?.let { mediaSources[it.kind] }
 
@@ -101,9 +110,12 @@ class SourceRepository(
             mediaSource == null ->
                 RefreshOutcome.Failure(SourceError.Unknown("No handler for ${source.kind}"))
 
-            else -> store(sourceId, mediaSource.load(SourceRequest(sourceId, source.url)))
+            else -> store(sourceId, mediaSource.load(SourceRequest(sourceId, source.url)), merge)
         }
     }
+
+    /** Every source there is, for the scheduled sync, which is not driven by a screen. */
+    suspend fun allSourceIds(): List<Long> = sourceDao.allOnce().map { it.id }
 
     /**
      * Commits a successful load.
@@ -111,23 +123,33 @@ class SourceRepository(
      * A failed load leaves the previously stored channels untouched, so losing the
      * network does not empty a list the user was already looking at (AC-DATA-05).
      */
-    private suspend fun store(sourceId: Long, result: SourceResult): RefreshOutcome = when (result) {
-        is SourceResult.Failure -> RefreshOutcome.Failure(result.error)
+    private suspend fun store(sourceId: Long, result: SourceResult, merge: Boolean): RefreshOutcome =
+        when (result) {
+            is SourceResult.Failure -> RefreshOutcome.Failure(result.error)
 
-        is SourceResult.Success -> {
-            val entities = result.channels.mapIndexed { index, channel ->
-                channel.toEntity(sortIndex = index)
+            is SourceResult.Success -> {
+                val entities = result.channels.mapIndexed { index, channel ->
+                    channel.toEntity(sortIndex = index)
+                }
+                if (merge) {
+                    channelDao.mergeForSource(sourceId, entities, now())
+                } else {
+                    channelDao.replaceForSource(sourceId, entities)
+                }
+                sourceDao.markRefreshed(sourceId, now())
+                RefreshOutcome.Success(sourceId, result.report)
             }
-            channelDao.replaceForSource(sourceId, entities)
-            sourceDao.markRefreshed(sourceId, now())
-            RefreshOutcome.Success(sourceId, result.report)
         }
-    }
 
     suspend fun deleteSource(sourceId: Long) {
         // Credentials are not in the database, so the cascade cannot reach them. Clearing
         // them explicitly is what stops a removed account leaving material behind.
         credentialStore.clear(sourceId)
+        // Nor can it reach the remembered For You rows: that table has no foreign key, because a
+        // cache of arithmetic is not owned by the thing it was computed from and a cascade would
+        // have been the third reason it could disappear. Cleared here, explicitly, for the same
+        // reason the credentials are.
+        feedRowDao.clearForSource(sourceId)
         // Channels and favourites cascade via the foreign key.
         sourceDao.deleteById(sourceId)
     }

@@ -26,6 +26,7 @@ import dev.quiblo.core.model.Profile
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 
 /**
@@ -80,6 +81,23 @@ class WatchHistoryRepository(
         resumePositionDao.positionFor(profiles.activeProfileId, stableKey) ?: 0L
 
     /**
+     * The same, as a flow, and this is what a detail screen watches.
+     *
+     * **A single read cannot answer this question correctly.** Coming back from the player, the
+     * screen returns to the foreground at the same moment the player is being disposed and is
+     * writing the position it finished with. Nothing orders a read against a write in flight, so
+     * the button said "Play" for something the viewer was four minutes into — and, having read
+     * once, never asked again.
+     *
+     * A flow does not order them either. It removes the need to: a write that lands a hundred
+     * milliseconds late still lands, and the button changes when it does.
+     */
+    fun observeResumePosition(stableKey: String): Flow<Long> =
+        profiles.activeProfile.flatMapLatest { profile ->
+            resumePositionDao.observePositionFor(profile?.id ?: Profile.NONE_ID, stableKey)
+        }.map { it ?: 0L }
+
+    /**
      * The most recently watched of [stableKeys], with where it stopped.
      *
      * Used to offer "resume" for a container — a series — whose parts are tracked
@@ -90,6 +108,16 @@ class WatchHistoryRepository(
         val entity = resumePositionDao.mostRecentOf(profiles.activeProfileId, stableKeys) ?: return null
         return entity.stableKey to entity.positionMillis
     }
+
+    /** The same, as a flow, for the reason [observeResumePosition] is one. */
+    fun observeMostRecentlyWatched(stableKeys: List<String>): Flow<Pair<String, Long>?> =
+        if (stableKeys.isEmpty()) {
+            flowOf(null)
+        } else {
+            profiles.activeProfile.flatMapLatest { profile ->
+                resumePositionDao.observeMostRecentOf(profile?.id ?: Profile.NONE_ID, stableKeys)
+            }.map { entity -> entity?.let { it.stableKey to it.positionMillis } }
+        }
 
     /**
      * Records where playback stopped, and enough about the item to list it later.

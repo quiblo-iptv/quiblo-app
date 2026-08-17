@@ -98,6 +98,7 @@ import dev.quiblo.core.media.PlaybackState
 import dev.quiblo.core.media.PlaybackStatus
 import dev.quiblo.core.model.AspectRatioMode
 import dev.quiblo.core.model.SeekInterval
+import dev.quiblo.core.model.WatchOrigin
 import dev.quiblo.core.model.videoScale
 import kotlinx.coroutines.delay
 import org.koin.androidx.compose.koinViewModel
@@ -126,6 +127,8 @@ fun PlayerScreen(
     /** Which episode this is, for the history entry. Null for anything that is not one. */
     seasonNumber: Int? = null,
     episodeNumber: Int? = null,
+    /** Where the viewer was when they chose this. Recorded once, when playback ends. */
+    origin: WatchOrigin = WatchOrigin.ROW,
     viewModel: PlayerViewModel = koinViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -203,6 +206,7 @@ fun PlayerScreen(
             startPositionMillis = startPositionMillis,
             seasonNumber = seasonNumber,
             episodeNumber = episodeNumber,
+            origin = origin,
         )
     }
 

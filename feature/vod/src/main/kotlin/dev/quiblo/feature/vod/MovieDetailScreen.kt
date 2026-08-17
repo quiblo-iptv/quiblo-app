@@ -43,10 +43,15 @@ import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Replay
+import androidx.compose.material.icons.filled.ThumbDown
+import androidx.compose.material.icons.filled.ThumbUp
+import androidx.compose.material.icons.outlined.ThumbDown
+import androidx.compose.material.icons.outlined.ThumbUp
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconToggleButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
@@ -63,12 +68,12 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.compose.SubcomposeAsyncImage
 import dev.quiblo.core.data.MetadataRefresh
 import dev.quiblo.core.data.ScanRefusal
 import dev.quiblo.core.model.Channel
+import dev.quiblo.core.model.Opinion
 import dev.quiblo.core.model.TitleMetadata
 import dev.quiblo.core.model.VodDetails
 import dev.quiblo.core.model.releaseYearIn
@@ -98,12 +103,10 @@ fun MovieDetailScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
-    // Coming back from playback must update the buttons: a film watched to the end still
-    // offered "resume from 1:52" until the screen was left and reopened.
-    LifecycleResumeEffect(Unit) {
-        viewModel.refreshResumePosition()
-        onPauseOrDispose {}
-    }
+    // The resume point is watched rather than re-read on returning to the foreground. A read on
+    // resume raced the player's own write of the position it had just finished with, and lost it
+    // often enough that backing out of a film offered "Play" for something four minutes in. See
+    // `observeResumePosition`.
 
     // No app bar. The screen states the film's name in full, at a readable size, a few
     // pixels below where a title bar would have repeated it — see [DetailOverlayActions].
@@ -127,6 +130,7 @@ fun MovieDetailScreen(
                 state = state,
                 onPlay = onPlay,
                 onRemoveFromHistory = viewModel::removeFromHistory,
+                onRate = viewModel::rate,
                 onRefreshMetadata = viewModel::refreshMetadata,
             )
         }
@@ -151,11 +155,13 @@ fun MovieDetailScreen(
  * of the description, which is the shape a phone layout takes when it is simply stretched.
  */
 @Composable
+@Suppress("LongParameterList")
 private fun MovieDetail(
     state: MovieDetailUiState.Ready,
     onPlay: (Channel, Long) -> Unit,
     onRemoveFromHistory: () -> Unit,
     onRefreshMetadata: () -> Unit,
+    onRate: (Opinion) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     // TMDB artwork first when it exists: it is a real poster at a known size, where a
@@ -200,6 +206,7 @@ private fun MovieDetail(
                     onPlay = onPlay,
                     onRemoveFromHistory = onRemoveFromHistory,
                     onRefreshMetadata = onRefreshMetadata,
+                    onRate = onRate,
                     modifier = Modifier.padding(top = 12.dp),
                 )
             }
@@ -218,6 +225,7 @@ private fun MovieDetail(
             onPlay = onPlay,
             onRemoveFromHistory = onRemoveFromHistory,
             onRefreshMetadata = onRefreshMetadata,
+            onRate = onRate,
             modifier = Modifier.padding(16.dp),
         )
     }
@@ -225,18 +233,25 @@ private fun MovieDetail(
 
 /** Metadata, buttons and overview — the part both orientations share. */
 @Composable
+@Suppress("LongParameterList")
 private fun Details(
     state: MovieDetailUiState.Ready,
     onPlay: (Channel, Long) -> Unit,
     onRemoveFromHistory: () -> Unit,
     onRefreshMetadata: () -> Unit,
+    onRate: (Opinion) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Column(modifier = modifier) {
         state.details?.let { MetadataLine(it, state.metadata) }
         state.metadata?.let { TitleFacts(metadata = it, modifier = Modifier.padding(bottom = 12.dp)) }
 
-        PlaybackButtons(state = state, onPlay = onPlay, onRemoveFromHistory = onRemoveFromHistory)
+        PlaybackButtons(
+            state = state,
+            onPlay = onPlay,
+            onRemoveFromHistory = onRemoveFromHistory,
+            onRate = onRate,
+        )
 
         RefreshMetadata(
             canRefresh = state.canRefreshMetadata,
@@ -405,8 +420,26 @@ private fun PlaybackButtons(
     state: MovieDetailUiState.Ready,
     onPlay: (Channel, Long) -> Unit,
     onRemoveFromHistory: () -> Unit,
+    onRate: (Opinion) -> Unit,
 ) {
     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        // What the viewer thought, which is the one signal the app cannot observe and has to be
+        // told. Always here rather than appearing after playback: somebody who saw a film
+        // elsewhere has an opinion about it too, and a control that comes and goes is one nobody
+        // finds. Pressing the filled one again takes the answer back.
+        IconToggleButton(checked = state.opinion == Opinion.UP, onCheckedChange = { onRate(Opinion.UP) }) {
+            Icon(
+                imageVector = if (state.opinion == Opinion.UP) Icons.Filled.ThumbUp else Icons.Outlined.ThumbUp,
+                contentDescription = stringResource(R.string.movie_like),
+            )
+        }
+        IconToggleButton(checked = state.opinion == Opinion.DOWN, onCheckedChange = { onRate(Opinion.DOWN) }) {
+            Icon(
+                imageVector = if (state.opinion == Opinion.DOWN) Icons.Filled.ThumbDown else Icons.Outlined.ThumbDown,
+                contentDescription = stringResource(R.string.movie_dislike),
+            )
+        }
+
         if (state.canResume) {
             // Resume leads, because a film with a saved position is one someone was part
             // way through and almost certainly means to continue.

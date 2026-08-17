@@ -945,6 +945,393 @@ how something *looks* or *feels*, which is the one class of claim a build cannot
 | **Passes if** | The list does not move when the keyboard opens |
 | **Fails if** | It shifts or shakes. `A15.9`'s manifest changes and the keyboard inset are the two edits that could have brought `#021` back |
 
+## A16 — Round `023`: the shelves on For You
+
+**Where:** the television, except `A16.7`, which is the phone. From
+[`023`](../agile/023_The_Shelves_of_For_You_of_Quiblo.md). Three of these need a Movie Database key
+and a scanned catalogue; two of those additionally need a provider that does *not* carry some of
+this week's popular titles, which is most of them.
+
+### A16.1 — two rows, ten each
+
+| | |
+| :---- | :---- |
+| **What to look at** | Open For You with a Movie Database key set and a scanned catalogue |
+| **Passes if** | **Popular films** and **Popular series** are separate rows, each numbered 1 upwards, no Movie/Series badge on either |
+| **Fails if** | One mixed row, or the numbers restart partway along, or a row holds more than ten |
+
+### A16.2 — the number reads from the sofa
+
+| | |
+| :---- | :---- |
+| **What to look at** | Both popular rows, from a normal viewing distance |
+| **Passes if** | The figure stands beside the poster, large enough to read across the room |
+| **Fails if** | It is inside the artwork, or it is too small to read at three metres — the whole argument for a numbered row is that the number is the content |
+
+### A16.3 — and walking the row does not move the screen
+
+| | |
+| :---- | :---- |
+| **What to look at** | Hold right along a popular row, past position 9, and watch the rows above and below |
+| **Passes if** | Nothing moves vertically, including across the 9 to 10 crossing |
+| **Fails if** | The catalogue twitches. **This is defect #008 and it is the risk this round took**: the numeral now stands outside the poster, and only a fixed-width gutter keeps 1 and 10 the same width. `TvBrowseScrollStabilityTest` walks this shape, so a failure here means the test's model of the screen is wrong |
+
+### A16.4 — a title the provider does not carry
+
+| | |
+| :---- | :---- |
+| **What to look at** | Find a place in either popular row marked **Unavailable** |
+| **Passes if** | The poster is dimmed, the number is still there and still in sequence, and pressing it writes **Not available yet** under the tile without opening anything or moving anything |
+| **Fails if** | The tile plays, or a dialog appears, or the row changes height when the line appears |
+
+### A16.5 — the rows are there before they are worked out
+
+| | |
+| :---- | :---- |
+| **What to look at** | Leave For You, go to Movies, come back. Then close the app entirely and reopen it |
+| **Passes if** | Both rows are on screen immediately, in the order they were in, and nothing flashes empty first |
+| **Fails if** | An empty shelf, or a visible pause, or the rows arrive one at a time |
+
+### A16.6 — Search's light reaches the corners
+
+| | |
+| :---- | :---- |
+| **What to look at** | Sit on Search with an empty box and look at the edges of the screen and the area behind the tab bar |
+| **Passes if** | The glow runs to all four corners and passes behind the bar, exactly as a poster's light does on Movies |
+| **Fails if** | A dark margin down either side, a dark band under the bar, or a visible rectangle edge anywhere |
+
+### A16.7 — categories in your own order, on the phone
+
+| | |
+| :---- | :---- |
+| **What to look at** | Settings, the categories card. Move one category up twice, then open Live |
+| **Passes if** | It is two places higher in the card, and the category picker on Live shows the same order |
+| **Fails if** | The list scatters rather than shifting one place, or the two screens disagree |
+
+### A16.8 — and on the television
+
+| | |
+| :---- | :---- |
+| **What to look at** | Settings, open the category box, move one down with the remote. Leave settings and open Movies |
+| **Passes if** | One press moves it one place, focus stays where it was, and the poster rows on Movies are in the new order |
+| **Fails if** | Focus jumps to another row, or the box closes, or the rows do not follow |
+
+### A16.9 — and the order survives a refresh
+
+| | |
+| :---- | :---- |
+| **What to look at** | Move two categories, then refresh the source from Settings |
+| **Passes if** | Both are still where you put them |
+| **Fails if** | They are back in the provider's order. The order is stored against the provider's own name for the category, so this is the assertion that the name is what came back |
+
+### A16.10 — Recently Added is fifteen
+
+| | |
+| :---- | :---- |
+| **What to look at** | Count the first row on For You on an account with plenty added this month |
+| **Passes if** | Fifteen at most |
+| **Fails if** | More. Forty is what it was |
+
+---
+
+## A17 — Round `024`: the work that runs on its own, and two defects
+
+**Where:** both apps. From [`024`](../agile/024_The_Work_That_Runs_On_Its_Own_of_Quiblo.md).
+`A17.1` and `A17.2` are the two a viewer reported; the rest are about work nobody watches, which
+is the hardest class of thing to certify and the reason these are written down at all.
+
+### A17.1 — Resume is there when you come back
+
+| | |
+| :---- | :---- |
+| **What to look at** | Play a film for a minute, press back, look at the button. Repeat five times on the television and five on the phone |
+| **Passes if** | **Resume from 1:0x** every single time, immediately, with no flicker of "Play" first |
+| **Fails if** | It says Play even once. **Five times each is the point**: this was a race, and a race that is lost one time in five looks fixed if you try it twice |
+
+### A17.2 — and after the app is killed
+
+| | |
+| :---- | :---- |
+| **What to look at** | Play something for two minutes. Kill the app from the recents list — do not press back. Reopen and go to the title |
+| **Passes if** | It offers to resume from somewhere in the last ten seconds of what you watched |
+| **Fails if** | It offers Play, or a position from when you started. This is the ten-second write, and killing the app is the only way to exercise it |
+
+### A17.3 — a film's details are in the middle
+
+| | |
+| :---- | :---- |
+| **What to look at** | Open a film with a short description on the television, then one with a long one |
+| **Passes if** | The short one sits centred vertically; the long one starts at the top and scrolls as it always did |
+| **Fails if** | The short one is still pressed against the top, or the long one has lost its top |
+
+### A17.4 — the catalogue syncs on its own
+
+| | |
+| :---- | :---- |
+| **What to look at** | Leave the app installed and untouched for five days, then open For You. **Owner: whoever can leave a device alone that long** |
+| **Passes if** | Recently added holds titles the provider added while you were away |
+| **Fails if** | The row is unchanged from five days ago. Check the provider actually added something before calling this a failure |
+
+### A17.5 — and it does not renumber everything while it does
+
+| | |
+| :---- | :---- |
+| **What to look at** | Before the wait: note three titles in Recently added and favourite one. After it: look again |
+| **Passes if** | The three are still there, in the same order, with the same relative dates, and the favourite is still a favourite |
+| **Fails if** | Recently added is suddenly the whole catalogue. That is the merge having become a rebuild, and it is the single failure this round's design exists to prevent |
+
+### A17.6 — a title the provider dropped goes
+
+| | |
+| :---- | :---- |
+| **What to look at** | Harder to arrange: needs a provider that removes something. Search for a title you know has gone after a sync |
+| **Passes if** | It is not in the catalogue |
+| **Fails if** | It is still listed and pressing it plays nothing |
+
+### A17.7 — popular changes without being asked
+
+| | |
+| :---- | :---- |
+| **What to look at** | With a Movie Database key set, note the popular rows. Leave it two days without opening For You, then open it |
+| **Passes if** | The rows have moved on |
+| **Fails if** | Identical after two days. TMDB's weekly lists do change, so identical rows mean the check did not run |
+
+### A17.8 — and none of it happens without a key
+
+| | |
+| :---- | :---- |
+| **What to look at** | On an installation with no Movie Database key, leave it several days and watch the battery figures for Quiblo |
+| **Passes if** | No repeated wake-ups, and no popular row |
+| **Fails if** | Regular activity with nothing to show for it. A worker that treats "no key" as a failure retries forever, which is the loop this asserts is absent |
+
+---
+
+## A18 — Round `025`: the suggestions row, rebuilt
+
+**Where:** both apps, and mostly the television, where the row lives. From
+[`025`](../agile/025_What_You_May_Like_of_Quiblo.md). **Every ticket here needs a real watch
+history**, which is days of use rather than an afternoon — there is no way to compress a scorer
+whose whole subject is what somebody actually watched.
+
+### A18.1 — it says nothing until it knows something
+
+| | |
+| :---- | :---- |
+| **What to look at** | A fresh profile. Watch one thing through, then open For You |
+| **Passes if** | There is no **You may like** row at all — not an empty one, not a spinner |
+| **Fails if** | A row appears. One watched title cannot produce four honest suggestions, and this is the whole of the "wait and learn" ask |
+
+### A18.2 — and then it does
+
+| | |
+| :---- | :---- |
+| **What to look at** | On the same profile, watch five different things most of the way through |
+| **Passes if** | The row appears, and every tile says which of your own titles put it there |
+| **Fails if** | Still nothing after five, or a tile with no reason under it |
+
+### A18.3 — the complaint itself
+
+| | |
+| :---- | :---- |
+| **What to look at** | On a profile whose viewing is mostly anime, read the whole row |
+| **Passes if** | The suggestions are recognisably like what was watched — other anime, other shows of the same sort |
+| **Fails if** | Superhero dramas, talk shows, or dubbed titles in a language nothing watched was in. **This is the reported defect** and it is the one judgement a test cannot make |
+
+### A18.4 — a language you do not watch
+
+| | |
+| :---- | :---- |
+| **What to look at** | A profile that watches only English or only Arabic |
+| **Passes if** | The row is mostly in that language |
+| **Fails if** | It is a mix with no pattern. Note this is separate from hiding a writing system, which is `A16`'s and is absolute |
+
+### A18.5 — thumbs, on both apps
+
+| | |
+| :---- | :---- |
+| **What to look at** | Open a film's details on the phone and on the television. Press the thumbs-up, then press it again |
+| **Passes if** | It fills, then empties. The same on the series screen |
+| **Fails if** | It cannot be taken back, or the two apps disagree about the same title |
+
+### A18.6 — and a thumbs down is heard
+
+| | |
+| :---- | :---- |
+| **What to look at** | Thumbs-down something the row was suggesting, or something like it. Leave For You and come back |
+| **Passes if** | That title is gone from the row, and nothing else is suggested *because of* it |
+| **Fails if** | It is still there. Note the row is remembered between opens (`A16.5`), so this may take one rebuild to show |
+
+### A18.7 — a comfort film
+
+| | |
+| :---- | :---- |
+| **What to look at** | Watch the same film three or four times over a week |
+| **Passes if** | Suggestions like it move up the row |
+| **Fails if** | Watching something repeatedly changes nothing at all |
+
+### A18.8 — the row does not become one genre
+
+| | |
+| :---- | :---- |
+| **What to look at** | Read the whole row on a profile with varied viewing |
+| **Passes if** | Several tastes are represented, not four of the strongest one |
+| **Fails if** | Twenty thrillers |
+
+### A18.9 — nothing is sent anywhere
+
+| | |
+| :---- | :---- |
+| **What to look at** | Watch several things, rate a few, then check the network — a router log, or a proxy |
+| **Passes if** | Traffic goes only to your own provider and to The Movie Database |
+| **Fails if** | Anything else at all. `FREEZE.md` §4.5, and the reason a scorer was chosen over a service |
+
+---
+
+---
+
+## A19 — Round `026`: first launch, the timeline, and updating itself
+
+**Where:** the television only. From
+[`026`](../agile/026_First_Launch_The_Timeline_And_Updating_Itself_of_Quiblo.md). Three of these
+need a **fresh install** — not a cleared cache, an uninstall — because consent is the one screen
+that cannot be reached twice.
+
+### A19.1 — the third page exists and can be got to
+
+| | |
+| :---- | :---- |
+| **What to look at** | Uninstall, install, and press centre twice from the first screen |
+| **Passes if** | Page three appears and offers **Add a playlist** and **Skip for later** |
+| **Fails if** | The app enters at the end of the terms, or page three has one control |
+
+### A19.2 — skipping actually skips
+
+| | |
+| :---- | :---- |
+| **What to look at** | On page three, walk right to **Skip for later** and press it |
+| **Passes if** | The app opens, with no source and no error. Settings → Playlists is empty and works |
+| **Fails if** | It hangs, or the consent screen comes back on the next launch |
+
+### A19.3 — adding a playlist from first launch
+
+| | |
+| :---- | :---- |
+| **What to look at** | On page three press **Add a playlist**, type a real M3U URL, press Save |
+| **Passes if** | It says it is loading, then says how many channels it loaded, and the app opens with them in it |
+| **Fails if** | It enters the app while still loading, or enters with nothing and no message |
+
+### A19.4 — and a playlist that will not load
+
+| | |
+| :---- | :---- |
+| **What to look at** | The same, with a URL that does not resolve |
+| **Passes if** | It says the source could not be loaded, and offers **Try again** and **Skip for later** |
+| **Fails if** | It enters the app silently, or leaves the viewer on a screen with no way forward |
+
+### A19.5 — the playlist screen is in the middle of the panel
+
+| | |
+| :---- | :---- |
+| **What to look at** | Settings → Playlists and accounts, on the largest panel available |
+| **Passes if** | The column is centred left-to-right, with equal space either side |
+| **Fails if** | It hugs the left edge, or runs the full width of the panel |
+
+### A19.6 — Save carries the light
+
+| | |
+| :---- | :---- |
+| **What to look at** | Open the add form and walk focus down to **Save** |
+| **Passes if** | The button's outline carries the travelling light Search and Play use, dimmer than Search's |
+| **Fails if** | No light, or a light as bright as the search field's — it must not out-shout the field being typed into |
+
+### A19.7 — the timeline takes focus
+
+| | |
+| :---- | :---- |
+| **What to look at** | Play a film, press centre for the controls, press down once |
+| **Passes if** | The progress bar itself is focused. Down again reaches subtitles/audio/picture fit |
+| **Fails if** | Down goes straight past the bar, or the bar cannot be got off again with up or down |
+
+### A19.8 — presses stack into one seek
+
+| | |
+| :---- | :---- |
+| **What to look at** | On the focused bar, press right five or six times quickly, then stop |
+| **Passes if** | The mark runs ahead of the picture as you press, and the film jumps **once**, about half a second after the last press |
+| **Fails if** | It jumps on every press, or several times. **This is the whole feature** — one seek per run |
+
+### A19.9 — a long run crosses the film
+
+| | |
+| :---- | :---- |
+| **What to look at** | Hold right, or press it fifteen times, on a two-hour film |
+| **Passes if** | The mark accelerates and reaches the far end in a few seconds |
+| **Fails if** | Fifteen presses move it two and a half minutes. Note the first four presses are the interval from Settings on purpose |
+
+### A19.10 — and the bar does not snap backwards
+
+| | |
+| :---- | :---- |
+| **What to look at** | Immediately after a scrub lands, watch the bar for a second |
+| **Passes if** | It stays where it was sent |
+| **Fails if** | It flicks back to where the film was and then forward again |
+
+### A19.11 — live has no timeline
+
+| | |
+| :---- | :---- |
+| **What to look at** | Play a live channel and press down from play/pause |
+| **Passes if** | It goes to the options row, as it always did. There is no bar and nothing to focus |
+| **Fails if** | A bar appears, or down lands on nothing |
+
+### A19.12 — check for updates, from behind
+
+| | |
+| :---- | :---- |
+| **What to look at** | On a build older than the newest release, Settings → About → Updates → **Check now** |
+| **Passes if** | It names the newer version. **Download** appears |
+| **Fails if** | It says you are current, or says nothing |
+
+### A19.13 — and from the front
+
+| | |
+| :---- | :---- |
+| **What to look at** | The same on a build of the newest release |
+| **Passes if** | It says you are on the newest release |
+| **Fails if** | It offers the version you are already running |
+
+### A19.14 — the download is verified before it is offered
+
+| | |
+| :---- | :---- |
+| **What to look at** | Press **Download**, wait, then press **Install** |
+| **Passes if** | It says the checksum matched and names the file, then the system installer opens |
+| **Fails if** | It offers to install without mentioning the checksum, or the installer opens on a file that is still downloading |
+
+### A19.15 — the television that will not install
+
+| | |
+| :---- | :---- |
+| **What to look at** | A set with installs from unknown sources locked down |
+| **Passes if** | Either the system's own permission prompt appears, or the row says the installer would not open and names the downloaded file |
+| **Fails if** | Pressing Install does nothing at all |
+
+### A19.16 — nothing is checked unprompted
+
+| | |
+| :---- | :---- |
+| **What to look at** | Watch the network on a launch, on a browse, on a playback — without opening Settings |
+| **Passes if** | Nothing goes to `api.github.com` |
+| **Fails if** | Anything does. The check is a button and nothing else, and `tv_consent_terms_body` is the promise it keeps |
+
+### A19.17 — offline says offline
+
+| | |
+| :---- | :---- |
+| **What to look at** | Pull the network, then press **Check now** |
+| **Passes if** | It says the television is not online |
+| **Fails if** | It says you are up to date. Being unable to ask is not the same as being current |
+
 ---
 
 ## C — Deferred measurements, in writing

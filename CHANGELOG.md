@@ -15,6 +15,124 @@ Formatted after [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and ve
 
 ## Unreleased
 
+### Added
+
+- **The television asks for your playlist on the first screen, instead of leaving you to find
+  it.** Setting Quiblo up used to end at the terms and drop you into an app with nothing in it,
+  where the next thing to do was four presses deep in Settings. There is a third page now: add
+  the playlist or account you already have and it loads before the app opens, or skip it and do
+  it later. If the playlist will not load, it says so and offers to try again — rather than
+  letting you in and leaving you to work out that nothing arrived.
+- **You can drag the film's timeline with the remote.** The progress bar takes focus now, one
+  press below play and pause. Left and right move a mark along it and **the presses stack**: six
+  presses are one jump of six, made half a second after you stop, instead of six separate jumps
+  and six re-buffers. Hold a direction and it speeds up, so crossing a two-hour film takes a few
+  seconds — while the first few presses are still worth exactly the skip interval you chose in
+  Settings, because that is what a small correction is for. Live channels have no timeline, since
+  there is nothing to move through.
+- **The television can tell you when there is a newer Quiblo, and fetch it.** A television has no
+  store to update this app from, so Settings → About now has a **Check now** button. It looks at
+  this project's own releases page, tells you if a newer version is there, downloads it, and
+  **checks it against the published checksum before offering to install it** — a download that
+  does not match is deleted rather than handed to the installer. Your set still asks its own
+  permission before anything is installed, and if it refuses outright, the file is downloaded and
+  named so you can install it from a file manager. **Nothing is checked unless you press the
+  button**: Quiblo does not look at anything on its own, and that has not changed.
+- **You may like actually looks at what you watched.** It scored on genre and nothing else, which
+  is why watching One Piece produced The Boys, The Umbrella Academy and a dubbed Arabic family
+  drama: at the level of "series, Action & Adventure" those are the same thing. It now weighs
+  thirteen things — including whether something is **anime** rather than merely animated, what
+  language it was made in, the words in its description, how many times you watched it, at what
+  hour, whether you searched for it or took it off a shelf, whether it is a favourite, and what you
+  said about it. Each of your strongest few titles proposes its own four, so somebody who watches
+  anime and one cookery programme gets suggestions from both rather than from the average of them.
+- **And it waits until it has something to say.** Below five titles watched, three of them most of
+  the way through, the row is not drawn at all. One thing watched cannot produce four honest
+  suggestions, and a confident wrong answer is worse than no answer.
+- **You can say what you thought.** A thumbs up and a thumbs down on every film and series, on both
+  apps. Pressing the lit one again takes it back. A thumbs down stops that title suggesting
+  anything and stops it being suggested; a thumbs up makes it count for more. Nothing leaves the
+  device — there is nowhere for it to go.
+- **Quiblo keeps your catalogue up to date on its own.** Until now the only way a new film reached
+  the app was somebody opening Settings and pressing Refresh, so "Recently added" was really
+  answering "what has your provider added since you last thought to check". It now syncs every four
+  days in the background, and it *merges* rather than rebuilding: a title that is still there keeps
+  its place and the date it first appeared, a title that has just arrived is dated now, and one your
+  provider has dropped goes. That last part is what gives an M3U playlist a recently-added row at
+  all — an M3U carries no dates, so the only honest answer is when Quiblo first saw it.
+- **And it checks what is popular every forty hours.** That check used to happen only when you
+  opened For You, which made "what is popular now" a question about how often you opened a tab. It
+  still costs at most two requests in that window, and still nothing at all without your own Movie
+  Database key.
+- **You can put your categories in your own order.** Settings has had "hide" and "rename" since it
+  had a category list; it now has move up and move down as well, on the phone and on the
+  television. The order you set is the order Live, Movies, Series and Favourites draw their rows
+  in, on both apps. Categories you have not moved stay in your provider's own order, behind the
+  ones you have — so ordering three shelves out of ninety moves three shelves and leaves the rest
+  alone. Your order survives a refresh, because it is stored against your provider's own name for
+  the category rather than against anything that gets renumbered.
+- **Now popular is two rows, and each is a top ten.** Films and series came from two different
+  lists and were drawn as one row of five and five, numbered 1 to 5 twice with a badge to tell the
+  halves apart. They are now **Popular films** and **Popular series**, ten each, numbered once, and
+  the number stands beside the poster where you can read it from the sofa.
+- **A popular title your provider does not carry now says so instead of disappearing.** The row
+  used to quietly drop them, so a top ten arrived with four films in it and no way to tell whether
+  the other six were unpopular or simply absent from your account. Every place is filled: an
+  unavailable title keeps its number, shows its poster dimmed with an "Unavailable" mark, and says
+  **Not available yet** under it when you press it. Nothing is fetched for it and nothing tries to
+  play. As before, none of this exists at all without your own Movie Database key.
+
+### Changed
+
+- **The playlist screen sits in the middle of the television, and Save is lit like Search.** It
+  started at the left edge and ran to some fraction of whatever panel it found itself on, which on
+  a fifty-inch set meant a form full of long URLs pressed against the bezel with half the screen
+  empty beside it. It is a centred column now. Save carries the same travelling light that Search
+  and Play have — dimmer than Search's, because Search is the only thing on its screen and Save
+  sits beside a form you are still filling in.
+- **Search's light now fills the screen like every other tab's.** It was drawn on the search
+  screen rather than behind the whole app, so it stopped dead at the margins and left a dark band
+  under the tab bar — a lit rectangle on a dark screen rather than light in a room. It reaches all
+  four corners and passes behind the bar now, exactly as the light from a poster does.
+- **For You draws last night's rows the moment it opens.** Now popular and You may like were both
+  worked out from scratch every time the tab was opened — a whole catalogue matched against a
+  popular list, and a scoring pass over every film and series you have — while you watched an empty
+  shelf. Both are remembered now and drawn straight away, then quietly brought up to date behind
+  what is on screen. They are remembered per profile, so nobody sees anybody else's.
+- **You may like grows rather than reshuffling.** The same viewing scored twice a fortnight apart
+  gives mostly the same titles in a different order, and a shelf that rearranges itself for no
+  visible reason is one nobody learns the shape of. What is there stays where it is and new
+  suggestions arrive on the end. Two things do leave it: a suggestion whose cause you have watched
+  again since — a second viewing is the strongest thing you can tell it, and it should move that
+  title's suggestions rather than leave a fortnight-old answer in front of them — and a suggestion
+  your provider no longer carries.
+- **Recently Added holds fifteen.** It held forty, which was chosen as more than anyone would walk
+  through rather than as an answer to "what is new".
+### Fixed
+
+- **"Resume from" is there when you come back.** Watching four minutes of something and pressing
+  back regularly gave you a **Play** button, as though you had never opened it — and the only way
+  to get the right button was to leave the screen and go back into it. Three things were wrong and
+  all three are fixed. The screen asked where you had got to at the same moment the player was
+  writing it down, and nothing decided which happened first; it now watches the answer instead of
+  asking once, so a position that arrives a moment late still moves the button. On the phone the
+  back press that made the position worth saving was also what cancelled the save; it is now
+  written somewhere the screen going away cannot reach. And a position is written down every ten
+  seconds of playback rather than only when you stop, so a television switched off at the wall or
+  an app killed for memory no longer loses everything since you pressed play.
+- **A film's details sit in the middle of the television screen.** A series fills the screen with
+  its episodes and a film has nothing below its buttons, so a film's details were pressed against
+  the top with the whole lower half of the panel empty. A long description still starts at the top
+  and scrolls exactly as before.
+
+- **Hiding a writing system now applies to For You as well.** Now popular and You may like were the
+  two rows that ignored the setting entirely: hide Arabic, and the catalogue, the search results and
+  Recently Added would all respect it while those two carried on proposing Arabic titles. They were
+  the worst two rows to get it wrong in, because they are the ones that offer something you did not
+  ask for. Both now honour it. A row can come out shorter than its usual length when a hidden title
+  would have filled a place — the alternative was letting the setting decide which titles count as
+  popular, which is a different claim entirely.
+
 ## 0.19.0
 
 ### Added

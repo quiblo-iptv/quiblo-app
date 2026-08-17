@@ -395,6 +395,12 @@ fun TvPlayerScreen(
                     controlsVisible = true
                 },
                 skip = viewModel::skipBy,
+                // Keeps the controls up: a viewer who has just scrubbed is still aiming, and a
+                // panel that hides the bar on the seek hides the thing they were using.
+                seekTo = {
+                    viewModel.seekTo(it)
+                    controlsVisible = true
+                },
                 nextEpisode = { onStepEpisode(1) },
                 previousEpisode = { onStepEpisode(-1) },
                 openAudio = { trackMenuAt = TrackMenuKind.AUDIO },

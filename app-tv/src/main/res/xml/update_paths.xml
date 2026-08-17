@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Quiblo — a free, open source IPTV player.
+  Copyright (C) 2026 The Quiblo Authors
+  Licensed under the GNU General Public License v3.0 or later. See LICENSE.
+
+  One directory, and it is the one downloaded release APKs go into. A provider that shares the
+  whole of external files storage would also share every subtitle a viewer has ever loaded.
+-->
+<paths>
+    <external-files-path
+        name="updates"
+        path="updates/" />
+</paths>

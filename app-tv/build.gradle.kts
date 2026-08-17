@@ -147,6 +147,10 @@ dependencies {
     testImplementation(libs.compose.ui.test.junit4)
     testImplementation(libs.robolectric)
     testImplementation(libs.androidx.test.junit)
+    // The consent flow's last page is driven by a real `SourcesViewModel`, so its repository
+    // has to be stubbed: a stubbed ViewModel would stub the state machine under test.
+    testImplementation(libs.mockk)
+    testImplementation(libs.kotlinx.coroutines.test)
     testRuntimeOnly(libs.junit.vintage.engine)
     debugImplementation(libs.compose.ui.test.manifest)
 }

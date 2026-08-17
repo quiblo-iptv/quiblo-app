@@ -22,6 +22,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusGroup
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.Arrangement
@@ -52,6 +53,7 @@ import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -59,8 +61,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -71,6 +79,7 @@ import androidx.compose.ui.unit.sp
 import dev.quiblo.core.model.AspectRatioMode
 import dev.quiblo.core.model.SeekInterval
 import dev.quiblo.tv.R
+import kotlinx.coroutines.delay
 
 /**
  * What the player offers, as buttons the remote walks through.
@@ -114,12 +123,22 @@ internal fun TvPlayerControls(
      */
     val firstOptionFocus = remember { FocusRequester() }
 
+    /*
+     * The timeline sits between the two rows in the vertical order a remote walks, and only
+     * where there is one: live has no bar, and wiring down onto a composable that was never
+     * drawn is a press that goes nowhere.
+     */
+    val progressFocus = remember { FocusRequester() }
+    val hasTimeline = state.isSeekable && state.durationMillis > 0L
+    val belowTransport = if (hasTimeline) progressFocus else firstOptionFocus
+    val aboveOptions = if (hasTimeline) progressFocus else playPauseFocus
+
     Box(modifier = Modifier.fillMaxSize()) {
         TransportRow(
             state = state,
             actions = actions,
             playPauseFocus = playPauseFocus,
-            firstOptionFocus = firstOptionFocus,
+            below = belowTransport,
             modifier = Modifier.align(Alignment.Center),
         )
 
@@ -136,13 +155,19 @@ internal fun TvPlayerControls(
                 fontWeight = FontWeight.SemiBold,
             )
 
-            Progress(state)
+            Progress(
+                state = state,
+                actions = actions,
+                focusRequester = progressFocus,
+                up = playPauseFocus,
+                down = firstOptionFocus,
+            )
 
             OptionsRow(
                 state = state,
                 actions = actions,
                 firstOptionFocus = firstOptionFocus,
-                playPauseFocus = playPauseFocus,
+                above = aboveOptions,
             )
         }
     }
@@ -167,7 +192,8 @@ private fun TransportRow(
     state: TvControlsState,
     actions: TvControlActions,
     playPauseFocus: FocusRequester,
-    firstOptionFocus: FocusRequester,
+    /** Where Down lands: the timeline where there is one, the options row where there is not. */
+    below: FocusRequester,
     modifier: Modifier = Modifier,
 ) {
     val buttons = buildList {
@@ -222,10 +248,10 @@ private fun TransportRow(
 
     ButtonRow(
         buttons = buttons,
-        // Nothing is above the transport row, and down is always the options row whichever
-        // button the remote is on.
+        // Nothing is above the transport row, and down is always the same place whichever
+        // button the remote is on — the timeline, or the options row where there is no timeline.
         up = FocusRequester.Cancel,
-        down = firstOptionFocus,
+        down = below,
         modifier = modifier,
     )
 }
@@ -247,7 +273,8 @@ private fun OptionsRow(
     state: TvControlsState,
     actions: TvControlActions,
     firstOptionFocus: FocusRequester,
-    playPauseFocus: FocusRequester,
+    /** Where Up lands: the timeline where there is one, play/pause where there is not. */
+    above: FocusRequester,
 ) {
     /*
      * Built as a list because the row's first button is not a fixed one — subtitles and audio
@@ -297,7 +324,7 @@ private fun OptionsRow(
 
     ButtonRow(
         buttons = options,
-        up = playPauseFocus,
+        up = above,
         // The bottom of the screen. Down from here is nothing, not a wrap round to the
         // transport row above.
         down = FocusRequester.Cancel,
@@ -367,27 +394,106 @@ private data class PlayerButton(
     val focusRequester: FocusRequester? = null,
 )
 
-/** The bar and the clock, or the word LIVE where neither means anything. */
+/**
+ * The bar and the clock, or the word LIVE where neither means anything.
+ *
+ * **The bar takes focus and can be walked.** It used to be a picture of where the film had got
+ * to, which left the two seek buttons as the only way through a film — one jump per press, and
+ * one re-buffer per jump. Focused, left and right move a pending mark that the bar draws ahead
+ * of the real one, and the player is told once the pressing stops. [TvScrubState] holds the
+ * arithmetic and explains why the presses stack rather than each seeking.
+ *
+ * **Up and down are left alone.** They are how a viewer gets off the bar and back to the
+ * buttons, and a timeline a remote cannot leave is the fault this project deletes features for.
+ *
+ * **Nothing about the bar's measured height changes while scrubbing.** The second mark is drawn
+ * inside the same box, and the clock line keeps its own height whatever it says. A focus target
+ * that resizes underneath the thing holding it is defect #008.
+ */
 @Composable
-private fun Progress(state: TvControlsState) {
+private fun Progress(
+    state: TvControlsState,
+    actions: TvControlActions,
+    focusRequester: FocusRequester,
+    up: FocusRequester,
+    down: FocusRequester,
+) {
     if (state.isSeekable && state.durationMillis > 0L) {
-        val progress = (state.positionMillis.toFloat() / state.durationMillis).coerceIn(0f, 1f)
+        val timelineLabel = stringResource(R.string.tv_a11y_timeline)
+        val scrub = remember(state.seekInterval) {
+            TvScrubState(stepMillis = state.seekInterval.seconds * MILLIS_PER_SECOND.toLong())
+        }
+        val target = scrub.targetMillis
+
+        // The commit. Restarted by every press, because the effect is keyed on the mark it
+        // moves — which is exactly "one seek once the viewer stops", with no timer to cancel
+        // by hand.
+        LaunchedEffect(target, scrub.isPending) {
+            if (!scrub.isPending) return@LaunchedEffect
+            delay(COMMIT_DELAY_MILLIS)
+            scrub.commit()?.let(actions.seekTo)
+        }
+
+        // Drops the mark once the player has arrived, rather than on the commit — see
+        // `TvScrubState.settle`.
+        LaunchedEffect(state.positionMillis) { scrub.settle(state.positionMillis) }
+
+        val shownMillis = target ?: state.positionMillis
+        val played = (state.positionMillis.toFloat() / state.durationMillis).coerceIn(0f, 1f)
+        val marked = (shownMillis.toFloat() / state.durationMillis).coerceIn(0f, 1f)
+
         Box(
             modifier = Modifier
                 .padding(top = 14.dp)
                 .fillMaxWidth()
                 .height(BAR_HEIGHT)
-                .background(Color.White.copy(alpha = 0.25f), RoundedCornerShape(2.dp)),
+                .background(Color.White.copy(alpha = 0.25f), RoundedCornerShape(2.dp))
+                // A focusable with nothing to say is a focusable TalkBack announces as nothing.
+                // The bar is four pixels of white; the description is the only thing that names
+                // it — and it is also how a test can tell the remote is on it.
+                .semantics { contentDescription = timelineLabel }
+                .focusRequester(focusRequester)
+                .focusProperties {
+                    this.up = up
+                    this.down = down
+                    // Left and right belong to the scrub while the bar holds focus. Without
+                    // this a press at either end of the film escapes sideways to whatever
+                    // rectangle happens to be there.
+                    left = FocusRequester.Cancel
+                    right = FocusRequester.Cancel
+                }
+                // Leaving the bar mid-run seeks to where the viewer had got to. Throwing the
+                // run away instead would make a mis-pressed Up undo ten presses of aiming.
+                .onFocusChanged { if (!it.isFocused) scrub.commit()?.let(actions.seekTo) }
+                .focusable()
+                .onPreviewKeyEvent { event ->
+                    if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+                    val direction = when (event.key) {
+                        Key.DirectionLeft -> -1
+                        Key.DirectionRight -> 1
+                        else -> return@onPreviewKeyEvent false
+                    }
+                    scrub.nudge(direction, state.positionMillis, state.durationMillis)
+                    true
+                },
         ) {
+            // The mark first, then the played portion over it, so a rewind still shows how far
+            // the film had actually got.
             Box(
                 modifier = Modifier
-                    .fillMaxWidth(progress)
+                    .fillMaxWidth(marked)
                     .height(BAR_HEIGHT)
                     .background(Color.White, RoundedCornerShape(2.dp)),
             )
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth(played)
+                    .height(BAR_HEIGHT)
+                    .background(Color.White.copy(alpha = if (target == null) 1f else 0.55f), RoundedCornerShape(2.dp)),
+            )
         }
         Text(
-            text = "${state.positionMillis.asClock()} / ${state.durationMillis.asClock()}",
+            text = "${shownMillis.asClock()} / ${state.durationMillis.asClock()}",
             color = Color.White.copy(alpha = 0.75f),
             fontSize = 15.sp,
             modifier = Modifier.padding(top = 8.dp),
@@ -475,6 +581,8 @@ internal data class TvControlsState(
 internal data class TvControlActions(
     val playPause: () -> Unit,
     val skip: (Int) -> Unit,
+    /** Where the timeline sends the player once a run of presses has stopped. */
+    val seekTo: (Long) -> Unit,
     val nextEpisode: () -> Unit,
     val previousEpisode: () -> Unit,
     val openAudio: () -> Unit,
@@ -513,6 +621,15 @@ private val BUTTON_GAP = 18.dp
 private val SCREEN_MARGIN = 48.dp
 private val BAR_HEIGHT = 4.dp
 private const val ICON_FRACTION = 0.5f
+
+/**
+ * How long the timeline waits after the last press before telling the player.
+ *
+ * Long enough that a run of presses is one seek, short enough that a single press still feels
+ * like a press. Half a second is roughly the gap between deliberate presses on a remote; below
+ * about 300ms a fast run starts splitting into two seeks, which is the behaviour this replaces.
+ */
+private const val COMMIT_DELAY_MILLIS = 500L
 
 private const val MILLIS_PER_SECOND = 1000
 private const val SECONDS_PER_MINUTE = 60

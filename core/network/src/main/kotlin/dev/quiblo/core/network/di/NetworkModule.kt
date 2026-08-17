@@ -24,6 +24,8 @@ import dev.quiblo.core.network.ConnectivityChecker
 import dev.quiblo.core.network.HttpContentFetcher
 import dev.quiblo.core.network.createHttpClient
 import dev.quiblo.core.network.createOkHttpClient
+import dev.quiblo.core.network.update.ReleaseChecker
+import dev.quiblo.core.network.update.ReleaseDownloader
 import org.koin.core.module.Module
 import org.koin.dsl.module
 
@@ -43,4 +45,6 @@ val networkModule: Module = module {
     single { createHttpClient(get()) }
     single<ConnectivityChecker> { AndroidConnectivityChecker(get<Context>()) }
     single { HttpContentFetcher(get(), get()) }
+    single { ReleaseChecker(get(), get()) }
+    single { ReleaseDownloader(get()) }
 }

@@ -417,6 +417,7 @@ fun TvSettingsScreen(
         aboutSection(
             licensesShown = licensesShown,
             onToggleLicenses = { licensesShown = !licensesShown },
+            updateRow = { TvUpdateRow() },
         )
     }
 }
@@ -435,10 +436,23 @@ fun TvSettingsScreen(
  *
  * A function on the list rather than inline, so the test drives the same rows a viewer does.
  */
-internal fun LazyListScope.aboutSection(licensesShown: Boolean, onToggleLicenses: () -> Unit) {
+internal fun LazyListScope.aboutSection(
+    licensesShown: Boolean,
+    onToggleLicenses: () -> Unit,
+    /**
+     * The update check, directly under the version it is checking.
+     *
+     * Passed in rather than composed here because it needs a ViewModel out of Koin, and the
+     * licence test drives this same function without a graph. A section that could only be
+     * tested with the whole application started is a section that stops being tested.
+     */
+    updateRow: (@Composable () -> Unit)? = null,
+) {
     item { SectionHeading(stringResource(R.string.tv_settings_about)) }
 
     item { VersionRow() }
+
+    if (updateRow != null) item { updateRow() }
 
     item {
         ActionRow(
@@ -1416,10 +1430,10 @@ private fun Attribution(text: String) {
 }
 
 /** The names column. Wide enough for a two-line description without crowding it. */
-private val LABEL_WIDTH = 400.dp
+internal val LABEL_WIDTH = 400.dp
 
 /** Air between the names and their controls. Without it the two columns read as one. */
-private val COLUMN_GAP = 40.dp
+internal val COLUMN_GAP = 40.dp
 private val FIELD_WIDTH = 460.dp
 
 /** As wide as the chips it sits under, so the two read as one control rather than two. */

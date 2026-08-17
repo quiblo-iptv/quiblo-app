@@ -17,6 +17,27 @@ Formatted after [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and ve
 
 ### Added
 
+- **The television asks for your playlist on the first screen, instead of leaving you to find
+  it.** Setting Quiblo up used to end at the terms and drop you into an app with nothing in it,
+  where the next thing to do was four presses deep in Settings. There is a third page now: add
+  the playlist or account you already have and it loads before the app opens, or skip it and do
+  it later. If the playlist will not load, it says so and offers to try again — rather than
+  letting you in and leaving you to work out that nothing arrived.
+- **You can drag the film's timeline with the remote.** The progress bar takes focus now, one
+  press below play and pause. Left and right move a mark along it and **the presses stack**: six
+  presses are one jump of six, made half a second after you stop, instead of six separate jumps
+  and six re-buffers. Hold a direction and it speeds up, so crossing a two-hour film takes a few
+  seconds — while the first few presses are still worth exactly the skip interval you chose in
+  Settings, because that is what a small correction is for. Live channels have no timeline, since
+  there is nothing to move through.
+- **The television can tell you when there is a newer Quiblo, and fetch it.** A television has no
+  store to update this app from, so Settings → About now has a **Check now** button. It looks at
+  this project's own releases page, tells you if a newer version is there, downloads it, and
+  **checks it against the published checksum before offering to install it** — a download that
+  does not match is deleted rather than handed to the installer. Your set still asks its own
+  permission before anything is installed, and if it refuses outright, the file is downloaded and
+  named so you can install it from a file manager. **Nothing is checked unless you press the
+  button**: Quiblo does not look at anything on its own, and that has not changed.
 - **You may like actually looks at what you watched.** It scored on genre and nothing else, which
   is why watching One Piece produced The Boys, The Umbrella Academy and a dubbed Arabic family
   drama: at the level of "series, Action & Adventure" those are the same thing. It now weighs
@@ -63,6 +84,12 @@ Formatted after [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and ve
 
 ### Changed
 
+- **The playlist screen sits in the middle of the television, and Save is lit like Search.** It
+  started at the left edge and ran to some fraction of whatever panel it found itself on, which on
+  a fifty-inch set meant a form full of long URLs pressed against the bezel with half the screen
+  empty beside it. It is a centred column now. Save carries the same travelling light that Search
+  and Play have — dimmer than Search's, because Search is the only thing on its screen and Save
+  sits beside a form you are still filling in.
 - **The ambient light keeps up with the picture.** It read the screen a little under twice a second
   and then took most of another second to change, so at worst the glow was around two seconds
   behind the frame it came from — near enough to look deliberate, far enough to look like two

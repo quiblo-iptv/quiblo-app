@@ -27,6 +27,11 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performKeyInput
 import androidx.compose.ui.test.pressKey
 import androidx.compose.ui.test.requestFocus
+import dev.quiblo.core.data.SourceRepository
+import dev.quiblo.feature.sources.SourcesViewModel
+import io.mockk.every
+import io.mockk.mockk
+import kotlinx.coroutines.flow.flowOf
 import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
@@ -61,17 +66,57 @@ class TvConsentReachableTest {
     private var accepted = 0
 
     @Test
-    fun `both screens are read and accepted with the centre key alone`() {
+    fun `all three screens are read and accepted with the centre key alone`() {
         showTheScreen { accepted++ }
 
         compose.onNodeWithText(NEXT).assertIsDisplayed()
         press(Key.DirectionCenter)
 
-        compose.onNodeWithText(START).assertIsDisplayed()
         assertEquals("The first press must not accept anything — it turns a page.", 0, accepted)
+        press(Key.DirectionCenter)
+
+        compose.onNodeWithText(ADD_PLAYLIST).assertIsDisplayed()
+        compose.onNodeWithText(SKIP).assertIsDisplayed()
+        assertEquals("The second press turns a page too — the terms are not the last word.", 0, accepted)
+
+        // Skip is the second control on the page, so the remote has to walk to it. That is the
+        // point: a viewer with no playlist to hand must be able to reach the way past.
+        press(Key.DirectionRight)
+        press(Key.DirectionCenter)
+        assertEquals("Skipping is what accepts, on the third page.", 1, accepted)
+    }
+
+    /**
+     * The last page offers the playlist, and offers a way past it.
+     *
+     * A first-launch step with no way out is the fault this project deletes features for. Both
+     * controls are asserted by their words, because a page that renders one focusable and calls
+     * it either of them would pass a count.
+     */
+    @Test
+    fun `the third page offers a playlist and a way past it`() {
+        showTheScreen()
+        press(Key.DirectionCenter)
+        press(Key.DirectionCenter)
+
+        compose.onNodeWithText(ADD_PLAYLIST).assertIsDisplayed()
+        compose.onNodeWithText(SKIP).assertIsDisplayed()
+    }
+
+    /**
+     * Nothing is agreed to before the terms have been on the screen.
+     *
+     * The acceptance moved from the end of the terms page to the end of the playlist page in
+     * `026`, and the thing that must not have moved with it is the order: a viewer cannot reach
+     * the page that accepts without passing the page that says what is being accepted.
+     */
+    @Test
+    fun `the terms come before anything that accepts them`() {
+        showTheScreen { accepted++ }
 
         press(Key.DirectionCenter)
-        assertEquals("The second press is the acceptance.", 1, accepted)
+        compose.onNodeWithText(RESPONSIBILITY, substring = true).assertIsDisplayed()
+        assertEquals(0, accepted)
     }
 
     /**
@@ -121,7 +166,15 @@ class TvConsentReachableTest {
      * so the worst case is one extra press rather than a television that cannot be used.
      */
     private fun showTheScreen(onAccept: () -> Unit = {}) {
-        compose.setContent { TvConsentScreen(onAccept = onAccept) }
+        // The real ViewModel over a stubbed repository, rather than a stubbed ViewModel: the
+        // third page's branching is driven by `addState`, and a stub of that is a stub of the
+        // thing under test.
+        val repository = mockk<SourceRepository> {
+            every { observeSources() } returns flowOf(emptyList())
+        }
+        val viewModel = SourcesViewModel(repository)
+
+        compose.setContent { TvConsentScreen(onAccept = onAccept, viewModel = viewModel) }
         compose.waitForIdle()
         compose.onNodeWithText(NEXT).requestFocus()
         compose.waitForIdle()
@@ -134,7 +187,8 @@ class TvConsentReachableTest {
 
     private companion object {
         const val NEXT = "Next"
-        const val START = "Start watching"
+        const val ADD_PLAYLIST = "Add a playlist"
+        const val SKIP = "Skip for later"
 
         /** From `tv_consent_terms_body`. */
         const val RESPONSIBILITY = "you are responsible for them"

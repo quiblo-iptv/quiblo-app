@@ -35,11 +35,13 @@ import org.koin.core.module.Module
 /**
  * The TV application's wiring.
  *
- * Deliberately the same list as `:app`'s, because the TV app reuses every ViewModel rather
+ * Almost the same list as `:app`'s, because the TV app reuses the shared ViewModels rather
  * than declaring its own. It is duplicated rather than shared because the two applications
- * are the assembly points and neither may depend on the other — and if the lists ever
- * genuinely diverge, that divergence should be visible here rather than hidden behind a
- * flag in a common module.
+ * are the assembly points and neither may depend on the other — and where the lists genuinely
+ * diverge, that divergence is visible here rather than hidden behind a flag in a common module.
+ *
+ * [tvUpdateModule] is the one divergence: checking for a newer APK is something a television
+ * needs and a phone with a store does not.
  */
 val tvModules: List<Module> = listOf(
     databaseModule,
@@ -54,4 +56,5 @@ val tvModules: List<Module> = listOf(
     settingsModule,
     vodModule,
     syncModule,
+    tvUpdateModule,
 )

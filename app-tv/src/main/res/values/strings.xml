@@ -25,6 +25,14 @@
     <string name="tv_consent_terms_body">You add your own sources, and you are responsible for them — including whether watching them is legal where you live.\n\nNothing you enter leaves this device except to the servers you name yourself. There is no account, no tracking, and no server of ours.\n\nQuiblo is free software under the GPLv3 and comes with no warranty of any kind.</string>
     <string name="tv_consent_terms_link">The full terms are at quiblo-iptv.github.io/quiblo-wiki/wiki/terms</string>
     <string name="tv_consent_start">Start watching</string>
+    <!-- The third page. A viewer who has just agreed to the terms has nothing to watch until
+         they add a source, and the alternative was leaving them to find it in Settings. -->
+    <string name="tv_consent_playlist_title">Your playlist</string>
+    <string name="tv_consent_playlist_body">Add the M3U playlist or Xtream account you already have, and Quiblo will load it now.\n\nYou can do this later instead — it is under Settings, in Playlists and accounts.</string>
+    <string name="tv_consent_playlist_add">Add a playlist</string>
+    <string name="tv_consent_playlist_skip">Skip for later</string>
+    <string name="tv_consent_playlist_not_now">Not now</string>
+    <string name="tv_consent_playlist_retry">Try again</string>
 
     <!-- Profiles -->
     <string name="tv_profile_welcome">Welcome to Quiblo</string>
@@ -211,6 +219,27 @@
     <string name="tv_settings_about">About</string>
     <string name="tv_settings_version_label">Quiblo for television</string>
     <string name="tv_settings_version_detail">Version %1$s</string>
+
+    <!-- Check for updates. A television has no store to update this app from, so the app has to
+         be able to say when it is out of date. Every state gets its own line: a row that goes
+         quiet on failure cannot be told apart from a row whose button is broken. -->
+    <string name="tv_settings_update_label">Updates</string>
+    <string name="tv_settings_update_check">Check now</string>
+    <string name="tv_settings_update_download">Download</string>
+    <string name="tv_settings_update_install">Install</string>
+    <string name="tv_settings_update_idle">Quiblo does not check on its own. Press to look at the releases page once.</string>
+    <string name="tv_settings_update_checking">Asking the releases page…</string>
+    <string name="tv_settings_update_current">You are on the newest release.</string>
+    <string name="tv_settings_update_available">%1$s is available.</string>
+    <string name="tv_settings_update_downloading">Downloading %1$s…</string>
+    <string name="tv_settings_update_ready">%1$s is downloaded and its checksum matched. Saved as %2$s.</string>
+    <string name="tv_settings_update_offline">This television is not online.</string>
+    <string name="tv_settings_update_unreachable">The releases page could not be reached.</string>
+    <string name="tv_settings_update_no_asset">That release has no television build in it.</string>
+    <string name="tv_settings_update_malformed">That release could not be read.</string>
+    <string name="tv_settings_update_checksum">The download did not match its published checksum, so it was deleted. Nothing was installed.</string>
+    <string name="tv_settings_update_no_checksum">That release published no checksum, so nothing could be verified. Nothing was downloaded.</string>
+    <string name="tv_settings_update_installer_refused">This television would not open the installer. The file is downloaded — install it from a file manager.</string>
     <string name="tv_settings_licenses_label">Open source licences</string>
     <string name="tv_settings_licenses_detail">Quiblo is free software under the GNU General Public License v3.0 or later. It ships the following third-party components.</string>
     <string name="tv_settings_licenses_show">Show</string>
@@ -279,6 +308,9 @@
     <string name="tv_a11y_previous_episode">Previous episode</string>
     <string name="tv_a11y_tracks">Audio and subtitles</string>
     <string name="tv_a11y_aspect">Picture fit: %1$s</string>
+    <!-- The bar is four pixels of white and takes focus, so this is the only thing that names
+         it — to a viewer using TalkBack, and to the test that checks the remote can reach it. -->
+    <string name="tv_a11y_timeline">Timeline. Left and right to move through, then wait.</string>
     <plurals name="tv_series_seasons">
         <item quantity="one">%1$d season</item>
         <item quantity="other">%1$d seasons</item>

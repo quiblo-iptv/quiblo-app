@@ -11,6 +11,18 @@
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
     <!--
+      Settings → Check for updates fetches the release APK from this project's own GitHub
+      releases and hands it to the system installer. Without this the intent is refused before
+      the viewer ever sees the installer's own "allow from this source?" prompt, which is the
+      consent that actually matters — this permission only lets Quiblo ask.
+
+      **It is a store-restricted permission**, and it is declared because Quiblo is distributed
+      as an APK from its releases page. A television has no store to update it from, so an app
+      that cannot tell a viewer they are three versions behind never gets updated at all.
+    -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+
+    <!--
       A television has no touchscreen and Android assumes one unless told otherwise, so
       without both of these the app is filtered off every TV in the store. leanback is what
       makes it a TV app; leanback_only would exclude tablets, and there is no reason to.
@@ -109,6 +121,23 @@
                 android:name="androidx.work.WorkManagerInitializer"
                 android:value="androidx.startup"
                 tools:node="remove" />
+        </provider>
+
+        <!--
+          The downloaded APK is handed to the system installer as a content:// URI, because a
+          file:// one has been refused since Android 7. `grantUriPermissions` plus the read flag
+          on the intent is what lets the installer — a different app — open a file inside this
+          app's own storage, and nothing else can: the provider is not exported and the paths
+          file names exactly one directory.
+        -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.updates"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/update_paths" />
         </provider>
 </application>
 

@@ -1189,6 +1189,151 @@ whose whole subject is what somebody actually watched.
 
 ---
 
+## A19 — Round `026`: first launch, the timeline, and updating itself
+
+**Where:** the television only. From
+[`026`](../agile/026_First_Launch_The_Timeline_And_Updating_Itself_of_Quiblo.md). Three of these
+need a **fresh install** — not a cleared cache, an uninstall — because consent is the one screen
+that cannot be reached twice.
+
+### A19.1 — the third page exists and can be got to
+
+| | |
+| :---- | :---- |
+| **What to look at** | Uninstall, install, and press centre twice from the first screen |
+| **Passes if** | Page three appears and offers **Add a playlist** and **Skip for later** |
+| **Fails if** | The app enters at the end of the terms, or page three has one control |
+
+### A19.2 — skipping actually skips
+
+| | |
+| :---- | :---- |
+| **What to look at** | On page three, walk right to **Skip for later** and press it |
+| **Passes if** | The app opens, with no source and no error. Settings → Playlists is empty and works |
+| **Fails if** | It hangs, or the consent screen comes back on the next launch |
+
+### A19.3 — adding a playlist from first launch
+
+| | |
+| :---- | :---- |
+| **What to look at** | On page three press **Add a playlist**, type a real M3U URL, press Save |
+| **Passes if** | It says it is loading, then says how many channels it loaded, and the app opens with them in it |
+| **Fails if** | It enters the app while still loading, or enters with nothing and no message |
+
+### A19.4 — and a playlist that will not load
+
+| | |
+| :---- | :---- |
+| **What to look at** | The same, with a URL that does not resolve |
+| **Passes if** | It says the source could not be loaded, and offers **Try again** and **Skip for later** |
+| **Fails if** | It enters the app silently, or leaves the viewer on a screen with no way forward |
+
+### A19.5 — the playlist screen is in the middle of the panel
+
+| | |
+| :---- | :---- |
+| **What to look at** | Settings → Playlists and accounts, on the largest panel available |
+| **Passes if** | The column is centred left-to-right, with equal space either side |
+| **Fails if** | It hugs the left edge, or runs the full width of the panel |
+
+### A19.6 — Save carries the light
+
+| | |
+| :---- | :---- |
+| **What to look at** | Open the add form and walk focus down to **Save** |
+| **Passes if** | The button's outline carries the travelling light Search and Play use, dimmer than Search's |
+| **Fails if** | No light, or a light as bright as the search field's — it must not out-shout the field being typed into |
+
+### A19.7 — the timeline takes focus
+
+| | |
+| :---- | :---- |
+| **What to look at** | Play a film, press centre for the controls, press down once |
+| **Passes if** | The progress bar itself is focused. Down again reaches subtitles/audio/picture fit |
+| **Fails if** | Down goes straight past the bar, or the bar cannot be got off again with up or down |
+
+### A19.8 — presses stack into one seek
+
+| | |
+| :---- | :---- |
+| **What to look at** | On the focused bar, press right five or six times quickly, then stop |
+| **Passes if** | The mark runs ahead of the picture as you press, and the film jumps **once**, about half a second after the last press |
+| **Fails if** | It jumps on every press, or several times. **This is the whole feature** — one seek per run |
+
+### A19.9 — a long run crosses the film
+
+| | |
+| :---- | :---- |
+| **What to look at** | Hold right, or press it fifteen times, on a two-hour film |
+| **Passes if** | The mark accelerates and reaches the far end in a few seconds |
+| **Fails if** | Fifteen presses move it two and a half minutes. Note the first four presses are the interval from Settings on purpose |
+
+### A19.10 — and the bar does not snap backwards
+
+| | |
+| :---- | :---- |
+| **What to look at** | Immediately after a scrub lands, watch the bar for a second |
+| **Passes if** | It stays where it was sent |
+| **Fails if** | It flicks back to where the film was and then forward again |
+
+### A19.11 — live has no timeline
+
+| | |
+| :---- | :---- |
+| **What to look at** | Play a live channel and press down from play/pause |
+| **Passes if** | It goes to the options row, as it always did. There is no bar and nothing to focus |
+| **Fails if** | A bar appears, or down lands on nothing |
+
+### A19.12 — check for updates, from behind
+
+| | |
+| :---- | :---- |
+| **What to look at** | On a build older than the newest release, Settings → About → Updates → **Check now** |
+| **Passes if** | It names the newer version. **Download** appears |
+| **Fails if** | It says you are current, or says nothing |
+
+### A19.13 — and from the front
+
+| | |
+| :---- | :---- |
+| **What to look at** | The same on a build of the newest release |
+| **Passes if** | It says you are on the newest release |
+| **Fails if** | It offers the version you are already running |
+
+### A19.14 — the download is verified before it is offered
+
+| | |
+| :---- | :---- |
+| **What to look at** | Press **Download**, wait, then press **Install** |
+| **Passes if** | It says the checksum matched and names the file, then the system installer opens |
+| **Fails if** | It offers to install without mentioning the checksum, or the installer opens on a file that is still downloading |
+
+### A19.15 — the television that will not install
+
+| | |
+| :---- | :---- |
+| **What to look at** | A set with installs from unknown sources locked down |
+| **Passes if** | Either the system's own permission prompt appears, or the row says the installer would not open and names the downloaded file |
+| **Fails if** | Pressing Install does nothing at all |
+
+### A19.16 — nothing is checked unprompted
+
+| | |
+| :---- | :---- |
+| **What to look at** | Watch the network on a launch, on a browse, on a playback — without opening Settings |
+| **Passes if** | Nothing goes to `api.github.com` |
+| **Fails if** | Anything does. The check is a button and nothing else, and `tv_consent_terms_body` is the promise it keeps |
+
+### A19.17 — offline says offline
+
+| | |
+| :---- | :---- |
+| **What to look at** | Pull the network, then press **Check now** |
+| **Passes if** | It says the television is not online |
+| **Fails if** | It says you are up to date. Being unable to ask is not the same as being current |
+
+---
+
 ## C — Deferred measurements, in writing
 
 Things nobody can check yet, recorded so they stop being re-asked.

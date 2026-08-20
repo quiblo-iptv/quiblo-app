@@ -19,7 +19,6 @@
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
 
 [![Sponsor on GitHub](https://img.shields.io/badge/Sponsor-GitHub_Sponsors-EA4AAA?logo=githubsponsors&logoColor=white)](https://github.com/sponsors/quiblo-iptv)
-[![Support on Patreon](https://img.shields.io/badge/Support-Patreon-FF424D?logo=patreon&logoColor=white)](https://www.patreon.com/c/Quiblo)
 
 [**Read the wiki**](https://quiblo-iptv.github.io/quiblo-wiki/) · [**Download**](https://github.com/quiblo-iptv/quiblo-app/releases/latest) · [**How it is built**](#learn-from-this-repository) · [**Support the project**](#support-quiblo)
 
@@ -236,13 +235,12 @@ amendment rather than an argument.
 <div align="center">
 
 [![Sponsor on GitHub](https://img.shields.io/badge/Sponsor_on-GitHub_Sponsors-EA4AAA?style=for-the-badge&logo=githubsponsors&logoColor=white)](https://github.com/sponsors/quiblo-iptv)
-[![Support on Patreon](https://img.shields.io/badge/Support_on-Patreon-FF424D?style=for-the-badge&logo=patreon&logoColor=white)](https://www.patreon.com/c/Quiblo)
 
 </div>
 
-Quiblo is free software and always will be. If it is useful to you and you are able, either of
-those helps — but please read what it does and does not buy first, because we would rather be
-clear than funded:
+Quiblo is free software and always will be. If it is useful to you and you are able, sponsoring
+helps — but please read what it does and does not buy first, because we would rather be clear
+than funded:
 
 - **No feature is ever paywalled.** Not now, not on any future platform. If it exists, it is
   in the free build for everyone.

@@ -20,6 +20,7 @@ package dev.quiblo.feature.player
 
 import android.view.SurfaceView
 import android.view.WindowManager
+import androidx.activity.compose.BackHandler
 import androidx.annotation.StringRes
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -229,6 +230,11 @@ fun PlayerScreen(
         }
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+
+    // Back closes the track sheet if open; otherwise system back leaves playback.
+    BackHandler(enabled = tracksVisible) {
+        tracksVisible = false
     }
 
     Box(

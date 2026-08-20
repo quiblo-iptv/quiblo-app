@@ -272,8 +272,7 @@ fun TvPlayerScreen(
 
     KeepScreenAwake(enabled = !hasFailed)
 
-    // Back closes what is on top first and leaves playback last, so a viewer who opened the
-    // controls by accident does not lose the stream getting rid of them (AC-TV-03).
+    // Back closes the track menu if open; otherwise it exits playback immediately.
     //
     // Leaving while the next episode is being offered cancels the offer on the way out. The
     // countdown is disposed with the screen either way; saying so here is what stops a future
@@ -281,7 +280,6 @@ fun TvPlayerScreen(
     BackHandler {
         when {
             trackMenuAt != null -> trackMenuAt = null
-            controlsVisible -> controlsVisible = false
             else -> {
                 nextEpisodeDismissed = true
                 onBack()

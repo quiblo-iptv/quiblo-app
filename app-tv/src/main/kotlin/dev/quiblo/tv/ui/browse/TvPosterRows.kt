@@ -685,44 +685,15 @@ internal fun TvPoster(
                     scaleY = scale
                 },
         ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .aspectRatio(POSTER_ASPECT_RATIO)
-                    .clip(RoundedCornerShape(8.dp))
-                    .border(
-                        width = if (isFocused) 3.dp else 0.dp,
-                        color = if (isFocused) Color.White else Color.Transparent,
-                        shape = RoundedCornerShape(8.dp),
-                    ),
-            ) {
-                if (artworkUrl == null) {
-                    ArtworkPlaceholder()
-                } else {
-                    SubcomposeAsyncImage(
-                        model = artworkUrl,
-                        contentDescription = null,
-                        contentScale = if (isLogo) ContentScale.Fit else ContentScale.Crop,
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(if (isLogo) LOGO_PADDING else 0.dp)
-                            // Dimmed rather than greyed. A title the provider does not carry
-                            // is still the title it is, and a viewer reading a top ten should
-                            // recognise the poster — it is the reason the place is filled at
-                            // all. The badge is what says it cannot be opened.
-                            .alpha(if (isPlayable) 1f else UNAVAILABLE_ARTWORK_ALPHA),
-                        loading = { ArtworkPlaceholder() },
-                        error = { ArtworkPlaceholder() },
-                    )
-                }
-
-                PosterOverlays(
-                    kind = tile.kind,
-                    rating = rating,
-                    showKindBadge = showKindBadge,
-                    isPlayable = isPlayable,
-                )
-            }
+            PosterArtwork(
+                artworkUrl = artworkUrl,
+                isLogo = isLogo,
+                isPlayable = isPlayable,
+                isFocused = isFocused,
+                kind = tile.kind,
+                rating = rating,
+                showKindBadge = showKindBadge,
+            )
 
             // No marquee. This was once thought to be the fix for the shake and it was not —
             // the shake was the modifier order above, and the recording that seemed to
@@ -759,6 +730,65 @@ internal fun TvPoster(
                 )
             }
         }
+    }
+}
+
+/**
+ * The poster itself: the artwork, its border, and the overlays that sit on it.
+ *
+ * Its own composable because it is the whole of what the tile draws that is *not* layout, and
+ * keeping it apart leaves [TvPoster] as what it should read like — a column of a picture, a title
+ * and a caption. Nothing here takes up layout of its own: the box is a fixed aspect ratio and the
+ * border draws at a constant size whether the tile is focused or not, which is the invariant the
+ * modifier-order note in [TvPoster] exists to protect.
+ */
+@Composable
+private fun PosterArtwork(
+    artworkUrl: String?,
+    isLogo: Boolean,
+    isPlayable: Boolean,
+    isFocused: Boolean,
+    kind: MediaKind,
+    rating: Double?,
+    showKindBadge: Boolean,
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .aspectRatio(POSTER_ASPECT_RATIO)
+            .clip(RoundedCornerShape(8.dp))
+            .border(
+                width = if (isFocused) 3.dp else 0.dp,
+                color = if (isFocused) Color.White else Color.Transparent,
+                shape = RoundedCornerShape(8.dp),
+            ),
+    ) {
+        if (artworkUrl == null) {
+            ArtworkPlaceholder()
+        } else {
+            SubcomposeAsyncImage(
+                model = artworkUrl,
+                contentDescription = null,
+                contentScale = if (isLogo) ContentScale.Fit else ContentScale.Crop,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(if (isLogo) LOGO_PADDING else 0.dp)
+                    // Dimmed rather than greyed. A title the provider does not carry
+                    // is still the title it is, and a viewer reading a top ten should
+                    // recognise the poster — it is the reason the place is filled at
+                    // all. The badge is what says it cannot be opened.
+                    .alpha(if (isPlayable) 1f else UNAVAILABLE_ARTWORK_ALPHA),
+                loading = { ArtworkPlaceholder() },
+                error = { ArtworkPlaceholder() },
+            )
+        }
+
+        PosterOverlays(
+            kind = kind,
+            rating = rating,
+            showKindBadge = showKindBadge,
+            isPlayable = isPlayable,
+        )
     }
 }
 

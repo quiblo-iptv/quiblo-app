@@ -265,6 +265,5 @@ class TvSearchResultsFitTest {
 
         /** Must match `TvPosterRows`. A focused poster grows by this about its own centre. */
         const val FOCUSED_SCALE = 1.1f
-
     }
 }

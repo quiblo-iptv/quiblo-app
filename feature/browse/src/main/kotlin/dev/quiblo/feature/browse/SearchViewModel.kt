@@ -83,6 +83,18 @@ data class SearchUiState(
      */
     val includeHidden: Boolean = false,
     /**
+     * Whether this search is also looking at live channels.
+     *
+     * `027` #5. Advanced search leaves television channels out — a viewer narrowing by genre is
+     * looking for a title, and a channel has no genre to be narrowed by — and until now the only
+     * way to change that was a setting two screens away, in Settings, that decided it for every
+     * search ever made. It is a question about *this* search, so it is asked where the search is.
+     *
+     * The setting is still what it starts as. A viewer who has said "always look in live" in
+     * Settings has said it; this switch is how they say otherwise for one question.
+     */
+    val includeLive: Boolean = false,
+    /**
      * Whether the filters are open.
      *
      * The view model's rather than the screen's, because it changes the *query* and not only the
@@ -130,6 +142,17 @@ class SearchViewModel(
     private val query = MutableStateFlow("")
     private val selectedGenre = MutableStateFlow<String?>(null)
     private val includeHidden = MutableStateFlow(false)
+
+    /**
+     * What the viewer has said about live channels for *this* search, or null for "whatever the
+     * rule says".
+     *
+     * Nullable rather than a boolean seeded from the setting, and the difference is real: the
+     * setting arrives asynchronously and the rule also depends on whether the filters are open, so
+     * a copied boolean would be a third answer that has to be kept in step with two others. Null
+     * means nobody has overruled anything, which is the truth until they do.
+     */
+    private val includeLiveOverride = MutableStateFlow<Boolean?>(null)
     private val isAdvanced = MutableStateFlow(false)
     private val genreIndex = MutableStateFlow(GenreState())
     private val ratings = MutableStateFlow<Map<String, Double>>(emptyMap())
@@ -165,6 +188,18 @@ class SearchViewModel(
     }
 
     /**
+     * Whether live channels are in this search at all.
+     *
+     * One flow read twice — by the query that decides whether to ask for them, and by the screen
+     * that draws the switch — because the two must never disagree. A switch drawn from one rule
+     * and a query made under another is a control that appears to do nothing.
+     */
+    private val includeLive: StateFlow<Boolean> =
+        combine(isAdvanced, showLiveInSearch, includeLiveOverride) { advanced, showLive, chosen ->
+            chosen ?: (!advanced || showLive)
+        }.stateIn(viewModelScope, SharingStarted.Eagerly, true)
+
+    /**
      * The answer to whatever is currently being asked.
      *
      * Debounced rather than run per keystroke, and `mapLatest` so a term typed over a slower
@@ -176,8 +211,7 @@ class SearchViewModel(
         selectedGenre,
         includeHidden,
         activeSourceId,
-        // Live is left out of an advanced search unless Settings says to keep it.
-        combine(isAdvanced, showLiveInSearch) { advanced, showLive -> !advanced || showLive },
+        includeLive,
     ) { text, genre, hidden, sourceId, live -> Ask(text, genre, hidden, sourceId, live) }
         .mapLatest { ask ->
             if (ask.sourceId == null || (ask.text.isBlank() && ask.genre == null)) {
@@ -207,9 +241,11 @@ class SearchViewModel(
             posters,
             isSearching,
             activeSourceId,
-            combine(includeHidden, isAdvanced) { hidden, advanced -> hidden to advanced },
+            combine(includeHidden, isAdvanced, includeLive) { hidden, advanced, live ->
+                Switches(hidden, advanced, live)
+            },
         ) { scores, art, searching, sourceId, switches ->
-            Extras(scores, art, searching, sourceId != null, switches.first, switches.second)
+            Extras(scores, art, searching, sourceId != null, switches)
         },
     ) { text, genre, index, found, extras ->
         SearchUiState(
@@ -227,8 +263,9 @@ class SearchViewModel(
             ratings = extras.ratings,
             posters = extras.posters,
             suggestions = found.suggestionsFor(text),
-            includeHidden = extras.includeHidden,
-            isAdvanced = extras.isAdvanced,
+            includeHidden = extras.switches.includeHidden,
+            includeLive = extras.switches.includeLive,
+            isAdvanced = extras.switches.isAdvanced,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS), SearchUiState())
 
@@ -236,14 +273,36 @@ class SearchViewModel(
         query.value = text
     }
 
-    /** Pressing the selected genre again clears it, so the filter needs no separate "off". */
+    /**
+     * Narrows to one genre, and keeps it there.
+     *
+     * **Pressing the chosen genre again used to clear it, and that was the fault** (`027` #7). A
+     * chip that does one thing on the first press and the opposite on the second is a control a
+     * viewer cannot aim: on a remote they arrive at the chip they are already filtering by as they
+     * walk the strip, and one stray press emptied the filter with nothing on screen saying so.
+     * Choosing is choosing. Clear is what unchooses, it is the first thing in the strip, and it is
+     * the only thing that means "no genre".
+     *
+     * Null is still accepted, because Clear goes through here rather than around it.
+     */
     fun selectGenre(genre: String?) {
-        selectedGenre.value = genre.takeIf { it != selectedGenre.value }
+        selectedGenre.value = genre
     }
 
     /** Looks in hidden categories and hidden writing systems too, for this search only. */
     fun setIncludeHidden(include: Boolean) {
         includeHidden.value = include
+    }
+
+    /**
+     * Looks at live channels too, or stops looking at them, for this search only.
+     *
+     * Never written back to Settings. A switch on a search screen answers the search it is on —
+     * changing a stored preference from here would make one evening's question the app's standing
+     * answer, which is the shape `FREEZE.md` §4.2 calls a setting that sets itself.
+     */
+    fun setIncludeLive(include: Boolean) {
+        includeLiveOverride.value = include
     }
 
     fun setAdvanced(advanced: Boolean) {
@@ -254,6 +313,9 @@ class SearchViewModel(
         query.value = ""
         selectedGenre.value = null
         includeHidden.value = false
+        // Back to whatever the rule says rather than to false, because "off" is not what this
+        // switch was before it was touched — see [includeLiveOverride].
+        includeLiveOverride.value = null
     }
 
     /**
@@ -308,14 +370,20 @@ class SearchViewModel(
         val includeLive: Boolean,
     )
 
+    /** The three switches above the results, bundled to fit `combine`'s arity. */
+    private data class Switches(
+        val includeHidden: Boolean,
+        val isAdvanced: Boolean,
+        val includeLive: Boolean,
+    )
+
     /** Everything that is neither the question nor the answer, bundled to fit `combine`. */
     private data class Extras(
         val ratings: Map<String, Double>,
         val posters: Map<String, String>,
         val isSearching: Boolean,
         val hasSource: Boolean,
-        val includeHidden: Boolean,
-        val isAdvanced: Boolean,
+        val switches: Switches,
     )
 
     private companion object {

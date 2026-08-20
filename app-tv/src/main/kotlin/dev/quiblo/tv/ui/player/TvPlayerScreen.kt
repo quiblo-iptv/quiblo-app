@@ -99,6 +99,7 @@ import dev.quiblo.tv.ui.common.AmbientColours
 import dev.quiblo.tv.ui.common.PLAYER_CROSSFADE_MILLIS
 import dev.quiblo.tv.ui.common.ambientBackdrop
 import dev.quiblo.tv.ui.common.ambientFrom
+import dev.quiblo.tv.ui.common.insistOnFocus
 import dev.quiblo.tv.ui.detail.DetailButton
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
@@ -203,13 +204,19 @@ fun TvPlayerScreen(
      * four places it can be: the root, the controls, the track panel and the banner. The last
      * three request it for themselves; this puts it back on the root whenever none of them is
      * on screen, which is the case the old code only handled once, at first composition.
+     *
+     * **The controls are no longer among them, and that is `027` #2.** They keep the remote for
+     * themselves now — see [TvPlayerControlsHost], which both places it there when they appear and
+     * puts it back when a button disappears from under it. This effect is left with the case it
+     * was always about: nothing is on screen, so the root takes it.
+     *
+     * [insistOnFocus] rather than a bare request, because `requestFocus()` *returns false* when
+     * its node exists but has not been placed — it does not throw — and the `runCatching` this
+     * replaces dropped that answer on the floor. `022` #4, in the one place it had been missed.
      */
     LaunchedEffect(controlsVisible, trackMenuAt, isOfferingNextEpisode) {
-        when {
-            isOfferingNextEpisode || trackMenuAt != null -> Unit
-            controlsVisible -> runCatching { playPauseFocus.requestFocus() }
-            else -> runCatching { rootFocus.requestFocus() }
-        }
+        val isSomethingElseUp = controlsVisible || trackMenuAt != null || isOfferingNextEpisode
+        if (!isSomethingElseUp) rootFocus.insistOnFocus()
     }
 
     // The offer replaces the controls rather than sitting over them. Two focusable things
@@ -482,10 +489,13 @@ private fun PlayerOverlays(
     zapNotice?.let { ZapNotice(name = it) }
 
     if (controlsVisible && !hasFailed) {
-        TvPlayerControls(
+        TvPlayerControlsHost(
             state = controlsState(state, settings, request, aspectRatioMode, trackMenu),
             actions = controlActions,
             playPauseFocus = playPauseFocus,
+            // Not while something is drawn over them. The panel and the offer each take the
+            // remote deliberately, and the controls' own repair must not fight them for it.
+            ownsFocus = trackMenuAt == null && !isOfferingNextEpisode,
         )
     }
 

@@ -49,13 +49,18 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
@@ -77,6 +82,8 @@ import dev.quiblo.feature.browse.labelRes
 import dev.quiblo.tv.R
 import dev.quiblo.tv.ui.common.AmbientRequest
 import dev.quiblo.tv.ui.common.LocalAmbientSink
+import dev.quiblo.tv.ui.common.LocalTvReturn
+import dev.quiblo.tv.ui.common.insistOnFocus
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -242,6 +249,41 @@ internal fun TvCategoryList(
     showKindBadge: Boolean = false,
     continueWatching: (@Composable () -> Unit)? = null,
 ) {
+    /*
+     * Which tile the remote was on, so that coming back lands on it (`027` #1).
+     *
+     * `rememberSaveable`, and that is the load-bearing word. This list is *destroyed* whenever
+     * anything opens over the shell — a film, a series, the player — so a plain `remember` would
+     * be forgotten by exactly the journey this exists to survive. Saved state is kept for the
+     * shell by the holder in `TvApp`, which is what makes the pair work: the list restores its
+     * own scroll position, and this restores the remote's place in it.
+     *
+     * The tile's key rather than its index, because the two are not the same fact. A catalogue
+     * that has refreshed underneath the viewer has moved every index and kept every key, and
+     * "the fifth thing in the row" is not what anybody was looking at.
+     */
+    var focusedKey by rememberSaveable { mutableStateOf<String?>(null) }
+    val cursorFocus = remember { FocusRequester() }
+
+    /*
+     * Asks for that tile back, once, on the way in from an overlay.
+     *
+     * Keyed on the rows because they are what has to exist first: a screen returning to a
+     * catalogue is composed long before the query behind it answers, and a focus request made
+     * against a tile that has not been built yet is a request that quietly returns false — the
+     * failure `insistOnFocus` was written for, on the one journey where it matters most.
+     *
+     * The signal is consumed rather than read, so this cannot fire on a tab switch. See
+     * [TvReturnSignal]: the content stealing focus off the tab bar is a worse fault than the one
+     * being fixed here.
+     */
+    val returning = LocalTvReturn.current
+    LaunchedEffect(rows) {
+        if (rows.isEmpty() || focusedKey == null) return@LaunchedEffect
+        if (!returning.consume()) return@LaunchedEffect
+        cursorFocus.insistOnFocus()
+    }
+
     LazyColumn(
         modifier = modifier.fillMaxSize(),
         // Each row reserves FOCUS_GROWTH above and below itself, so the spacing between
@@ -263,6 +305,9 @@ internal fun TvCategoryList(
                 onItemClick = onItemClick,
                 showKindBadge = showKindBadge,
                 style = row.style,
+                focusedKey = focusedKey,
+                cursorFocus = cursorFocus,
+                onFocusedKeyChange = { focusedKey = it },
             )
         }
     }
@@ -421,6 +466,11 @@ private fun CategoryRow(
     onItemClick: (TvRowItem) -> Unit,
     showKindBadge: Boolean = false,
     style: TvRowStyle = TvRowStyle.POSTER,
+    /** The tile the remote was on when the shell was last left. See [TvCategoryList]. */
+    focusedKey: String? = null,
+    /** Attached to that one tile, wherever in the catalogue it turns out to be. */
+    cursorFocus: FocusRequester? = null,
+    onFocusedKeyChange: (String) -> Unit = {},
 ) {
     Column {
         Text(
@@ -451,6 +501,11 @@ private fun CategoryRow(
                     fallbackArtworkUrl = posters[item.tile.key],
                     showKindBadge = showKindBadge,
                     onClick = { onItemClick(item) },
+                    // Only the one tile carries the requester. Two nodes sharing a
+                    // `FocusRequester` is the state that throws, and a catalogue holds
+                    // thousands of these.
+                    focusRequester = cursorFocus.takeIf { item.tile.key == focusedKey },
+                    onFocused = { onFocusedKeyChange(item.tile.key) },
                     rank = item.rank.takeIf { style == TvRowStyle.RANKED },
                     // Reserved for the whole row, not only for the tiles that have one. A tile
                     // one line taller than its neighbour is a tile whose bounds differ from its
@@ -495,6 +550,15 @@ internal fun TvPoster(
     showKindBadge: Boolean = false,
     /** This title's position in the list it came from, drawn across the artwork when present. */
     rank: Int? = null,
+    /**
+     * Set on the one tile a returning viewer should land on, and null on every other.
+     *
+     * The tile does not decide that — the list does, from what it remembered before it was
+     * destroyed. See [TvCategoryList].
+     */
+    focusRequester: FocusRequester? = null,
+    /** Says this tile now has the remote, so the list can remember it. */
+    onFocused: () -> Unit = {},
     /** One line under the title, saying why this tile is here. */
     caption: String? = null,
     /**
@@ -525,6 +589,12 @@ internal fun TvPoster(
         if (isFocused) ambientSink(AmbientRequest.Artwork(artworkUrl))
     }
 
+    // Reported rather than stored here: which tile the remote is on is a fact about the list,
+    // and a tile that remembered it for itself would be forgotten with the tile.
+    LaunchedEffect(isFocused) {
+        if (isFocused) onFocused()
+    }
+
     val scale by animateFloatAsState(
         targetValue = if (isFocused) FOCUSED_SCALE else 1f,
         label = "posterScale",
@@ -536,7 +606,7 @@ internal fun TvPoster(
      * clipped at the left edge (#003).
      *
      * This padding is *not* what stopped the shake, though it was twice believed to be. The
-     * shake is the modifier order two lines below, and the note there says why.
+     * shake is the modifier order below, and the note there says why.
      */
     Row(verticalAlignment = Alignment.CenterVertically) {
         // The gutter is drawn for every tile of a ranked row and for no tile of any other, so a
@@ -545,132 +615,148 @@ internal fun TvPoster(
         // content is where #008 came from.
         rank?.let { RankGutter(rank = it, dimmed = !isPlayable) }
 
-        Box(
-            modifier = Modifier.padding(
-                horizontal = FOCUS_GROWTH_HORIZONTAL,
-                vertical = FOCUS_GROWTH,
-            ),
+        Column(
+            modifier = Modifier
+                // On the tile a returning viewer left, and on no other. Ahead of `clickable`
+                // because a requester attaches to the next focus target in the chain, and
+                // `clickable`'s is the only one this tile has.
+                .then(focusRequester?.let { Modifier.focusRequester(it) } ?: Modifier)
+                /*
+                 * `clickable` before `graphicsLayer`, and the order is the whole of #008.
+                 *
+                 * A modifier chain applies outside-in, so anything to the right of
+                 * `graphicsLayer` sits inside that layer — and `clickable` used to, which put
+                 * the *focusable* node inside the animating scale. A focus node's bounds are
+                 * resolved through every layer between it and the scrollable above it, so for
+                 * the length of the scale animation this poster reported a rectangle that
+                 * grew a little every frame.
+                 *
+                 * The vertical list reads exactly that rectangle to decide whether the
+                 * focused thing is on screen. From the second row down the answer is "only
+                 * just", so it scrolls until the poster is flush with the bottom edge — and
+                 * flush is the one position where the next frame's growth immediately puts it
+                 * out of view again. Press right, and the whole catalogue twitches upward
+                 * while the new poster inflates. Hold the remote down and it does that on
+                 * every repeat. That is the wobble, and it is why the **first row never
+                 * shook**: a poster there fits with room to spare, so the list never scrolls
+                 * and there is no equilibrium to fall off.
+                 *
+                 * With the focusable outside the layer its bounds are a constant 150dp box
+                 * whatever the scale is doing. The poster still grows; nothing is asked to
+                 * chase it, and every poster in a row now reports the same rectangle as its
+                 * neighbours — so moving along a row gives the vertical list nothing to
+                 * react to at all.
+                 *
+                 * Measured, not reasoned: `TvBrowseScrollStabilityTest` walks the remote
+                 * along a row and reads the catalogue's position off every frame. Before this
+                 * line it moved 11px on the second row and 12px on the fourth while the first
+                 * stayed at zero, which is the asymmetry that was reported from the sofa.
+                 * After it, all three are flat.
+                 *
+                 * Note for anyone changing this tile: the resting position is still *flush*
+                 * with the viewport edge, which tolerates nothing. Anything that makes a
+                 * focused poster's measured bounds vary — a focus-dependent size, a border
+                 * that takes up layout, a label that grows a line — will start the loop
+                 * again. The test is what will tell you.
+                 */
+                .clickable(interactionSource = interactionSource, indication = null, onClick = onClick)
+                /*
+                 * The growth reserved **inside** the focus target rather than around it (`027` #4).
+                 *
+                 * The room itself is #003's and is unchanged. What moved is which node owns it:
+                 * this padding used to sit on a `Box` *outside* the focusable, so the rectangle the
+                 * tile reported to the list above was the 253dp column and not the 281dp the tile
+                 * actually draws into. A vertical list scrolls a focused thing until *that*
+                 * rectangle is on screen and then stops — which on the search results, where the
+                 * field and the chips leave a row barely enough height, left the last ten
+                 * millimetres of the tile below the viewport. The poster fitted; the title under it
+                 * was sliced along its baseline, which is the report.
+                 *
+                 * Inside the focusable, the rectangle is the whole tile including the room the
+                 * scale needs, so the list brings all of it into view and there is nothing left to
+                 * clip. **It is still constant**, which is the invariant the note above exists to
+                 * protect: this padding is the same 14dp whether the tile is focused or not, and it
+                 * is outside `graphicsLayer`, so a tile's measured bounds still never move.
+                 */
+                .padding(horizontal = FOCUS_GROWTH_HORIZONTAL, vertical = FOCUS_GROWTH)
+                .width(POSTER_WIDTH)
+                .graphicsLayer {
+                    scaleX = scale
+                    scaleY = scale
+                },
         ) {
-            Column(
+            Box(
                 modifier = Modifier
-                    .width(POSTER_WIDTH)
-                    /*
-                     * `clickable` before `graphicsLayer`, and the order is the whole of #008.
-                     *
-                     * A modifier chain applies outside-in, so anything to the right of
-                     * `graphicsLayer` sits inside that layer — and `clickable` used to, which put
-                     * the *focusable* node inside the animating scale. A focus node's bounds are
-                     * resolved through every layer between it and the scrollable above it, so for
-                     * the length of the scale animation this poster reported a rectangle that
-                     * grew a little every frame.
-                     *
-                     * The vertical list reads exactly that rectangle to decide whether the
-                     * focused thing is on screen. From the second row down the answer is "only
-                     * just", so it scrolls until the poster is flush with the bottom edge — and
-                     * flush is the one position where the next frame's growth immediately puts it
-                     * out of view again. Press right, and the whole catalogue twitches upward
-                     * while the new poster inflates. Hold the remote down and it does that on
-                     * every repeat. That is the wobble, and it is why the **first row never
-                     * shook**: a poster there fits with room to spare, so the list never scrolls
-                     * and there is no equilibrium to fall off.
-                     *
-                     * With the focusable outside the layer its bounds are a constant 150dp box
-                     * whatever the scale is doing. The poster still grows; nothing is asked to
-                     * chase it, and every poster in a row now reports the same rectangle as its
-                     * neighbours — so moving along a row gives the vertical list nothing to
-                     * react to at all.
-                     *
-                     * Measured, not reasoned: `TvBrowseScrollStabilityTest` walks the remote
-                     * along a row and reads the catalogue's position off every frame. Before this
-                     * line it moved 11px on the second row and 12px on the fourth while the first
-                     * stayed at zero, which is the asymmetry that was reported from the sofa.
-                     * After it, all three are flat.
-                     *
-                     * Note for anyone changing this tile: the resting position is still *flush*
-                     * with the viewport edge, which tolerates nothing. Anything that makes a
-                     * focused poster's measured bounds vary — a focus-dependent size, a border
-                     * that takes up layout, a label that grows a line — will start the loop
-                     * again. The test is what will tell you.
-                     */
-                    .clickable(interactionSource = interactionSource, indication = null, onClick = onClick)
-                    .graphicsLayer {
-                        scaleX = scale
-                        scaleY = scale
-                    },
+                    .fillMaxWidth()
+                    .aspectRatio(POSTER_ASPECT_RATIO)
+                    .clip(RoundedCornerShape(8.dp))
+                    .border(
+                        width = if (isFocused) 3.dp else 0.dp,
+                        color = if (isFocused) Color.White else Color.Transparent,
+                        shape = RoundedCornerShape(8.dp),
+                    ),
             ) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .aspectRatio(POSTER_ASPECT_RATIO)
-                        .clip(RoundedCornerShape(8.dp))
-                        .border(
-                            width = if (isFocused) 3.dp else 0.dp,
-                            color = if (isFocused) Color.White else Color.Transparent,
-                            shape = RoundedCornerShape(8.dp),
-                        ),
-                ) {
-                    if (artworkUrl == null) {
-                        ArtworkPlaceholder()
-                    } else {
-                        SubcomposeAsyncImage(
-                            model = artworkUrl,
-                            contentDescription = null,
-                            contentScale = if (isLogo) ContentScale.Fit else ContentScale.Crop,
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .padding(if (isLogo) LOGO_PADDING else 0.dp)
-                                // Dimmed rather than greyed. A title the provider does not carry
-                                // is still the title it is, and a viewer reading a top ten should
-                                // recognise the poster — it is the reason the place is filled at
-                                // all. The badge is what says it cannot be opened.
-                                .alpha(if (isPlayable) 1f else UNAVAILABLE_ARTWORK_ALPHA),
-                            loading = { ArtworkPlaceholder() },
-                            error = { ArtworkPlaceholder() },
-                        )
-                    }
-
-                    PosterOverlays(
-                        kind = tile.kind,
-                        rating = rating,
-                        showKindBadge = showKindBadge,
-                        isPlayable = isPlayable,
+                if (artworkUrl == null) {
+                    ArtworkPlaceholder()
+                } else {
+                    SubcomposeAsyncImage(
+                        model = artworkUrl,
+                        contentDescription = null,
+                        contentScale = if (isLogo) ContentScale.Fit else ContentScale.Crop,
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(if (isLogo) LOGO_PADDING else 0.dp)
+                            // Dimmed rather than greyed. A title the provider does not carry
+                            // is still the title it is, and a viewer reading a top ten should
+                            // recognise the poster — it is the reason the place is filled at
+                            // all. The badge is what says it cannot be opened.
+                            .alpha(if (isPlayable) 1f else UNAVAILABLE_ARTWORK_ALPHA),
+                        loading = { ArtworkPlaceholder() },
+                        error = { ArtworkPlaceholder() },
                     )
                 }
 
-                // No marquee. This was once thought to be the fix for the shake and it was not —
-                // the shake was the modifier order above, and the recording that seemed to
-                // implicate a marquee had truncated early, so its "idle" tail still had key
-                // presses in it.
-                //
-                // It stays gone on its own merits: on a ten-foot display a title that never stops
-                // moving is harder to read than one politely truncated.
+                PosterOverlays(
+                    kind = tile.kind,
+                    rating = rating,
+                    showKindBadge = showKindBadge,
+                    isPlayable = isPlayable,
+                )
+            }
+
+            // No marquee. This was once thought to be the fix for the shake and it was not —
+            // the shake was the modifier order above, and the recording that seemed to
+            // implicate a marquee had truncated early, so its "idle" tail still had key
+            // presses in it.
+            //
+            // It stays gone on its own merits: on a ten-foot display a title that never stops
+            // moving is harder to read than one politely truncated.
+            Text(
+                text = tile.name,
+                color = Color.White.copy(alpha = if (isFocused) 1f else 0.7f),
+                fontSize = 14.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier
+                    .padding(top = 8.dp)
+                    .fillMaxWidth(),
+            )
+
+            // A fixed line, present or blank, for every tile in a row that has any. Its height
+            // is set rather than left to the text, so an empty one and a full one measure alike.
+            if (showCaption) {
                 Text(
-                    text = tile.name,
-                    color = Color.White.copy(alpha = if (isFocused) 1f else 0.7f),
-                    fontSize = 14.sp,
+                    text = caption.orEmpty(),
+                    color = Color.White.copy(alpha = 0.55f),
+                    fontSize = 11.sp,
+                    lineHeight = CAPTION_LINE_HEIGHT,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier
-                        .padding(top = 8.dp)
+                        .padding(top = 2.dp)
+                        .height(CAPTION_HEIGHT)
                         .fillMaxWidth(),
                 )
-
-                // A fixed line, present or blank, for every tile in a row that has any. Its height
-                // is set rather than left to the text, so an empty one and a full one measure alike.
-                if (showCaption) {
-                    Text(
-                        text = caption.orEmpty(),
-                        color = Color.White.copy(alpha = 0.55f),
-                        fontSize = 11.sp,
-                        lineHeight = CAPTION_LINE_HEIGHT,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier
-                            .padding(top = 2.dp)
-                            .height(CAPTION_HEIGHT)
-                            .fillMaxWidth(),
-                    )
-                }
             }
         }
     }

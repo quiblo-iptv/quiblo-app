@@ -78,6 +78,7 @@ import dev.quiblo.tv.ui.common.LocalAmbientSink
 import dev.quiblo.tv.ui.common.QuibloMark
 import dev.quiblo.tv.ui.common.TvChip
 import dev.quiblo.tv.ui.common.TvTextField
+import dev.quiblo.tv.ui.common.TvToggle
 import dev.quiblo.tv.ui.common.travellingGlow
 import org.koin.androidx.compose.koinViewModel
 
@@ -130,6 +131,7 @@ fun TvSearchScreen(
         onQueryChange = viewModel::search,
         onSelectGenre = viewModel::selectGenre,
         onToggleIncludeHidden = viewModel::setIncludeHidden,
+        onToggleIncludeLive = viewModel::setIncludeLive,
         onToggleAdvanced = viewModel::setAdvanced,
         onClear = viewModel::clear,
         onResultVisible = viewModel::onResultVisible,
@@ -154,6 +156,7 @@ internal fun TvSearchPanel(
     onQueryChange: (String) -> Unit,
     onSelectGenre: (String?) -> Unit,
     onToggleIncludeHidden: (Boolean) -> Unit,
+    onToggleIncludeLive: (Boolean) -> Unit,
     onToggleAdvanced: (Boolean) -> Unit,
     onClear: () -> Unit,
     onResultVisible: (Channel) -> Unit,
@@ -226,6 +229,7 @@ internal fun TvSearchPanel(
             onQueryChange = onQueryChange,
             onSelectGenre = onSelectGenre,
             onToggleIncludeHidden = onToggleIncludeHidden,
+            onToggleIncludeLive = onToggleIncludeLive,
             onClear = onClear,
             onToggleAdvanced = { onToggleAdvanced(!isAdvanced) },
         )
@@ -299,6 +303,7 @@ internal fun ColumnScope.SearchHeader(
     onQueryChange: (String) -> Unit,
     onSelectGenre: (String?) -> Unit,
     onToggleIncludeHidden: (Boolean) -> Unit,
+    onToggleIncludeLive: (Boolean) -> Unit,
     onClear: () -> Unit,
     onToggleAdvanced: () -> Unit,
 ) {
@@ -441,19 +446,33 @@ internal fun ColumnScope.SearchHeader(
                     modifier = Modifier.focusRequester(advancedFocus),
                 )
 
-                // Only alongside the genre chips it explains, and only once there is room for
-                // it — at rest it would be a paragraph beside a box nobody has used yet.
+                /*
+                 * The two switches, on the right of the field's own row (`027` #6).
+                 *
+                 * **They were chips at the head of the genre strip, and that was two faults in one
+                 * place.** A switch drawn as a chip looks like a genre that happens to be chosen,
+                 * which is the first; and living in the same scrolling strip as the genres put
+                 * them behind however many suggestions the term had produced — six of them on a
+                 * common word — so reaching *Include hidden* meant walking past a row of titles.
+                 * A filter that decides what a search returns does not belong downstream of the
+                 * search's own answers.
+                 *
+                 * Up here they are one press right of Advanced, which is the control that reveals
+                 * them, and they are on the row a viewer is already looking at.
+                 */
                 if (isAdvanced) {
                     Spacer(modifier = Modifier.width(COLUMN_GAP))
-                    genreHint(state)?.let {
-                        Text(
-                            text = it,
-                            color = Color.White.copy(alpha = 0.55f),
-                            fontSize = 13.sp,
-                            lineHeight = 18.sp,
-                            modifier = Modifier.fillMaxWidth(),
-                        )
-                    }
+                    TvToggle(
+                        label = stringResource(R.string.tv_search_include_hidden),
+                        isOn = state.includeHidden,
+                        onToggle = onToggleIncludeHidden,
+                    )
+                    Spacer(modifier = Modifier.width(TOGGLE_GAP))
+                    TvToggle(
+                        label = stringResource(R.string.tv_search_include_live),
+                        isOn = state.includeLive,
+                        onToggle = onToggleIncludeLive,
+                    )
                 }
             }
         }
@@ -465,6 +484,28 @@ internal fun ColumnScope.SearchHeader(
                 isSelected = isAdvanced,
                 onClick = onToggleAdvanced,
                 modifier = Modifier.focusRequester(advancedFocus),
+            )
+        }
+    }
+
+    /*
+     * What the genre filter can and cannot describe, under the field and above the genres.
+     *
+     * `027` #6 again, and this half is the reason the switches had nowhere to go. The sentence sat
+     * *beside* the field, taking the width the switches now use, to explain chips that were a row
+     * below it and a screen's width to the left. It reads where it belongs: after the question,
+     * before the answers it qualifies.
+     */
+    if (isAdvanced) {
+        genreHint(state)?.let {
+            Text(
+                text = it,
+                color = Color.White.copy(alpha = 0.55f),
+                fontSize = 13.sp,
+                lineHeight = 18.sp,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 6.dp),
             )
         }
     }
@@ -531,22 +572,16 @@ internal fun ColumnScope.SearchHeader(
         }
 
         if (isAdvanced) {
-            // First among the advanced controls, and before the genres, because it changes what
-            // every one of them can return rather than narrowing what they already do.
-            item(key = HIDDEN_KEY) {
-                TvChip(
-                    label = stringResource(R.string.tv_search_include_hidden),
-                    isSelected = state.includeHidden,
-                    onClick = { onToggleIncludeHidden(!state.includeHidden) },
-                )
-            }
-
+            // Genres only. The two switches that decide what a search *looks at* are up on the
+            // field's row now — see the note there for why they cannot live in this strip.
             items(items = state.genres, key = { it }) { genre ->
                 TvChip(
                     label = genre,
                     isSelected = genre == state.selectedGenre,
-                    // Pressing the selected genre again clears it, which is why there is no
-                    // separate "all genres" chip to walk past.
+                    // Choosing, and only choosing (`027` #7). Pressing the chosen genre again
+                    // used to clear it, so the one chip a viewer is most likely to walk onto was
+                    // the one that undid their filter. Clear is at the head of this strip and is
+                    // the only thing that means "no genre".
                     onClick = { onSelectGenre(genre) },
                 )
             }
@@ -658,6 +693,9 @@ private val COLUMN_GAP = 40.dp
 /** Between the resting field and Advanced under it. Close enough to read as one control's row. */
 private val RESTING_ADVANCED_GAP = 20.dp
 
+/** Between the two switches. Nearer to each other than either is to Advanced, because they pair. */
+private val TOGGLE_GAP = 16.dp
+
 /**
  * Where the middle of the panel is *to a viewer*, as a fraction of its height.
  *
@@ -687,4 +725,3 @@ private val CHIP_STRIP_PADDING = 4.dp
 
 /** Stable, so the chip row is not rebuilt when the genres behind it change. */
 private const val CLEAR_KEY = "__clear__"
-private const val HIDDEN_KEY = "__hidden__"

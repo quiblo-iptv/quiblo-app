@@ -55,6 +55,7 @@ import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.ui.Alignment
@@ -83,6 +84,8 @@ import dev.quiblo.tv.ui.browse.TvForYouScreen
 import dev.quiblo.tv.ui.browse.TvPosterRows
 import dev.quiblo.tv.ui.common.AmbientRequest
 import dev.quiblo.tv.ui.common.LocalAmbientSink
+import dev.quiblo.tv.ui.common.LocalTvReturn
+import dev.quiblo.tv.ui.common.TvReturnSignal
 import dev.quiblo.tv.ui.common.ambientBackdrop
 import dev.quiblo.tv.ui.common.driftingGlow
 import dev.quiblo.tv.ui.common.insistOnFocus
@@ -197,48 +200,78 @@ private fun TvAppBehindConsent(onExit: () -> Unit) {
     // composed — so "playing and in settings" is still not expressible.
     val backStack = remember { mutableStateListOf<TvOverlay>() }
 
+    /*
+     * What the shell had, kept for while the shell is not there (`027` #1).
+     *
+     * The shell is *removed from composition* whenever anything opens over it — that is the line
+     * below, and it is deliberate: a television plays full screen and a catalogue drawn behind a
+     * film is a catalogue still measuring, still fetching artwork and still holding memory. The
+     * cost of that is everything the shell remembered going with it, which is what a viewer met as
+     * "I searched, opened a film, came back, and I am at the top of the results again".
+     *
+     * A holder keeps the *saved* state of that subtree — every `rememberSaveable` in it, which
+     * includes the scroll position of every list, because `rememberLazyListState` is one — and
+     * hands it back when the shell is composed again. It is the same mechanism a navigation
+     * library uses for the same reason, and it is a dozen lines rather than a dependency.
+     *
+     * Where the remote was is *not* saved state and cannot be: focus is a node, and the node is
+     * gone. That half is [TvReturnSignal], armed below and spent by whichever list is on screen.
+     */
+    val shellState = rememberSaveableStateHolder()
+    val returning = remember { TvReturnSignal() }
+
+    /** Pops one step, and says so when the pop lands back on the shell. */
+    val pop: () -> Unit = {
+        backStack.popRestoringCursor()
+        if (backStack.isEmpty()) returning.arm()
+    }
+
     // Playing replaces the whole shell rather than sitting inside it: a television plays
     // full screen, and leaving the bar drawn over video would be the same mistake the phone
     // app made for a fortnight.
     val current = backStack.lastOrNull()
     if (current == null) {
-        TvShell(
-            selectedTab = selectedTab,
-            onSelectTab = { selectedTab = it },
-            /*
-             * Closing the app, and forgetting who was watching on the way out.
-             *
-             * **Both halves, and the second is the reported one.** Backing out used to fall
-             * through to the system, which backgrounds an activity rather than finishing it — so
-             * the process survived, the chosen profile survived with it, and the next launch
-             * resumed straight into somebody else's favourites. Finishing alone would not fix
-             * that either: the chooser is cleared in `Application.onCreate`, which does not run
-             * again while the process is cached. Signing out is what makes the promise keepable
-             * whether the process dies or not.
-             *
-             * The sign-out is awaited before finishing, because a write racing an activity that
-             * is going away is a write that sometimes happens.
-             */
-            onExit = {
-                scope.launch {
-                    profiles.signOut()
-                    onExit()
-                }
-            },
-            onOpenSettings = { backStack.add(TvOverlay.Settings) },
-            onOpen = { items, index, origin -> overlayFor(items, index, origin)?.let(backStack::add) },
-            onOpenChannel = { channel -> backStack.add(detailFor(channel)) },
-            // The same sign-out Settings offers, one press closer. Both land on the chooser,
-            // because there is only one thing "switch profile" can mean.
-            onSwitchProfile = { profileSwitch() },
-            activeProfileName = activeProfile?.name,
-            activeProfileAvatar = activeProfile?.avatar,
-        )
+        CompositionLocalProvider(LocalTvReturn provides returning) {
+            shellState.SaveableStateProvider(SHELL_STATE_KEY) {
+                TvShell(
+                    selectedTab = selectedTab,
+                    onSelectTab = { selectedTab = it },
+                    /*
+                     * Closing the app, and forgetting who was watching on the way out.
+                     *
+                     * **Both halves, and the second is the reported one.** Backing out used to fall
+                     * through to the system, which backgrounds an activity rather than finishing it — so
+                     * the process survived, the chosen profile survived with it, and the next launch
+                     * resumed straight into somebody else's favourites. Finishing alone would not fix
+                     * that either: the chooser is cleared in `Application.onCreate`, which does not run
+                     * again while the process is cached. Signing out is what makes the promise keepable
+                     * whether the process dies or not.
+                     *
+                     * The sign-out is awaited before finishing, because a write racing an activity that
+                     * is going away is a write that sometimes happens.
+                     */
+                    onExit = {
+                        scope.launch {
+                            profiles.signOut()
+                            onExit()
+                        }
+                    },
+                    onOpenSettings = { backStack.add(TvOverlay.Settings) },
+                    onOpen = { items, index, origin -> overlayFor(items, index, origin)?.let(backStack::add) },
+                    onOpenChannel = { channel -> backStack.add(detailFor(channel)) },
+                    // The same sign-out Settings offers, one press closer. Both land on the chooser,
+                    // because there is only one thing "switch profile" can mean.
+                    onSwitchProfile = { profileSwitch() },
+                    activeProfileName = activeProfile?.name,
+                    activeProfileAvatar = activeProfile?.avatar,
+                )
+            }
+        }
     } else {
         TvOverlayScreen(
             overlay = current,
             onPush = backStack::add,
-            onPop = { backStack.popRestoringCursor() },
+            onPop = pop,
             onReplaceTop = { backStack[backStack.lastIndex] = it },
             activeProfileName = activeProfile?.name,
             onSwitchProfile = { profileSwitch() },
@@ -452,6 +485,9 @@ private fun TvShell(
     val barFocusRequester = remember { FocusRequester() }
     val contentFocusRequester = remember { FocusRequester() }
 
+    // One holder for all six tabs. See the note at the provider below.
+    val tabState = rememberSaveableStateHolder()
+
     // Insists rather than tries, and that distinction is `022` #4. `requestFocus()` returns a
     // boolean rather than throwing when its node is not placed yet, and `tryRequestFocus` drops
     // that `false` on the floor — so the shell sat with *nothing* focused: no highlight on the
@@ -551,40 +587,51 @@ private fun TvShell(
                         .focusRequester(contentFocusRequester)
                         .focusGroup(),
                 ) {
-                    when (TvTab.entries[selectedTab]) {
-                        // Each tab says where the viewer was, because that is the one thing
-                        // about a choice nothing downstream can recover: a title typed into a
-                        // search box was wanted, and the first tile of a row was offered.
-                        TvTab.SEARCH -> TvSearchScreen(
-                            onOpen = { items, index -> onOpen(items, index, WatchOrigin.SEARCH) },
-                        )
+                    /*
+                     * Each tab keeps its own place, for the same reason the shell keeps the tab's
+                     * (`027` #1).
+                     *
+                     * Only the selected tab is composed — five catalogues drawn at once is five
+                     * catalogues fetching artwork — so walking from Movies to Series and back used
+                     * to put a viewer at the top of Movies again, exactly as opening a film did.
+                     * One provider per tab, keyed by the tab, and each keeps what it had.
+                     */
+                    tabState.SaveableStateProvider(TvTab.entries[selectedTab]) {
+                        when (TvTab.entries[selectedTab]) {
+                            // Each tab says where the viewer was, because that is the one thing
+                            // about a choice nothing downstream can recover: a title typed into a
+                            // search box was wanted, and the first tile of a row was offered.
+                            TvTab.SEARCH -> TvSearchScreen(
+                                onOpen = { items, index -> onOpen(items, index, WatchOrigin.SEARCH) },
+                            )
 
-                        TvTab.LIVE -> TvLiveScreen(
-                            onPlay = { items, index -> onOpen(items, index, WatchOrigin.ROW) },
-                        )
+                            TvTab.LIVE -> TvLiveScreen(
+                                onPlay = { items, index -> onOpen(items, index, WatchOrigin.ROW) },
+                            )
 
-                        TvTab.FOR_YOU -> TvForYouScreen(
-                            onPlay = { items, index -> onOpen(items, index, WatchOrigin.ROW) },
-                        )
+                            TvTab.FOR_YOU -> TvForYouScreen(
+                                onPlay = { items, index -> onOpen(items, index, WatchOrigin.ROW) },
+                            )
 
-                        TvTab.MOVIES -> TvPosterRows(
-                            kind = MediaKind.VOD,
-                            onPlay = { items, index -> onOpen(items, index, WatchOrigin.ROW) },
-                            onResume = onOpenChannel,
-                        )
+                            TvTab.MOVIES -> TvPosterRows(
+                                kind = MediaKind.VOD,
+                                onPlay = { items, index -> onOpen(items, index, WatchOrigin.ROW) },
+                                onResume = onOpenChannel,
+                            )
 
-                        TvTab.SERIES -> TvPosterRows(
-                            kind = MediaKind.SERIES,
-                            onPlay = { items, index -> onOpen(items, index, WatchOrigin.ROW) },
-                            onResume = onOpenChannel,
-                        )
+                            TvTab.SERIES -> TvPosterRows(
+                                kind = MediaKind.SERIES,
+                                onPlay = { items, index -> onOpen(items, index, WatchOrigin.ROW) },
+                                onResume = onOpenChannel,
+                            )
 
-                        TvTab.FAVOURITES -> TvPosterRows(
-                            kind = MediaKind.VOD,
-                            favouritesOnly = true,
-                            onPlay = { items, index -> onOpen(items, index, WatchOrigin.FAVOURITE) },
-                            onResume = onOpenChannel,
-                        )
+                            TvTab.FAVOURITES -> TvPosterRows(
+                                kind = MediaKind.VOD,
+                                favouritesOnly = true,
+                                onPlay = { items, index -> onOpen(items, index, WatchOrigin.FAVOURITE) },
+                                onResume = onOpenChannel,
+                            )
+                        }
                     }
                 }
             }
@@ -613,6 +660,14 @@ private fun TvShell(
         }
     }
 }
+
+/**
+ * The one key the shell's saved state is filed under.
+ *
+ * There is only ever one shell, so the key names nothing a viewer can see — it exists because a
+ * holder files state by key and something has to be written there.
+ */
+private const val SHELL_STATE_KEY = "shell"
 
 /** Long enough to find the button again, short enough that a stray press cannot close it later. */
 private const val EXIT_WINDOW_MILLIS = 3_000L

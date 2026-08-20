@@ -22,7 +22,7 @@ down at the bottom of `012` is the one this page is built around:
 
 So every row below says **what to look at**, not what was changed.
 
-Last updated: **2026-08-16**.
+Last updated: **2026-08-20**.
 
 ---
 
@@ -1331,6 +1331,87 @@ that cannot be reached twice.
 | **What to look at** | Pull the network, then press **Check now** |
 | **Passes if** | It says the television is not online |
 | **Fails if** | It says you are up to date. Being unable to ask is not the same as being current |
+
+---
+
+## A20 — Round `027`: eight things found by using it
+
+**Where:** the television only, against a real account with a TMDB key configured. From
+[`027`](../agile/027_Bug_Round_of_Quiblo_—_Round_4.md). Every row below needs a viewer to do a
+*second* thing — come back from somewhere, press twice, watch for a fortnight — which is why none
+of them was found by opening a screen and looking at it.
+
+### A20.1 — back lands where you left
+
+| | |
+| :---- | :---- |
+| **What to look at** | Search a term, walk right to the fourth or fifth result, open it, then press Back |
+| **Passes if** | The remote is on the tile that was opened, with the row scrolled where it was |
+| **Fails if** | It is on the first result, or on the tab bar with the row back at its start |
+
+### A20.2 — and from the player, and on the catalogue tabs
+
+| | |
+| :---- | :---- |
+| **What to look at** | The same from Movies and from For You, and after actually *playing* something and backing out |
+| **Passes if** | Each returns to the tile it was opened from |
+| **Fails if** | Any one of them lands at the top. Series is the one that already worked — it is the comparison, not a case |
+
+### A20.3 — walking the tab bar still works
+
+| | |
+| :---- | :---- |
+| **What to look at** | With a tile focused deep in Movies, press Up to the bar and walk along it |
+| **Passes if** | The bar keeps the remote for the whole walk |
+| **Fails if** | The content snatches focus back mid-walk. That is the fault A20.1's fix must not introduce |
+
+### A20.4 — the controls keep the remote
+
+| | |
+| :---- | :---- |
+| **What to look at** | Play a film. Press Down to open the controls **immediately**, before the duration appears, then again a minute in. Walk the rows each time |
+| **Passes if** | Something is always highlighted, and the arrows always move it |
+| **Fails if** | The controls come up with nothing lit, or go dead after a button appears — the Back-then-Down workaround is the symptom |
+
+### A20.5 — the timeline shows where you are aiming
+
+| | |
+| :---- | :---- |
+| **What to look at** | On the controls, press Down to the bar and hold Left for a few seconds |
+| **Passes if** | A circle on the line travels as you press, and is visibly larger while the bar has the remote |
+| **Fails if** | Nothing on the bar moves until the seek lands, or the controls below the bar shift when it takes focus |
+
+### A20.6 — a focused result keeps its whole title
+
+| | |
+| :---- | :---- |
+| **What to look at** | Search a term, open **Advanced**, then walk onto a film and onto a series |
+| **Passes if** | The title under the focused poster is whole, on every row |
+| **Fails if** | Its bottom third is sliced off. This is #019's fault returning, and it returned once already |
+
+### A20.7 — the two switches
+
+| | |
+| :---- | :---- |
+| **What to look at** | Open **Advanced**. The switches sit on the field's own row, one press right of Advanced |
+| **Passes if** | Both read as switches, the knob slides, and **Include TV channels** puts live results back into an advanced search |
+| **Fails if** | Either is behind the suggestions in the chip strip, or is drawn like a genre, or changes nothing |
+
+### A20.8 — a genre stays chosen
+
+| | |
+| :---- | :---- |
+| **What to look at** | Choose a genre, then press the same chip again |
+| **Passes if** | It stays chosen. **Clear** is what empties it |
+| **Fails if** | The second press clears the filter |
+
+### A20.9 — suggestions appear for somebody who stars things
+
+| | |
+| :---- | :---- |
+| **What to look at** | On a profile with at least five favourites — watched or not — open **For You** and scroll to the bottom |
+| **Passes if** | **You may like** is drawn, and each tile says which title caused it |
+| **Fails if** | The row is absent. Note the catalogue must have been *described*: the coverage figure under Advanced search says how much of it has |
 
 ---
 

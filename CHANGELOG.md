@@ -15,6 +15,35 @@ Formatted after [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and ve
 
 ## Unreleased
 
+### Fixed
+
+- **Backing out of a film puts you back on the tile you opened it from.** The television used to
+  land you at the top of the catalogue, so finding your place again meant scrolling the row you
+  had just been in. Every tab keeps its own place too, and switching between them no longer
+  snatches the remote off the tab bar.
+- **The remote can no longer be left on nothing inside the player.** The controls arrive with the
+  stream — the seek buttons, the timeline, the subtitle button — so a button could disappear from
+  under the cursor and leave presses going nowhere. The player insists on holding focus, and asks
+  again the moment nothing inside the controls has it.
+- **Scrubbing the timeline shows you where you are going.** The mark has a handle, and it sits in
+  a lane of its own so the buttons underneath do not shift as it grows.
+- **A focused search result is no longer sliced along its title.** The room a tile reserves to
+  grow into now belongs to the tile itself, so the list brings all of it into view instead of
+  stopping ten millimetres short.
+- **"You may like" appears for people who star titles and finish none of them.** A favourite is
+  evidence about your taste, and the row now treats it as such — a starred film nobody has played
+  is a reason to suggest something in its own right.
+
+### Changed
+
+- **Advanced search can look at live channels from the search screen.** It is a switch beside the
+  field, rather than a setting two screens away.
+- **Include hidden is a switch, not a chip.** It sits beside the field instead of behind the
+  suggestions, and the sentence saying what is being searched moves under the field, where it is
+  read.
+- **A genre chip chooses, and Clear unchooses.** Pressing a chip a second time no longer takes it
+  off, which made a list of chips behave differently depending on where you had been.
+
 ## 0.20.0
 
 ### Added

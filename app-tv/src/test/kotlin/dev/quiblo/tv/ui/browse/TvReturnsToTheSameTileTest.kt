@@ -211,6 +211,5 @@ class TvReturnsToTheSameTileTest {
         const val ROWS = 2
         const val COLUMNS = 6
         const val OVERLAY = "A film"
-
     }
 }

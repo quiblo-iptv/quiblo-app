@@ -15,6 +15,8 @@ Formatted after [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and ve
 
 ## Unreleased
 
+## 0.20.1
+
 ### Fixed
 
 - **Backing out of a film puts you back on the tile you opened it from.** The television used to

@@ -18,6 +18,7 @@
 
 package dev.quiblo.tv.ui.player
 
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -27,11 +28,13 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
@@ -55,7 +58,10 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
@@ -79,6 +85,7 @@ import androidx.compose.ui.unit.sp
 import dev.quiblo.core.model.AspectRatioMode
 import dev.quiblo.core.model.SeekInterval
 import dev.quiblo.tv.R
+import dev.quiblo.tv.ui.common.insistOnFocus
 import kotlinx.coroutines.delay
 
 /**
@@ -104,6 +111,72 @@ import kotlinx.coroutines.delay
  * These sit in no list, so it would cost nothing today and would be a trap set for whoever
  * puts them in one.
  */
+@Composable
+internal fun TvPlayerControlsHost(
+    state: TvControlsState,
+    actions: TvControlActions,
+    /** Where the remote lands when the controls appear: play/pause, always. */
+    playPauseFocus: FocusRequester,
+    /**
+     * Whether the controls are the thing the remote belongs to right now.
+     *
+     * False while the track panel is open or the next-episode offer is up. Both are drawn over
+     * these controls and both take the remote for themselves, so without this the repair below
+     * would snatch it straight back off whichever one the viewer was reading.
+     */
+    ownsFocus: Boolean = true,
+) {
+    var hasFocus by remember { mutableStateOf(false) }
+
+    /*
+     * Puts the remote back on the controls whenever they have it and lose it (`027` #2).
+     *
+     * **The transport is not a fixed set of buttons, and that is the fault.** The two seek
+     * buttons appear when a duration arrives, the subtitle button when the tracks are enumerated,
+     * the episode steps when the run is known — all of which happen a second or two into
+     * playback, which is exactly when a viewer is pressing things. Whichever button was under the
+     * remote can therefore be *removed from under it*, and Compose does not hand focus to a
+     * neighbour when that happens: it drops it. The controls stayed on screen with nothing
+     * highlighted and the arrows moved nothing, and the only way out was Back and then Down,
+     * because hiding and showing them was the one thing that ran the screen's original one-shot
+     * request again.
+     *
+     * Losing focus is itself the event that asks for it back, so this repairs whatever takes it
+     * away rather than the three causes known today.
+     *
+     * **A frame is waited before acting, and it is not a delay dressed up as one.** Compose
+     * sometimes hands focus to another control in the same layout pass — which is a fine outcome,
+     * and better than this one, because the viewer keeps a place near where they were. Only when
+     * *nothing* here has taken it is there anything wrong, and that is the reported symptom: the
+     * controls on screen with nothing highlighted at all. Re-reading after the frame is what tells
+     * the two apart.
+     *
+     * [insistOnFocus] rather than a bare request, because the other half of the same report is a
+     * race: `requestFocus()` returns false — it does not throw — when its node exists but has not
+     * been placed, and this runs the moment the controls are composed, before the layout that
+     * places them.
+     */
+    LaunchedEffect(ownsFocus, hasFocus) {
+        if (!ownsFocus || hasFocus) return@LaunchedEffect
+        withFrameNanos { }
+        if (!hasFocus) playPauseFocus.insistOnFocus()
+    }
+
+    /*
+     * The box exists only to watch. `onFocusChanged` on a node with no focus target of its own
+     * reports whether anything *below* it holds focus, which is the question above. It adds no
+     * focus target of its own — see `onTap` for why that distinction matters in this app — and no
+     * layout, being a full-size box around a full-size one.
+     */
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .onFocusChanged { hasFocus = it.hasFocus },
+    ) {
+        TvPlayerControls(state = state, actions = actions, playPauseFocus = playPauseFocus)
+    }
+}
+
 @Composable
 @Suppress("LongParameterList")
 internal fun TvPlayerControls(
@@ -442,12 +515,30 @@ private fun Progress(
         val played = (state.positionMillis.toFloat() / state.durationMillis).coerceIn(0f, 1f)
         val marked = (shownMillis.toFloat() / state.durationMillis).coerceIn(0f, 1f)
 
+        val interactionSource = remember { MutableInteractionSource() }
+        val isFocused by interactionSource.collectIsFocusedAsState()
+
+        // Bigger while the remote is on the bar, and drawn either way. See [Knob].
+        val knobSize by animateDpAsState(
+            targetValue = if (isFocused) KNOB_FOCUSED_SIZE else KNOB_SIZE,
+            label = "timelineKnob",
+        )
+
+        /*
+         * A lane rather than the bar itself, and its height is a constant.
+         *
+         * The focus target used to *be* the four-pixel bar, which left nowhere to put the handle
+         * that says the bar is being dragged — a circle drawn on a node four pixels tall either
+         * changes that node's height or hangs outside it. The lane is [KNOB_LANE] whether the bar
+         * is focused, scrubbing or idle, so the mark can be drawn as a real handle without
+         * anything under the controls moving. That constancy is the rule this file's header
+         * states and #008's note explains.
+         */
         Box(
             modifier = Modifier
-                .padding(top = 14.dp)
+                .padding(top = LANE_TOP_PADDING)
                 .fillMaxWidth()
-                .height(BAR_HEIGHT)
-                .background(Color.White.copy(alpha = 0.25f), RoundedCornerShape(2.dp))
+                .height(KNOB_LANE)
                 // A focusable with nothing to say is a focusable TalkBack announces as nothing.
                 // The bar is four pixels of white; the description is the only thing that names
                 // it — and it is also how a test can tell the remote is on it.
@@ -465,7 +556,7 @@ private fun Progress(
                 // Leaving the bar mid-run seeks to where the viewer had got to. Throwing the
                 // run away instead would make a mis-pressed Up undo ten presses of aiming.
                 .onFocusChanged { if (!it.isFocused) scrub.commit()?.let(actions.seekTo) }
-                .focusable()
+                .focusable(interactionSource = interactionSource)
                 .onPreviewKeyEvent { event ->
                     if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
                     val direction = when (event.key) {
@@ -476,27 +567,70 @@ private fun Progress(
                     scrub.nudge(direction, state.positionMillis, state.durationMillis)
                     true
                 },
+            contentAlignment = Alignment.CenterStart,
         ) {
-            // The mark first, then the played portion over it, so a rewind still shows how far
-            // the film had actually got.
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth(marked)
-                    .height(BAR_HEIGHT)
-                    .background(Color.White, RoundedCornerShape(2.dp)),
-            )
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth(played)
-                    .height(BAR_HEIGHT)
-                    .background(Color.White.copy(alpha = if (target == null) 1f else 0.55f), RoundedCornerShape(2.dp)),
-            )
+            // The width the handle is placed against. Measured rather than assumed: the bar is as
+            // wide as the panel less its margins, and nothing here should have to know that.
+            BoxWithConstraints(
+                modifier = Modifier.fillMaxWidth(),
+                contentAlignment = Alignment.CenterStart,
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(BAR_HEIGHT)
+                        .background(
+                            // Brighter under the remote, so the bar itself answers "where am I"
+                            // even before the handle is looked at.
+                            color = Color.White.copy(alpha = if (isFocused) 0.4f else 0.25f),
+                            shape = RoundedCornerShape(2.dp),
+                        ),
+                )
+
+                // The mark first, then the played portion over it, so a rewind still shows how far
+                // the film had actually got.
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth(marked)
+                        .height(BAR_HEIGHT)
+                        .background(Color.White, RoundedCornerShape(2.dp)),
+                )
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth(played)
+                        .height(BAR_HEIGHT)
+                        .background(
+                            Color.White.copy(alpha = if (target == null) 1f else 0.55f),
+                            RoundedCornerShape(2.dp),
+                        ),
+                )
+
+                /*
+                 * The handle, on the mark rather than on the playhead (`027` #3).
+                 *
+                 * **It follows [marked], which is where the viewer is aiming**, not where the film
+                 * has got to. Rewinding by holding Left moved nothing a viewer could see until the
+                 * seek committed half a second after they stopped — the bar's white did shorten,
+                 * but a line changing length across a dark panel three metres away reads as
+                 * nothing at all. The handle is the thing that visibly travels, which is what was
+                 * asked for and is what every phone player draws.
+                 *
+                 * Offset by the fraction of the *usable* width — the lane less the handle — so the
+                 * circle sits inside the bar at both ends rather than half off the screen at zero.
+                 */
+                Box(
+                    modifier = Modifier
+                        .offset(x = (maxWidth - knobSize) * marked)
+                        .size(knobSize)
+                        .background(Color.White, CircleShape),
+                )
+            }
         }
         Text(
             text = "${shownMillis.asClock()} / ${state.durationMillis.asClock()}",
             color = Color.White.copy(alpha = 0.75f),
             fontSize = 15.sp,
-            modifier = Modifier.padding(top = 8.dp),
+            modifier = Modifier.padding(top = CLOCK_TOP_PADDING),
         )
     } else if (state.isLive) {
         Text(
@@ -621,6 +755,32 @@ private val BUTTON_GAP = 18.dp
 private val SCREEN_MARGIN = 48.dp
 private val BAR_HEIGHT = 4.dp
 private const val ICON_FRACTION = 0.5f
+
+/**
+ * The height the timeline occupies, bar and handle together.
+ *
+ * A constant, and that is the point: the handle grows when the bar takes focus and this does not,
+ * so nothing below the timeline moves when the remote arrives on it. Wide enough for the focused
+ * handle with a pixel to spare.
+ */
+private val KNOB_LANE = 20.dp
+
+/** Visible from a sofa without being a blob on the bar when nobody is scrubbing. */
+private val KNOB_SIZE = 8.dp
+
+/** Under the remote, where it is the thing being aimed with. */
+private val KNOB_FOCUSED_SIZE = 16.dp
+
+/**
+ * Air above the timeline, less what the lane now carries.
+ *
+ * The gap a viewer sees is the same 14dp it was when the bar was the whole of it: the lane centres
+ * a 4dp bar in 20dp, so eight of those millimetres are already inside it.
+ */
+private val LANE_TOP_PADDING = 6.dp
+
+/** The same, underneath. The clock used to sit 8dp below a bar with nothing under it. */
+private val CLOCK_TOP_PADDING = 2.dp
 
 /**
  * How long the timeline waits after the last press before telling the player.

@@ -69,13 +69,16 @@ class RecommendationRepository(
 ) {
 
     suspend fun suggestions(sourceId: Long, limit: Int = Recommender.DEFAULT_LIMIT): List<Suggestion> {
+        val profileId = profiles.activeProfileId
         val watched = watchedTitles(sourceId)
+        val favourites = favouriteTitles(profileId, sourceId)
         val factRows = titleMetadataDao.allFactRows()
 
-        // Two ways there is nothing honest to say: nobody has watched anything on this profile, or
-        // nothing in the catalogue has been described yet. Both draw no row at all. The third —
+        // Two ways there is nothing honest to say: this profile has said nothing about anything,
+        // or nothing in the catalogue has been described yet. Both draw no row at all. The third —
         // "not enough yet" — is the scorer's own, because it is a judgement rather than an absence.
-        if (watched.isEmpty() || factRows.isEmpty()) return emptyList()
+        if (watched.isEmpty() && favourites.isEmpty()) return emptyList()
+        if (factRows.isEmpty()) return emptyList()
 
         // Hidden categories are left out here, unlike the popular row. A suggestion is the app
         // proposing something unprompted, and proposing out of a shelf the viewer has put away
@@ -87,7 +90,7 @@ class RecommendationRepository(
         val hours = watchEvents.usualHourByStableKey(sourceId)
         val origins = watchEvents.strongestOriginByStableKey(sourceId)
         val opinionsByTitle = opinions.all()
-        val favourites = favoriteDao.keysFor(profiles.activeProfileId, sourceId).toSet()
+        val favouriteKeys = favourites.mapTo(HashSet()) { it.stableKey }
 
         return withContext(matchDispatcher) {
             val factsByTitle = factRows.associateBy(
@@ -109,23 +112,61 @@ class RecommendationRepository(
                 )
             }
 
+            val watchedSeeds = watched.mapNotNull { entry ->
+                val identity = entry.title.titleIdentity().takeIf { it.searchTitle.isNotBlank() }
+                    ?: return@mapNotNull null
+                WatchedTitle(
+                    title = identity.searchTitle,
+                    kind = entry.kind,
+                    facts = factsByTitle[identity.searchTitle to entry.kind.name] ?: TitleFacts(),
+                    fraction = entry.watchedFraction(),
+                    watchedAtEpochMillis = entry.watchedAtEpochMillis,
+                    plays = plays[entry.stableKey] ?: 1,
+                    hourOfDay = hours[entry.stableKey] ?: hourOf(entry.watchedAtEpochMillis),
+                    origin = origins[entry.stableKey] ?: WatchOrigin.ROW,
+                    isFavourite = entry.stableKey in favouriteKeys,
+                    opinion = opinionsByTitle[identity.searchTitle] ?: Opinion.NONE,
+                )
+            }
+
+            /*
+             * The favourites nobody has played, as evidence in their own right (`027` #8).
+             *
+             * **A starred title the viewer has not got round to watching is still a statement
+             * about their taste**, and until now it was worth precisely nothing: the scorer read
+             * the watch history and the favourites table was consulted only to *weight* a title
+             * that was in both. So a viewer who had starred ten films and finished none of them
+             * got no row, which is the report.
+             *
+             * They are seeded as watched-in-full, and the reasoning is in `hasLearnedEnough`:
+             * starring is not a weaker claim than reaching the sixty-percent mark, it is a
+             * different and plainer one. The occasion is the moment it was starred, so a favourite
+             * added last week outweighs one added last year exactly as a viewing would, and the
+             * origin says where it came from — a favourite is chosen, never stumbled into.
+             *
+             * Anything already in the history is left to the branch above, which knows more about
+             * it: how much was watched, how often, and at what hour.
+             */
+            val watchedKeys = watched.mapTo(HashSet()) { it.stableKey }
+            val favouriteSeeds = favourites.mapNotNull { favourite ->
+                if (favourite.stableKey in watchedKeys) return@mapNotNull null
+                val identity = favourite.title.titleIdentity().takeIf { it.searchTitle.isNotBlank() }
+                    ?: return@mapNotNull null
+                WatchedTitle(
+                    title = identity.searchTitle,
+                    kind = favourite.kind,
+                    facts = factsByTitle[identity.searchTitle to favourite.kind.name] ?: TitleFacts(),
+                    fraction = 1.0,
+                    watchedAtEpochMillis = favourite.favouritedAtEpochMillis,
+                    hourOfDay = hourOf(favourite.favouritedAtEpochMillis),
+                    origin = WatchOrigin.FAVOURITE,
+                    isFavourite = true,
+                    opinion = opinionsByTitle[identity.searchTitle] ?: Opinion.NONE,
+                )
+            }
+
             Recommender.suggest(
-                watched = watched.mapNotNull { entry ->
-                    val identity = entry.title.titleIdentity().takeIf { it.searchTitle.isNotBlank() }
-                        ?: return@mapNotNull null
-                    WatchedTitle(
-                        title = identity.searchTitle,
-                        kind = entry.kind,
-                        facts = factsByTitle[identity.searchTitle to entry.kind.name] ?: TitleFacts(),
-                        fraction = entry.watchedFraction(),
-                        watchedAtEpochMillis = entry.watchedAtEpochMillis,
-                        plays = plays[entry.stableKey] ?: 1,
-                        hourOfDay = hours[entry.stableKey] ?: hourOf(entry.watchedAtEpochMillis),
-                        origin = origins[entry.stableKey] ?: WatchOrigin.ROW,
-                        isFavourite = entry.stableKey in favourites,
-                        opinion = opinionsByTitle[identity.searchTitle] ?: Opinion.NONE,
-                    )
-                },
+                watched = watchedSeeds + favouriteSeeds,
                 candidates = candidates,
                 now = now(),
                 hourOfDay = hourOf(now()),
@@ -143,6 +184,35 @@ class RecommendationRepository(
      */
     private suspend fun watchedTitles(sourceId: Long): List<HistoryEntry> =
         HISTORY_KINDS.flatMap { kind -> history.observeHistory(sourceId, kind).first() }
+
+    /**
+     * What this profile has starred on this source, with enough about each to score it.
+     *
+     * Two reads because the favourites table stores identity and nothing else — it is keyed by the
+     * provider's stable key so that starring survives a playlist refresh, which is the same reason
+     * the history is. The catalogue is what knows the name and the kind.
+     *
+     * Live channels are dropped. A starred channel says something true about a viewer and nothing
+     * a film database can act on: there is no genre, no year and no runtime behind it, and a
+     * suggestion drawn from one would be drawn from an empty record.
+     */
+    private suspend fun favouriteTitles(profileId: Long, sourceId: Long): List<FavouriteTitle> {
+        val rows = favoriteDao.allFor(profileId, sourceId)
+        if (rows.isEmpty()) return emptyList()
+
+        val starredAt = rows.associate { it.stableKey to it.favoritedAtEpochMillis }
+        return channelDao.findAllByStableKeys(profileId, sourceId, rows.map { it.stableKey })
+            .mapNotNull { row ->
+                val kind = row.channel.kind.toMediaKindOrNull()?.takeIf { it in HISTORY_KINDS }
+                    ?: return@mapNotNull null
+                FavouriteTitle(
+                    stableKey = row.channel.stableKey,
+                    title = row.channel.name,
+                    kind = kind,
+                    favouritedAtEpochMillis = starredAt[row.channel.stableKey] ?: 0L,
+                )
+            }
+    }
 
     /**
      * When each watched title was last played, by title.
@@ -173,6 +243,14 @@ class RecommendationRepository(
         Calendar.getInstance(TimeZone.getDefault())
             .apply { timeInMillis = epochMillis }
             .get(Calendar.HOUR_OF_DAY)
+
+    /** One starred title, as much of it as the scorer needs. */
+    private data class FavouriteTitle(
+        val stableKey: String,
+        val title: String,
+        val kind: MediaKind,
+        val favouritedAtEpochMillis: Long,
+    )
 
     private companion object {
         val HISTORY_KINDS = listOf(MediaKind.VOD, MediaKind.SERIES)

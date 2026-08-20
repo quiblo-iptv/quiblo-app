@@ -20,9 +20,12 @@ package dev.quiblo.core.data
 
 import dev.quiblo.core.database.dao.ChannelDao
 import dev.quiblo.core.database.dao.ChannelTitle
+import dev.quiblo.core.database.dao.ChannelWithFavorite
 import dev.quiblo.core.database.dao.FavoriteDao
 import dev.quiblo.core.database.dao.TitleFactRow
 import dev.quiblo.core.database.dao.TitleMetadataDao
+import dev.quiblo.core.database.entity.ChannelEntity
+import dev.quiblo.core.database.entity.FavoriteEntity
 import dev.quiblo.core.model.HistoryEntry
 import dev.quiblo.core.model.MediaKind
 import io.mockk.coEvery
@@ -93,6 +96,52 @@ class RecommendationRepositoryTest {
     }
 
     /**
+     * A viewer who has starred things and finished nothing is still answered — `027` #8.
+     *
+     * **The reported case.** Ten films opened and left part-way, ten titles starred, and the row
+     * never appeared: the favourites table was read only to *weight* a title that was also in the
+     * watch history, so a starred title nobody had played was worth nothing at all. It is a
+     * statement about taste and it is now seeded as one.
+     */
+    @Test
+    fun `titles that were only starred are seeds in their own right`() = runTest {
+        watched()
+        starred(*(1..Recommender.MINIMUM_DISTINCT_TITLES).map { "Starred $it" }.toTypedArray())
+        coEvery { titleMetadataDao.allFactRows() } returns
+            (1..Recommender.MINIMUM_DISTINCT_TITLES)
+                .map { factRow("starred $it", "Animation", kind = MediaKind.SERIES) } +
+            factRow("naruto", "Animation", kind = MediaKind.SERIES)
+        coEvery { channelDao.titlesForMetadata(SOURCE_ID, includeHidden = false) } returns
+            listOf(ChannelTitle(id = 9L, name = "Naruto", kind = MediaKind.SERIES.name))
+
+        val suggestions = repository.suggestions(SOURCE_ID)
+
+        assertEquals(
+            listOf(9L),
+            suggestions.map { it.channelId },
+            "Five starred titles produced no suggestions (`027` #8).",
+        )
+        // And the tile says which of the viewer's own choices caused it, as every suggestion must.
+        assertTrue(suggestions.all { it.becauseOf.startsWith("starred") })
+    }
+
+    /** A starred title that has also been watched is one seed, not two. */
+    @Test
+    fun `a starred title that was also watched is not seeded twice`() = runTest {
+        watched(*learned())
+        starred("Watched 1")
+        coEvery { titleMetadataDao.allFactRows() } returns
+            learned().map { factRow(it.title.lowercase(), "Animation", kind = MediaKind.SERIES) } +
+            factRow("naruto", "Animation", kind = MediaKind.SERIES)
+        coEvery { channelDao.titlesForMetadata(SOURCE_ID, includeHidden = false) } returns
+            listOf(ChannelTitle(id = 9L, name = "Naruto", kind = MediaKind.SERIES.name))
+
+        val suggestions = repository.suggestions(SOURCE_ID)
+
+        assertEquals(1, suggestions.size)
+    }
+
+    /**
      * A shelf the viewer has put away is not proposed out of.
      *
      * The popular row does the opposite deliberately — it is about what a provider carries, and
@@ -129,6 +178,40 @@ class RecommendationRepositoryTest {
         // The most recent of the two, not the first one found: this is the fact the remembered
         // suggestions row uses to decide that a cause has been watched again since.
         assertEquals(mapOf("One Piece" to NOW - 10, "Dune" to NOW - 50), lastWatched)
+    }
+
+    /**
+     * The titles this profile has starred, and the catalogue rows behind them.
+     *
+     * Both halves, because the favourites table stores identity and nothing else — the name and
+     * the kind come from the catalogue, which is the join the repository has to make.
+     */
+    private fun starred(vararg titles: String) {
+        val keys = titles.map { "key-$it-$NOW" }
+        coEvery { favoriteDao.allFor(any(), SOURCE_ID) } returns titles.mapIndexed { index, title ->
+            FavoriteEntity(
+                sourceId = SOURCE_ID,
+                stableKey = keys[index],
+                favoritedAtEpochMillis = NOW - index * 1_000L,
+                profileId = 1L,
+            )
+        }
+        coEvery { channelDao.findAllByStableKeys(any(), SOURCE_ID, any()) } returns
+            titles.mapIndexed { index, title ->
+                ChannelWithFavorite(
+                    channel = ChannelEntity(
+                        id = 100L + index,
+                        sourceId = SOURCE_ID,
+                        name = title,
+                        streamUrl = "https://example.invalid/$index",
+                        kind = MediaKind.SERIES.name,
+                        groupTitle = "Starred",
+                        stableKey = keys[index],
+                        sortIndex = index,
+                    ),
+                    isFavorite = true,
+                )
+            }
     }
 
     private fun entry(

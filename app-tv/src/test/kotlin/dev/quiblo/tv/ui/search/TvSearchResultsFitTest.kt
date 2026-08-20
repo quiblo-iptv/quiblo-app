@@ -166,13 +166,29 @@ class TvSearchResultsFitTest {
      * **`size` is the unscaled layout box and focus scales at draw time**, so a semantics node
      * reports exactly the same rectangle focused or not. Asserting on it alone is a test that
      * cannot see the thing it was written for — which is the trap that made a first attempt at
-     * this file pass while measuring nothing. The scale is applied here explicitly: the poster
-     * grows about its centre, so half the gain goes below the layout box.
+     * this file pass while measuring nothing.
+     *
+     * **What is measured is the label, and that is `027` #4's correction.** This used to take the
+     * *tile's* node and multiply its whole height by 1.1, which is wrong twice over: the tile
+     * reserves room around itself that is not drawn into, and the label is not the tile — it is
+     * the strip along its bottom edge, which is the thing a viewer reported as sliced. The old
+     * arithmetic reported a number that was neither, and it happened to be small enough to pass
+     * while the panel was visibly cutting titles off.
+     *
+     * **`positionInRoot` is already the scaled position and `size` is not the scaled size**, and
+     * mixing the two is the trap in this file. A semantics node's position is resolved through
+     * every layer above it, so a child of a focused tile reports where it is actually drawn; its
+     * size is the size it was measured at, which the scale never touches. So the drawn bottom is
+     * the reported top plus the measured height times the scale — apply the scale to the position
+     * as well and the answer comes out some twenty pixels too far down, which is what a second
+     * attempt at this test did.
+     *
+     * Nothing here assumes where the tile reserves its growth or how tall a label is. Both are
+     * read off the layout, which is what makes this survive the next change to either.
      */
     private fun focusedVisualBottom(text: String): Float {
-        val node = compose.onNodeWithText(text).fetchSemanticsNode()
-        val height = node.size.height.toFloat()
-        return node.positionInRoot.y + height + height * (FOCUSED_SCALE - 1f) / 2f
+        val label = compose.onNodeWithText(text, useUnmergedTree = true).fetchSemanticsNode()
+        return label.positionInRoot.y + label.size.height * FOCUSED_SCALE
     }
 
     /**
@@ -201,6 +217,7 @@ class TvSearchResultsFitTest {
                     onQueryChange = {},
                     onSelectGenre = {},
                     onToggleIncludeHidden = {},
+                    onToggleIncludeLive = {},
                     onClear = {},
                     onToggleAdvanced = {},
                 )
@@ -248,5 +265,6 @@ class TvSearchResultsFitTest {
 
         /** Must match `TvPosterRows`. A focused poster grows by this about its own centre. */
         const val FOCUSED_SCALE = 1.1f
+
     }
 }

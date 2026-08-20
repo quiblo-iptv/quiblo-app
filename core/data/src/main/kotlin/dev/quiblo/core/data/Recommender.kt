@@ -246,12 +246,33 @@ object Recommender {
      * Two conditions, and both are needed. A viewer who has opened twenty things and finished none
      * has told us what they browse rather than what they watch; a viewer who has finished one
      * thing three times has told us about one thing.
+     *
+     * **A favourite counts as the second condition, and that is `027` #8.** The rule used to read
+     * "watched most of the way through", full stop — so somebody who had opened ten films, left
+     * each of them part-way, and then *marked ten titles as favourites* was told nothing, forever.
+     * They had made ten deliberate statements about their taste and the app was waiting for an
+     * eleventh of a different kind. Starring something is not weaker evidence than reaching the
+     * sixty-percent mark of it; if anything it is the plainer of the two, because nobody stars a
+     * title by accident and plenty of people leave a film on while falling asleep.
+     *
+     * The first condition is untouched: five distinct titles, however they were come by. That is
+     * the one that stops a single evening's viewing being read as a taste.
      */
     private fun hasLearnedEnough(watched: List<WatchedTitle>): Boolean {
         val distinct = watched.distinctBy { it.title.lowercase() }
         return distinct.size >= MINIMUM_DISTINCT_TITLES &&
-            distinct.count { it.fraction >= FINISHED_FRACTION } >= MINIMUM_FINISHED
+            distinct.count { it.isDeliberate } >= MINIMUM_FINISHED
     }
+
+    /**
+     * Whether this title is something the viewer chose rather than merely opened.
+     *
+     * Watched most of the way through, said so with a thumb, or kept as a favourite. The three are
+     * one question — "did they mean it" — and the scorer treats them alike everywhere it counts
+     * evidence rather than weighs it.
+     */
+    private val WatchedTitle.isDeliberate: Boolean
+        get() = fraction >= FINISHED_FRACTION || isFavourite || opinion == Opinion.UP
 
     /**
      * How much this viewing counts as evidence.

@@ -67,6 +67,40 @@ class RecommenderTest {
         assertTrue(row.isEmpty())
     }
 
+    /**
+     * Ten titles starred and none of them finished is enough to answer — `027` #8.
+     *
+     * **The reported case, exactly as it happened.** A viewer opened ten films, left each of them
+     * part-way, and marked ten titles as favourites; the row never appeared, because the rule read
+     * "watched most of the way through" and nothing else. Starring is not weaker evidence than
+     * reaching the sixty-percent mark — nobody stars a title by accident, and plenty of people
+     * leave a film running while falling asleep.
+     */
+    @Test
+    fun `titles that were starred rather than finished are enough to answer`() {
+        val starred = (1..Recommender.MINIMUM_DISTINCT_TITLES).map {
+            watched("starred $it", ANIME, fraction = 0.1, isFavourite = true)
+        }
+
+        val row = Recommender.suggest(starred, listOf(candidate(1, "naruto", ANIME)), NOW)
+
+        assertTrue(
+            row.isNotEmpty(),
+            "Five starred titles produced no suggestions, which is the report: a viewer who has " +
+                "said what they like ten times over is told nothing (`027` #8).",
+        )
+    }
+
+    /** And a thumb up says the same thing in the other vocabulary the app collects. */
+    @Test
+    fun `titles given a thumbs up are enough to answer`() {
+        val liked = (1..Recommender.MINIMUM_DISTINCT_TITLES).map {
+            watched("liked $it", ANIME, fraction = 0.1, opinion = Opinion.UP)
+        }
+
+        assertTrue(Recommender.suggest(liked, listOf(candidate(1, "naruto", ANIME)), NOW).isNotEmpty())
+    }
+
     @Test
     fun `once there is enough, it answers`() {
         assertTrue(Recommender.suggest(learned(), listOf(candidate(1, "naruto", ANIME)), NOW).isNotEmpty())
@@ -377,6 +411,7 @@ class RecommenderTest {
         hourOfDay: Int = EVENING,
         origin: WatchOrigin = WatchOrigin.ROW,
         opinion: Opinion = Opinion.NONE,
+        isFavourite: Boolean = false,
     ) = WatchedTitle(
         title = title,
         kind = MediaKind.SERIES,
@@ -387,6 +422,7 @@ class RecommenderTest {
         hourOfDay = hourOfDay,
         origin = origin,
         opinion = opinion,
+        isFavourite = isFavourite,
     )
 
     private fun candidate(

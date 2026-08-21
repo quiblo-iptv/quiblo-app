@@ -49,6 +49,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.SubcomposeAsyncImage
+import dev.quiblo.core.common.cleanedForDisplay
 import dev.quiblo.core.model.TitleMetadata
 import dev.quiblo.designsystem.AutoDirection
 import dev.quiblo.tv.ui.common.travellingGlow
@@ -249,9 +250,10 @@ fun DetailButton(
 /** Title, big, with whatever the provider called it. */
 @Composable
 fun DetailTitle(title: String) {
-    AutoDirection(title) {
+    val cleaned = title.cleanedForDisplay()
+    AutoDirection(cleaned) {
         Text(
-            text = title,
+            text = cleaned,
             color = Color.White,
             fontSize = 26.sp,
             // Without an explicit line height the default is too tight for type this large

@@ -173,7 +173,7 @@ internal fun MovieDetailsDto.toMetadata(): TitleMetadata = TitleMetadata(
     authorLabel = AuthorLabel.DIRECTOR,
     topCast = credits?.cast.orEmpty().leadNames(),
     posterUrl = posterPath?.let { TmdbClient.IMAGE_BASE_URL + it },
-    backdropUrl = backdropPath?.let { TmdbClient.IMAGE_BASE_URL + it },
+    backdropUrl = backdropPath?.let { TmdbClient.BACKDROP_BASE_URL + it },
     releaseYear = releaseYearIn(releaseDate),
     // Zero is how the service says "unknown", exactly as it does for a score.
     runtimeMinutes = runtime?.takeIf { it > 0 },
@@ -197,7 +197,7 @@ internal fun TvDetailsDto.toMetadata(): TitleMetadata = TitleMetadata(
     authorLabel = AuthorLabel.CREATOR,
     topCast = credits?.cast.orEmpty().leadNames(),
     posterUrl = posterPath?.let { TmdbClient.IMAGE_BASE_URL + it },
-    backdropUrl = backdropPath?.let { TmdbClient.IMAGE_BASE_URL + it },
+    backdropUrl = backdropPath?.let { TmdbClient.BACKDROP_BASE_URL + it },
     releaseYear = releaseYearIn(firstAirDate),
     // Left null on purpose. TMDB offers an average episode length for a series and it is not
     // the length of anything a viewer is about to watch.
@@ -219,7 +219,7 @@ internal fun SearchResult.toPartialMetadata(genreNames: Map<Int, String>): Title
     genres = genreIds.mapNotNull { genreNames[it] },
     rating = voteAverage?.takeIf { it > 0.0 },
     posterUrl = posterPath?.let { TmdbClient.IMAGE_BASE_URL + it },
-    backdropUrl = backdropPath?.let { TmdbClient.IMAGE_BASE_URL + it },
+    backdropUrl = backdropPath?.let { TmdbClient.BACKDROP_BASE_URL + it },
     releaseYear = year(),
     // A search hit carries no runtime at all, for either kind. That is what makes this record
     // partial, and a detail screen upgrades it.

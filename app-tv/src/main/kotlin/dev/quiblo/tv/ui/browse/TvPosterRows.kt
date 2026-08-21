@@ -19,6 +19,7 @@
 package dev.quiblo.tv.ui.browse
 
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -28,6 +29,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
@@ -39,6 +41,9 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.relocation.BringIntoViewResponder
+import androidx.compose.foundation.relocation.bringIntoViewResponder
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Movie
@@ -61,6 +66,8 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
@@ -71,6 +78,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.compose.SubcomposeAsyncImage
+import dev.quiblo.core.common.cleanedForDisplay
 import dev.quiblo.core.model.Channel
 import dev.quiblo.core.model.MediaKind
 import dev.quiblo.feature.browse.BrowseScope
@@ -248,6 +256,7 @@ internal fun TvCategoryList(
      */
     showKindBadge: Boolean = false,
     continueWatching: (@Composable () -> Unit)? = null,
+    header: (@Composable () -> Unit)? = null,
 ) {
     /*
      * Which tile the remote was on, so that coming back lands on it (`027` #1).
@@ -284,18 +293,61 @@ internal fun TvCategoryList(
         cursorFocus.insistOnFocus()
     }
 
+    val listState = rememberLazyListState()
+    var isHeaderFocused by remember { mutableStateOf(false) }
+
+    LaunchedEffect(isHeaderFocused) {
+        if (isHeaderFocused) {
+            listState.animateScrollToItem(0, 0)
+        }
+    }
+
     LazyColumn(
+        state = listState,
         modifier = modifier.fillMaxSize(),
+        // Padding at the ends so the first heading and last row are not flush against the
+        // edges. contentPadding is used rather than Modifier.padding so that the focused
+        // poster's growth is not clipped by the container's bounds.
+        //
+        // Full-bleed header: top padding is removed when a header is present, so a hero
+        // slider can reach the screen edges and blend into the ambient light.
+        contentPadding = PaddingValues(top = if (header == null) 16.dp else 0.dp, bottom = 32.dp),
         // Each row reserves FOCUS_GROWTH above and below itself, so the spacing between
         // rows is reduced by the same amount to keep the rhythm on screen unchanged.
-        // The gap a viewer sees is still about 28dp.
         verticalArrangement = Arrangement.spacedBy(ROW_SPACING),
     ) {
+        if (header != null) {
+            item(key = "header") {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .onFocusChanged { isHeaderFocused = it.hasFocus }
+                        .ignoreChildBringIntoView(),
+                ) {
+                    header()
+                }
+            }
+        }
+
         if (continueWatching != null) {
-            item(key = CONTINUE_ROW_KEY) { continueWatching() }
+            item(key = CONTINUE_ROW_KEY) {
+                val rowModifier = if (header != null) {
+                    Modifier.padding(horizontal = ROW_HORIZONTAL_PADDING)
+                } else {
+                    Modifier
+                }
+                Box(modifier = rowModifier) {
+                    continueWatching()
+                }
+            }
         }
 
         items(items = rows, key = { it.title }) { row ->
+            val rowModifier = if (header != null) {
+                Modifier.padding(horizontal = ROW_HORIZONTAL_PADDING)
+            } else {
+                Modifier
+            }
             CategoryRow(
                 category = row.title,
                 items = row.items,
@@ -308,10 +360,27 @@ internal fun TvCategoryList(
                 focusedKey = focusedKey,
                 cursorFocus = cursorFocus,
                 onFocusedKeyChange = { focusedKey = it },
+                modifier = rowModifier,
             )
         }
     }
 }
+
+@OptIn(ExperimentalFoundationApi::class)
+@Suppress("DEPRECATION")
+private fun Modifier.ignoreChildBringIntoView(): Modifier = this.then(
+    Modifier.bringIntoViewResponder(
+        object : BringIntoViewResponder {
+            override fun calculateRectForParent(localRect: Rect): Rect {
+                return Rect.Zero
+            }
+
+            override suspend fun bringChildIntoView(localRect: () -> Rect?) {
+                // Ignore child bringIntoView requests to prevent unwanted scrolling while focus is inside header
+            }
+        },
+    ),
+)
 
 /** One category's worth of posters, ready to render. */
 internal data class TvCategoryRow(
@@ -471,14 +540,15 @@ private fun CategoryRow(
     /** Attached to that one tile, wherever in the catalogue it turns out to be. */
     cursorFocus: FocusRequester? = null,
     onFocusedKeyChange: (String) -> Unit = {},
+    modifier: Modifier = Modifier,
 ) {
-    Column {
+    Column(modifier = modifier) {
         Text(
             text = category,
             color = Color.White.copy(alpha = 0.85f),
             fontSize = 18.sp,
             fontWeight = FontWeight.SemiBold,
-            modifier = Modifier.padding(bottom = TITLE_GAP),
+            modifier = Modifier.padding(top = 8.dp, bottom = TITLE_GAP),
         )
 
         // Room above and below for the focused poster to grow into. A `LazyRow` clips to its
@@ -703,7 +773,7 @@ internal fun TvPoster(
             // It stays gone on its own merits: on a ten-foot display a title that never stops
             // moving is harder to read than one politely truncated.
             Text(
-                text = tile.name,
+                text = tile.name.cleanedForDisplay(),
                 color = Color.White.copy(alpha = if (isFocused) 1f else 0.7f),
                 fontSize = 14.sp,
                 maxLines = 1,
@@ -974,7 +1044,10 @@ private val FOCUS_GROWTH_HORIZONTAL = 10.dp
 private val TITLE_GAP = 16.dp
 
 /** Between rows, net of the [FOCUS_GROWTH] every poster reserves above and below itself. */
-private val ROW_SPACING = 4.dp
+private val ROW_SPACING = 8.dp
+
+/** Horizontal overscan padding for rows when a full-bleed header is present. */
+private val ROW_HORIZONTAL_PADDING = 48.dp
 
 /** Stable across catalogues, so the row is not rebuilt when the titles beneath it change. */
 private const val CONTINUE_ROW_KEY = "__continue__"

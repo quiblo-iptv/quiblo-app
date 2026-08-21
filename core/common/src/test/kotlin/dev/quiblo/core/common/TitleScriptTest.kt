@@ -173,6 +173,18 @@ class TitleScriptTest {
     }
 
     @Test
+    fun `cleanedForDisplay removes bracketed tags and common fillers`() {
+        assertEquals("Dune", "Dune 2024 (مترجم)".cleanedForDisplay())
+        assertEquals("The Matrix", "The Matrix (1999) 4K UHD".cleanedForDisplay())
+        assertEquals("Interstellar", "Interstellar [BluRay] مترجم".cleanedForDisplay())
+        assertEquals("Oppenheimer", "Oppenheimer (2023) {4K} [sub]".cleanedForDisplay())
+        assertEquals("Film Name", "Film Name 1080p HEVC".cleanedForDisplay())
+        assertEquals("Arabic Title", "Arabic Title مدبلج".cleanedForDisplay())
+        assertEquals("Arabic Title", "Arabic Title مترجم".cleanedForDisplay())
+        assertEquals("Movie", "EN Movie [4K]".cleanedForDisplay())
+    }
+
+    @Test
     fun `an emoji before the title does not decide it`() {
         assertEquals(TitleScript.Arabic, "🎬 مسلسل".firstStrongScript())
     }

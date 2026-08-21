@@ -256,7 +256,14 @@ fun TvPlayerScreen(
     // left to wait for.
     val hasFailed = state.status == PlaybackStatus.ERROR
 
-    // Immersive.
+    /*
+     * Immersive mode.
+     *
+     * The system bars are hidden for the whole life of the player, and restored on the way out.
+     * It is set on the view because that is where the insets controller lives, but the effect
+     * is on the window — so even if this composition is replaced by an overlay, the bars stay
+     * hidden until playback is actually finished.
+     */
     val view = LocalView.current
     DisposableEffect(view) {
         val window = (view.context as? android.app.Activity)?.window
@@ -272,20 +279,41 @@ fun TvPlayerScreen(
 
     KeepScreenAwake(enabled = !hasFailed)
 
-    // Back closes the track menu if open; otherwise it exits playback immediately.
-    //
-    // Leaving while the next episode is being offered cancels the offer on the way out. The
-    // countdown is disposed with the screen either way; saying so here is what stops a future
-    // reader hoisting that state somewhere it would survive.
-    BackHandler {
+    /*
+     * Back button handling (Hierarchical).
+     *
+     * The definitive source of truth for the Back key. It is handled in one place rather than
+     * split between a BackHandler and a key listener, which is what made the previous version
+     * unreliable: on some remotes the key press reached the listener but not the handler,
+     * so backing out did nothing.
+     *
+     * The order is the hierarchy: it closes the track menu, then the controls, then the offer,
+     * and only then exits playback.
+     */
+    val handleBack = { isExitAllowed: Boolean ->
         when {
-            trackMenuAt != null -> trackMenuAt = null
-            else -> {
+            trackMenuAt != null -> {
+                trackMenuAt = null
+                true
+            }
+            controlsVisible -> {
+                controlsVisible = false
+                true
+            }
+            isOfferingNextEpisode -> {
+                nextEpisodeDismissed = true
+                true
+            }
+            isExitAllowed -> {
                 nextEpisodeDismissed = true
                 onBack()
+                true
             }
+            else -> false
         }
     }
+
+    BackHandler { handleBack(true) }
 
     /*
      * Tell the player it is finished — on the way out, and on the way to the background.
@@ -320,12 +348,26 @@ fun TvPlayerScreen(
             .background(Color.Black)
             .focusRequester(rootFocus)
             .focusable()
-            // Never consumes anything. It runs before the focused control gets the press,
-            // which is the only place that sees every press: once the controls hold focus,
-            // a button consumes OK and the arrows are eaten by focus traversal, so a handler
-            // reading them on the way back up would restart the timeout on almost nothing.
+            /*
+             * Intercepts every press before it reaches a focused control.
+             *
+             * **This is the definitive key handler for the whole screen.** It catches the Back
+             * key to ensure it is handled here even if a focused control (like a button) tries to
+             * consume it, and it restarts the controls' timeout on every press. The latter only
+             * works here: once the controls take focus, a button consumes OK and the arrows are
+             * eaten by focus traversal, so a handler reading them on the way back up would
+             * restart the timeout on almost nothing.
+             */
             .onPreviewKeyEvent { event ->
-                if (event.type == KeyEventType.KeyDown && controlsVisible) interactionTick++
+                if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+
+                if (event.key == Key.Back) {
+                    // Only handle Back here if something is open. If nothing is open,
+                    // return false so the BackHandler (which is Activity-level) handles it.
+                    return@onPreviewKeyEvent handleBack(false)
+                }
+
+                if (controlsVisible) interactionTick++
                 false
             }
             .onKeyEvent { event ->

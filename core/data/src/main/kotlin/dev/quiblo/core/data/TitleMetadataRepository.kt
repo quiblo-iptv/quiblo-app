@@ -90,6 +90,19 @@ class TitleMetadataRepository(
         cachedOrFetched(title, kind, acceptPartial = true)
 
     /**
+     * Everything the cache holds for [title], or null if nothing is cached.
+     *
+     * Does not touch the network.
+     */
+    suspend fun cachedPreviewFor(title: String, kind: MediaKind): TitleMetadata? {
+        val identity = title.titleIdentity().takeIf { it.searchTitle.isNotBlank() } ?: return null
+        return dao.find(identity.searchTitle, kind.name, identity.year)
+            ?.takeIf { now() - it.fetchedAtEpochMillis < CACHE_TTL_MILLIS }
+            ?.takeUnless { it.isMiss }
+            ?.toMetadata()
+    }
+
+    /**
      * Asks the service about [title] again, ignoring whatever is cached.
      *
      * `INC-F7`. The intake asks for this because artwork is sometimes missing or a plot is
@@ -393,8 +406,8 @@ private fun TitleMetadataEntity.toMetadata() = TitleMetadata(
     author = author,
     authorLabel = if (kind == MediaKind.SERIES.name) AuthorLabel.CREATOR else AuthorLabel.DIRECTOR,
     topCast = topCast?.split(LIST_SEPARATOR).orEmpty().filter { it.isNotBlank() },
-    posterUrl = posterUrl,
-    backdropUrl = backdropUrl,
+    posterUrl = TmdbClient.toHighResTmdbUrl(posterUrl, isBackdrop = false),
+    backdropUrl = TmdbClient.toHighResTmdbUrl(backdropUrl, isBackdrop = true),
     releaseYear = releaseYear,
     runtimeMinutes = runtimeMinutes,
     originalLanguage = originalLanguage,

@@ -138,6 +138,19 @@ fun String.isInHiddenScript(hidden: Set<TitleScript>): Boolean =
     hidden.isNotEmpty() && withoutTrailingTags().strongScripts().any { it in hidden }
 
 /**
+ * This title with any trailing fillers removed for display.
+ *
+ * Similar to TMDB cleanup but safe for UI: removes "(مترجم)", "(YEAR)", and common
+ * quality markers like "4K" or "UHD" that often clutter provider titles.
+ */
+fun String.cleanedForDisplay(): String =
+    replace(ANY_BRACKETED, " ")
+        .replace(YEAR, " ")
+        .replace(DISPLAY_CLEANUP, " ")
+        .replace(WHITESPACE, " ")
+        .trim()
+
+/**
  * This title with any trailing bracketed groups removed — `[…]`, `(…)` and `{…}`, repeatedly.
  *
  * **Only brackets, and only at the end.** A trailing `| AR` segment is the other shape a tag
@@ -145,7 +158,7 @@ fun String.isInHiddenScript(hidden: Set<TitleScript>): Boolean =
  * far more often: stripping the last pipe-separated segment of `AR | مسلسل الاختيار` removes the
  * title and keeps the tag, which is the exact inversion of what this is for.
  */
-internal fun String.withoutTrailingTags(): String {
+fun String.withoutTrailingTags(): String {
     var trimmed = trim()
     while (true) {
         val stripped = TRAILING_TAG.replace(trimmed, "").trim()
@@ -156,6 +169,18 @@ internal fun String.withoutTrailingTags(): String {
 
 /** One bracketed group at the very end, of any of the three kinds a provider uses. */
 private val TRAILING_TAG = Regex("""\s*[\[({][^\[\](){}]*[])}]\s*$""")
+
+/** Any bracketed group anywhere in the string. */
+private val ANY_BRACKETED = Regex("""[\[({][^\[\](){}]*[])}]""")
+
+/** Common fillers in provider titles that are noise for a UI slider. */
+private val DISPLAY_CLEANUP = Regex(
+    "(?i)(\\b(4k|uhd|fhd|hd|sd|hq|hevc|h26[45]|x26[45]|av1|10bit|1080p|720p|" +
+        "2160p|bluray|multi|dual|dubbed|subbed|sub|ar|en|fr|vo|vf|web|webdl|cam|ts)\\b|مترجم|مدبلج)",
+)
+
+private val YEAR = Regex("""\b(19\d{2}|20\d{2})\b""")
+private val WHITESPACE = Regex("""\s+""")
 
 private fun Character.UnicodeScript.toTitleScript(): TitleScript? = when (this) {
     Character.UnicodeScript.LATIN -> TitleScript.Latin

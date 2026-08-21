@@ -132,7 +132,7 @@ class PopularTitlesRepository(
                             kind = kind,
                             channelId = index.find(row.title, row.year, kind),
                             title = row.title,
-                            posterUrl = row.posterUrl,
+                            posterUrl = TmdbClient.toHighResTmdbUrl(row.posterUrl, isBackdrop = false),
                         )
                     }
                     .toList()

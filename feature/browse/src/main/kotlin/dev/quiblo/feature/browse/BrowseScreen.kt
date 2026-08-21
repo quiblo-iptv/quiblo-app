@@ -88,6 +88,7 @@ import androidx.paging.compose.LazyPagingItems
 import androidx.paging.compose.collectAsLazyPagingItems
 import androidx.paging.compose.itemKey
 import coil3.compose.SubcomposeAsyncImage
+import dev.quiblo.core.common.cleanedForDisplay
 import dev.quiblo.core.model.Category
 import dev.quiblo.core.model.Channel
 import dev.quiblo.core.model.HistoryEntry
@@ -565,7 +566,7 @@ private fun ChannelGridCard(
             }
 
             Text(
-                text = channel.name,
+                text = channel.name.cleanedForDisplay(),
                 style = MaterialTheme.typography.bodyMedium,
                 fontWeight = FontWeight.Bold,
                 maxLines = 2,
@@ -602,7 +603,7 @@ private fun ChannelRow(
                 .padding(start = 12.dp),
         ) {
             Text(
-                text = channel.name,
+                text = channel.name.cleanedForDisplay(),
                 style = MaterialTheme.typography.bodyLarge,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,

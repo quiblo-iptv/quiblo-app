@@ -360,7 +360,10 @@ class TmdbClient(
 
     companion object {
         const val BASE_URL = "https://api.themoviedb.org/3"
-        const val IMAGE_BASE_URL = "https://image.tmdb.org/t/p/w500"
+        const val IMAGE_BASE_URL = "https://image.tmdb.org/t/p/w780"
+
+        /** High-res for hero backdrops on TV screens. */
+        const val BACKDROP_BASE_URL = "https://image.tmdb.org/t/p/original"
 
         private const val JWT_DOT_COUNT = 2
         private const val RETRY_AFTER_HEADER = "Retry-After"
@@ -370,6 +373,16 @@ class TmdbClient(
             ignoreUnknownKeys = true
             coerceInputValues = true
             explicitNulls = false
+        }
+
+        fun toHighResTmdbUrl(url: String?, isBackdrop: Boolean = false): String? {
+            if (url == null) return null
+            val target = if (isBackdrop) BACKDROP_BASE_URL else IMAGE_BASE_URL
+            return if (url.contains("image.tmdb.org/t/p/")) {
+                url.replace(Regex("https?://image\\.tmdb\\.org/t/p/(?:w[0-9]+|original)"), target)
+            } else {
+                url
+            }
         }
     }
 }

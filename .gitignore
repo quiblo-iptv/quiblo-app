@@ -49,3 +49,7 @@ config/detekt/baseline.xml.tmp
 
 # Third-party API keys used for local testing. Never committed.
 tmdb.properties
+
+# Agent scratch and logs
+.artifacts/
+.kotlin/

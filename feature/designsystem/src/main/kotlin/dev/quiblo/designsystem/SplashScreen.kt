@@ -64,17 +64,19 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlin.math.cos
+import kotlin.math.sin
 
 /**
  * Creative launch screen: animated solid-white Quiblo brand mark, title, audio sting, and version tag.
  *
- * Synchronized with the audio sting peak at ~1.9s for a dramatic Netflix-style zoom-through landing.
+ * Synchronized with the audio sting peak at ~1.9s with animated drifting ambient lighting and a Netflix-style zoom.
  */
 @Composable
 fun QuibloSplashScreen(
     versionName: String,
     modifier: Modifier = Modifier,
-    logoSize: Dp = 150.dp,
+    logoSize: Dp = 210.dp,
     durationMillis: Long = DEFAULT_SPLASH_DURATION_MILLIS,
     playSound: Boolean = true,
     onSplashComplete: () -> Unit = {},
@@ -154,7 +156,7 @@ fun QuibloSplashScreen(
         onSplashComplete()
     }
 
-    val infiniteTransition = rememberInfiniteTransition(label = "splashGlow")
+    val infiniteTransition = rememberInfiniteTransition(label = "splashAnimations")
     val glowPulse by infiniteTransition.animateFloat(
         initialValue = GLOW_PULSE_MIN,
         targetValue = GLOW_PULSE_MAX,
@@ -163,6 +165,15 @@ fun QuibloSplashScreen(
             repeatMode = RepeatMode.Reverse,
         ),
         label = "splashGlowPulse",
+    )
+
+    val ambientAngle by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 360f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(AMBIENT_DRIFT_DURATION_MILLIS, easing = LinearEasing),
+        ),
+        label = "splashAmbientAngle",
     )
 
     val currentContentAlpha = introAlpha.value * exitAlpha.value
@@ -185,9 +196,44 @@ fun QuibloSplashScreen(
             .statusBarsPadding()
             .navigationBarsPadding(),
     ) {
-        // Ambient glow pool behind the central logo
+        // Animated drifting ambient lighting backdrop
         Canvas(modifier = Modifier.fillMaxSize()) {
             val flareScale = (zoomScale.value - 1f) * GLOW_ZOOM_FLARE_FACTOR + 1f
+            val radians = ambientAngle * (Math.PI.toFloat() / 180f)
+            val orbitX = cos(radians) * AMBIENT_ORBIT_REACH_X
+            val orbitY = sin(radians) * AMBIENT_ORBIT_REACH_Y
+
+            // Top-left orbiting ambient pool
+            val pool1Alpha = (0.28f * currentContentAlpha).coerceIn(0f, 1f)
+            drawCircle(
+                brush = Brush.radialGradient(
+                    colors = listOf(
+                        Color(0xFF5C6BC0).copy(alpha = pool1Alpha),
+                        Color.Transparent,
+                    ),
+                    center = Offset(size.width * (0.22f + orbitX), size.height * (0.20f + orbitY)),
+                    radius = size.minDimension * 0.75f * flareScale,
+                ),
+                center = Offset(size.width * (0.22f + orbitX), size.height * (0.20f + orbitY)),
+                radius = size.minDimension * 0.75f * flareScale,
+            )
+
+            // Bottom-right orbiting ambient pool
+            val pool2Alpha = (0.24f * currentContentAlpha).coerceIn(0f, 1f)
+            drawCircle(
+                brush = Brush.radialGradient(
+                    colors = listOf(
+                        Color(0xFF7E57C2).copy(alpha = pool2Alpha),
+                        Color.Transparent,
+                    ),
+                    center = Offset(size.width * (0.78f - orbitX), size.height * (0.78f - orbitY)),
+                    radius = size.minDimension * 0.75f * flareScale,
+                ),
+                center = Offset(size.width * (0.78f - orbitX), size.height * (0.78f - orbitY)),
+                radius = size.minDimension * 0.75f * flareScale,
+            )
+
+            // Center pulsating glow behind the central logo
             val innerAlpha = (glowPulse * currentContentAlpha).coerceIn(0f, 1f)
             val outerAlpha = ((glowPulse * GLOW_OUTER_SCALE) * currentContentAlpha).coerceIn(0f, 1f)
             drawCircle(
@@ -205,7 +251,7 @@ fun QuibloSplashScreen(
             )
         }
 
-        // Central branding: Large Pure White Logo + Name
+        // Central branding: Large Pure White Logo + Title directly below
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center,
@@ -219,12 +265,12 @@ fun QuibloSplashScreen(
                 color = Color.White,
             )
 
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(6.dp))
 
             Text(
                 text = "Quiblo",
                 color = Color.White,
-                fontSize = 44.sp,
+                fontSize = 46.sp,
                 fontWeight = FontWeight.Bold,
                 letterSpacing = 2.sp,
             )
@@ -307,5 +353,8 @@ private const val GLOW_PULSE_MIN = 0.25f
 private const val GLOW_PULSE_MAX = 0.45f
 private const val GLOW_OUTER_SCALE = 0.5f
 private const val GLOW_RADIUS_FACTOR = 0.55f
+private const val AMBIENT_DRIFT_DURATION_MILLIS = 7000
+private const val AMBIENT_ORBIT_REACH_X = 0.12f
+private const val AMBIENT_ORBIT_REACH_Y = 0.08f
 private const val LOGO_VERTICAL_BIAS = 0.48f
 private const val CANVAS_BASE_SIZE = 108f

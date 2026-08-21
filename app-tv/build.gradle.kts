@@ -52,6 +52,7 @@ android {
         applicationId = "dev.quiblo.tv"
         versionCode = 43
         versionName = "0.21.0"
+
     }
 
     buildFeatures {

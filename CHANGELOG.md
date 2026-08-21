@@ -15,6 +15,8 @@ Formatted after [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and ve
 
 ## Unreleased
 
+## 0.20.2
+
 ### Fixed
 
 - **Pressing back in the player exits playback immediately.** The player controls no longer intercept the back button to only hide themselves, so backing out of a stream returns you straight to the previous screen without requiring multiple back presses.

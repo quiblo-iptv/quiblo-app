@@ -68,14 +68,14 @@ import kotlinx.coroutines.launch
 /**
  * Creative launch screen: animated solid-white Quiblo brand mark, title, audio sting, and version tag.
  *
- * Runs for 5 seconds with a cinematic Netflix-style zoom-through landing transition.
+ * Synchronized with the audio sting peak at ~1.9s for a dramatic Netflix-style zoom-through landing.
  */
 @Composable
 fun QuibloSplashScreen(
     versionName: String,
     modifier: Modifier = Modifier,
     logoSize: Dp = 150.dp,
-    durationMillis: Long = SPLASH_DURATION_MILLIS,
+    durationMillis: Long = DEFAULT_SPLASH_DURATION_MILLIS,
     playSound: Boolean = true,
     onSplashComplete: () -> Unit = {},
 ) {
@@ -86,18 +86,20 @@ fun QuibloSplashScreen(
             var player: MediaPlayer? = null
             try {
                 player = MediaPlayer.create(context, R.raw.splash_sound)?.apply {
+                    setOnCompletionListener { mp ->
+                        try {
+                            mp.release()
+                        } catch (_: Throwable) {
+                            // Ignore release errors
+                        }
+                    }
                     start()
                 }
             } catch (_: Throwable) {
                 // Ignore audio failure if audio device is unavailable
             }
             onDispose {
-                try {
-                    player?.stop()
-                    player?.release()
-                } catch (_: Throwable) {
-                    // Ignore disposal error
-                }
+                // Let the audio tail finish decaying naturally on transition
             }
         }
     }
@@ -108,7 +110,7 @@ fun QuibloSplashScreen(
     val exitAlpha = remember { Animatable(1f) }
 
     LaunchedEffect(Unit) {
-        // 1. Entrance animation (0ms to 700ms)
+        // 1. Entrance animation (0ms to 400ms)
         launch {
             introAlpha.animateTo(
                 targetValue = 1f,
@@ -122,17 +124,21 @@ fun QuibloSplashScreen(
             )
         }
 
-        // 2. Resting duration before Netflix zoom
-        val restTime = (durationMillis - ZOOM_DURATION_MILLIS).coerceAtLeast(0L)
-        delay(restTime)
+        // 2. Resting duration: aligns the zoom explosion directly with the audio peak at ~1.9s
+        val effectiveZoomStart = if (durationMillis != DEFAULT_SPLASH_DURATION_MILLIS) {
+            (durationMillis - ZOOM_DURATION_MILLIS).coerceAtLeast(0L)
+        } else {
+            ZOOM_START_DELAY_MILLIS
+        }
+        delay(effectiveZoomStart)
 
-        // 3. Netflix-style camera zoom-through (e.g. from 3600ms to 5000ms)
+        // 3. Netflix-style camera zoom-through hitting exactly at the audio peak
         launch {
             zoomScale.animateTo(
                 targetValue = NETFLIX_ZOOM_MAX_SCALE,
                 animationSpec = tween(
                     ZOOM_DURATION_MILLIS.toInt(),
-                    easing = CubicBezierEasing(0.7f, 0f, 0.84f, 0f),
+                    easing = CubicBezierEasing(0.65f, 0f, 0.85f, 0.2f),
                 ),
             )
         }
@@ -288,13 +294,14 @@ fun QuibloLogoMark(
     }
 }
 
-private const val SPLASH_DURATION_MILLIS = 5000L
-private const val INTRO_DURATION_MILLIS = 700
-private const val ZOOM_DURATION_MILLIS = 1400L
-private const val ZOOM_FADEOUT_DELAY_MILLIS = 900L
-private const val ZOOM_FADEOUT_DURATION_MILLIS = 500
-private const val NETFLIX_ZOOM_MAX_SCALE = 18f
-private const val GLOW_ZOOM_FLARE_FACTOR = 0.2f
+private const val DEFAULT_SPLASH_DURATION_MILLIS = 2450L
+private const val INTRO_DURATION_MILLIS = 400
+private const val ZOOM_START_DELAY_MILLIS = 1750L
+private const val ZOOM_DURATION_MILLIS = 700L
+private const val ZOOM_FADEOUT_DELAY_MILLIS = 350L
+private const val ZOOM_FADEOUT_DURATION_MILLIS = 350
+private const val NETFLIX_ZOOM_MAX_SCALE = 20f
+private const val GLOW_ZOOM_FLARE_FACTOR = 0.25f
 private const val GLOW_PULSE_DURATION_MILLIS = 1800
 private const val GLOW_PULSE_MIN = 0.25f
 private const val GLOW_PULSE_MAX = 0.45f

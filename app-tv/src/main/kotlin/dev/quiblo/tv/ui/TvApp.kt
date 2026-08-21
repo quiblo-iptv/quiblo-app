@@ -19,6 +19,7 @@
 package dev.quiblo.tv.ui
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -80,6 +81,7 @@ import dev.quiblo.core.model.Channel
 import dev.quiblo.core.model.MediaKind
 import dev.quiblo.core.model.WatchOrigin
 import dev.quiblo.designsystem.ProfileAvatar
+import dev.quiblo.tv.BuildConfig
 import dev.quiblo.tv.R
 import dev.quiblo.tv.ui.browse.TvForYouScreen
 import dev.quiblo.tv.ui.browse.TvPosterRows
@@ -103,6 +105,7 @@ import dev.quiblo.tv.ui.search.TvSearchScreen
 import dev.quiblo.tv.ui.series.TvSeriesScreen
 import dev.quiblo.tv.ui.settings.TvSettingsScreen
 import dev.quiblo.tv.ui.sources.TvSourcesScreen
+import dev.quiblo.tv.ui.splash.TvSplashScreen
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
@@ -133,9 +136,21 @@ fun TvApp(
      * covers the bottom of the window would cover the field being typed into.
      */
     insetForKeyboard: Boolean = false,
+    initialShowSplash: Boolean = true,
 ) {
-    Box(modifier = if (insetForKeyboard) Modifier.imePadding() else Modifier) {
-        TvConsentGate { TvAppBehindConsent(onExit = onExit) }
+    var showSplash by remember { mutableStateOf(initialShowSplash) }
+
+    Crossfade(targetState = showSplash, label = "tvSplashCrossfade") { inSplash ->
+        if (inSplash) {
+            TvSplashScreen(
+                versionName = BuildConfig.VERSION_NAME,
+                onSplashComplete = { showSplash = false },
+            )
+        } else {
+            Box(modifier = if (insetForKeyboard) Modifier.imePadding() else Modifier) {
+                TvConsentGate { TvAppBehindConsent(onExit = onExit) }
+            }
+        }
     }
 }
 

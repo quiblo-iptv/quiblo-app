@@ -97,7 +97,10 @@ fun Project.enforceNoCompose() {
                     runCatching {
                         configuration.incoming.resolutionResult.allDependencies
                             .mapNotNull { it.requested as? ModuleComponentSelector }
-                            .filter { it.group.startsWith("androidx.compose") || it.group.startsWith("org.jetbrains.compose") }
+                            .filter {
+                                (it.group.startsWith("androidx.compose") || it.group.startsWith("org.jetbrains.compose")) &&
+                                    !it.module.startsWith("runtime-annotation")
+                            }
                             .map { "${configuration.name} -> ${it.group}:${it.module}" }
                     }.getOrDefault(emptyList())
                 }

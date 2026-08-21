@@ -74,6 +74,8 @@ import dev.quiblo.feature.browse.runtimeLabel
 import dev.quiblo.feature.series.SeriesDetailUiState
 import dev.quiblo.feature.series.SeriesDetailViewModel
 import dev.quiblo.tv.R
+import dev.quiblo.tv.ui.common.ambientBackdrop
+import dev.quiblo.tv.ui.common.rememberAmbient
 import dev.quiblo.tv.ui.detail.DETAIL_COLUMN_GAP
 import dev.quiblo.tv.ui.detail.DetailArtwork
 import dev.quiblo.tv.ui.detail.DetailButton
@@ -119,6 +121,13 @@ fun TvSeriesScreen(
     )
     val state by viewModel.uiState.collectAsStateWithLifecycle()
 
+    val artworkUrl = (state as? SeriesDetailUiState.Success)?.let { success ->
+        success.channel.logoUrl?.takeIf { it.isNotBlank() }
+            ?: success.details.coverUrl
+            ?: success.metadata?.posterUrl
+    } ?: channel.logoUrl
+    val ambient = rememberAmbient(artworkUrl)
+
     // The resume point is watched rather than re-read on returning to the foreground. A read on
     // resume raced the player's own write of the position it had just finished with, and lost it
     // often enough that backing out of a film offered "Play" for something four minutes in. See
@@ -126,29 +135,36 @@ fun TvSeriesScreen(
 
     BackHandler(onBack = onBack)
 
-    Box(modifier = modifier.fillMaxSize()) {
-        when (val current = state) {
-            is SeriesDetailUiState.Loading -> Centered { CircularProgressIndicator(color = Color.White) }
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black)
+            .ambientBackdrop(ambient),
+    ) {
+        Box(modifier = modifier.fillMaxSize()) {
+            when (val current = state) {
+                is SeriesDetailUiState.Loading -> Centered { CircularProgressIndicator(color = Color.White) }
 
-            is SeriesDetailUiState.Error -> Centered {
-                Text(
-                    text = stringResource(R.string.tv_series_unavailable),
-                    color = Color.White.copy(alpha = 0.65f),
-                    style = MaterialTheme.typography.headlineSmall,
+                is SeriesDetailUiState.Error -> Centered {
+                    Text(
+                        text = stringResource(R.string.tv_series_unavailable),
+                        color = Color.White.copy(alpha = 0.65f),
+                        style = MaterialTheme.typography.headlineSmall,
+                    )
+                }
+
+                is SeriesDetailUiState.Success -> Loaded(
+                    state = current,
+                    onPlayEpisode = onPlayEpisode,
+                    onToggleFavorite = viewModel::toggleFavorite,
+                    onRemoveFromHistory = viewModel::removeFromHistory,
+                    onRefreshMetadata = viewModel::refreshMetadata,
+                    onRate = viewModel::rate,
+                    onMerged = viewModel::setMerged,
+                    onDescending = viewModel::setDescending,
+                    focusEpisodeId = focusEpisodeId,
                 )
             }
-
-            is SeriesDetailUiState.Success -> Loaded(
-                state = current,
-                onPlayEpisode = onPlayEpisode,
-                onToggleFavorite = viewModel::toggleFavorite,
-                onRemoveFromHistory = viewModel::removeFromHistory,
-                onRefreshMetadata = viewModel::refreshMetadata,
-                onRate = viewModel::rate,
-                onMerged = viewModel::setMerged,
-                onDescending = viewModel::setDescending,
-                focusEpisodeId = focusEpisodeId,
-            )
         }
     }
 }

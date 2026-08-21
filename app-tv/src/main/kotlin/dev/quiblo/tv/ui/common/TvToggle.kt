@@ -106,6 +106,7 @@ internal fun TvToggle(
             color = Color.White.copy(alpha = if (isFocused || isOn) 1f else 0.6f),
             fontSize = 15.sp,
             fontWeight = if (isOn) FontWeight.SemiBold else FontWeight.Normal,
+            maxLines = 1,
         )
 
         Box(

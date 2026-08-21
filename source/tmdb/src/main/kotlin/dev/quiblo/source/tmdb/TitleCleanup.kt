@@ -136,7 +136,7 @@ private val QUALITY_MARKERS = Regex(
         "1080p?|720p?|480p?|2160p?|" +
         "pure|remux|blu ?ray|brrip|bdrip|webrip|web ?dl|hdrip|dvdrip|cam|hdts|" +
         "multi|dual|dubbed|subbed|vostfr|vo|vf|sub|atmos|dts|ac3|aac" +
-        ")\\b",
+        ")\\b|مترجم|مدبلج",
 )
 
 /**

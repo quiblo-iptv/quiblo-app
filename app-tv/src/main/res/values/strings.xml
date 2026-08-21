@@ -9,7 +9,7 @@
 
     <string name="tv_tab_search">Search</string>
     <string name="tv_tab_live">Live</string>
-    <string name="tv_tab_for_you">For You</string>
+    <string name="tv_tab_for_you">Home</string>
     <string name="tv_tab_movies">Movies</string>
     <string name="tv_tab_series">Series</string>
     <string name="tv_tab_favourites">Favourites</string>
@@ -89,7 +89,7 @@
          of them is anything the viewer can act on: an Xtream panel supplies a date per title and
          an M3U playlist supplies none at all, and "nothing here" would read as a fault in both
          cases. -->
-    <string name="tv_row_recently_added">Recently added</string>
+    <string name="tv_row_recently_added">Recently Added</string>
     <string name="tv_row_latest_in_playlist">Latest in your playlist</string>
     <string name="tv_recently_added_none">Nothing has been added to this service in the last thirty days.</string>
     <string name="tv_no_films_or_series">This playlist has no films or series in it.</string>
@@ -99,9 +99,9 @@
     <!-- The other three For You rows. None is drawn at all when it is empty, so none has an
          empty message: a row that cannot say anything says nothing. -->
     <string name="tv_row_now_popular">Now popular</string>
-    <string name="tv_row_popular_movies">Popular films</string>
-    <string name="tv_row_popular_series">Popular series</string>
-    <string name="tv_row_you_may_like">You may like</string>
+    <string name="tv_row_popular_movies">Popular Movies</string>
+    <string name="tv_row_popular_series">Popular Series</string>
+    <string name="tv_row_you_may_like">You May Like</string>
     <string name="tv_because_you_watched">Because you watched %1$s</string>
 
     <!-- A popular title this provider does not carry. The badge is on the poster; the sentence
@@ -123,7 +123,7 @@
     <string name="tv_search_include_hidden">Include hidden</string>
     <!-- The other switch: whether an advanced search looks at television channels as well as at
          films and series. Off by default because a genre filter means nothing to a channel. -->
-    <string name="tv_search_include_live">Include TV channels</string>
+    <string name="tv_search_include_live">Include TV</string>
     <!-- Row headings come from feature:browse now, so both apps say the same words. -->
     <string name="tv_search_genres_coverage">Genres describe %1$d%% of your catalogue so far — browsing fills in the rest.</string>
     <string name="tv_search_genres_empty">Browse some films or series and you will be able to filter by genre here.</string>

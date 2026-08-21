@@ -59,6 +59,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil3.compose.SubcomposeAsyncImage
+import dev.quiblo.core.common.cleanedForDisplay
 import dev.quiblo.core.model.Channel
 import dev.quiblo.core.model.MediaKind
 
@@ -164,7 +165,7 @@ internal fun ChannelArtCard(
             }
 
             Text(
-                text = channel.name,
+                text = channel.name.cleanedForDisplay(),
                 style = MaterialTheme.typography.bodyMedium,
                 fontWeight = FontWeight.SemiBold,
                 color = Color.White,

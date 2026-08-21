@@ -161,83 +161,85 @@ fun TvLiveScreen(
     }
 
     Box(modifier = modifier.fillMaxSize()) {
-        Row(
-            modifier = Modifier.fillMaxSize(),
-            horizontalArrangement = Arrangement.spacedBy(24.dp),
-        ) {
-            // Only when there is a choice to make. A source with one category, or an M3U with
-            // none at all, gets the full width for its channels rather than a rail holding a
-            // single row (#002).
-            if (state.categories.size > 1) {
-                TvCategoryRail(
-                    categories = state.categories,
-                    selectedCategory = state.selectedCategory,
-                    onSelect = viewModel::selectCategory,
-                )
-            }
+        Column(modifier = Modifier.fillMaxSize()) {
+            Row(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(24.dp),
+            ) {
+                // Only when there is a choice to make. A source with one category, or an M3U with
+                // none at all, gets the full width for its channels rather than a rail holding a
+                // single row (#002).
+                if (state.categories.size > 1) {
+                    TvCategoryRail(
+                        categories = state.categories,
+                        selectedCategory = state.selectedCategory,
+                        onSelect = viewModel::selectCategory,
+                    )
+                }
 
-            // A fresh state per category, so the list starts at the top when the filter
-            // changes. Carrying a scroll position into a different set of channels leaves the
-            // viewer somewhere arbitrary in a list they have not seen — and the position is
-            // meaningless anyway, since row 400 of one category is not row 400 of another.
-            val listState = remember(state.selectedCategory) { LazyListState() }
+                // A fresh state per category, so the list starts at the top when the filter
+                // changes. Carrying a scroll position into a different set of channels leaves the
+                // viewer somewhere arbitrary in a list they have not seen — and the position is
+                // meaningless anyway, since row 400 of one category is not row 400 of another.
+                val listState = remember(state.selectedCategory) { LazyListState() }
 
-            when {
-                // "No playlist" and "a playlist with no live channels" are two different things
-                // to be told, and only one of them is the viewer's to fix. Search has drawn the
-                // distinction since it was written; this screen told everyone to import a
-                // playlist they had never added, which reads as a failure rather than as a step
-                // they have not taken yet.
-                !state.hasSource -> Message(stringResource(R.string.tv_no_source))
+                when {
+                    // "No playlist" and "a playlist with no live channels" are two different things
+                    // to be told, and only one of them is the viewer's to fix. Search has drawn the
+                    // distinction since it was written; this screen told everyone to import a
+                    // playlist they had never added, which reads as a failure rather than as a step
+                    // they have not taken yet.
+                    !state.hasSource -> Message(stringResource(R.string.tv_no_source))
 
-                // `itemCount` and not a loaded snapshot: a list still fetching its first page
-                // has no items and is not empty, and telling a viewer their provider carries no
-                // channels while it is still being asked is worse than a moment of nothing.
-                channels.loadState.refresh !is LoadState.Loading && channels.itemCount == 0 ->
-                    Message(stringResource(R.string.tv_no_channels))
+                    // `itemCount` and not a loaded snapshot: a list still fetching its first page
+                    // has no items and is not empty, and telling a viewer their provider carries no
+                    // channels while it is still being asked is worse than a moment of nothing.
+                    channels.loadState.refresh !is LoadState.Loading && channels.itemCount == 0 ->
+                        Message(stringResource(R.string.tv_no_channels))
 
-                else -> LazyColumn(
-                    state = listState,
-                    modifier = Modifier.fillMaxSize(),
-                    verticalArrangement = Arrangement.spacedBy(4.dp),
-                ) {
-                    items(count = channels.itemCount, key = channels.itemKey { it.id }) { index ->
-                        // Null while the page holding this row is still arriving. With
-                        // placeholders off that is only ever transient, and drawing nothing for a
-                        // frame is the honest answer — a skeleton row would be a second thing to
-                        // keep in step with the real one.
-                        val channel = channels[index] ?: return@items
-                        ChannelRow(
-                            // The provider's own ordering is the channel numbering a viewer
-                            // knows; the panel's `num` field is not stored, so position stands
-                            // in for it.
-                            number = index + 1,
-                            channel = channel,
-                            nowPlaying = state.nowPlaying[channel.stableKey],
-                            onFocused = { focusedChannel = channel },
-                            // The pages loaded so far, which is what zapping can honestly walk.
-                            // It used to be the whole catalogue, and it was only whole because
-                            // the screen was paying to read all of it.
-                            onClick = { onPlay(channels.itemSnapshotList.items, index) },
-                            onLongClick = { guideFor = channel },
-                        )
+                    else -> LazyColumn(
+                        state = listState,
+                        modifier = Modifier.fillMaxSize(),
+                        verticalArrangement = Arrangement.spacedBy(4.dp),
+                    ) {
+                        items(count = channels.itemCount, key = channels.itemKey { it.id }) { index ->
+                            // Null while the page holding this row is still arriving. With
+                            // placeholders off that is only ever transient, and drawing nothing for a
+                            // frame is the honest answer — a skeleton row would be a second thing to
+                            // keep in step with the real one.
+                            val channel = channels[index] ?: return@items
+                            ChannelRow(
+                                // The provider's own ordering is the channel numbering a viewer
+                                // knows; the panel's `num` field is not stored, so position stands
+                                // in for it.
+                                number = index + 1,
+                                channel = channel,
+                                nowPlaying = state.nowPlaying[channel.stableKey],
+                                onFocused = { focusedChannel = channel },
+                                // The pages loaded so far, which is what zapping can honestly walk.
+                                // It used to be the whole catalogue, and it was only whole because
+                                // the screen was paying to read all of it.
+                                onClick = { onPlay(channels.itemSnapshotList.items, index) },
+                                onLongClick = { guideFor = channel },
+                            )
+                        }
                     }
                 }
             }
-        }
 
-        // Along the bottom, under the list rather than in place of it. A guide that is not
-        // arriving does not stop anyone watching television, so it is a footnote and never a
-        // screen of its own — and this app has no dialogs to put it in either.
-        guideTrouble(state.guideOutcome)?.let { message ->
-            Text(
-                text = stringResource(message),
-                color = Color.White.copy(alpha = 0.55f),
-                style = MaterialTheme.typography.bodyMedium,
-                modifier = Modifier
-                    .align(Alignment.BottomStart)
-                    .padding(top = 12.dp),
-            )
+            // Along the bottom, under the list rather than in place of it. A guide that is not
+            // arriving does not stop anyone watching television, so it is a footnote and never a
+            // screen of its own — and this app has no dialogs to put it in either.
+            guideTrouble(state.guideOutcome)?.let { message ->
+                Text(
+                    text = stringResource(message),
+                    color = Color.White.copy(alpha = 0.55f),
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.padding(top = 12.dp),
+                )
+            }
         }
 
         // Over the list rather than instead of it: this app has no dialogs, and the

@@ -27,6 +27,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -42,10 +43,13 @@ import dev.quiblo.feature.browse.FeedRow
 import dev.quiblo.feature.browse.FeedRowItem
 import dev.quiblo.feature.browse.di.forYouParams
 import dev.quiblo.tv.R
+import kotlinx.coroutines.launch
 import org.koin.androidx.compose.koinViewModel
 
 /**
- * For You: three rows, three different questions.
+ * Home (formerly For You): featured slider and several rows of content.
+ *
+ * **Hero Slider** shows randomized featured titles with TMDB metadata.
  *
  * **Recently Added** is what the provider put on the service this month, films and series merged
  * — split in two it would answer a question nobody asked, since a viewer wondering what is new is
@@ -83,6 +87,7 @@ fun TvForYouScreen(
         parameters = { forYouParams() },
     )
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+    val scope = rememberCoroutineScope()
 
     // Two different headings for the first row, and the difference is the point. A provider that
     // dates its catalogue gives a genuine "recently added"; a playlist that dates nothing gives
@@ -145,7 +150,7 @@ fun TvForYouScreen(
         // has added nothing this month.
         !state.hasSource -> Message(stringResource(R.string.tv_no_source))
 
-        rows.isEmpty() -> Message(
+        rows.isEmpty() && state.heroItems.isEmpty() && state.history.isEmpty() -> Message(
             stringResource(
                 if (state.orderedByDate) {
                     R.string.tv_recently_added_none
@@ -174,6 +179,28 @@ fun TvForYouScreen(
             // Recently Added mixes films and series, so its tiles have to say which they are.
             // The two popular rows are headed by their kind and say it once instead.
             showKindBadge = true,
+            header = {
+                TvHeroSlider(
+                    items = state.heroItems,
+                    onPlay = { channel -> onPlay(listOf(channel), 0) },
+                    onToggleFavorite = viewModel::toggleFavorite,
+                    onRefresh = viewModel::shuffleHeroItems,
+                )
+            },
+            continueWatching = {
+                TvContinueWatchingRow(
+                    entries = state.history,
+                    posters = state.posters,
+                    onClick = { entry ->
+                        scope.launch {
+                            viewModel.channelForHistory(entry)?.let { channel ->
+                                onPlay(listOf(channel), 0)
+                            }
+                        }
+                    },
+                    onRemove = viewModel::removeFromHistory,
+                )
+            }
         )
     }
 }
@@ -197,7 +224,27 @@ private fun forYouRows(
     pressedUnavailable: String?,
 ): Pair<List<TvCategoryRow>, List<Channel>> {
     val flat = mutableListOf<Channel>()
+    val extrasById = extras.associateBy { it.id }
+
     val rows = buildList {
+        extrasById[FeedRowId.POPULAR_MOVIES]?.let { row ->
+            add(
+                TvCategoryRow(
+                    title = headings.popularMovies,
+                    items = row.items.map { item -> item.toTile(flat, headings, pressedUnavailable) },
+                    style = TvRowStyle.RANKED,
+                ),
+            )
+        }
+        extrasById[FeedRowId.POPULAR_SERIES]?.let { row ->
+            add(
+                TvCategoryRow(
+                    title = headings.popularSeries,
+                    items = row.items.map { item -> item.toTile(flat, headings, pressedUnavailable) },
+                    style = TvRowStyle.RANKED,
+                ),
+            )
+        }
         if (recent.isNotEmpty()) {
             add(
                 TvCategoryRow(
@@ -206,13 +253,12 @@ private fun forYouRows(
                 ),
             )
         }
-        extras.forEach { row ->
-            val ranked = row.id != FeedRowId.YOU_MAY_LIKE
+        extrasById[FeedRowId.YOU_MAY_LIKE]?.let { row ->
             add(
                 TvCategoryRow(
-                    title = headings.forRow(row.id),
+                    title = headings.suggestions,
                     items = row.items.map { item -> item.toTile(flat, headings, pressedUnavailable) },
-                    style = if (ranked) TvRowStyle.RANKED else TvRowStyle.POSTER,
+                    style = TvRowStyle.POSTER,
                 ),
             )
         }

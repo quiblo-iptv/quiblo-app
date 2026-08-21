@@ -42,6 +42,7 @@ import dev.quiblo.core.model.FeedRowId
 import dev.quiblo.core.model.HistoryEntry
 import dev.quiblo.core.model.MediaKind
 import dev.quiblo.core.model.Programme
+import dev.quiblo.core.model.TitleMetadata
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.Flow
@@ -133,7 +134,17 @@ data class BrowseUiState(
      * the whole of how "no key" and "no history" are rendered.
      */
     val extraRows: List<FeedRow> = emptyList(),
+    /**
+     * Items for the hero slider at the top of the screen.
+     *
+     * Only [BrowseScope.FOR_YOU] fills it, using titles from Recently Added and the extra rows
+     * that have TMDB metadata.
+     */
+    val heroItems: List<HeroItem> = emptyList(),
 )
+
+/** One item in the hero slider, with its channel and metadata. */
+data class HeroItem(val channel: Channel, val metadata: TitleMetadata)
 
 /**
  * One extra row, and enough about each tile to draw it.
@@ -363,6 +374,7 @@ class BrowseViewModel(
 
     private val ratings = MutableStateFlow<Map<String, Double>>(emptyMap())
     private val posters = MutableStateFlow<Map<String, String>>(emptyMap())
+    private val heroItems = MutableStateFlow<List<HeroItem>>(emptyList())
 
     init {
         // Reads the stored key once, so the first posters on screen already know whether
@@ -488,10 +500,14 @@ class BrowseViewModel(
         combine(
             rows,
             guideFor(sourceId),
-            ratings,
-            posters,
+            combine(ratings, posters) { r, p -> r to p },
             combine(historyFor(sourceId), extraRowsFor(sourceId)) { entries, extras -> entries to extras },
-        ) { list, guide, scores, art, (history, extras) ->
+            heroItems,
+        ) { list, guide, (scores, art), (history, extras), hero ->
+            val hasContent = list.items.isNotEmpty() || extras.isNotEmpty()
+            if (feed.scope == BrowseScope.FOR_YOU && hero.isEmpty() && hasContent) {
+                refreshHeroItems(list.items, extras)
+            }
             BrowseUiState(
                 isLoading = false,
                 hasSource = true,
@@ -506,6 +522,7 @@ class BrowseViewModel(
                 posters = art,
                 history = history,
                 extraRows = extras,
+                heroItems = hero,
             )
         }
     }
@@ -802,7 +819,7 @@ class BrowseViewModel(
      * request the poster grid makes and therefore usually already answered from the cache.
      */
     private fun historyFor(sourceId: Long): Flow<List<HistoryEntry>> =
-        if (feed.scope !in CATALOGUE_SCOPES || feed.kind == MediaKind.LIVE) {
+        if ((feed.scope !in CATALOGUE_SCOPES && feed.scope != BrowseScope.FOR_YOU) || feed.kind == MediaKind.LIVE) {
             flowOf(emptyList())
         } else {
             historyRepository.observeHistory(sourceId, feed.kind)
@@ -1019,6 +1036,24 @@ class BrowseViewModel(
         }
     }
 
+    fun shuffleHeroItems() {
+        val state = uiState.value
+        refreshHeroItems(state.items, state.extraRows)
+    }
+
+    private fun refreshHeroItems(recent: List<Channel>, extras: List<FeedRow>) {
+        viewModelScope.launch {
+            val extraChannels = extras.flatMap { it.items }
+                .filterIsInstance<FeedRowItem.Playable>()
+                .map { it.channel }
+            val candidates = (recent + extraChannels).distinctBy { it.stableKey }
+            val hero = candidates.mapNotNull { channel ->
+                metadataRepository.cachedPreviewFor(channel.name, channel.kind)?.let { HeroItem(channel, it) }
+            }.shuffled().take(HERO_ITEM_COUNT)
+            heroItems.value = hero
+        }
+    }
+
     private companion object {
         /**
          * The two scopes that are a provider's catalogue rather than a list about the viewer.
@@ -1062,5 +1097,6 @@ class BrowseViewModel(
          * thing this project keeps getting blocked by.
          */
         const val MAX_CONCURRENT_RATING_FETCHES = 4
+        const val HERO_ITEM_COUNT = 5
     }
 }

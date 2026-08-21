@@ -151,7 +151,7 @@ class FeedRowCacheRepository(
             position = position,
             stableKey = stableKey,
             title = title,
-            posterUrl = posterUrl,
+            posterUrl = dev.quiblo.source.tmdb.TmdbClient.toHighResTmdbUrl(posterUrl, isBackdrop = false),
             kind = runCatching { MediaKind.valueOf(kind) }.getOrDefault(MediaKind.VOD),
             rank = rank,
             becauseOf = becauseOf,

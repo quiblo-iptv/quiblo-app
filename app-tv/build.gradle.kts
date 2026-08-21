@@ -50,8 +50,9 @@ android {
         // A separate application id, not a flavour of the phone app. They are two installs
         // with two databases, and a user may well have both — a phone and a television.
         applicationId = "dev.quiblo.tv"
-        versionCode = 37
-        versionName = "0.20.2"
+        versionCode = 43
+        versionName = "0.21.0"
+
     }
 
     buildFeatures {

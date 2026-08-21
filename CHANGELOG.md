@@ -15,6 +15,16 @@ Formatted after [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and ve
 
 ## Unreleased
 
+### Added
+
+- **A featured hero slider on Android TV with D-pad navigation.** The TV browse home features a full-bleed hero slider with a 6-step D-pad navigation flow across top controls, play, in-slider favorites, and slide pagination indicators.
+- **Toggle favorites directly from the TV hero slider.** A heart button beside the play button allows adding or removing featured movies and series from your favorites without leaving the hero banner.
+- **High-resolution backdrops and artwork.** Movie and series backdrop images are upgraded to full resolution and posters to high-definition formats for sharp display on large television screens.
+
+### Changed
+
+- **Polished TV home screen layout and styling.** Content shelves are ordered (Popular Movies, Popular Series, Recently Added, You May Like) with title-cased headings, and a subtle dark gradient scrim keeps top bar navigation clear over full-bleed backdrops.
+
 ## 0.20.2
 
 ### Fixed

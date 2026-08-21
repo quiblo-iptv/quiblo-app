@@ -15,6 +15,8 @@ Formatted after [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and ve
 
 ## Unreleased
 
+## 0.21.0
+
 ### Added
 
 - **A featured hero slider on Android TV with D-pad navigation.** The TV browse home features a full-bleed hero slider with a 6-step D-pad navigation flow across top controls, play, in-slider favorites, and slide pagination indicators.

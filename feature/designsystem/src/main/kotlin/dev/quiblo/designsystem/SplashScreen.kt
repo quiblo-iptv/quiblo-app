@@ -70,7 +70,7 @@ import kotlin.math.sin
 /**
  * Creative launch screen: animated solid-white Quiblo brand mark, title, audio sting, and version tag.
  *
- * Synchronized with the audio sting peak at ~1.9s with animated drifting ambient lighting and a Netflix-style zoom.
+ * Plays full 5 seconds of audio with zoom aligned to the audio peak at ~1.92s.
  */
 @Composable
 fun QuibloSplashScreen(
@@ -101,7 +101,7 @@ fun QuibloSplashScreen(
                 // Ignore audio failure if audio device is unavailable
             }
             onDispose {
-                // Let the audio tail finish decaying naturally on transition
+                // Let audio finish playing completely without cutting
             }
         }
     }
@@ -126,7 +126,7 @@ fun QuibloSplashScreen(
             )
         }
 
-        // 2. Resting duration: aligns the zoom explosion directly with the audio peak at ~1.9s
+        // 2. Resting duration: aligns the zoom explosion directly with the audio peak at ~1.92s
         val effectiveZoomStart = if (durationMillis != DEFAULT_SPLASH_DURATION_MILLIS) {
             (durationMillis - ZOOM_DURATION_MILLIS).coerceAtLeast(0L)
         } else {
@@ -152,7 +152,9 @@ fun QuibloSplashScreen(
             )
         }
 
-        delay(ZOOM_DURATION_MILLIS)
+        // 4. Let the full audio reverb tail finish decaying before transitioning
+        val remainingDelay = (durationMillis - effectiveZoomStart - ZOOM_DURATION_MILLIS).coerceAtLeast(0L)
+        delay(ZOOM_DURATION_MILLIS + remainingDelay)
         onSplashComplete()
     }
 
@@ -340,9 +342,9 @@ fun QuibloLogoMark(
     }
 }
 
-private const val DEFAULT_SPLASH_DURATION_MILLIS = 2450L
+private const val DEFAULT_SPLASH_DURATION_MILLIS = 5000L
 private const val INTRO_DURATION_MILLIS = 400
-private const val ZOOM_START_DELAY_MILLIS = 1750L
+private const val ZOOM_START_DELAY_MILLIS = 1850L
 private const val ZOOM_DURATION_MILLIS = 700L
 private const val ZOOM_FADEOUT_DELAY_MILLIS = 350L
 private const val ZOOM_FADEOUT_DURATION_MILLIS = 350

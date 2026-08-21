@@ -15,6 +15,8 @@ Formatted after [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and ve
 
 ## Unreleased
 
+## 0.23.0
+
 ### Added
 
 - **Cinematic TV splash screen with audio sting and Netflix-style zoom.** An animated 5-second launch screen with pure white branding, orbiting ambient light, and a high-impact zoom-through synchronized to the audio crescendo.

@@ -17,6 +17,13 @@ Formatted after [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and ve
 
 ### Added
 
+- **Cinematic TV splash screen with audio sting and Netflix-style zoom.** An animated 5-second launch screen with pure white branding, orbiting ambient light, and a high-impact zoom-through synchronized to the audio crescendo.
+- **Dedicated TV splash screen component.** Separated the TV launch screen into its own dedicated package (`dev.quiblo.tv.ui.splash`) for fine-grained television tuning.
+
+## 0.21.0
+
+### Added
+
 - **Animated branding splash screen with version indicator.** A glowing, animated launch screen with the signature Quiblo mark, title, tagline, and version number positioned at the bottom right welcomes viewers before smoothly transitioning into the app.
 - **Ambient lighting backdrop on movie and series detail screens.** Detail screens for films and television series now extract ambient color accents from poster artwork and softly project them onto the background for an immersive cinematic backdrop on both TV and mobile.
 - **A featured hero slider on Android TV with D-pad navigation.** The TV browse home features a full-bleed hero slider with a 6-step D-pad navigation flow across top controls, play, in-slider favorites, and slide pagination indicators.

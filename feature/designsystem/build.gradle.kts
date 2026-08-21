@@ -28,4 +28,5 @@ android {
 
 dependencies {
     api(projects.core.common)
+    implementation(libs.coil.compose)
 }

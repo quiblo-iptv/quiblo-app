@@ -19,8 +19,10 @@
 package dev.quiblo.tv.ui.detail
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.background
 import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -55,6 +57,8 @@ import dev.quiblo.feature.browse.runtimeLabelFromMinutes
 import dev.quiblo.feature.vod.MovieDetailUiState
 import dev.quiblo.feature.vod.MovieDetailViewModel
 import dev.quiblo.tv.R
+import dev.quiblo.tv.ui.common.ambientBackdrop
+import dev.quiblo.tv.ui.common.rememberAmbient
 import org.koin.androidx.compose.koinViewModel
 import org.koin.core.parameter.parametersOf
 
@@ -82,6 +86,13 @@ fun TvMovieScreen(
     )
     val state by viewModel.uiState.collectAsStateWithLifecycle()
 
+    val artworkUrl = (state as? MovieDetailUiState.Ready)?.let { ready ->
+        ready.channel.logoUrl?.takeIf { it.isNotBlank() }
+            ?: ready.details?.coverUrl
+            ?: ready.metadata?.posterUrl
+    } ?: channel.logoUrl
+    val ambient = rememberAmbient(artworkUrl)
+
     // The resume point is watched rather than re-read on returning to the foreground. A read on
     // resume raced the player's own write of the position it had just finished with, and lost it
     // often enough that backing out of a film offered "Play" for something four minutes in. See
@@ -89,21 +100,28 @@ fun TvMovieScreen(
 
     BackHandler(onBack = onBack)
 
-    when (val current = state) {
-        MovieDetailUiState.Loading -> DetailMessage(stringResource(R.string.tv_detail_loading))
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black)
+            .ambientBackdrop(ambient),
+    ) {
+        when (val current = state) {
+            MovieDetailUiState.Loading -> DetailMessage(stringResource(R.string.tv_detail_loading))
 
-        MovieDetailUiState.NotFound ->
-            DetailMessage(stringResource(R.string.tv_detail_unavailable))
+            MovieDetailUiState.NotFound ->
+                DetailMessage(stringResource(R.string.tv_detail_unavailable))
 
-        is MovieDetailUiState.Ready -> Loaded(
-            state = current,
-            onPlay = onPlay,
-            onToggleFavorite = viewModel::toggleFavorite,
-            onRemoveFromHistory = viewModel::removeFromHistory,
-            onRefreshMetadata = viewModel::refreshMetadata,
-            onRate = viewModel::rate,
-            modifier = modifier,
-        )
+            is MovieDetailUiState.Ready -> Loaded(
+                state = current,
+                onPlay = onPlay,
+                onToggleFavorite = viewModel::toggleFavorite,
+                onRemoveFromHistory = viewModel::removeFromHistory,
+                onRefreshMetadata = viewModel::refreshMetadata,
+                onRate = viewModel::rate,
+                modifier = modifier,
+            )
+        }
     }
 }
 

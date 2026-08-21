@@ -86,6 +86,8 @@ import dev.quiblo.core.model.Season
 import dev.quiblo.core.model.SeriesDetails
 import dev.quiblo.core.model.TitleMetadata
 import dev.quiblo.designsystem.AutoDirection
+import dev.quiblo.designsystem.ambientBackdrop
+import dev.quiblo.designsystem.rememberAmbient
 import dev.quiblo.feature.browse.DetailOverlayActions
 import dev.quiblo.feature.browse.TitleFacts
 import dev.quiblo.feature.browse.runtimeLabel
@@ -111,6 +113,13 @@ fun SeriesDetailScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
+    val artwork = (uiState as? SeriesDetailUiState.Success)?.let { success ->
+        success.metadata?.posterUrl
+            ?: success.details.coverUrl?.takeIf { it.isNotBlank() }
+            ?: success.channel.logoUrl
+    }
+    val ambient = rememberAmbient(artwork)
+
     // The resume point is watched rather than re-read on returning to the foreground. A read on
     // resume raced the player's own write of the position it had just finished with, and lost it
     // often enough that backing out of a film offered "Play" for something four minutes in. See
@@ -118,7 +127,11 @@ fun SeriesDetailScreen(
 
     // No app bar, for the same reason as the film screen: the header states the series'
     // name in full a few pixels below where a title bar would have repeated it.
-    Box(modifier = modifier.fillMaxSize()) {
+    Box(
+        modifier = modifier
+            .fillMaxSize()
+            .ambientBackdrop(ambient),
+    ) {
         when (val state = uiState) {
             is SeriesDetailUiState.Loading -> {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {

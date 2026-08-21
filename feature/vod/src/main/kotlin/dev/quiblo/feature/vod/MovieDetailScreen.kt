@@ -78,6 +78,8 @@ import dev.quiblo.core.model.TitleMetadata
 import dev.quiblo.core.model.VodDetails
 import dev.quiblo.core.model.releaseYearIn
 import dev.quiblo.designsystem.AutoDirection
+import dev.quiblo.designsystem.ambientBackdrop
+import dev.quiblo.designsystem.rememberAmbient
 import dev.quiblo.feature.browse.DetailOverlayActions
 import dev.quiblo.feature.browse.TitleFacts
 import dev.quiblo.feature.browse.runtimeLabel
@@ -103,6 +105,13 @@ fun MovieDetailScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
+    val artworkUrl = (uiState as? MovieDetailUiState.Ready)?.let { ready ->
+        ready.metadata?.posterUrl
+            ?: ready.details?.coverUrl?.takeIf { it.isNotBlank() }
+            ?: ready.channel.logoUrl
+    }
+    val ambient = rememberAmbient(artworkUrl)
+
     // The resume point is watched rather than re-read on returning to the foreground. A read on
     // resume raced the player's own write of the position it had just finished with, and lost it
     // often enough that backing out of a film offered "Play" for something four minutes in. See
@@ -110,7 +119,11 @@ fun MovieDetailScreen(
 
     // No app bar. The screen states the film's name in full, at a readable size, a few
     // pixels below where a title bar would have repeated it — see [DetailOverlayActions].
-    Box(modifier = modifier.fillMaxSize()) {
+    Box(
+        modifier = modifier
+            .fillMaxSize()
+            .ambientBackdrop(ambient),
+    ) {
         when (val state = uiState) {
             MovieDetailUiState.Loading -> Box(
                 modifier = Modifier.fillMaxSize(),

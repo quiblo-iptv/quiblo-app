@@ -22,10 +22,15 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.animation.Crossfade
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.quiblo.core.data.PlayerSettingsRepository
 import dev.quiblo.core.model.Appearance
+import dev.quiblo.designsystem.QuibloSplashScreen
 import dev.quiblo.player.ui.ConsentGate
 import dev.quiblo.player.ui.ProfileGate
 import dev.quiblo.player.ui.QuibloApp
@@ -43,12 +48,23 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
         setContent {
+            var showSplash by remember { mutableStateOf(true) }
+
             // Collected here rather than inside the theme so the whole tree recomposes
             // against one value, and a change applies without restarting the app.
             val appearance by appearanceRepository.appearance.collectAsStateWithLifecycle(Appearance())
             QuibloTheme(appearance = appearance) {
-                ConsentGate {
-                    ProfileGate { QuibloApp() }
+                Crossfade(targetState = showSplash, label = "mainSplashCrossfade") { inSplash ->
+                    if (inSplash) {
+                        QuibloSplashScreen(
+                            versionName = BuildConfig.VERSION_NAME,
+                            onSplashComplete = { showSplash = false },
+                        )
+                    } else {
+                        ConsentGate {
+                            ProfileGate { QuibloApp() }
+                        }
+                    }
                 }
             }
         }

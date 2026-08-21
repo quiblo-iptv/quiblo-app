@@ -81,7 +81,6 @@ import dev.quiblo.core.model.Channel
 import dev.quiblo.core.model.MediaKind
 import dev.quiblo.core.model.WatchOrigin
 import dev.quiblo.designsystem.ProfileAvatar
-import dev.quiblo.designsystem.QuibloSplashScreen
 import dev.quiblo.tv.BuildConfig
 import dev.quiblo.tv.R
 import dev.quiblo.tv.ui.browse.TvForYouScreen
@@ -106,6 +105,7 @@ import dev.quiblo.tv.ui.search.TvSearchScreen
 import dev.quiblo.tv.ui.series.TvSeriesScreen
 import dev.quiblo.tv.ui.settings.TvSettingsScreen
 import dev.quiblo.tv.ui.sources.TvSourcesScreen
+import dev.quiblo.tv.ui.splash.TvSplashScreen
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
@@ -142,7 +142,7 @@ fun TvApp(
 
     Crossfade(targetState = showSplash, label = "tvSplashCrossfade") { inSplash ->
         if (inSplash) {
-            QuibloSplashScreen(
+            TvSplashScreen(
                 versionName = BuildConfig.VERSION_NAME,
                 onSplashComplete = { showSplash = false },
             )

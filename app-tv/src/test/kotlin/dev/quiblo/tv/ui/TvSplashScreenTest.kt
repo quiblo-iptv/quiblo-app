@@ -23,7 +23,7 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
-import dev.quiblo.designsystem.QuibloSplashScreen
+import dev.quiblo.tv.ui.splash.TvSplashScreen
 import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
@@ -47,7 +47,7 @@ class TvSplashScreenTest {
     @Test
     fun `splash screen displays branding and version number`() {
         compose.setContent {
-            QuibloSplashScreen(
+            TvSplashScreen(
                 versionName = "0.20.2",
                 durationMillis = 5000L,
                 playSound = false,
@@ -64,7 +64,7 @@ class TvSplashScreenTest {
     fun `splash screen calls completion callback when duration completes`() {
         var completed = 0
         compose.setContent {
-            QuibloSplashScreen(
+            TvSplashScreen(
                 versionName = "0.20.2",
                 durationMillis = 100L,
                 playSound = false,

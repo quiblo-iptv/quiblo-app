@@ -70,7 +70,7 @@ import kotlin.math.sin
 /**
  * Creative launch screen: animated solid-white Quiblo brand mark, title, audio sting, and version tag.
  *
- * Plays full 5 seconds of audio with zoom aligned to the audio peak at ~1.92s.
+ * Lands immediately on the app when the zoom hits at ~1.9s without waiting for reverb decay.
  */
 @Composable
 fun QuibloSplashScreen(
@@ -101,7 +101,12 @@ fun QuibloSplashScreen(
                 // Ignore audio failure if audio device is unavailable
             }
             onDispose {
-                // Let audio finish playing completely without cutting
+                try {
+                    player?.stop()
+                    player?.release()
+                } catch (_: Throwable) {
+                    // Ignore release errors
+                }
             }
         }
     }
@@ -126,7 +131,7 @@ fun QuibloSplashScreen(
             )
         }
 
-        // 2. Resting duration: aligns the zoom explosion directly with the audio peak at ~1.92s
+        // 2. Resting duration: aligns the zoom explosion directly with the audio peak at ~1.9s
         val effectiveZoomStart = if (durationMillis != DEFAULT_SPLASH_DURATION_MILLIS) {
             (durationMillis - ZOOM_DURATION_MILLIS).coerceAtLeast(0L)
         } else {
@@ -152,9 +157,7 @@ fun QuibloSplashScreen(
             )
         }
 
-        // 4. Let the full audio reverb tail finish decaying before transitioning
-        val remainingDelay = (durationMillis - effectiveZoomStart - ZOOM_DURATION_MILLIS).coerceAtLeast(0L)
-        delay(ZOOM_DURATION_MILLIS + remainingDelay)
+        delay(ZOOM_DURATION_MILLIS)
         onSplashComplete()
     }
 
@@ -342,9 +345,9 @@ fun QuibloLogoMark(
     }
 }
 
-private const val DEFAULT_SPLASH_DURATION_MILLIS = 5000L
+private const val DEFAULT_SPLASH_DURATION_MILLIS = 2450L
 private const val INTRO_DURATION_MILLIS = 400
-private const val ZOOM_START_DELAY_MILLIS = 1850L
+private const val ZOOM_START_DELAY_MILLIS = 1750L
 private const val ZOOM_DURATION_MILLIS = 700L
 private const val ZOOM_FADEOUT_DELAY_MILLIS = 350L
 private const val ZOOM_FADEOUT_DURATION_MILLIS = 350

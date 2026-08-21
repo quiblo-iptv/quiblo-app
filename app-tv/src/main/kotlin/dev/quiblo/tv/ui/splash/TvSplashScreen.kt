@@ -71,7 +71,7 @@ import kotlin.math.sin
  *
  * Sits at the start of app launch on TV, rendering the large solid white Quiblo mark,
  * bold title directly below, audio sting, orbiting ambient glow, and Netflix-style zoom landing.
- * Lasts the full 5 seconds with zoom aligned to the audio peak at ~1.92s.
+ * Lands immediately on the app when the zoom hits at ~1.9s without waiting for reverb decay.
  */
 @Composable
 fun TvSplashScreen(
@@ -102,7 +102,12 @@ fun TvSplashScreen(
                 // Ignore audio failure if audio device is unavailable
             }
             onDispose {
-                // Let audio finish playing completely without cutting
+                try {
+                    player?.stop()
+                    player?.release()
+                } catch (_: Throwable) {
+                    // Ignore release errors
+                }
             }
         }
     }
@@ -127,7 +132,7 @@ fun TvSplashScreen(
             )
         }
 
-        // 2. Resting duration: aligns the zoom explosion directly with the audio peak at ~1.92s
+        // 2. Resting duration: aligns the zoom explosion directly with the audio peak at ~1.9s
         val effectiveZoomStart = if (durationMillis != DEFAULT_SPLASH_DURATION_MILLIS) {
             (durationMillis - ZOOM_DURATION_MILLIS).coerceAtLeast(0L)
         } else {
@@ -153,9 +158,7 @@ fun TvSplashScreen(
             )
         }
 
-        // 4. Let the full audio reverb tail finish decaying before transitioning
-        val remainingDelay = (durationMillis - effectiveZoomStart - ZOOM_DURATION_MILLIS).coerceAtLeast(0L)
-        delay(ZOOM_DURATION_MILLIS + remainingDelay)
+        delay(ZOOM_DURATION_MILLIS)
         onSplashComplete()
     }
 
@@ -342,13 +345,13 @@ fun TvLogoMark(
 }
 
 // Visual layout constants - easy to find & tune right here
-val TV_LOGO_SIZE = 210.dp
-val TV_LOGO_TITLE_SPACING = 6.dp
-val TV_TITLE_FONT_SIZE = 46.sp
+val TV_LOGO_SIZE = 300.dp
+val TV_LOGO_TITLE_SPACING = 3.dp
+val TV_TITLE_FONT_SIZE = 60.sp
 
-private const val DEFAULT_SPLASH_DURATION_MILLIS = 5000L
+private const val DEFAULT_SPLASH_DURATION_MILLIS = 2450L
 private const val INTRO_DURATION_MILLIS = 400
-private const val ZOOM_START_DELAY_MILLIS = 1850L
+private const val ZOOM_START_DELAY_MILLIS = 1750L
 private const val ZOOM_DURATION_MILLIS = 700L
 private const val ZOOM_FADEOUT_DELAY_MILLIS = 350L
 private const val ZOOM_FADEOUT_DURATION_MILLIS = 350

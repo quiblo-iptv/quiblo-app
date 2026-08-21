@@ -18,11 +18,13 @@
 
 package dev.quiblo.designsystem
 
+import android.media.MediaPlayer
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
@@ -40,11 +42,10 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -55,44 +56,97 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 /**
- * Creative launch screen: animated Quiblo glowing mark, title, tagline and version number.
+ * Creative launch screen: animated solid-white Quiblo brand mark, title, audio sting, and version tag.
  *
- * Sits at the start of app launch, providing a cinematic welcome before transitioning
- * into consent, profiles, or the catalogue.
+ * Runs for 5 seconds with a cinematic Netflix-style zoom-through landing transition.
  */
 @Composable
 fun QuibloSplashScreen(
     versionName: String,
     modifier: Modifier = Modifier,
+    logoSize: Dp = 150.dp,
     durationMillis: Long = SPLASH_DURATION_MILLIS,
+    playSound: Boolean = true,
     onSplashComplete: () -> Unit = {},
 ) {
-    var startAnimation by remember { mutableStateOf(false) }
+    val context = LocalContext.current
 
-    LaunchedEffect(Unit) {
-        startAnimation = true
-        delay(durationMillis)
-        onSplashComplete()
+    if (playSound) {
+        DisposableEffect(Unit) {
+            var player: MediaPlayer? = null
+            try {
+                player = MediaPlayer.create(context, R.raw.splash_sound)?.apply {
+                    start()
+                }
+            } catch (_: Throwable) {
+                // Ignore audio failure if audio device is unavailable
+            }
+            onDispose {
+                try {
+                    player?.stop()
+                    player?.release()
+                } catch (_: Throwable) {
+                    // Ignore disposal error
+                }
+            }
+        }
     }
 
-    val contentAlpha by animateFloatAsState(
-        targetValue = if (startAnimation) 1f else 0f,
-        animationSpec = tween(ANIMATION_DURATION_MILLIS, easing = FastOutSlowInEasing),
-        label = "splashContentAlpha",
-    )
+    val introAlpha = remember { Animatable(0f) }
+    val introScale = remember { Animatable(0.85f) }
+    val zoomScale = remember { Animatable(1f) }
+    val exitAlpha = remember { Animatable(1f) }
 
-    val contentScale by animateFloatAsState(
-        targetValue = if (startAnimation) 1f else 0.88f,
-        animationSpec = tween(ANIMATION_DURATION_MILLIS, easing = FastOutSlowInEasing),
-        label = "splashContentScale",
-    )
+    LaunchedEffect(Unit) {
+        // 1. Entrance animation (0ms to 700ms)
+        launch {
+            introAlpha.animateTo(
+                targetValue = 1f,
+                animationSpec = tween(INTRO_DURATION_MILLIS, easing = FastOutSlowInEasing),
+            )
+        }
+        launch {
+            introScale.animateTo(
+                targetValue = 1f,
+                animationSpec = tween(INTRO_DURATION_MILLIS, easing = FastOutSlowInEasing),
+            )
+        }
+
+        // 2. Resting duration before Netflix zoom
+        val restTime = (durationMillis - ZOOM_DURATION_MILLIS).coerceAtLeast(0L)
+        delay(restTime)
+
+        // 3. Netflix-style camera zoom-through (e.g. from 3600ms to 5000ms)
+        launch {
+            zoomScale.animateTo(
+                targetValue = NETFLIX_ZOOM_MAX_SCALE,
+                animationSpec = tween(
+                    ZOOM_DURATION_MILLIS.toInt(),
+                    easing = CubicBezierEasing(0.7f, 0f, 0.84f, 0f),
+                ),
+            )
+        }
+        launch {
+            delay(ZOOM_FADEOUT_DELAY_MILLIS)
+            exitAlpha.animateTo(
+                targetValue = 0f,
+                animationSpec = tween(ZOOM_FADEOUT_DURATION_MILLIS, easing = LinearEasing),
+            )
+        }
+
+        delay(ZOOM_DURATION_MILLIS)
+        onSplashComplete()
+    }
 
     val infiniteTransition = rememberInfiniteTransition(label = "splashGlow")
     val glowPulse by infiniteTransition.animateFloat(
@@ -104,6 +158,9 @@ fun QuibloSplashScreen(
         ),
         label = "splashGlowPulse",
     )
+
+    val currentContentAlpha = introAlpha.value * exitAlpha.value
+    val currentContentScale = introScale.value * zoomScale.value
 
     Box(
         modifier = modifier
@@ -122,94 +179,86 @@ fun QuibloSplashScreen(
             .statusBarsPadding()
             .navigationBarsPadding(),
     ) {
-        // Subtle animated ambient light pool behind the center logo
+        // Ambient glow pool behind the central logo
         Canvas(modifier = Modifier.fillMaxSize()) {
+            val flareScale = (zoomScale.value - 1f) * GLOW_ZOOM_FLARE_FACTOR + 1f
+            val innerAlpha = (glowPulse * currentContentAlpha).coerceIn(0f, 1f)
+            val outerAlpha = ((glowPulse * GLOW_OUTER_SCALE) * currentContentAlpha).coerceIn(0f, 1f)
             drawCircle(
                 brush = Brush.radialGradient(
                     colors = listOf(
-                        Color(0xFF7986CB).copy(alpha = glowPulse * contentAlpha),
-                        Color(0xFF3F51B5).copy(alpha = (glowPulse * GLOW_OUTER_SCALE) * contentAlpha),
+                        Color(0xFF7986CB).copy(alpha = innerAlpha),
+                        Color(0xFF3F51B5).copy(alpha = outerAlpha),
                         Color.Transparent,
                     ),
                     center = Offset(size.width / 2f, size.height * LOGO_VERTICAL_BIAS),
-                    radius = size.minDimension * GLOW_RADIUS_FACTOR,
+                    radius = size.minDimension * GLOW_RADIUS_FACTOR * flareScale,
                 ),
                 center = Offset(size.width / 2f, size.height * LOGO_VERTICAL_BIAS),
-                radius = size.minDimension * GLOW_RADIUS_FACTOR,
+                radius = size.minDimension * GLOW_RADIUS_FACTOR * flareScale,
             )
         }
 
-        // Central branding: Logo + Name + Tagline
+        // Central branding: Large Pure White Logo + Name
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center,
             modifier = Modifier
                 .align(Alignment.Center)
-                .scale(contentScale)
-                .alpha(contentAlpha),
+                .scale(currentContentScale)
+                .alpha(currentContentAlpha),
         ) {
-            QuibloLogoMark(modifier = Modifier.size(108.dp))
+            QuibloLogoMark(
+                modifier = Modifier.size(logoSize),
+                color = Color.White,
+            )
 
-            Spacer(modifier = Modifier.height(20.dp))
+            Spacer(modifier = Modifier.height(24.dp))
 
             Text(
                 text = "Quiblo",
                 color = Color.White,
-                fontSize = 38.sp,
+                fontSize = 44.sp,
                 fontWeight = FontWeight.Bold,
-                letterSpacing = 1.5.sp,
-            )
-
-            Spacer(modifier = Modifier.height(6.dp))
-
-            Text(
-                text = "Free & Open Source IPTV",
-                color = Color.White.copy(alpha = 0.65f),
-                fontSize = 14.sp,
-                fontWeight = FontWeight.Normal,
-                letterSpacing = 0.5.sp,
+                letterSpacing = 2.sp,
             )
         }
 
         // Version tag: Cleanly placed at the bottom right
         Text(
             text = if (versionName.startsWith("v")) versionName else "v$versionName",
-            color = Color.White.copy(alpha = 0.45f),
-            fontSize = 13.sp,
+            color = Color.White.copy(alpha = (0.75f * currentContentAlpha).coerceIn(0f, 1f)),
+            fontSize = 14.sp,
             fontWeight = FontWeight.Medium,
             letterSpacing = 0.8.sp,
             modifier = Modifier
                 .align(Alignment.BottomEnd)
-                .padding(end = 24.dp, bottom = 20.dp)
-                .alpha(contentAlpha)
+                .padding(end = 32.dp, bottom = 28.dp)
+                .alpha(currentContentAlpha)
                 .testTag("splash_version_text"),
         )
     }
 }
 
 /**
- * The Quiblo Brand Mark: The outer letter Q ring, triangular play symbol, and angled tail.
+ * The Quiblo Brand Mark: Pure white outer letter Q ring, triangular play symbol, and angled tail.
  */
 @Composable
 fun QuibloLogoMark(
     modifier: Modifier = Modifier,
-    accentColor: Color = Color(0xFF9FA4FF),
-    secondaryColor: Color = Color.White,
+    color: Color = Color.White,
 ) {
     Canvas(modifier = modifier) {
         val w = size.width
         val scale = w / CANVAS_BASE_SIZE
 
-        val strokeWidth = 5f * scale
+        val strokeWidth = 5.5f * scale
         val ringCenter = Offset(54f * scale, 54f * scale)
         val ringRadius = 18f * scale
 
         // The outer ring of the Q
         drawCircle(
-            brush = Brush.sweepGradient(
-                listOf(accentColor, secondaryColor, accentColor),
-                center = ringCenter,
-            ),
+            color = color,
             center = ringCenter,
             radius = ringRadius,
             style = Stroke(width = strokeWidth),
@@ -217,11 +266,7 @@ fun QuibloLogoMark(
 
         // The tail of the Q (breaking through bottom-right)
         drawLine(
-            brush = Brush.linearGradient(
-                listOf(accentColor, secondaryColor),
-                start = Offset(64f * scale, 64f * scale),
-                end = Offset(74f * scale, 74f * scale),
-            ),
+            color = color,
             start = Offset(64f * scale, 64f * scale),
             end = Offset(74f * scale, 74f * scale),
             strokeWidth = strokeWidth,
@@ -238,21 +283,22 @@ fun QuibloLogoMark(
 
         drawPath(
             path = playPath,
-            brush = Brush.linearGradient(
-                listOf(secondaryColor, accentColor),
-                start = Offset(49f * scale, 45f * scale),
-                end = Offset(65f * scale, 54f * scale),
-            ),
+            color = color,
         )
     }
 }
 
-private const val SPLASH_DURATION_MILLIS = 1200L
-private const val ANIMATION_DURATION_MILLIS = 600
+private const val SPLASH_DURATION_MILLIS = 5000L
+private const val INTRO_DURATION_MILLIS = 700
+private const val ZOOM_DURATION_MILLIS = 1400L
+private const val ZOOM_FADEOUT_DELAY_MILLIS = 900L
+private const val ZOOM_FADEOUT_DURATION_MILLIS = 500
+private const val NETFLIX_ZOOM_MAX_SCALE = 18f
+private const val GLOW_ZOOM_FLARE_FACTOR = 0.2f
 private const val GLOW_PULSE_DURATION_MILLIS = 1800
-private const val GLOW_PULSE_MIN = 0.22f
-private const val GLOW_PULSE_MAX = 0.42f
+private const val GLOW_PULSE_MIN = 0.25f
+private const val GLOW_PULSE_MAX = 0.45f
 private const val GLOW_OUTER_SCALE = 0.5f
 private const val GLOW_RADIUS_FACTOR = 0.55f
-private const val LOGO_VERTICAL_BIAS = 0.46f
+private const val LOGO_VERTICAL_BIAS = 0.48f
 private const val CANVAS_BASE_SIZE = 108f

@@ -50,12 +50,12 @@ class TvSplashScreenTest {
             QuibloSplashScreen(
                 versionName = "0.20.2",
                 durationMillis = 5000L,
+                playSound = false,
             )
         }
         compose.waitForIdle()
 
         compose.onNodeWithText("Quiblo").assertIsDisplayed()
-        compose.onNodeWithText("Free & Open Source IPTV").assertIsDisplayed()
         compose.onNodeWithTag("splash_version_text").assertIsDisplayed()
         compose.onNodeWithText("v0.20.2").assertIsDisplayed()
     }
@@ -67,6 +67,7 @@ class TvSplashScreenTest {
             QuibloSplashScreen(
                 versionName = "0.20.2",
                 durationMillis = 100L,
+                playSound = false,
                 onSplashComplete = { completed++ },
             )
         }

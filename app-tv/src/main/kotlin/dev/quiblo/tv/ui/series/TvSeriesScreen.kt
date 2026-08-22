@@ -275,7 +275,7 @@ private fun Loaded(
              */
             Box(
                 modifier = Modifier.onFocusChanged {
-                    if (it.hasFocus) {
+                    if (it.hasFocus && (listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset > 0)) {
                         scope.launch { listState.animateScrollToItem(0) }
                     }
                 },
@@ -289,6 +289,11 @@ private fun Loaded(
                     onRemoveFromHistory = onRemoveFromHistory,
                     onRefreshMetadata = onRefreshMetadata,
                     onRate = onRate,
+                    onScrollToTop = {
+                        if (listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset > 0) {
+                            scope.launch { listState.animateScrollToItem(0) }
+                        }
+                    },
                 )
             }
         }
@@ -391,6 +396,7 @@ private fun SeriesHeader(
     onRemoveFromHistory: () -> Unit,
     onRefreshMetadata: () -> Unit,
     onRate: (Opinion) -> Unit,
+    onScrollToTop: () -> Unit,
 ) {
     Row(horizontalArrangement = Arrangement.spacedBy(DETAIL_COLUMN_GAP)) {
         DetailArtwork(
@@ -435,6 +441,7 @@ private fun SeriesHeader(
                 onRemoveFromHistory = onRemoveFromHistory,
                 onRefreshMetadata = onRefreshMetadata,
                 onRate = onRate,
+                onScrollToTop = onScrollToTop,
             )
         }
     }
@@ -452,6 +459,7 @@ private fun SeriesActions(
     onRemoveFromHistory: () -> Unit,
     onRefreshMetadata: () -> Unit,
     onRate: (Opinion) -> Unit,
+    onScrollToTop: () -> Unit,
 ) {
     val hasResume = state.resumeEpisode != null
 
@@ -479,6 +487,7 @@ private fun SeriesActions(
                 onClick = { onPlayEpisode(episode, state.resumePositionMillis) },
                 isPrimary = true,
                 modifier = Modifier.focusRequester(firstAction),
+                onFocus = onScrollToTop,
             )
         }
 
@@ -490,6 +499,7 @@ private fun SeriesActions(
                 onClick = { onPlayEpisode(first, null) },
                 isPrimary = !hasResume,
                 modifier = if (hasResume) Modifier else Modifier.focusRequester(firstAction),
+                onFocus = onScrollToTop,
             )
         }
 
@@ -499,6 +509,7 @@ private fun SeriesActions(
                 if (state.isFavorite) R.string.tv_detail_unfavourite else R.string.tv_detail_favourite
             ),
             onClick = onToggleFavorite,
+            onFocus = onScrollToTop,
         )
 
         // What the viewer thought — about the series, not the episode. Nobody has an opinion
@@ -511,6 +522,7 @@ private fun SeriesActions(
                 if (state.opinion == Opinion.UP) R.string.tv_detail_liked else R.string.tv_detail_like
             ),
             onClick = { onRate(Opinion.UP) },
+            onFocus = onScrollToTop,
         )
 
         DetailButton(
@@ -519,6 +531,7 @@ private fun SeriesActions(
                 if (state.opinion == Opinion.DOWN) R.string.tv_detail_disliked else R.string.tv_detail_dislike
             ),
             onClick = { onRate(Opinion.DOWN) },
+            onFocus = onScrollToTop,
         )
 
         // Only when there is something to remove. A control that would do nothing is the
@@ -532,6 +545,7 @@ private fun SeriesActions(
             DetailButton(
                 label = stringResource(R.string.tv_detail_remove_history),
                 onClick = onRemoveFromHistory,
+                onFocus = onScrollToTop,
             )
         }
 
@@ -545,6 +559,7 @@ private fun SeriesActions(
                     if (state.isEnriching) R.string.tv_detail_refresh_working else R.string.tv_detail_refresh
                 ),
                 onClick = onRefreshMetadata,
+                onFocus = onScrollToTop,
             )
         }
     }

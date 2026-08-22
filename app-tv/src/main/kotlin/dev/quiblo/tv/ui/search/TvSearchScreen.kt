@@ -47,6 +47,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
@@ -367,21 +368,24 @@ internal fun ColumnScope.SearchHeader(
         modifier = Modifier
             .fillMaxWidth()
             .height(wordmarkHeight)
+            .clipToBounds()
             .testTag(WORDMARK_TAG),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
-        QuibloMark(
-            colour = Color.White.copy(alpha = wordmarkAlpha),
-            modifier = Modifier.size(LOGO_SIZE),
-        )
-        Text(
-            text = stringResource(R.string.tv_app_name),
-            color = Color.White.copy(alpha = wordmarkAlpha),
-            fontSize = WORDMARK_TEXT_SIZE,
-            fontWeight = FontWeight.SemiBold,
-            letterSpacing = 1.sp,
-        )
+        if (wordmarkHeight > 0.dp) {
+            QuibloMark(
+                colour = Color.White.copy(alpha = wordmarkAlpha),
+                modifier = Modifier.size(LOGO_SIZE),
+            )
+            Text(
+                text = stringResource(R.string.tv_app_name),
+                color = Color.White.copy(alpha = wordmarkAlpha),
+                fontSize = WORDMARK_TEXT_SIZE,
+                fontWeight = FontWeight.SemiBold,
+                letterSpacing = 1.sp,
+            )
+        }
     }
 
     val advancedFocus = remember { FocusRequester() }
@@ -682,7 +686,7 @@ internal const val FIELD_ROW_TAG = "search.fieldRow"
  * a size chosen against a laptop. On a television the resting screen is three things in the
  * middle of a very large rectangle, so they can afford to be large.
  */
-private val WORDMARK_HEIGHT = 120.dp
+private val WORDMARK_HEIGHT = 128.dp
 private val LOGO_SIZE = 72.dp
 private val WORDMARK_TEXT_SIZE = 34.sp
 
@@ -693,13 +697,13 @@ private val RESTING_FIELD_WIDTH = 560.dp
 private val FIELD_WIDTH = 420.dp
 
 /** Narrower when advanced filters are taking up the row. */
-private val FIELD_WIDTH_ADVANCED = 320.dp
+private val FIELD_WIDTH_ADVANCED = 380.dp
 
 /** Air between the field and the sentence beside it, matching the settings screen. */
 private val COLUMN_GAP = 40.dp
 
 /** Narrower gap for when the row is crowded with filters. */
-private val COLUMN_GAP_COMPACT = 20.dp
+private val COLUMN_GAP_COMPACT = 28.dp
 
 /** Between the resting field and Advanced under it. Close enough to read as one control's row. */
 private val RESTING_ADVANCED_GAP = 20.dp
@@ -708,15 +712,17 @@ private val RESTING_ADVANCED_GAP = 20.dp
 private val TOGGLE_GAP = 16.dp
 
 /** Narrower toggle gap for crowded rows. */
-private val TOGGLE_GAP_COMPACT = 12.dp
+private val TOGGLE_GAP_COMPACT = 16.dp
 
 /**
  * Where the middle of the panel is *to a viewer*, as a fraction of its height.
  *
- * 0.44, not 0.46. Moved slightly higher to ensure that results below it are not pushed off the
- * bottom of the screen.
+ * 0.46, not 0.50. A block on the true half-way line looks low on a television, and the two
+ * reasons are both real: the bar across the top reads as the top edge of the picture, so the eye
+ * centres what is under it; and there is always something below the block — the results, or the
+ * line of copy standing in for them — while above it there is nothing.
  */
-private const val OPTICAL_CENTRE = 0.44f
+private const val OPTICAL_CENTRE = 0.46f
 
 /**
  * Air above and below the chip strip, and it is load-bearing rather than taste.
@@ -730,7 +736,7 @@ private const val OPTICAL_CENTRE = 0.44f
  * The chips also read better nearer the field they belong to, but that is a bonus and not the
  * reason. If anything above the results grows again, that test is what will say so.
  */
-private val CHIP_STRIP_PADDING = 8.dp
+private val CHIP_STRIP_PADDING = 12.dp
 
 /** Stable, so the chip row is not rebuilt when the genres behind it change. */
 private const val CLEAR_KEY = "__clear__"

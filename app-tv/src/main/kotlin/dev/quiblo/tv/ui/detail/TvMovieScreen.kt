@@ -45,6 +45,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -150,6 +151,7 @@ private fun Loaded(
 ) {
     val firstAction = remember { FocusRequester() }
     val scrollState = rememberScrollState()
+    val scope = rememberCoroutineScope()
 
     /*
      * Focus the first action, and leave the screen at its top while doing it.
@@ -243,6 +245,12 @@ private fun Loaded(
                             .padding(top = 14.dp)
                             .focusGroup(),
                     ) {
+                        val onScrollToTop = {
+                            if (scrollState.value > 0) {
+                                scope.launch { scrollState.animateScrollTo(0) }
+                            }
+                        }
+
                         // Resume first when there is one, because it is what a returning viewer
                         // came for. Start from the beginning stays beside it rather than being
                         // buried: rewatching should not mean resuming and then seeking back.
@@ -252,10 +260,12 @@ private fun Loaded(
                                 onClick = { onPlay(state.resumePositionMillis) },
                                 isPrimary = true,
                                 modifier = Modifier.focusRequester(firstAction),
+                                onFocus = onScrollToTop,
                             )
                             DetailButton(
                                 label = stringResource(R.string.tv_detail_from_start),
                                 onClick = { onPlay(0L) },
+                                onFocus = onScrollToTop,
                             )
                         } else {
                             DetailButton(
@@ -263,6 +273,7 @@ private fun Loaded(
                                 onClick = { onPlay(null) },
                                 isPrimary = true,
                                 modifier = Modifier.focusRequester(firstAction),
+                                onFocus = onScrollToTop,
                             )
                         }
 
@@ -272,6 +283,7 @@ private fun Loaded(
                                 if (state.isFavorite) R.string.tv_detail_unfavourite else R.string.tv_detail_favourite
                             ),
                             onClick = onToggleFavorite,
+                            onFocus = onScrollToTop,
                         )
 
                         // What the viewer thought, which is the one signal the app cannot observe
@@ -284,6 +296,7 @@ private fun Loaded(
                                 if (state.opinion == Opinion.UP) R.string.tv_detail_liked else R.string.tv_detail_like
                             ),
                             onClick = { onRate(Opinion.UP) },
+                            onFocus = onScrollToTop,
                         )
 
                         DetailButton(
@@ -292,6 +305,7 @@ private fun Loaded(
                                 if (state.opinion == Opinion.DOWN) R.string.tv_detail_disliked else R.string.tv_detail_dislike
                             ),
                             onClick = { onRate(Opinion.DOWN) },
+                            onFocus = onScrollToTop,
                         )
 
                         // Only when there is a position to forget. The phone has offered this
@@ -301,6 +315,7 @@ private fun Loaded(
                             DetailButton(
                                 label = stringResource(R.string.tv_detail_remove_history),
                                 onClick = onRemoveFromHistory,
+                                onFocus = onScrollToTop,
                             )
                         }
 
@@ -315,6 +330,7 @@ private fun Loaded(
                                     if (state.isEnriching) R.string.tv_detail_refresh_working else R.string.tv_detail_refresh
                                 ),
                                 onClick = onRefreshMetadata,
+                                onFocus = onScrollToTop,
                             )
                         }
                     }

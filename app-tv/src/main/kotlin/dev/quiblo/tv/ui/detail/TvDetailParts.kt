@@ -44,6 +44,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -208,9 +209,14 @@ fun DetailButton(
     icon: androidx.compose.ui.graphics.vector.ImageVector? = null,
     contentDescription: String? = null,
     isPrimary: Boolean = false,
+    onFocus: (() -> Unit)? = null,
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val isFocused by interactionSource.collectIsFocusedAsState()
+
+    LaunchedEffect(isFocused) {
+        if (isFocused) onFocus?.invoke()
+    }
 
     Box(
         modifier = modifier
@@ -237,7 +243,7 @@ fun DetailButton(
                 intensity = PRIMARY_GLOW,
             )
             .padding(
-                horizontal = if (label != null) 18.dp else 12.dp,
+                horizontal = if (label != null) 18.dp else 14.dp,
                 vertical = 9.dp,
             ),
         contentAlignment = Alignment.Center,

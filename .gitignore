@@ -22,6 +22,7 @@ gradle/gradle-daemon-jvm.properties
 *.ap_
 *.dex
 release/
+releases/
 .cxx/
 
 # Signing material — never commit these

@@ -33,12 +33,12 @@ import org.junit.jupiter.api.Test
 class TvTabOrderTest {
 
     @Test
-    fun `the bar reads search, live, for you, movies, series, favourites`() {
+    fun `the bar reads search, for you, live, movies, series, favourites`() {
         assertEquals(
             listOf(
                 TvTab.SEARCH,
-                TvTab.LIVE,
                 TvTab.FOR_YOU,
+                TvTab.LIVE,
                 TvTab.MOVIES,
                 TvTab.SERIES,
                 TvTab.FAVOURITES,
@@ -53,13 +53,9 @@ class TvTabOrderTest {
     }
 
     @Test
-    fun `for you sits between live and the catalogues`() {
-        // The request this was built for, stated as an assertion rather than as a comment on
-        // the enum: after Live, ahead of both Movies and Series. The tab was Recently Added and
-        // is now For You, holding that row as the first of three — the position did not move
-        // with the name, and this is what says so.
-        assertEquals(TvTab.LIVE.ordinal + 1, TvTab.FOR_YOU.ordinal)
-        assertEquals(TvTab.FOR_YOU.ordinal + 1, TvTab.MOVIES.ordinal)
+    fun `for you sits ahead of live and the catalogues`() {
+        assertEquals(TvTab.SEARCH.ordinal + 1, TvTab.FOR_YOU.ordinal)
+        assertEquals(TvTab.FOR_YOU.ordinal + 1, TvTab.LIVE.ordinal)
     }
 
     @Test

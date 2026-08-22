@@ -35,11 +35,16 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material.icons.filled.ThumbDown
 import androidx.compose.material.icons.filled.ThumbUp
+import androidx.compose.material.icons.outlined.ThumbDown
+import androidx.compose.material.icons.outlined.ThumbUp
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -256,6 +261,7 @@ private fun Loaded(
                         // buried: rewatching should not mean resuming and then seeking back.
                         if (state.canResume) {
                             DetailButton(
+                                icon = Icons.Filled.PlayArrow,
                                 label = stringResource(R.string.tv_detail_resume),
                                 onClick = { onPlay(state.resumePositionMillis) },
                                 isPrimary = true,
@@ -263,12 +269,15 @@ private fun Loaded(
                                 onFocus = onScrollToTop,
                             )
                             DetailButton(
+                                icon = Icons.Filled.SkipPrevious,
                                 label = stringResource(R.string.tv_detail_from_start),
+                                contentDescription = stringResource(R.string.tv_detail_from_start),
                                 onClick = { onPlay(0L) },
                                 onFocus = onScrollToTop,
                             )
                         } else {
                             DetailButton(
+                                icon = Icons.Filled.PlayArrow,
                                 label = stringResource(R.string.tv_detail_play),
                                 onClick = { onPlay(null) },
                                 isPrimary = true,
@@ -290,30 +299,10 @@ private fun Loaded(
                         // and has to be told. Both buttons are always here rather than appearing
                         // after playback: a viewer who has seen something elsewhere has an opinion
                         // about it too, and a control that comes and goes is one nobody finds.
-                        DetailButton(
-                            icon = Icons.Filled.ThumbUp,
-                            contentDescription = stringResource(
-                                if (state.opinion == Opinion.UP) {
-                                    R.string.tv_detail_liked
-                                } else {
-                                    R.string.tv_detail_like
-                                },
-                            ),
-                            onClick = { onRate(Opinion.UP) },
-                            onFocus = onScrollToTop,
-                        )
-
-                        DetailButton(
-                            icon = Icons.Filled.ThumbDown,
-                            contentDescription = stringResource(
-                                if (state.opinion == Opinion.DOWN) {
-                                    R.string.tv_detail_disliked
-                                } else {
-                                    R.string.tv_detail_dislike
-                                },
-                            ),
-                            onClick = { onRate(Opinion.DOWN) },
-                            onFocus = onScrollToTop,
+                        MovieRatingButtons(
+                            opinion = state.opinion,
+                            onRate = onRate,
+                            onScrollToTop = onScrollToTop,
                         )
 
                         // Only when there is a position to forget. The phone has offered this
@@ -321,7 +310,9 @@ private fun Loaded(
                         // parity gap `agile/004` generalised, found again (#014).
                         if (state.canResume) {
                             DetailButton(
+                                icon = Icons.Filled.DeleteOutline,
                                 label = stringResource(R.string.tv_detail_remove_history),
+                                contentDescription = stringResource(R.string.tv_detail_remove_history),
                                 onClick = onRemoveFromHistory,
                                 onFocus = onScrollToTop,
                             )
@@ -363,6 +354,43 @@ private fun Loaded(
             }
         }
     }
+}
+
+@Composable
+private fun MovieRatingButtons(
+    opinion: Opinion,
+    onRate: (Opinion) -> Unit,
+    onScrollToTop: () -> Unit,
+) {
+    DetailButton(
+        icon = if (opinion == Opinion.UP) Icons.Filled.ThumbUp else Icons.Outlined.ThumbUp,
+        contentDescription = stringResource(
+            if (opinion == Opinion.UP) {
+                R.string.tv_detail_liked
+            } else {
+                R.string.tv_detail_like
+            },
+        ),
+        onClick = { onRate(Opinion.UP) },
+        onFocus = onScrollToTop,
+    )
+
+    DetailButton(
+        icon = if (opinion == Opinion.DOWN) {
+            Icons.Filled.ThumbDown
+        } else {
+            Icons.Outlined.ThumbDown
+        },
+        contentDescription = stringResource(
+            if (opinion == Opinion.DOWN) {
+                R.string.tv_detail_disliked
+            } else {
+                R.string.tv_detail_dislike
+            },
+        ),
+        onClick = { onRate(Opinion.DOWN) },
+        onFocus = onScrollToTop,
+    )
 }
 
 /**

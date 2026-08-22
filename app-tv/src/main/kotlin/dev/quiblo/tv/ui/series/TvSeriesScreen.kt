@@ -43,6 +43,17 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.DeleteOutline
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.FavoriteBorder
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.SkipPrevious
+import androidx.compose.material.icons.filled.ThumbDown
+import androidx.compose.material.icons.filled.ThumbUp
+import androidx.compose.material.icons.outlined.ThumbDown
+import androidx.compose.material.icons.outlined.ThumbUp
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -51,11 +62,13 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
@@ -85,6 +98,7 @@ import dev.quiblo.tv.ui.detail.DetailTitle
 import dev.quiblo.tv.ui.detail.genresOrEmpty
 import dev.quiblo.tv.ui.detail.messageRes
 import dev.quiblo.tv.ui.detail.openDetailScreen
+import kotlinx.coroutines.launch
 import org.koin.androidx.compose.koinViewModel
 import org.koin.core.parameter.parametersOf
 
@@ -169,6 +183,73 @@ fun TvSeriesScreen(
     }
 }
 
+private fun findReturningSeason(seasons: List<Season>, focusEpisodeId: String?): Int? =
+    focusEpisodeId?.let { id ->
+        seasons.indexOfFirst { season -> season.episodes.any { it.id == id } }.takeIf { it >= 0 }
+    }
+
+@Composable
+private fun SeriesArrangementRow(
+    isMerged: Boolean,
+    isDescending: Boolean,
+    onMerged: (Boolean) -> Unit,
+    onDescending: (Boolean) -> Unit,
+) {
+    LazyRow(
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        // Its own focus group, so walking along it with the remote does not step into
+        // the season chips below by accident.
+        modifier = Modifier
+            .padding(top = 6.dp)
+            .focusGroup(),
+    ) {
+        item {
+            SeasonChip(
+                label = stringResource(R.string.tv_series_merge_seasons),
+                isSelected = isMerged,
+                onClick = { onMerged(!isMerged) },
+            )
+        }
+        item {
+            SeasonChip(
+                label = stringResource(R.string.tv_series_newest_first),
+                isSelected = isDescending,
+                onClick = { onDescending(!isDescending) },
+            )
+        }
+    }
+}
+
+@Composable
+private fun SeriesSeasonsRow(
+    seasons: List<Season>,
+    selectedSeason: Int,
+    onSelectSeason: (Int) -> Unit,
+) {
+    LazyRow(
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        modifier = Modifier.padding(top = 6.dp),
+    ) {
+        itemsIndexed(
+            items = seasons,
+            key = { _, season -> season.seasonNumber },
+        ) { index, season ->
+            val label = if (season.seasonNumber == MERGED_SEASON_NUMBER && season.name.isEmpty()) {
+                stringResource(R.string.tv_series_all_episodes)
+            } else {
+                season.name.ifBlank {
+                    stringResource(R.string.tv_series_season, season.seasonNumber)
+                }
+            }
+            SeasonChip(
+                label = label,
+                isSelected = index == selectedSeason,
+                onClick = { onSelectSeason(index) },
+            )
+        }
+    }
+}
+
 @Composable
 private fun Loaded(
     state: SeriesDetailUiState.Success,
@@ -194,9 +275,7 @@ private fun Loaded(
 
     // Returning to an episode means returning to its season, not to the first one.
     val returningSeason = remember(state.details.seriesId, focusEpisodeId) {
-        focusEpisodeId?.let { id ->
-            seasons.indexOfFirst { season -> season.episodes.any { it.id == id } }.takeIf { it >= 0 }
-        }
+        findReturningSeason(seasons, focusEpisodeId)
     }
     // Also keyed on the arrangement: merging collapses several seasons into one, so an index
     // of 4 points at nothing the moment the switch is flipped.
@@ -208,6 +287,7 @@ private fun Loaded(
     val firstAction = remember { FocusRequester() }
     val episodeCursor = remember { FocusRequester() }
     val listState = rememberLazyListState()
+    val scope = rememberCoroutineScope()
 
     /*
      * Where the remote lands, and what the screen is showing when it does.
@@ -254,16 +334,39 @@ private fun Loaded(
         contentPadding = PaddingValues(bottom = 24.dp),
     ) {
         item(key = "header") {
-            SeriesHeader(
-                state = state,
-                seasonCount = seasons.size,
-                firstAction = firstAction,
-                onPlayEpisode = play,
-                onToggleFavorite = onToggleFavorite,
-                onRemoveFromHistory = onRemoveFromHistory,
-                onRefreshMetadata = onRefreshMetadata,
-                onRate = onRate,
-            )
+            /*
+             * The header is one scrolling item, and bringing the buttons back into view is what
+             * brings the rest of the page with them (`027` #3).
+             *
+             * Without this, navigating up from the episodes would land on the buttons at whatever
+             * scroll position the list happened to be in, which on this panel left the title and
+             * artwork partially or entirely cut off.
+             */
+            Box(
+                modifier = Modifier.onFocusChanged { focusState ->
+                    val isScrolled = listState.firstVisibleItemIndex > 0 ||
+                        listState.firstVisibleItemScrollOffset > 0
+                    if (focusState.hasFocus && isScrolled) {
+                        scope.launch { listState.animateScrollToItem(0) }
+                    }
+                },
+            ) {
+                SeriesHeader(
+                    state = state,
+                    seasonCount = seasons.size,
+                    firstAction = firstAction,
+                    onPlayEpisode = play,
+                    onToggleFavorite = onToggleFavorite,
+                    onRemoveFromHistory = onRemoveFromHistory,
+                    onRefreshMetadata = onRefreshMetadata,
+                    onRate = onRate,
+                    onScrollToTop = {
+                        if (listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset > 0) {
+                            scope.launch { listState.animateScrollToItem(0) }
+                        }
+                    },
+                )
+            }
         }
 
         if (seasons.isEmpty()) {
@@ -279,54 +382,21 @@ private fun Loaded(
         }
 
         item(key = "arrangement") {
-            LazyRow(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                // Its own focus group, so walking along it with the remote does not step into
-                // the season chips below by accident.
-                modifier = Modifier
-                    .padding(top = 6.dp)
-                    .focusGroup(),
-            ) {
-                item {
-                    SeasonChip(
-                        label = stringResource(R.string.tv_series_merge_seasons),
-                        isSelected = state.preference.isMerged,
-                        onClick = { onMerged(!state.preference.isMerged) },
-                    )
-                }
-                item {
-                    SeasonChip(
-                        label = stringResource(R.string.tv_series_newest_first),
-                        isSelected = state.preference.isDescending,
-                        onClick = { onDescending(!state.preference.isDescending) },
-                    )
-                }
-            }
+            SeriesArrangementRow(
+                isMerged = state.preference.isMerged,
+                isDescending = state.preference.isDescending,
+                onMerged = onMerged,
+                onDescending = onDescending,
+            )
         }
 
         if (seasons.size > 1) {
             item(key = "seasons") {
-                LazyRow(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    modifier = Modifier.padding(top = 6.dp),
-                ) {
-                    itemsIndexed(
-                        items = seasons,
-                        key = { _, season -> season.seasonNumber },
-                    ) { index, season ->
-                        SeasonChip(
-                            label = if (season.seasonNumber == MERGED_SEASON_NUMBER && season.name.isEmpty()) {
-                                stringResource(R.string.tv_series_all_episodes)
-                            } else {
-                                season.name.ifBlank {
-                                    stringResource(R.string.tv_series_season, season.seasonNumber)
-                                }
-                            },
-                            isSelected = index == selectedSeason,
-                            onClick = { selectedSeason = index },
-                        )
-                    }
-                }
+                SeriesSeasonsRow(
+                    seasons = seasons,
+                    selectedSeason = selectedSeason,
+                    onSelectSeason = { selectedSeason = it },
+                )
             }
         }
 
@@ -364,6 +434,7 @@ private fun SeriesHeader(
     onRemoveFromHistory: () -> Unit,
     onRefreshMetadata: () -> Unit,
     onRate: (Opinion) -> Unit,
+    onScrollToTop: () -> Unit,
 ) {
     Row(horizontalArrangement = Arrangement.spacedBy(DETAIL_COLUMN_GAP)) {
         DetailArtwork(
@@ -408,6 +479,7 @@ private fun SeriesHeader(
                 onRemoveFromHistory = onRemoveFromHistory,
                 onRefreshMetadata = onRefreshMetadata,
                 onRate = onRate,
+                onScrollToTop = onScrollToTop,
             )
         }
     }
@@ -425,6 +497,7 @@ private fun SeriesActions(
     onRemoveFromHistory: () -> Unit,
     onRefreshMetadata: () -> Unit,
     onRate: (Opinion) -> Unit,
+    onScrollToTop: () -> Unit,
 ) {
     val hasResume = state.resumeEpisode != null
 
@@ -444,6 +517,7 @@ private fun SeriesActions(
     ) {
         state.resumeEpisode?.let { episode ->
             DetailButton(
+                icon = Icons.Filled.PlayArrow,
                 label = stringResource(
                     R.string.tv_series_resume,
                     episode.seasonNumber,
@@ -452,47 +526,41 @@ private fun SeriesActions(
                 onClick = { onPlayEpisode(episode, state.resumePositionMillis) },
                 isPrimary = true,
                 modifier = Modifier.focusRequester(firstAction),
+                onFocus = onScrollToTop,
             )
         }
 
         state.firstEpisode?.let { first ->
             DetailButton(
-                label = stringResource(
+                icon = if (hasResume) Icons.Filled.SkipPrevious else Icons.Filled.PlayArrow,
+                label = if (hasResume) null else stringResource(R.string.tv_detail_play),
+                contentDescription = stringResource(
                     if (hasResume) R.string.tv_detail_from_start else R.string.tv_detail_play,
                 ),
                 onClick = { onPlayEpisode(first, null) },
                 isPrimary = !hasResume,
                 modifier = if (hasResume) Modifier else Modifier.focusRequester(firstAction),
+                onFocus = onScrollToTop,
             )
         }
 
         DetailButton(
-            label = stringResource(
-                if (state.isFavorite) {
-                    R.string.tv_detail_unfavourite
-                } else {
-                    R.string.tv_detail_favourite
-                },
+            icon = if (state.isFavorite) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,
+            contentDescription = stringResource(
+                if (state.isFavorite) R.string.tv_detail_unfavourite else R.string.tv_detail_favourite
             ),
             onClick = onToggleFavorite,
+            onFocus = onScrollToTop,
         )
 
         // What the viewer thought — about the series, not the episode. Nobody has an opinion
         // about episode four of season two separately from the show, and a thumbs-down on one
         // episode that removed the whole series from suggestions would answer a question that
         // was not asked.
-        DetailButton(
-            label = stringResource(
-                if (state.opinion == Opinion.UP) R.string.tv_detail_liked else R.string.tv_detail_like,
-            ),
-            onClick = { onRate(Opinion.UP) },
-        )
-
-        DetailButton(
-            label = stringResource(
-                if (state.opinion == Opinion.DOWN) R.string.tv_detail_disliked else R.string.tv_detail_dislike,
-            ),
-            onClick = { onRate(Opinion.DOWN) },
+        SeriesRatingButtons(
+            opinion = state.opinion,
+            onRate = onRate,
+            onScrollToTop = onScrollToTop,
         )
 
         // Only when there is something to remove. A control that would do nothing is the
@@ -504,8 +572,10 @@ private fun SeriesActions(
         // wherever nobody looked (#014).
         if (hasResume) {
             DetailButton(
-                label = stringResource(R.string.tv_detail_remove_history),
+                icon = Icons.Filled.DeleteOutline,
+                contentDescription = stringResource(R.string.tv_detail_remove_history),
                 onClick = onRemoveFromHistory,
+                onFocus = onScrollToTop,
             )
         }
 
@@ -514,14 +584,12 @@ private fun SeriesActions(
         // the favourite on the way there.
         if (state.canRefreshMetadata) {
             DetailButton(
-                label = stringResource(
-                    if (state.isEnriching) {
-                        R.string.tv_detail_refresh_working
-                    } else {
-                        R.string.tv_detail_refresh
-                    },
+                icon = Icons.Filled.Refresh,
+                contentDescription = stringResource(
+                    if (state.isEnriching) R.string.tv_detail_refresh_working else R.string.tv_detail_refresh
                 ),
                 onClick = onRefreshMetadata,
+                onFocus = onScrollToTop,
             )
         }
     }
@@ -650,6 +718,43 @@ private fun Centered(content: @Composable () -> Unit) {
 }
 
 private const val IDLE_ALPHA = 0.65f
+
+@Composable
+private fun SeriesRatingButtons(
+    opinion: Opinion,
+    onRate: (Opinion) -> Unit,
+    onScrollToTop: () -> Unit,
+) {
+    DetailButton(
+        icon = if (opinion == Opinion.UP) Icons.Filled.ThumbUp else Icons.Outlined.ThumbUp,
+        contentDescription = stringResource(
+            if (opinion == Opinion.UP) {
+                R.string.tv_detail_liked
+            } else {
+                R.string.tv_detail_like
+            },
+        ),
+        onClick = { onRate(Opinion.UP) },
+        onFocus = onScrollToTop,
+    )
+
+    DetailButton(
+        icon = if (opinion == Opinion.DOWN) {
+            Icons.Filled.ThumbDown
+        } else {
+            Icons.Outlined.ThumbDown
+        },
+        contentDescription = stringResource(
+            if (opinion == Opinion.DOWN) {
+                R.string.tv_detail_disliked
+            } else {
+                R.string.tv_detail_dislike
+            },
+        ),
+        onClick = { onRate(Opinion.DOWN) },
+        onFocus = onScrollToTop,
+    )
+}
 
 /** "3 seasons", or nothing at all when the provider listed none. */
 @Composable

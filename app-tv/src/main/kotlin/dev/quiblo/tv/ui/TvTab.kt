@@ -35,7 +35,6 @@ import dev.quiblo.tv.R
  */
 internal enum class TvTab(@param:StringRes val labelRes: Int, val isIconOnly: Boolean = false) {
     SEARCH(R.string.tv_tab_search, isIconOnly = true),
-    LIVE(R.string.tv_tab_live),
 
     /**
      * Three rows about three questions: what the provider added, what the world is watching of
@@ -49,6 +48,7 @@ internal enum class TvTab(@param:StringRes val labelRes: Int, val isIconOnly: Bo
      * It was Recently Added, which is now the first of its three rows.
      */
     FOR_YOU(R.string.tv_tab_for_you),
+    LIVE(R.string.tv_tab_live),
     MOVIES(R.string.tv_tab_movies),
     SERIES(R.string.tv_tab_series),
     FAVOURITES(R.string.tv_tab_favourites),

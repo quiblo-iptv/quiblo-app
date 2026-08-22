@@ -821,6 +821,21 @@ interface ResumePositionDao {
         limit: Int,
     ): Flow<List<ResumePositionEntity>>
 
+    @Query(
+        """
+        SELECT * FROM resume_positions
+        WHERE profileId = :profileId AND sourceId = :sourceId AND kind IN (:kinds) AND title != ''
+        ORDER BY updatedAtEpochMillis DESC
+        LIMIT :limit
+        """,
+    )
+    fun observeHistoryOfKinds(
+        profileId: Long,
+        sourceId: Long,
+        kinds: List<String>,
+        limit: Int,
+    ): Flow<List<ResumePositionEntity>>
+
     @Query("DELETE FROM resume_positions WHERE profileId = :profileId AND stableKey = :stableKey")
     suspend fun delete(profileId: Long, stableKey: String)
 

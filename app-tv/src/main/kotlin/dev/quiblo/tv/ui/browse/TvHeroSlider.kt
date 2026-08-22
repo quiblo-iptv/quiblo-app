@@ -44,7 +44,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -69,10 +68,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.zIndex
 import androidx.tv.material3.Icon
-import androidx.tv.material3.IconButton
-import androidx.tv.material3.IconButtonDefaults
 import coil3.compose.AsyncImage
 import dev.quiblo.core.common.cleanedForDisplay
 import dev.quiblo.core.model.Channel
@@ -94,7 +90,6 @@ fun TvHeroSlider(
     items: List<HeroItem>,
     onPlay: (Channel) -> Unit,
     onToggleFavorite: (Channel) -> Unit = {},
-    onRefresh: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     if (items.isEmpty()) return
@@ -143,26 +138,6 @@ fun TvHeroSlider(
                 .align(Alignment.BottomCenter)
                 .padding(bottom = 24.dp),
         )
-
-        // Refresh Button - Positioned to the right, below the top bar area
-        IconButton(
-            onClick = onRefresh,
-            scale = IconButtonDefaults.scale(focusedScale = 1.2f),
-            colors = IconButtonDefaults.colors(
-                containerColor = Color.Transparent,
-                focusedContainerColor = Color.White.copy(alpha = 0.2f),
-            ),
-            modifier = Modifier
-                .align(Alignment.TopEnd)
-                .padding(top = 100.dp, end = 64.dp) // Below the tab bar
-                .zIndex(1f),
-        ) {
-            Icon(
-                imageVector = Icons.Default.Refresh,
-                contentDescription = "Refresh Slider",
-                tint = Color.White.copy(alpha = 0.8f),
-            )
-        }
     }
 }
 

@@ -54,6 +54,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
@@ -261,6 +262,10 @@ fun TvSplashScreen(
             verticalArrangement = Arrangement.Center,
             modifier = Modifier
                 .align(Alignment.Center)
+                .graphicsLayer {
+                    // Match the background glow's vertical bias (0.48)
+                    translationY = size.height * (LOGO_VERTICAL_BIAS - 0.5f)
+                }
                 .scale(currentContentScale)
                 .alpha(currentContentAlpha),
         ) {
@@ -310,7 +315,7 @@ fun TvLogoMark(
 
         val strokeWidth = 5.5f * scale
         val ringCenter = Offset(54f * scale, 54f * scale)
-        val ringRadius = 18f * scale
+        val ringRadius = 36f * scale
 
         // The outer ring of the Q
         drawCircle(
@@ -323,17 +328,17 @@ fun TvLogoMark(
         // The tail of the Q (breaking through bottom-right)
         drawLine(
             color = color,
-            start = Offset(64f * scale, 64f * scale),
-            end = Offset(74f * scale, 74f * scale),
+            start = Offset(76f * scale, 76f * scale),
+            end = Offset(94f * scale, 94f * scale),
             strokeWidth = strokeWidth,
             cap = StrokeCap.Round,
         )
 
         // The play mark (triangle in center)
         val playPath = Path().apply {
-            moveTo(49f * scale, 45f * scale)
-            lineTo(49f * scale, 63f * scale)
-            lineTo(65f * scale, 54f * scale)
+            moveTo(44f * scale, 36f * scale)
+            lineTo(44f * scale, 72f * scale)
+            lineTo(76f * scale, 54f * scale)
             close()
         }
 
@@ -345,13 +350,13 @@ fun TvLogoMark(
 }
 
 // Visual layout constants - easy to find & tune right here
-val TV_LOGO_SIZE = 300.dp
-val TV_LOGO_TITLE_SPACING = 3.dp
-val TV_TITLE_FONT_SIZE = 60.sp
+val TV_LOGO_SIZE = 280.dp
+val TV_LOGO_TITLE_SPACING = 8.dp
+val TV_TITLE_FONT_SIZE = 64.sp
 
-private const val DEFAULT_SPLASH_DURATION_MILLIS = 2450L
+private const val DEFAULT_SPLASH_DURATION_MILLIS = 5000L
 private const val INTRO_DURATION_MILLIS = 400
-private const val ZOOM_START_DELAY_MILLIS = 1750L
+private const val ZOOM_START_DELAY_MILLIS = 4300L
 private const val ZOOM_DURATION_MILLIS = 700L
 private const val ZOOM_FADEOUT_DELAY_MILLIS = 350L
 private const val ZOOM_FADEOUT_DURATION_MILLIS = 350

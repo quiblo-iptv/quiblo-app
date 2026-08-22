@@ -22,6 +22,11 @@ Formatted after [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and ve
 - **Cinematic TV splash screen with audio sting and Netflix-style zoom.** An animated 5-second launch screen with pure white branding, orbiting ambient light, and a high-impact zoom-through synchronized to the audio crescendo.
 - **Dedicated TV splash screen component.** Separated the TV launch screen into its own dedicated package (`dev.quiblo.tv.ui.splash`) for fine-grained television tuning.
 
+### Fixed
+
+- **TV tab ordering and remote navigation.** Restored the Live and For You tab order on Android TV.
+- **TV search and detail screen polish.** Refined search bar layout with compact spacing, icon-based detail action buttons, and automatic header scrolling on series detail views.
+
 ## 0.21.0
 
 ### Added

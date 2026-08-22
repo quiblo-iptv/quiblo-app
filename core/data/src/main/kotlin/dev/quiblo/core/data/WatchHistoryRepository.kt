@@ -61,12 +61,36 @@ class WatchHistoryRepository(
      * a series watched through five episodes in a row cannot crowd everything else out of
      * the answer.
      */
-    fun observeHistory(sourceId: Long, kind: MediaKind, limit: Int = DEFAULT_HISTORY_LIMIT): Flow<List<HistoryEntry>> =
+    fun observeHistory(
+        sourceId: Long,
+        kind: MediaKind,
+        limit: Int = DEFAULT_HISTORY_LIMIT,
+    ): Flow<List<HistoryEntry>> =
         profiles.activeProfile.flatMapLatest { profile ->
             resumePositionDao.observeHistory(
                 profileId = profile?.id ?: Profile.NONE_ID,
                 sourceId = sourceId,
                 kind = kind.name,
+                limit = HISTORY_SCAN_LIMIT,
+            )
+        }
+            .map { rows ->
+                rows.map { it.toDomain() }
+                    .distinctBy { it.titleKey }
+                    .take(limit)
+            }
+
+    /** The same, for multiple kinds at once. */
+    fun observeHistory(
+        sourceId: Long,
+        kinds: List<MediaKind>,
+        limit: Int = DEFAULT_HISTORY_LIMIT,
+    ): Flow<List<HistoryEntry>> =
+        profiles.activeProfile.flatMapLatest { profile ->
+            resumePositionDao.observeHistoryOfKinds(
+                profileId = profile?.id ?: Profile.NONE_ID,
+                sourceId = sourceId,
+                kinds = kinds.map { it.name },
                 limit = HISTORY_SCAN_LIMIT,
             )
         }

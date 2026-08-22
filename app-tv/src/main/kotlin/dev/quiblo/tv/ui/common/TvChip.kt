@@ -32,6 +32,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
@@ -47,7 +48,14 @@ import androidx.compose.ui.unit.sp
  * other.
  */
 @Composable
-internal fun TvChip(label: String, isSelected: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
+internal fun TvChip(
+    label: String,
+    isSelected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    horizontalPadding: Dp = 16.dp,
+    verticalPadding: Dp = 8.dp,
+) {
     val interactionSource = remember { MutableInteractionSource() }
     val isFocused by interactionSource.collectIsFocusedAsState()
 
@@ -67,6 +75,6 @@ internal fun TvChip(label: String, isSelected: Boolean, onClick: () -> Unit, mod
                 shape = RoundedCornerShape(8.dp),
             )
             .clickable(interactionSource = interactionSource, indication = null, onClick = onClick)
-            .padding(horizontal = 16.dp, vertical = 8.dp),
+            .padding(horizontal = horizontalPadding, vertical = verticalPadding),
     )
 }

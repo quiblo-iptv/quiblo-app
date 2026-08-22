@@ -822,11 +822,15 @@ class BrowseViewModel(
         if ((feed.scope !in CATALOGUE_SCOPES && feed.scope != BrowseScope.FOR_YOU) || feed.kind == MediaKind.LIVE) {
             flowOf(emptyList())
         } else {
-            historyRepository.observeHistory(sourceId, feed.kind)
-                .onEach { entries ->
-                    entries.filter { it.artworkUrl.isNullOrBlank() }
-                        .forEach { requestPreview(it.titleKey, it.title, it.kind) }
-                }
+            val history = if (feed.scope == BrowseScope.FOR_YOU) {
+                historyRepository.observeHistory(sourceId, listOf(MediaKind.VOD, MediaKind.SERIES))
+            } else {
+                historyRepository.observeHistory(sourceId, feed.kind)
+            }
+            history.onEach { entries ->
+                entries.filter { it.artworkUrl.isNullOrBlank() }
+                    .forEach { requestPreview(it.titleKey, it.title, it.kind) }
+            }
         }
 
     /**

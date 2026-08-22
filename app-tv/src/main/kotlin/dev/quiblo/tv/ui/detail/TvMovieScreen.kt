@@ -34,11 +34,23 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.DeleteOutline
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.FavoriteBorder
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.SkipPrevious
+import androidx.compose.material.icons.filled.ThumbDown
+import androidx.compose.material.icons.filled.ThumbUp
+import androidx.compose.material.icons.outlined.ThumbDown
+import androidx.compose.material.icons.outlined.ThumbUp
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -59,6 +71,7 @@ import dev.quiblo.feature.vod.MovieDetailViewModel
 import dev.quiblo.tv.R
 import dev.quiblo.tv.ui.common.ambientBackdrop
 import dev.quiblo.tv.ui.common.rememberAmbient
+import kotlinx.coroutines.launch
 import org.koin.androidx.compose.koinViewModel
 import org.koin.core.parameter.parametersOf
 
@@ -143,6 +156,7 @@ private fun Loaded(
 ) {
     val firstAction = remember { FocusRequester() }
     val scrollState = rememberScrollState()
+    val scope = rememberCoroutineScope()
 
     /*
      * Focus the first action, and leave the screen at its top while doing it.
@@ -236,64 +250,58 @@ private fun Loaded(
                             .padding(top = 14.dp)
                             .focusGroup(),
                     ) {
+                        val onScrollToTop = {
+                            if (scrollState.value > 0) {
+                                scope.launch { scrollState.animateScrollTo(0) }
+                            }
+                        }
+
                         // Resume first when there is one, because it is what a returning viewer
                         // came for. Start from the beginning stays beside it rather than being
                         // buried: rewatching should not mean resuming and then seeking back.
                         if (state.canResume) {
                             DetailButton(
+                                icon = Icons.Filled.PlayArrow,
                                 label = stringResource(R.string.tv_detail_resume),
                                 onClick = { onPlay(state.resumePositionMillis) },
                                 isPrimary = true,
                                 modifier = Modifier.focusRequester(firstAction),
+                                onFocus = onScrollToTop,
                             )
                             DetailButton(
-                                label = stringResource(R.string.tv_detail_from_start),
+                                icon = Icons.Filled.SkipPrevious,
+                                contentDescription = stringResource(R.string.tv_detail_from_start),
                                 onClick = { onPlay(0L) },
+                                onFocus = onScrollToTop,
                             )
                         } else {
                             DetailButton(
+                                icon = Icons.Filled.PlayArrow,
                                 label = stringResource(R.string.tv_detail_play),
                                 onClick = { onPlay(null) },
                                 isPrimary = true,
                                 modifier = Modifier.focusRequester(firstAction),
+                                onFocus = onScrollToTop,
                             )
                         }
 
                         DetailButton(
-                            label = stringResource(
-                                if (state.isFavorite) {
-                                    R.string.tv_detail_unfavourite
-                                } else {
-                                    R.string.tv_detail_favourite
-                                },
+                            icon = if (state.isFavorite) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,
+                            contentDescription = stringResource(
+                                if (state.isFavorite) R.string.tv_detail_unfavourite else R.string.tv_detail_favourite
                             ),
                             onClick = onToggleFavorite,
+                            onFocus = onScrollToTop,
                         )
 
                         // What the viewer thought, which is the one signal the app cannot observe
                         // and has to be told. Both buttons are always here rather than appearing
                         // after playback: a viewer who has seen something elsewhere has an opinion
                         // about it too, and a control that comes and goes is one nobody finds.
-                        DetailButton(
-                            label = stringResource(
-                                if (state.opinion == Opinion.UP) {
-                                    R.string.tv_detail_liked
-                                } else {
-                                    R.string.tv_detail_like
-                                },
-                            ),
-                            onClick = { onRate(Opinion.UP) },
-                        )
-
-                        DetailButton(
-                            label = stringResource(
-                                if (state.opinion == Opinion.DOWN) {
-                                    R.string.tv_detail_disliked
-                                } else {
-                                    R.string.tv_detail_dislike
-                                },
-                            ),
-                            onClick = { onRate(Opinion.DOWN) },
+                        MovieRatingButtons(
+                            opinion = state.opinion,
+                            onRate = onRate,
+                            onScrollToTop = onScrollToTop,
                         )
 
                         // Only when there is a position to forget. The phone has offered this
@@ -301,8 +309,10 @@ private fun Loaded(
                         // parity gap `agile/004` generalised, found again (#014).
                         if (state.canResume) {
                             DetailButton(
-                                label = stringResource(R.string.tv_detail_remove_history),
+                                icon = Icons.Filled.DeleteOutline,
+                                contentDescription = stringResource(R.string.tv_detail_remove_history),
                                 onClick = onRemoveFromHistory,
+                                onFocus = onScrollToTop,
                             )
                         }
 
@@ -312,7 +322,8 @@ private fun Loaded(
                         // about what a remote walks past to reach what it wants).
                         if (state.canRefreshMetadata) {
                             DetailButton(
-                                label = stringResource(
+                                icon = Icons.Filled.Refresh,
+                                contentDescription = stringResource(
                                     if (state.isEnriching) {
                                         R.string.tv_detail_refresh_working
                                     } else {
@@ -320,6 +331,7 @@ private fun Loaded(
                                     },
                                 ),
                                 onClick = onRefreshMetadata,
+                                onFocus = onScrollToTop,
                             )
                         }
                     }
@@ -340,6 +352,43 @@ private fun Loaded(
             }
         }
     }
+}
+
+@Composable
+private fun MovieRatingButtons(
+    opinion: Opinion,
+    onRate: (Opinion) -> Unit,
+    onScrollToTop: () -> Unit,
+) {
+    DetailButton(
+        icon = if (opinion == Opinion.UP) Icons.Filled.ThumbUp else Icons.Outlined.ThumbUp,
+        contentDescription = stringResource(
+            if (opinion == Opinion.UP) {
+                R.string.tv_detail_liked
+            } else {
+                R.string.tv_detail_like
+            },
+        ),
+        onClick = { onRate(Opinion.UP) },
+        onFocus = onScrollToTop,
+    )
+
+    DetailButton(
+        icon = if (opinion == Opinion.DOWN) {
+            Icons.Filled.ThumbDown
+        } else {
+            Icons.Outlined.ThumbDown
+        },
+        contentDescription = stringResource(
+            if (opinion == Opinion.DOWN) {
+                R.string.tv_detail_disliked
+            } else {
+                R.string.tv_detail_dislike
+            },
+        ),
+        onClick = { onRate(Opinion.DOWN) },
+        onFocus = onScrollToTop,
+    )
 }
 
 /**

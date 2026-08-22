@@ -56,7 +56,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
@@ -179,6 +178,73 @@ fun TvSeriesScreen(
     }
 }
 
+private fun findReturningSeason(seasons: List<Season>, focusEpisodeId: String?): Int? =
+    focusEpisodeId?.let { id ->
+        seasons.indexOfFirst { season -> season.episodes.any { it.id == id } }.takeIf { it >= 0 }
+    }
+
+@Composable
+private fun SeriesArrangementRow(
+    isMerged: Boolean,
+    isDescending: Boolean,
+    onMerged: (Boolean) -> Unit,
+    onDescending: (Boolean) -> Unit,
+) {
+    LazyRow(
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        // Its own focus group, so walking along it with the remote does not step into
+        // the season chips below by accident.
+        modifier = Modifier
+            .padding(top = 6.dp)
+            .focusGroup(),
+    ) {
+        item {
+            SeasonChip(
+                label = stringResource(R.string.tv_series_merge_seasons),
+                isSelected = isMerged,
+                onClick = { onMerged(!isMerged) },
+            )
+        }
+        item {
+            SeasonChip(
+                label = stringResource(R.string.tv_series_newest_first),
+                isSelected = isDescending,
+                onClick = { onDescending(!isDescending) },
+            )
+        }
+    }
+}
+
+@Composable
+private fun SeriesSeasonsRow(
+    seasons: List<Season>,
+    selectedSeason: Int,
+    onSelectSeason: (Int) -> Unit,
+) {
+    LazyRow(
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        modifier = Modifier.padding(top = 6.dp),
+    ) {
+        itemsIndexed(
+            items = seasons,
+            key = { _, season -> season.seasonNumber },
+        ) { index, season ->
+            val label = if (season.seasonNumber == MERGED_SEASON_NUMBER && season.name.isEmpty()) {
+                stringResource(R.string.tv_series_all_episodes)
+            } else {
+                season.name.ifBlank {
+                    stringResource(R.string.tv_series_season, season.seasonNumber)
+                }
+            }
+            SeasonChip(
+                label = label,
+                isSelected = index == selectedSeason,
+                onClick = { onSelectSeason(index) },
+            )
+        }
+    }
+}
+
 @Composable
 private fun Loaded(
     state: SeriesDetailUiState.Success,
@@ -204,9 +270,7 @@ private fun Loaded(
 
     // Returning to an episode means returning to its season, not to the first one.
     val returningSeason = remember(state.details.seriesId, focusEpisodeId) {
-        focusEpisodeId?.let { id ->
-            seasons.indexOfFirst { season -> season.episodes.any { it.id == id } }.takeIf { it >= 0 }
-        }
+        findReturningSeason(seasons, focusEpisodeId)
     }
     // Also keyed on the arrangement: merging collapses several seasons into one, so an index
     // of 4 points at nothing the moment the switch is flipped.
@@ -274,8 +338,10 @@ private fun Loaded(
              * artwork partially or entirely cut off.
              */
             Box(
-                modifier = Modifier.onFocusChanged {
-                    if (it.hasFocus && (listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset > 0)) {
+                modifier = Modifier.onFocusChanged { focusState ->
+                    val isScrolled = listState.firstVisibleItemIndex > 0 ||
+                        listState.firstVisibleItemScrollOffset > 0
+                    if (focusState.hasFocus && isScrolled) {
                         scope.launch { listState.animateScrollToItem(0) }
                     }
                 },
@@ -311,54 +377,21 @@ private fun Loaded(
         }
 
         item(key = "arrangement") {
-            LazyRow(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                // Its own focus group, so walking along it with the remote does not step into
-                // the season chips below by accident.
-                modifier = Modifier
-                    .padding(top = 6.dp)
-                    .focusGroup(),
-            ) {
-                item {
-                    SeasonChip(
-                        label = stringResource(R.string.tv_series_merge_seasons),
-                        isSelected = state.preference.isMerged,
-                        onClick = { onMerged(!state.preference.isMerged) },
-                    )
-                }
-                item {
-                    SeasonChip(
-                        label = stringResource(R.string.tv_series_newest_first),
-                        isSelected = state.preference.isDescending,
-                        onClick = { onDescending(!state.preference.isDescending) },
-                    )
-                }
-            }
+            SeriesArrangementRow(
+                isMerged = state.preference.isMerged,
+                isDescending = state.preference.isDescending,
+                onMerged = onMerged,
+                onDescending = onDescending,
+            )
         }
 
         if (seasons.size > 1) {
             item(key = "seasons") {
-                LazyRow(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    modifier = Modifier.padding(top = 6.dp),
-                ) {
-                    itemsIndexed(
-                        items = seasons,
-                        key = { _, season -> season.seasonNumber },
-                    ) { index, season ->
-                        SeasonChip(
-                            label = if (season.seasonNumber == MERGED_SEASON_NUMBER && season.name.isEmpty()) {
-                                stringResource(R.string.tv_series_all_episodes)
-                            } else {
-                                season.name.ifBlank {
-                                    stringResource(R.string.tv_series_season, season.seasonNumber)
-                                }
-                            },
-                            isSelected = index == selectedSeason,
-                            onClick = { selectedSeason = index },
-                        )
-                    }
-                }
+                SeriesSeasonsRow(
+                    seasons = seasons,
+                    selectedSeason = selectedSeason,
+                    onSelectSeason = { selectedSeason = it },
+                )
             }
         }
 

@@ -184,7 +184,6 @@ fun TvForYouScreen(
                     items = state.heroItems,
                     onPlay = { channel -> onPlay(listOf(channel), 0) },
                     onToggleFavorite = viewModel::toggleFavorite,
-                    onRefresh = viewModel::shuffleHeroItems,
                 )
             },
             continueWatching = {

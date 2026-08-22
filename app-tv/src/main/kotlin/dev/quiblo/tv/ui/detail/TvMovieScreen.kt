@@ -34,13 +34,13 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Text
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.ThumbDown
 import androidx.compose.material.icons.filled.ThumbUp
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -293,7 +293,11 @@ private fun Loaded(
                         DetailButton(
                             icon = Icons.Filled.ThumbUp,
                             contentDescription = stringResource(
-                                if (state.opinion == Opinion.UP) R.string.tv_detail_liked else R.string.tv_detail_like
+                                if (state.opinion == Opinion.UP) {
+                                    R.string.tv_detail_liked
+                                } else {
+                                    R.string.tv_detail_like
+                                },
                             ),
                             onClick = { onRate(Opinion.UP) },
                             onFocus = onScrollToTop,
@@ -302,7 +306,11 @@ private fun Loaded(
                         DetailButton(
                             icon = Icons.Filled.ThumbDown,
                             contentDescription = stringResource(
-                                if (state.opinion == Opinion.DOWN) R.string.tv_detail_disliked else R.string.tv_detail_dislike
+                                if (state.opinion == Opinion.DOWN) {
+                                    R.string.tv_detail_disliked
+                                } else {
+                                    R.string.tv_detail_dislike
+                                },
                             ),
                             onClick = { onRate(Opinion.DOWN) },
                             onFocus = onScrollToTop,
@@ -327,7 +335,11 @@ private fun Loaded(
                             DetailButton(
                                 icon = Icons.Filled.Refresh,
                                 contentDescription = stringResource(
-                                    if (state.isEnriching) R.string.tv_detail_refresh_working else R.string.tv_detail_refresh
+                                    if (state.isEnriching) {
+                                        R.string.tv_detail_refresh_working
+                                    } else {
+                                        R.string.tv_detail_refresh
+                                    },
                                 ),
                                 onClick = onRefreshMetadata,
                                 onFocus = onScrollToTop,

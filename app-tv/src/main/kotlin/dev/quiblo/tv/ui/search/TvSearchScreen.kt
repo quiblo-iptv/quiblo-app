@@ -699,17 +699,11 @@ private val FIELD_WIDTH = 420.dp
 /** Narrower when advanced filters are taking up the row. */
 private val FIELD_WIDTH_ADVANCED = 380.dp
 
-/** Air between the field and the sentence beside it, matching the settings screen. */
-private val COLUMN_GAP = 40.dp
-
 /** Narrower gap for when the row is crowded with filters. */
 private val COLUMN_GAP_COMPACT = 28.dp
 
 /** Between the resting field and Advanced under it. Close enough to read as one control's row. */
 private val RESTING_ADVANCED_GAP = 20.dp
-
-/** Between the two switches. Nearer to each other than either is to Advanced, because they pair. */
-private val TOGGLE_GAP = 16.dp
 
 /** Narrower toggle gap for crowded rows. */
 private val TOGGLE_GAP_COMPACT = 16.dp

@@ -97,7 +97,8 @@ class BrowseViewModelTest {
         every { channelRepository.observeFavorites(any(), any()) } returns flowOf(emptyList())
         every { channelRepository.observeRecentlyAdded(any(), any(), any()) } returns
             flowOf(RecentlyAddedFeed())
-        every { historyRepository.observeHistory(any(), any()) } returns flowOf(emptyList())
+        every { historyRepository.observeHistory(any(), any<MediaKind>()) } returns flowOf(emptyList())
+        every { historyRepository.observeHistory(any(), any<List<MediaKind>>()) } returns flowOf(emptyList())
     }
 
     @AfterEach
@@ -274,7 +275,8 @@ class BrowseViewModelTest {
         // the one that was already being asked for and discarded on Favourites before this
         // feed existed; asserting it here is what stops it coming back.
         verify(exactly = 0) { guideRepository.observeNowPlaying(any()) }
-        verify(exactly = 0) { historyRepository.observeHistory(any(), any()) }
+        verify(exactly = 0) { historyRepository.observeHistory(any(), any<MediaKind>()) }
+        verify(exactly = 0) { historyRepository.observeHistory(any(), any<List<MediaKind>>()) }
         verify(exactly = 0) { categoryRepository.observeCategories(any(), any()) }
     }
 

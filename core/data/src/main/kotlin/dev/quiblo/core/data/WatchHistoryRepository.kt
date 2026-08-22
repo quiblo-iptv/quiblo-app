@@ -57,11 +57,15 @@ class WatchHistoryRepository(
      * "continue watching" is a list of things, and six rows of the same programme is a list
      * of one thing pretending to be six.
      *
-     * The scan is deliberately wider than the result.     * Collapsing happens after the read, so
+     * The scan is deliberately wider than the result. Collapsing happens after the read, so
      * a series watched through five episodes in a row cannot crowd everything else out of
      * the answer.
      */
-    fun observeHistory(sourceId: Long, kind: MediaKind, limit: Int = DEFAULT_HISTORY_LIMIT): Flow<List<HistoryEntry>> =
+    fun observeHistory(
+        sourceId: Long,
+        kind: MediaKind,
+        limit: Int = DEFAULT_HISTORY_LIMIT,
+    ): Flow<List<HistoryEntry>> =
         profiles.activeProfile.flatMapLatest { profile ->
             resumePositionDao.observeHistory(
                 profileId = profile?.id ?: Profile.NONE_ID,
@@ -77,7 +81,11 @@ class WatchHistoryRepository(
             }
 
     /** The same, for multiple kinds at once. */
-    fun observeHistory(sourceId: Long, kinds: List<MediaKind>, limit: Int = DEFAULT_HISTORY_LIMIT): Flow<List<HistoryEntry>> =
+    fun observeHistory(
+        sourceId: Long,
+        kinds: List<MediaKind>,
+        limit: Int = DEFAULT_HISTORY_LIMIT,
+    ): Flow<List<HistoryEntry>> =
         profiles.activeProfile.flatMapLatest { profile ->
             resumePositionDao.observeHistoryOfKinds(
                 profileId = profile?.id ?: Profile.NONE_ID,

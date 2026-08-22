@@ -15,6 +15,17 @@ Formatted after [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and ve
 
 ## Unreleased
 
+### Added
+
+- **TV UI Improvements and Polish.** Outlined rating thumbs when unselected, dedicated icon-only action buttons for start-over and remove-history across Movie and Series detail screens.
+- **Series Detail Auto-Scroll & Season Selector.** Enhanced Android TV series screen with automatic header scrolling on focus and refined season row navigation.
+- **Compact TV Search Bar.** Optical centering and compact filter spacing for fast D-pad searching on television screens.
+
+### Fixed
+
+- **TV Tab Order & Remote Navigation.** Aligned `TvTab` enum order (Search, For You, Live, Movies, Series, Favourites) and updated verification tests.
+- **Code Quality & Complexity.** Refactored `DetailButton` and `Loaded` composables in TV UI to comply with detekt cyclomatic complexity rules.
+
 ## 0.23.0
 
 ### Added

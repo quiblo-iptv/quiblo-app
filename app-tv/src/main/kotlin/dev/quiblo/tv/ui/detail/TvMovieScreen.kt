@@ -35,6 +35,12 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.FavoriteBorder
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.ThumbDown
+import androidx.compose.material.icons.filled.ThumbUp
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -59,6 +65,7 @@ import dev.quiblo.feature.vod.MovieDetailViewModel
 import dev.quiblo.tv.R
 import dev.quiblo.tv.ui.common.ambientBackdrop
 import dev.quiblo.tv.ui.common.rememberAmbient
+import kotlinx.coroutines.launch
 import org.koin.androidx.compose.koinViewModel
 import org.koin.core.parameter.parametersOf
 
@@ -260,12 +267,9 @@ private fun Loaded(
                         }
 
                         DetailButton(
-                            label = stringResource(
-                                if (state.isFavorite) {
-                                    R.string.tv_detail_unfavourite
-                                } else {
-                                    R.string.tv_detail_favourite
-                                },
+                            icon = if (state.isFavorite) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,
+                            contentDescription = stringResource(
+                                if (state.isFavorite) R.string.tv_detail_unfavourite else R.string.tv_detail_favourite
                             ),
                             onClick = onToggleFavorite,
                         )
@@ -275,23 +279,17 @@ private fun Loaded(
                         // after playback: a viewer who has seen something elsewhere has an opinion
                         // about it too, and a control that comes and goes is one nobody finds.
                         DetailButton(
-                            label = stringResource(
-                                if (state.opinion == Opinion.UP) {
-                                    R.string.tv_detail_liked
-                                } else {
-                                    R.string.tv_detail_like
-                                },
+                            icon = Icons.Filled.ThumbUp,
+                            contentDescription = stringResource(
+                                if (state.opinion == Opinion.UP) R.string.tv_detail_liked else R.string.tv_detail_like
                             ),
                             onClick = { onRate(Opinion.UP) },
                         )
 
                         DetailButton(
-                            label = stringResource(
-                                if (state.opinion == Opinion.DOWN) {
-                                    R.string.tv_detail_disliked
-                                } else {
-                                    R.string.tv_detail_dislike
-                                },
+                            icon = Icons.Filled.ThumbDown,
+                            contentDescription = stringResource(
+                                if (state.opinion == Opinion.DOWN) R.string.tv_detail_disliked else R.string.tv_detail_dislike
                             ),
                             onClick = { onRate(Opinion.DOWN) },
                         )
@@ -312,12 +310,9 @@ private fun Loaded(
                         // about what a remote walks past to reach what it wants).
                         if (state.canRefreshMetadata) {
                             DetailButton(
-                                label = stringResource(
-                                    if (state.isEnriching) {
-                                        R.string.tv_detail_refresh_working
-                                    } else {
-                                        R.string.tv_detail_refresh
-                                    },
+                                icon = Icons.Filled.Refresh,
+                                contentDescription = stringResource(
+                                    if (state.isEnriching) R.string.tv_detail_refresh_working else R.string.tv_detail_refresh
                                 ),
                                 onClick = onRefreshMetadata,
                             )

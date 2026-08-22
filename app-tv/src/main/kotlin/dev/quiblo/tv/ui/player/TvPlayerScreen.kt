@@ -290,30 +290,14 @@ fun TvPlayerScreen(
      * The order is the hierarchy: it closes the track menu, then the controls, then the offer,
      * and only then exits playback.
      */
-    val handleBack = { isExitAllowed: Boolean ->
+    BackHandler {
         when {
-            trackMenuAt != null -> {
-                trackMenuAt = null
-                true
-            }
-            controlsVisible -> {
-                controlsVisible = false
-                true
-            }
-            isOfferingNextEpisode -> {
-                nextEpisodeDismissed = true
-                true
-            }
-            isExitAllowed -> {
-                nextEpisodeDismissed = true
-                onBack()
-                true
-            }
-            else -> false
+            trackMenuAt != null -> trackMenuAt = null
+            controlsVisible -> controlsVisible = false
+            isOfferingNextEpisode -> nextEpisodeDismissed = true
+            else -> onBack()
         }
     }
-
-    BackHandler { handleBack(true) }
 
     /*
      * Tell the player it is finished — on the way out, and on the way to the background.
@@ -360,12 +344,6 @@ fun TvPlayerScreen(
              */
             .onPreviewKeyEvent { event ->
                 if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
-
-                if (event.key == Key.Back) {
-                    // Only handle Back here if something is open. If nothing is open,
-                    // return false so the BackHandler (which is Activity-level) handles it.
-                    return@onPreviewKeyEvent handleBack(false)
-                }
 
                 if (controlsVisible) interactionTick++
                 false

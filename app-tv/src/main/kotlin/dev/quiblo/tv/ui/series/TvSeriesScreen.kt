@@ -43,6 +43,12 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.FavoriteBorder
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.ThumbDown
+import androidx.compose.material.icons.filled.ThumbUp
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -50,12 +56,15 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
@@ -85,6 +94,7 @@ import dev.quiblo.tv.ui.detail.DetailTitle
 import dev.quiblo.tv.ui.detail.genresOrEmpty
 import dev.quiblo.tv.ui.detail.messageRes
 import dev.quiblo.tv.ui.detail.openDetailScreen
+import kotlinx.coroutines.launch
 import org.koin.androidx.compose.koinViewModel
 import org.koin.core.parameter.parametersOf
 
@@ -208,6 +218,7 @@ private fun Loaded(
     val firstAction = remember { FocusRequester() }
     val episodeCursor = remember { FocusRequester() }
     val listState = rememberLazyListState()
+    val scope = rememberCoroutineScope()
 
     /*
      * Where the remote lands, and what the screen is showing when it does.
@@ -254,16 +265,32 @@ private fun Loaded(
         contentPadding = PaddingValues(bottom = 24.dp),
     ) {
         item(key = "header") {
-            SeriesHeader(
-                state = state,
-                seasonCount = seasons.size,
-                firstAction = firstAction,
-                onPlayEpisode = play,
-                onToggleFavorite = onToggleFavorite,
-                onRemoveFromHistory = onRemoveFromHistory,
-                onRefreshMetadata = onRefreshMetadata,
-                onRate = onRate,
-            )
+            /*
+             * The header is one scrolling item, and bringing the buttons back into view is what
+             * brings the rest of the page with them (`027` #3).
+             *
+             * Without this, navigating up from the episodes would land on the buttons at whatever
+             * scroll position the list happened to be in, which on this panel left the title and
+             * artwork partially or entirely cut off.
+             */
+            Box(
+                modifier = Modifier.onFocusChanged {
+                    if (it.hasFocus) {
+                        scope.launch { listState.animateScrollToItem(0) }
+                    }
+                },
+            ) {
+                SeriesHeader(
+                    state = state,
+                    seasonCount = seasons.size,
+                    firstAction = firstAction,
+                    onPlayEpisode = play,
+                    onToggleFavorite = onToggleFavorite,
+                    onRemoveFromHistory = onRemoveFromHistory,
+                    onRefreshMetadata = onRefreshMetadata,
+                    onRate = onRate,
+                )
+            }
         }
 
         if (seasons.isEmpty()) {
@@ -467,12 +494,9 @@ private fun SeriesActions(
         }
 
         DetailButton(
-            label = stringResource(
-                if (state.isFavorite) {
-                    R.string.tv_detail_unfavourite
-                } else {
-                    R.string.tv_detail_favourite
-                },
+            icon = if (state.isFavorite) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,
+            contentDescription = stringResource(
+                if (state.isFavorite) R.string.tv_detail_unfavourite else R.string.tv_detail_favourite
             ),
             onClick = onToggleFavorite,
         )
@@ -482,15 +506,17 @@ private fun SeriesActions(
         // episode that removed the whole series from suggestions would answer a question that
         // was not asked.
         DetailButton(
-            label = stringResource(
-                if (state.opinion == Opinion.UP) R.string.tv_detail_liked else R.string.tv_detail_like,
+            icon = Icons.Filled.ThumbUp,
+            contentDescription = stringResource(
+                if (state.opinion == Opinion.UP) R.string.tv_detail_liked else R.string.tv_detail_like
             ),
             onClick = { onRate(Opinion.UP) },
         )
 
         DetailButton(
-            label = stringResource(
-                if (state.opinion == Opinion.DOWN) R.string.tv_detail_disliked else R.string.tv_detail_dislike,
+            icon = Icons.Filled.ThumbDown,
+            contentDescription = stringResource(
+                if (state.opinion == Opinion.DOWN) R.string.tv_detail_disliked else R.string.tv_detail_dislike
             ),
             onClick = { onRate(Opinion.DOWN) },
         )
@@ -514,12 +540,9 @@ private fun SeriesActions(
         // the favourite on the way there.
         if (state.canRefreshMetadata) {
             DetailButton(
-                label = stringResource(
-                    if (state.isEnriching) {
-                        R.string.tv_detail_refresh_working
-                    } else {
-                        R.string.tv_detail_refresh
-                    },
+                icon = Icons.Filled.Refresh,
+                contentDescription = stringResource(
+                    if (state.isEnriching) R.string.tv_detail_refresh_working else R.string.tv_detail_refresh
                 ),
                 onClick = onRefreshMetadata,
             )

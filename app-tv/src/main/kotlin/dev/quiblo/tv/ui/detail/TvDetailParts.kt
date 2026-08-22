@@ -23,7 +23,9 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -32,7 +34,12 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.Movie
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.ThumbDown
+import androidx.compose.material.icons.filled.ThumbUp
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -195,9 +202,11 @@ fun DetailOverview(
 /** A focusable action. The only kind of control these screens have. */
 @Composable
 fun DetailButton(
-    label: String,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    label: String? = null,
+    icon: androidx.compose.ui.graphics.vector.ImageVector? = null,
+    contentDescription: String? = null,
     isPrimary: Boolean = false,
 ) {
     val interactionSource = remember { MutableInteractionSource() }
@@ -227,23 +236,42 @@ fun DetailButton(
                 cornerRadius = 10.dp,
                 intensity = PRIMARY_GLOW,
             )
-            .padding(horizontal = 18.dp, vertical = 9.dp),
+            .padding(
+                horizontal = if (label != null) 18.dp else 12.dp,
+                vertical = 9.dp,
+            ),
         contentAlignment = Alignment.Center,
     ) {
-        Text(
-            text = label,
-            // Inverted while focused: a white fill needs dark text, and the focused control
-            // has to be unmistakable from the other side of a room.
-            color = if (isFocused) Color.Black else Color.White,
-            fontSize = 15.sp,
-            fontWeight = if (isPrimary || isFocused) FontWeight.SemiBold else FontWeight.Normal,
-            maxLines = 1,
-            // Clipped was the default and it is the worse of the two failures: "Add to
-            // favourites" was cut mid-word with nothing to say it had been (#014). The row
-            // these sit in wraps now, so this should not fire — it is here for the label that
-            // is longer in some other language than any of ours is in English.
-            overflow = TextOverflow.Ellipsis,
-        )
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            if (icon != null) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = contentDescription,
+                    tint = if (isFocused) Color.Black else Color.White,
+                    modifier = Modifier.size(20.dp),
+                )
+            }
+
+            if (label != null) {
+                Text(
+                    text = label,
+                    // Inverted while focused: a white fill needs dark text, and the focused control
+                    // has to be unmistakable from the other side of a room.
+                    color = if (isFocused) Color.Black else Color.White,
+                    fontSize = 15.sp,
+                    fontWeight = if (isPrimary || isFocused) FontWeight.SemiBold else FontWeight.Normal,
+                    maxLines = 1,
+                    // Clipped was the default and it is the worse of the two failures: "Add to
+                    // favourites" was cut mid-word with nothing to say it had been (#014). The row
+                    // these sit in wraps now, so this should not fire — it is here for the label that
+                    // is longer in some other language than any of ours is in English.
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
     }
 }
 

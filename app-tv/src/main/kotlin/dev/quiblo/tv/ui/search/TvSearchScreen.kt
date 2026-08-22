@@ -345,7 +345,11 @@ internal fun ColumnScope.SearchHeader(
         label = "searchWordmarkAlpha",
     )
     val fieldWidth by animateDpAsState(
-        targetValue = if (isResting) RESTING_FIELD_WIDTH else FIELD_WIDTH,
+        targetValue = when {
+            isResting -> RESTING_FIELD_WIDTH
+            isAdvanced -> FIELD_WIDTH_ADVANCED
+            else -> FIELD_WIDTH
+        },
         label = "searchFieldWidth",
     )
 
@@ -438,40 +442,32 @@ internal fun ColumnScope.SearchHeader(
             )
 
             if (!isResting) {
-                Spacer(modifier = Modifier.width(COLUMN_GAP))
+                Spacer(modifier = Modifier.width(COLUMN_GAP_COMPACT))
                 TvChip(
                     label = stringResource(R.string.tv_search_advanced),
                     isSelected = isAdvanced,
                     onClick = onToggleAdvanced,
                     modifier = Modifier.focusRequester(advancedFocus),
+                    horizontalPadding = 10.dp,
+                    verticalPadding = 6.dp,
                 )
 
-                /*
-                 * The two switches, on the right of the field's own row (`027` #6).
-                 *
-                 * **They were chips at the head of the genre strip, and that was two faults in one
-                 * place.** A switch drawn as a chip looks like a genre that happens to be chosen,
-                 * which is the first; and living in the same scrolling strip as the genres put
-                 * them behind however many suggestions the term had produced — six of them on a
-                 * common word — so reaching *Include hidden* meant walking past a row of titles.
-                 * A filter that decides what a search returns does not belong downstream of the
-                 * search's own answers.
-                 *
-                 * Up here they are one press right of Advanced, which is the control that reveals
-                 * them, and they are on the row a viewer is already looking at.
-                 */
                 if (isAdvanced) {
-                    Spacer(modifier = Modifier.width(COLUMN_GAP))
+                    Spacer(modifier = Modifier.width(COLUMN_GAP_COMPACT))
                     TvToggle(
                         label = stringResource(R.string.tv_search_include_hidden),
                         isOn = state.includeHidden,
                         onToggle = onToggleIncludeHidden,
+                        horizontalPadding = 8.dp,
+                        verticalPadding = 6.dp,
                     )
-                    Spacer(modifier = Modifier.width(TOGGLE_GAP))
+                    Spacer(modifier = Modifier.width(TOGGLE_GAP_COMPACT))
                     TvToggle(
                         label = stringResource(R.string.tv_search_include_live),
                         isOn = state.includeLive,
                         onToggle = onToggleIncludeLive,
+                        horizontalPadding = 8.dp,
+                        verticalPadding = 6.dp,
                     )
                 }
             }
@@ -495,8 +491,11 @@ internal fun ColumnScope.SearchHeader(
      * *beside* the field, taking the width the switches now use, to explain chips that were a row
      * below it and a screen's width to the left. It reads where it belongs: after the question,
      * before the answers it qualifies.
+     *
+     * **Hidden when results are on screen.** It takes vertical room that the results need, and once
+     * a viewer has results they have already navigated past the filter.
      */
-    if (isAdvanced) {
+    if (isAdvanced && !state.isActive) {
         genreHint(state)?.let {
             Text(
                 text = it,
@@ -552,6 +551,8 @@ internal fun ColumnScope.SearchHeader(
                     label = stringResource(R.string.tv_search_clear),
                     isSelected = false,
                     onClick = onClear,
+                    horizontalPadding = 12.dp,
+                    verticalPadding = 6.dp,
                 )
             }
         }
@@ -568,6 +569,8 @@ internal fun ColumnScope.SearchHeader(
                 // here wants the shorter term, and opening a title from a strip that also holds
                 // filters would make the strip mean two things.
                 onClick = { onQueryChange(suggestion) },
+                horizontalPadding = 12.dp,
+                verticalPadding = 6.dp,
             )
         }
 
@@ -583,6 +586,8 @@ internal fun ColumnScope.SearchHeader(
                     // the one that undid their filter. Clear is at the head of this strip and is
                     // the only thing that means "no genre".
                     onClick = { onSelectGenre(genre) },
+                    horizontalPadding = 12.dp,
+                    verticalPadding = 6.dp,
                 )
             }
         }
@@ -677,7 +682,7 @@ internal const val FIELD_ROW_TAG = "search.fieldRow"
  * a size chosen against a laptop. On a television the resting screen is three things in the
  * middle of a very large rectangle, so they can afford to be large.
  */
-private val WORDMARK_HEIGHT = 128.dp
+private val WORDMARK_HEIGHT = 120.dp
 private val LOGO_SIZE = 72.dp
 private val WORDMARK_TEXT_SIZE = 34.sp
 
@@ -687,8 +692,14 @@ private val RESTING_FIELD_WIDTH = 560.dp
 /** Wide enough for a film title typed in full, and no wider — the hint shares the line. */
 private val FIELD_WIDTH = 420.dp
 
+/** Narrower when advanced filters are taking up the row. */
+private val FIELD_WIDTH_ADVANCED = 320.dp
+
 /** Air between the field and the sentence beside it, matching the settings screen. */
 private val COLUMN_GAP = 40.dp
+
+/** Narrower gap for when the row is crowded with filters. */
+private val COLUMN_GAP_COMPACT = 20.dp
 
 /** Between the resting field and Advanced under it. Close enough to read as one control's row. */
 private val RESTING_ADVANCED_GAP = 20.dp
@@ -696,18 +707,16 @@ private val RESTING_ADVANCED_GAP = 20.dp
 /** Between the two switches. Nearer to each other than either is to Advanced, because they pair. */
 private val TOGGLE_GAP = 16.dp
 
+/** Narrower toggle gap for crowded rows. */
+private val TOGGLE_GAP_COMPACT = 12.dp
+
 /**
  * Where the middle of the panel is *to a viewer*, as a fraction of its height.
  *
- * 0.46, not 0.50. A block on the true half-way line looks low on a television, and the two
- * reasons are both real: the bar across the top reads as the top edge of the picture, so the eye
- * centres what is under it; and there is always something below the block — the results, or the
- * line of copy standing in for them — while above it there is nothing.
- *
- * Roughly 43px up on a 1080 panel, and it scales with the screen rather than being a fixed
- * nudge, which is what stops it becoming wrong on the next size of television.
+ * 0.44, not 0.46. Moved slightly higher to ensure that results below it are not pushed off the
+ * bottom of the screen.
  */
-private const val OPTICAL_CENTRE = 0.46f
+private const val OPTICAL_CENTRE = 0.44f
 
 /**
  * Air above and below the chip strip, and it is load-bearing rather than taste.
@@ -721,7 +730,7 @@ private const val OPTICAL_CENTRE = 0.46f
  * The chips also read better nearer the field they belong to, but that is a bonus and not the
  * reason. If anything above the results grows again, that test is what will say so.
  */
-private val CHIP_STRIP_PADDING = 4.dp
+private val CHIP_STRIP_PADDING = 8.dp
 
 /** Stable, so the chip row is not rebuilt when the genres behind it change. */
 private const val CLEAR_KEY = "__clear__"

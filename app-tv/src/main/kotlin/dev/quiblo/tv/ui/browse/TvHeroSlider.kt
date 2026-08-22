@@ -143,26 +143,6 @@ fun TvHeroSlider(
                 .align(Alignment.BottomCenter)
                 .padding(bottom = 24.dp),
         )
-
-        // Refresh Button - Positioned to the right, below the top bar area
-        IconButton(
-            onClick = onRefresh,
-            scale = IconButtonDefaults.scale(focusedScale = 1.2f),
-            colors = IconButtonDefaults.colors(
-                containerColor = Color.Transparent,
-                focusedContainerColor = Color.White.copy(alpha = 0.2f),
-            ),
-            modifier = Modifier
-                .align(Alignment.TopEnd)
-                .padding(top = 100.dp, end = 64.dp) // Below the tab bar
-                .zIndex(1f),
-        ) {
-            Icon(
-                imageVector = Icons.Default.Refresh,
-                contentDescription = "Refresh Slider",
-                tint = Color.White.copy(alpha = 0.8f),
-            )
-        }
     }
 }
 

@@ -15,6 +15,8 @@ Formatted after [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and ve
 
 ## Unreleased
 
+## 0.24.0
+
 ### Added
 
 - **TV UI Improvements and Polish.** Outlined rating thumbs when unselected, dedicated icon-only action buttons for start-over and remove-history across Movie and Series detail screens.

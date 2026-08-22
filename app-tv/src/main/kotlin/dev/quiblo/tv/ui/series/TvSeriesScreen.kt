@@ -533,9 +533,7 @@ private fun SeriesActions(
         state.firstEpisode?.let { first ->
             DetailButton(
                 icon = if (hasResume) Icons.Filled.SkipPrevious else Icons.Filled.PlayArrow,
-                label = stringResource(
-                    if (hasResume) R.string.tv_detail_from_start else R.string.tv_detail_play,
-                ),
+                label = if (hasResume) null else stringResource(R.string.tv_detail_play),
                 contentDescription = stringResource(
                     if (hasResume) R.string.tv_detail_from_start else R.string.tv_detail_play,
                 ),
@@ -575,7 +573,6 @@ private fun SeriesActions(
         if (hasResume) {
             DetailButton(
                 icon = Icons.Filled.DeleteOutline,
-                label = stringResource(R.string.tv_detail_remove_history),
                 contentDescription = stringResource(R.string.tv_detail_remove_history),
                 onClick = onRemoveFromHistory,
                 onFocus = onScrollToTop,

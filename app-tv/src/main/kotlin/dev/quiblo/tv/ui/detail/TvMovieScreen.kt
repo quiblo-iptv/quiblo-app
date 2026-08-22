@@ -270,7 +270,6 @@ private fun Loaded(
                             )
                             DetailButton(
                                 icon = Icons.Filled.SkipPrevious,
-                                label = stringResource(R.string.tv_detail_from_start),
                                 contentDescription = stringResource(R.string.tv_detail_from_start),
                                 onClick = { onPlay(0L) },
                                 onFocus = onScrollToTop,
@@ -311,7 +310,6 @@ private fun Loaded(
                         if (state.canResume) {
                             DetailButton(
                                 icon = Icons.Filled.DeleteOutline,
-                                label = stringResource(R.string.tv_detail_remove_history),
                                 contentDescription = stringResource(R.string.tv_detail_remove_history),
                                 onClick = onRemoveFromHistory,
                                 onFocus = onScrollToTop,

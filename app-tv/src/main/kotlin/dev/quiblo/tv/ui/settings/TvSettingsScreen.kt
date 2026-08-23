@@ -87,6 +87,8 @@ import dev.quiblo.core.model.Category
 import dev.quiblo.core.model.MaxBitrateCap
 import dev.quiblo.core.model.MediaKind
 import dev.quiblo.core.model.SeekInterval
+import dev.quiblo.designsystem.TMDB_API_KEY_URL
+import dev.quiblo.designsystem.openLink
 import dev.quiblo.feature.settings.BackupUiState
 import dev.quiblo.feature.settings.SettingsViewModel
 import dev.quiblo.feature.settings.THIRD_PARTY_LICENSES
@@ -564,6 +566,10 @@ private fun LicenseRow(entry: ThirdPartyLicense) {
  *
  * Held locally until Save rather than written per keystroke: a key is meaningless
  * half-entered, and writing one would clear the cached metadata on every character.
+ *
+ * **Get a key is beside Save because a field for a key nobody has is a dead end.** The address
+ * is in the line above it as well: a television box often has no browser, and the likely way
+ * anybody makes one of these is on the phone in their hand — see [openLink].
  */
 @Composable
 internal fun TmdbKeyRow(
@@ -573,6 +579,7 @@ internal fun TmdbKeyRow(
     onClear: () -> Unit,
 ) {
     var draft by remember(currentKey) { mutableStateOf(currentKey.orEmpty()) }
+    val context = LocalContext.current
 
     /*
      * Laid out as `OptionRow` lays out every other row on this screen, because #022 was that it
@@ -625,6 +632,11 @@ internal fun TmdbKeyRow(
                 label = stringResource(R.string.tv_settings_clear),
                 isSelected = false,
                 onClick = onClear,
+            )
+            TvChip(
+                label = stringResource(R.string.tv_settings_tmdb_open),
+                isSelected = false,
+                onClick = { openLink(context, TMDB_API_KEY_URL) },
             )
 
             // The service is the only thing that can say whether a key works, so the answer

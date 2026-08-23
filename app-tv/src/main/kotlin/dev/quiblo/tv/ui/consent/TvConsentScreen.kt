@@ -46,28 +46,37 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import dev.quiblo.designsystem.TMDB_API_KEY_URL
+import dev.quiblo.feature.settings.SettingsViewModel
 import dev.quiblo.feature.sources.AddSourceState
 import dev.quiblo.feature.sources.SourcesViewModel
 import dev.quiblo.tv.R
 import dev.quiblo.tv.ui.common.TvChip
 import dev.quiblo.tv.ui.common.TvFocusRow
 import dev.quiblo.tv.ui.common.tryRequestFocus
+import dev.quiblo.tv.ui.settings.TmdbKeyRow
 import dev.quiblo.tv.ui.sources.FORM_WIDTH
 import dev.quiblo.tv.ui.sources.TvAddSourceForm
 import org.koin.androidx.compose.koinViewModel
 
 /**
- * What this app is, what you are agreeing to, and the playlist it needs — the first three
- * screens of a fresh install (`FREEZE.md` Amendment 9).
+ * What this app is, what you are agreeing to, the playlist it needs and the key that describes
+ * it — the first four screens of a fresh install (`FREEZE.md` Amendment 9).
  *
  * **The text is on the screen and the link is extra.** A television has no browser worth using,
  * so a link that is the only way to read the terms is a term nobody here can read. The wiki page
  * is the full version and this is the part that matters, written to be read from a sofa.
  *
- * **Three screens rather than two**, split where the subject changes: what the app is, what is
- * being agreed, and then the one thing a viewer has to do before this app can show them
- * anything at all. The third page is new, and it exists because the flow used to end at the
- * terms and drop somebody into an empty app whose next step was four presses deep in Settings.
+ * **A page per subject**: what the app is, what is being agreed, the one thing a viewer has to
+ * do before this app can show them anything at all, and the one thing that turns a list of
+ * filenames into a catalogue with posters. The last two exist for the same reason — the flow
+ * used to end at the terms and drop somebody into an empty app whose next steps were both four
+ * presses deep in Settings.
+ *
+ * **The metadata key is asked for last and can be skipped in one press**, because unlike a
+ * playlist the app works without one. It is asked for at all because nothing on screen says a
+ * key exists, so a viewer who never opens Settings never finds out why their films have no
+ * posters.
  *
  * **There is no decline button**, and that is a decision rather than an omission. Somebody who
  * will not accept the terms of a player they downloaded can read this and leave; an app that
@@ -82,6 +91,7 @@ fun TvConsentScreen(
     onAccept: () -> Unit,
     modifier: Modifier = Modifier,
     viewModel: SourcesViewModel = koinViewModel(key = "tv-consent-sources"),
+    settingsViewModel: SettingsViewModel = koinViewModel(key = "tv-consent-settings"),
 ) {
     var page by remember { mutableStateOf(ConsentPage.WHAT) }
 
@@ -108,7 +118,12 @@ fun TvConsentScreen(
                 onAction = { page = ConsentPage.PLAYLIST },
             )
 
-            ConsentPage.PLAYLIST -> PlaylistPage(viewModel = viewModel, onDone = onAccept)
+            ConsentPage.PLAYLIST -> PlaylistPage(
+                viewModel = viewModel,
+                onDone = { page = ConsentPage.METADATA },
+            )
+
+            ConsentPage.METADATA -> MetadataPage(onDone = onAccept, viewModel = settingsViewModel)
         }
     }
 }
@@ -159,12 +174,11 @@ private fun ReadingPage(
 }
 
 /**
- * The last page: a playlist now, or later.
+ * The playlist: now, or later.
  *
- * **Consent is accepted on the way out of this page, by whichever button is pressed.** It used
- * to be accepted at the end of the terms page, which would have left a viewer able to save a
- * source while the app still believed nobody had agreed to anything — a state nothing else here
- * expects.
+ * **Whichever button is pressed leads to the last page rather than into the app.** Consent is
+ * accepted on the way out of *that* one, which keeps the rule this page was built under: the
+ * flow is not left half way, and the app is never entered by a route that skipped a page.
  *
  * **It waits for the source to load rather than accepting and running.** Adding a playlist
  * starts a fetch that can take a while and can fail, and a viewer dropped into an empty app
@@ -244,6 +258,67 @@ private fun PlaylistPage(viewModel: SourcesViewModel, onDone: () -> Unit) {
     }
 }
 
+/**
+ * The last page: a key for the film database, or none.
+ *
+ * **Skipping is one press and costs nothing that cannot be had later.** Without a key the app
+ * plays everything it did before — posters, plots, ratings and the genre and year filters are
+ * what a key buys, and every one of them arrives the moment a key is saved in Settings.
+ *
+ * **The address is on the screen as well as behind the button.** A television box often has no
+ * browser, and the ones that do are painful to type a login into with a remote; the likely way
+ * anybody does this is on the phone in their hand, reading the address off the television. The
+ * button is the shortcut for a device that can take it, and nothing depends on it — see
+ * [openLink].
+ */
+@Composable
+private fun MetadataPage(onDone: () -> Unit, viewModel: SettingsViewModel) {
+    val savedKey by viewModel.tmdbApiKey.collectAsStateWithLifecycle()
+    val check by viewModel.tmdbCheck.collectAsStateWithLifecycle()
+
+    val focusRequester = remember { FocusRequester() }
+    LaunchedEffect(Unit) { focusRequester.tryRequestFocus() }
+
+    Heading(stringResource(R.string.tv_consent_metadata_title))
+
+    Text(
+        text = stringResource(R.string.tv_consent_metadata_body),
+        color = BODY_COLOUR,
+        fontSize = 17.sp,
+        lineHeight = 26.sp,
+        modifier = Modifier.width(BODY_WIDTH),
+    )
+
+    Text(
+        text = TMDB_API_KEY_URL,
+        color = Color.White,
+        fontSize = 17.sp,
+        modifier = Modifier.width(BODY_WIDTH),
+    )
+
+    Spacer(modifier = Modifier.height(6.dp))
+
+    // The same row Settings uses, rather than a second one: a field that saves a key and reports
+    // what the service said about it is exactly what this page needs, and a copy of it here is
+    // how the two come to disagree about what a rejected key looks like.
+    TmdbKeyRow(
+        currentKey = savedKey,
+        check = check,
+        onSave = viewModel::saveTmdbKey,
+        onClear = viewModel::clearTmdbKey,
+    )
+
+    // Save, Clear and Get a key are [TmdbKeyRow]'s own; this is the way out of the flow.
+    TvChip(
+        label = stringResource(
+            if (savedKey.isNullOrBlank()) R.string.tv_consent_metadata_skip else R.string.tv_consent_start,
+        ),
+        isSelected = true,
+        onClick = onDone,
+        modifier = Modifier.focusRequester(focusRequester),
+    )
+}
+
 @Composable
 private fun Loading() {
     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -311,7 +386,7 @@ private fun Heading(title: String) {
  * how a third one gets bolted on as a second flag, and then two of the four combinations mean
  * nothing.
  */
-private enum class ConsentPage { WHAT, TERMS, PLAYLIST }
+private enum class ConsentPage { WHAT, TERMS, PLAYLIST, METADATA }
 
 /**
  * The panel's own margin.

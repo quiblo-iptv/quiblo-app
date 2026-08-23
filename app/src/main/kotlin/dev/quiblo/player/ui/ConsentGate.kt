@@ -18,8 +18,6 @@
 
 package dev.quiblo.player.ui
 
-import android.content.ActivityNotFoundException
-import android.content.Intent
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -41,9 +39,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.core.net.toUri
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.quiblo.core.datastore.ConsentStore
+import dev.quiblo.designsystem.openLink
 import dev.quiblo.player.R
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
@@ -108,13 +106,7 @@ private fun ConsentScreens(onAccept: () -> Unit) {
             // not impossible, and the terms are readable without ever leaving this screen — so a
             // failure here is a button that did nothing visible, not a person unable to read
             // what they are agreeing to.
-            TextButton(
-                onClick = {
-                    runCatching {
-                        context.startActivity(Intent(Intent.ACTION_VIEW, TERMS_URL.toUri()))
-                    }.onFailure { if (it !is ActivityNotFoundException) throw it }
-                },
-            ) {
+            TextButton(onClick = { openLink(context, TERMS_URL) }) {
                 Text(text = stringResource(R.string.consent_terms_link))
             }
         }

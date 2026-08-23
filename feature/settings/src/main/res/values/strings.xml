@@ -60,6 +60,7 @@
     <string name="settings_metadata_key">TMDB API key or read access token</string>
     <string name="settings_metadata_save">Save and check</string>
     <string name="settings_metadata_clear">Turn off</string>
+    <string name="settings_metadata_get_key">Get a key</string>
     <string name="settings_metadata_checking">Checking the key…</string>
     <string name="settings_metadata_accepted">Key accepted. Film information is on.</string>
     <string name="settings_metadata_rejected">The Movie Database rejected that key. Nothing was saved.</string>

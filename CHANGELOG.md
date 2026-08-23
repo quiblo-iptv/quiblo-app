@@ -17,6 +17,7 @@ Formatted after [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and ve
 
 ### Added
 
+- **First launch asks for a Movie Database key, and offers to open the page that makes one.** A fourth page after the playlist, skippable in one press: nothing on screen said a key existed, so anybody who never opened Settings never found out why their films had no posters. Settings has the same *Get a key* button on both the phone and the television.
 - **Advanced search on the television filters by year.** The Years chip beside Genres lists every year the app has metadata for, newest first, and narrows films and series to it — on its own or together with a genre. It shares the one chip strip rather than taking a row of its own, because a second row is what pushes a focused result off the bottom of the screen.
 
 ### Fixed

@@ -34,6 +34,7 @@ android {
 
 dependencies {
     implementation(projects.core.data)
+    implementation(projects.feature.designsystem)
     implementation(projects.core.model)
     implementation(projects.core.media)
 

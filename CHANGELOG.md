@@ -15,6 +15,17 @@ Formatted after [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and ve
 
 ## Unreleased
 
+### Fixed
+
+- **The button that changes the featured titles is back on the television home screen.** It was removed while the hero slider was being tidied and the code behind it was left in place, so the slider offered whatever five titles it had picked and no way to ask for five more.
+- **The launch screen no longer plays again every time the screen rotates.** Rotating a phone, or changing the theme, recreates the app's window; the splash treated that as a fresh start and put five seconds in front of an app the viewer was already inside.
+- **The Quiblo mark on the launch screen is the app's own mark again.** Both launch screens had drawn a hand-made copy of it with the ring, the tail and the play triangle in the wrong places.
+- **The television build is a megabyte smaller.** It shipped the launch sound twice — once compressed, once not.
+
+### Changed
+
+- **The launch screen, the ambient light and the brand mark are one implementation each, shared by the phone and the television.** They were a copy each, which is how the television's mark came to be drawn wrong while the phone's was right.
+
 ## 0.24.0
 
 ### Added

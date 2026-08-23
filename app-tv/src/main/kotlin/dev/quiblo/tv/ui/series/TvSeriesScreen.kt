@@ -83,12 +83,12 @@ import dev.quiblo.core.model.Channel
 import dev.quiblo.core.model.Episode
 import dev.quiblo.core.model.Opinion
 import dev.quiblo.core.model.Season
+import dev.quiblo.designsystem.ambientBackdrop
+import dev.quiblo.designsystem.rememberAmbient
 import dev.quiblo.feature.browse.runtimeLabel
 import dev.quiblo.feature.series.SeriesDetailUiState
 import dev.quiblo.feature.series.SeriesDetailViewModel
 import dev.quiblo.tv.R
-import dev.quiblo.tv.ui.common.ambientBackdrop
-import dev.quiblo.tv.ui.common.rememberAmbient
 import dev.quiblo.tv.ui.detail.DETAIL_COLUMN_GAP
 import dev.quiblo.tv.ui.detail.DetailArtwork
 import dev.quiblo.tv.ui.detail.DetailButton
@@ -135,10 +135,13 @@ fun TvSeriesScreen(
     )
     val state by viewModel.uiState.collectAsStateWithLifecycle()
 
+    // TMDB's poster first, the provider's cover second, its logo last — the same order the phone
+    // screen uses. A provider logo is often a channel bug rather than artwork, and light taken
+    // from one is light from the wrong picture.
     val artworkUrl = (state as? SeriesDetailUiState.Success)?.let { success ->
-        success.channel.logoUrl?.takeIf { it.isNotBlank() }
-            ?: success.details.coverUrl
-            ?: success.metadata?.posterUrl
+        success.metadata?.posterUrl
+            ?: success.details.coverUrl?.takeIf { it.isNotBlank() }
+            ?: success.channel.logoUrl
     } ?: channel.logoUrl
     val ambient = rememberAmbient(artworkUrl)
 
@@ -150,35 +153,33 @@ fun TvSeriesScreen(
     BackHandler(onBack = onBack)
 
     Box(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxSize()
             .background(Color.Black)
             .ambientBackdrop(ambient),
     ) {
-        Box(modifier = modifier.fillMaxSize()) {
-            when (val current = state) {
-                is SeriesDetailUiState.Loading -> Centered { CircularProgressIndicator(color = Color.White) }
+        when (val current = state) {
+            is SeriesDetailUiState.Loading -> Centered { CircularProgressIndicator(color = Color.White) }
 
-                is SeriesDetailUiState.Error -> Centered {
-                    Text(
-                        text = stringResource(R.string.tv_series_unavailable),
-                        color = Color.White.copy(alpha = 0.65f),
-                        style = MaterialTheme.typography.headlineSmall,
-                    )
-                }
-
-                is SeriesDetailUiState.Success -> Loaded(
-                    state = current,
-                    onPlayEpisode = onPlayEpisode,
-                    onToggleFavorite = viewModel::toggleFavorite,
-                    onRemoveFromHistory = viewModel::removeFromHistory,
-                    onRefreshMetadata = viewModel::refreshMetadata,
-                    onRate = viewModel::rate,
-                    onMerged = viewModel::setMerged,
-                    onDescending = viewModel::setDescending,
-                    focusEpisodeId = focusEpisodeId,
+            is SeriesDetailUiState.Error -> Centered {
+                Text(
+                    text = stringResource(R.string.tv_series_unavailable),
+                    color = Color.White.copy(alpha = 0.65f),
+                    style = MaterialTheme.typography.headlineSmall,
                 )
             }
+
+            is SeriesDetailUiState.Success -> Loaded(
+                state = current,
+                onPlayEpisode = onPlayEpisode,
+                onToggleFavorite = viewModel::toggleFavorite,
+                onRemoveFromHistory = viewModel::removeFromHistory,
+                onRefreshMetadata = viewModel::refreshMetadata,
+                onRate = viewModel::rate,
+                onMerged = viewModel::setMerged,
+                onDescending = viewModel::setDescending,
+                focusEpisodeId = focusEpisodeId,
+            )
         }
     }
 }
@@ -360,11 +361,6 @@ private fun Loaded(
                     onRemoveFromHistory = onRemoveFromHistory,
                     onRefreshMetadata = onRefreshMetadata,
                     onRate = onRate,
-                    onScrollToTop = {
-                        if (listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset > 0) {
-                            scope.launch { listState.animateScrollToItem(0) }
-                        }
-                    },
                 )
             }
         }
@@ -434,7 +430,6 @@ private fun SeriesHeader(
     onRemoveFromHistory: () -> Unit,
     onRefreshMetadata: () -> Unit,
     onRate: (Opinion) -> Unit,
-    onScrollToTop: () -> Unit,
 ) {
     Row(horizontalArrangement = Arrangement.spacedBy(DETAIL_COLUMN_GAP)) {
         DetailArtwork(
@@ -479,7 +474,6 @@ private fun SeriesHeader(
                 onRemoveFromHistory = onRemoveFromHistory,
                 onRefreshMetadata = onRefreshMetadata,
                 onRate = onRate,
-                onScrollToTop = onScrollToTop,
             )
         }
     }
@@ -497,7 +491,6 @@ private fun SeriesActions(
     onRemoveFromHistory: () -> Unit,
     onRefreshMetadata: () -> Unit,
     onRate: (Opinion) -> Unit,
-    onScrollToTop: () -> Unit,
 ) {
     val hasResume = state.resumeEpisode != null
 
@@ -526,7 +519,6 @@ private fun SeriesActions(
                 onClick = { onPlayEpisode(episode, state.resumePositionMillis) },
                 isPrimary = true,
                 modifier = Modifier.focusRequester(firstAction),
-                onFocus = onScrollToTop,
             )
         }
 
@@ -540,7 +532,6 @@ private fun SeriesActions(
                 onClick = { onPlayEpisode(first, null) },
                 isPrimary = !hasResume,
                 modifier = if (hasResume) Modifier else Modifier.focusRequester(firstAction),
-                onFocus = onScrollToTop,
             )
         }
 
@@ -550,18 +541,13 @@ private fun SeriesActions(
                 if (state.isFavorite) R.string.tv_detail_unfavourite else R.string.tv_detail_favourite
             ),
             onClick = onToggleFavorite,
-            onFocus = onScrollToTop,
         )
 
         // What the viewer thought — about the series, not the episode. Nobody has an opinion
         // about episode four of season two separately from the show, and a thumbs-down on one
         // episode that removed the whole series from suggestions would answer a question that
         // was not asked.
-        SeriesRatingButtons(
-            opinion = state.opinion,
-            onRate = onRate,
-            onScrollToTop = onScrollToTop,
-        )
+        SeriesRatingButtons(opinion = state.opinion, onRate = onRate)
 
         // Only when there is something to remove. A control that would do nothing is the
         // hollow-feature shape this project has deleted nine of — and here it is also the
@@ -575,7 +561,6 @@ private fun SeriesActions(
                 icon = Icons.Filled.DeleteOutline,
                 contentDescription = stringResource(R.string.tv_detail_remove_history),
                 onClick = onRemoveFromHistory,
-                onFocus = onScrollToTop,
             )
         }
 
@@ -589,7 +574,6 @@ private fun SeriesActions(
                     if (state.isEnriching) R.string.tv_detail_refresh_working else R.string.tv_detail_refresh
                 ),
                 onClick = onRefreshMetadata,
-                onFocus = onScrollToTop,
             )
         }
     }
@@ -723,7 +707,6 @@ private const val IDLE_ALPHA = 0.65f
 private fun SeriesRatingButtons(
     opinion: Opinion,
     onRate: (Opinion) -> Unit,
-    onScrollToTop: () -> Unit,
 ) {
     DetailButton(
         icon = if (opinion == Opinion.UP) Icons.Filled.ThumbUp else Icons.Outlined.ThumbUp,
@@ -735,7 +718,6 @@ private fun SeriesRatingButtons(
             },
         ),
         onClick = { onRate(Opinion.UP) },
-        onFocus = onScrollToTop,
     )
 
     DetailButton(
@@ -752,7 +734,6 @@ private fun SeriesRatingButtons(
             },
         ),
         onClick = { onRate(Opinion.DOWN) },
-        onFocus = onScrollToTop,
     )
 }
 

@@ -26,6 +26,8 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.junit4.v2.createComposeRule
+import dev.quiblo.designsystem.AmbientColours
+import dev.quiblo.designsystem.ambientBackdrop
 import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test

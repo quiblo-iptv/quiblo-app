@@ -64,13 +64,13 @@ import dev.quiblo.core.data.ScanRefusal
 import dev.quiblo.core.model.Channel
 import dev.quiblo.core.model.Opinion
 import dev.quiblo.core.model.releaseYearIn
+import dev.quiblo.designsystem.ambientBackdrop
+import dev.quiblo.designsystem.rememberAmbient
 import dev.quiblo.feature.browse.runtimeLabel
 import dev.quiblo.feature.browse.runtimeLabelFromMinutes
 import dev.quiblo.feature.vod.MovieDetailUiState
 import dev.quiblo.feature.vod.MovieDetailViewModel
 import dev.quiblo.tv.R
-import dev.quiblo.tv.ui.common.ambientBackdrop
-import dev.quiblo.tv.ui.common.rememberAmbient
 import kotlinx.coroutines.launch
 import org.koin.androidx.compose.koinViewModel
 import org.koin.core.parameter.parametersOf
@@ -99,10 +99,13 @@ fun TvMovieScreen(
     )
     val state by viewModel.uiState.collectAsStateWithLifecycle()
 
+    // TMDB's poster first, the provider's cover second, its logo last — the same order the phone
+    // screen uses. A provider logo is often a channel bug rather than artwork, and light taken
+    // from one is light from the wrong picture.
     val artworkUrl = (state as? MovieDetailUiState.Ready)?.let { ready ->
-        ready.channel.logoUrl?.takeIf { it.isNotBlank() }
-            ?: ready.details?.coverUrl
-            ?: ready.metadata?.posterUrl
+        ready.metadata?.posterUrl
+            ?: ready.details?.coverUrl?.takeIf { it.isNotBlank() }
+            ?: ready.channel.logoUrl
     } ?: channel.logoUrl
     val ambient = rememberAmbient(artworkUrl)
 
@@ -114,7 +117,7 @@ fun TvMovieScreen(
     BackHandler(onBack = onBack)
 
     Box(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxSize()
             .background(Color.Black)
             .ambientBackdrop(ambient),
@@ -132,7 +135,6 @@ fun TvMovieScreen(
                 onRemoveFromHistory = viewModel::removeFromHistory,
                 onRefreshMetadata = viewModel::refreshMetadata,
                 onRate = viewModel::rate,
-                modifier = modifier,
             )
         }
     }
@@ -152,7 +154,7 @@ private fun Loaded(
     onRemoveFromHistory: () -> Unit,
     onRefreshMetadata: () -> Unit,
     onRate: (Opinion) -> Unit,
-    modifier: Modifier,
+    modifier: Modifier = Modifier,
 ) {
     val firstAction = remember { FocusRequester() }
     val scrollState = rememberScrollState()

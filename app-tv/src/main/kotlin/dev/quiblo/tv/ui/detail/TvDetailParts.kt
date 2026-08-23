@@ -46,6 +46,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -204,7 +205,7 @@ private fun detailButtonBackgroundColor(isFocused: Boolean, isPrimary: Boolean):
 
 @Composable
 private fun DetailButtonContent(
-    icon: androidx.compose.ui.graphics.vector.ImageVector?,
+    icon: ImageVector?,
     label: String?,
     contentDescription: String?,
     isFocused: Boolean,
@@ -248,7 +249,7 @@ fun DetailButton(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     label: String? = null,
-    icon: androidx.compose.ui.graphics.vector.ImageVector? = null,
+    icon: ImageVector? = null,
     contentDescription: String? = null,
     isPrimary: Boolean = false,
     onFocus: (() -> Unit)? = null,

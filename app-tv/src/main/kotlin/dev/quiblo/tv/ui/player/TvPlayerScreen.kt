@@ -82,6 +82,9 @@ import dev.quiblo.core.media.PlaybackStatus
 import dev.quiblo.core.model.AspectRatioMode
 import dev.quiblo.core.model.PlayerSettings
 import dev.quiblo.core.model.videoScale
+import dev.quiblo.designsystem.AmbientColours
+import dev.quiblo.designsystem.ambientBackdrop
+import dev.quiblo.designsystem.ambientFrom
 import dev.quiblo.feature.player.PlayerViewModel
 import dev.quiblo.feature.player.SubtitleNotice
 import dev.quiblo.feature.player.TrackMenu
@@ -95,10 +98,7 @@ import dev.quiblo.feature.player.subtitleActionHandler
 import dev.quiblo.feature.player.subtitleNoticeText
 import dev.quiblo.feature.player.trackMenu
 import dev.quiblo.tv.R
-import dev.quiblo.tv.ui.common.AmbientColours
 import dev.quiblo.tv.ui.common.PLAYER_CROSSFADE_MILLIS
-import dev.quiblo.tv.ui.common.ambientBackdrop
-import dev.quiblo.tv.ui.common.ambientFrom
 import dev.quiblo.tv.ui.common.insistOnFocus
 import dev.quiblo.tv.ui.detail.DetailButton
 import kotlinx.coroutines.delay

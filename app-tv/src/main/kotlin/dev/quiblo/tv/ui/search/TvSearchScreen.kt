@@ -66,6 +66,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.quiblo.core.model.Channel
 import dev.quiblo.core.model.MediaKind
+import dev.quiblo.designsystem.QuibloMark
 import dev.quiblo.feature.browse.SearchUiState
 import dev.quiblo.feature.browse.SearchViewModel
 import dev.quiblo.feature.browse.labelRes
@@ -76,7 +77,6 @@ import dev.quiblo.tv.ui.browse.TvRowItem
 import dev.quiblo.tv.ui.common.AmbientRequest
 import dev.quiblo.tv.ui.common.FIELD_CORNER
 import dev.quiblo.tv.ui.common.LocalAmbientSink
-import dev.quiblo.tv.ui.common.QuibloMark
 import dev.quiblo.tv.ui.common.TvChip
 import dev.quiblo.tv.ui.common.TvTextField
 import dev.quiblo.tv.ui.common.TvToggle
@@ -456,6 +456,20 @@ internal fun ColumnScope.SearchHeader(
                     verticalPadding = 6.dp,
                 )
 
+                /*
+                 * The two switches, on the right of the field's own row (`027` #6).
+                 *
+                 * **They were chips at the head of the genre strip, and that was two faults in one
+                 * place.** A switch drawn as a chip looks like a genre that happens to be chosen,
+                 * which is the first; and living in the same scrolling strip as the genres put
+                 * them behind however many suggestions the term had produced — six of them on a
+                 * common word — so reaching *Include hidden* meant walking past a row of titles.
+                 * A filter that decides what a search returns does not belong downstream of the
+                 * search's own answers.
+                 *
+                 * Up here they are one press right of Advanced, which is the control that reveals
+                 * them, and they are on the row a viewer is already looking at.
+                 */
                 if (isAdvanced) {
                     Spacer(modifier = Modifier.width(COLUMN_GAP_COMPACT))
                     TvToggle(
@@ -696,16 +710,27 @@ private val RESTING_FIELD_WIDTH = 560.dp
 /** Wide enough for a film title typed in full, and no wider — the hint shares the line. */
 private val FIELD_WIDTH = 420.dp
 
-/** Narrower when advanced filters are taking up the row. */
+/**
+ * Narrower again once the switches are on the row beside it.
+ *
+ * Advanced puts three more controls on the field's line. Something has to give and it is the
+ * field: a title is still typed in full at 380dp, and the alternative — the switches wrapping to
+ * a line of their own — costs the results the height they need.
+ */
 private val FIELD_WIDTH_ADVANCED = 380.dp
 
-/** Narrower gap for when the row is crowded with filters. */
+/**
+ * Air between the field and what is beside it.
+ *
+ * 28 rather than the settings screen's 40, because this row holds Advanced and two switches when
+ * it is open and the same gap four times over pushed the last switch off the panel.
+ */
 private val COLUMN_GAP_COMPACT = 28.dp
 
 /** Between the resting field and Advanced under it. Close enough to read as one control's row. */
 private val RESTING_ADVANCED_GAP = 20.dp
 
-/** Narrower toggle gap for crowded rows. */
+/** Between the two switches. Nearer to each other than either is to Advanced, because they pair. */
 private val TOGGLE_GAP_COMPACT = 16.dp
 
 /**
@@ -729,6 +754,10 @@ private const val OPTICAL_CENTRE = 0.46f
  *
  * The chips also read better nearer the field they belong to, but that is a bonus and not the
  * reason. If anything above the results grows again, that test is what will say so.
+ *
+ * **12 rather than 4 since the genre hint stopped being drawn over results.** That line was worth
+ * a row of its own and it is now hidden the moment there are results to read, which is where the
+ * air came from. `TvSearchResultsFitTest` is what says the eight dp were actually spare.
  */
 private val CHIP_STRIP_PADDING = 12.dp
 

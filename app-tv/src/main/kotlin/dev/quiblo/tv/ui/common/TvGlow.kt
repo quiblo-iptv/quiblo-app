@@ -37,6 +37,7 @@ import androidx.compose.ui.graphics.SweepGradientShader
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import dev.quiblo.designsystem.GLOW_CIRCUIT_MILLIS
 
 /**
  * A highlight that travels round the edge of something (`013` INC-E3).
@@ -81,7 +82,7 @@ fun Modifier.travellingGlow(
         initialValue = 0f,
         targetValue = 360f,
         animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = CIRCUIT_MILLIS, easing = LinearEasing),
+            animation = tween(durationMillis = GLOW_CIRCUIT_MILLIS, easing = LinearEasing),
             repeatMode = RepeatMode.Restart,
         ),
         label = "glowAngle",
@@ -163,6 +164,3 @@ private val BLOOM = listOf(
 private const val ARC_START = 0.42f
 private const val ARC_PEAK = 0.5f
 private const val ARC_END = 0.58f
-
-/** Slow enough to read as breathing. A fast circuit is a control asking to be pressed. */
-internal const val CIRCUIT_MILLIS = 6_000

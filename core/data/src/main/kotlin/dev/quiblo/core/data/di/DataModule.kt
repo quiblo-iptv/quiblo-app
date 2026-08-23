@@ -40,6 +40,7 @@ import dev.quiblo.core.data.SubtitleRepository
 import dev.quiblo.core.data.TitleMetadataRepository
 import dev.quiblo.core.data.TitleMetadataScanner
 import dev.quiblo.core.data.TitleOpinionRepository
+import dev.quiblo.core.data.TitleVersionsRepository
 import dev.quiblo.core.data.WatchEventRepository
 import dev.quiblo.core.data.WatchHistoryRepository
 import dev.quiblo.core.data.backup.BackupRepository
@@ -111,13 +112,27 @@ val dataModule: Module = module {
             sourceDao = get(),
             mediaSources = get(),
             hiddenScripts = get<ScriptFilterRepository>().hiddenScripts,
+            mergeDuplicates = get<PlayerSettingsRepository>().mergeDuplicateTitles,
         )
     }
     single { ScriptFilterRepository(get()) }
+    single {
+        TitleVersionsRepository(
+            dao = get(),
+            mergeDuplicates = get<PlayerSettingsRepository>().mergeDuplicateTitles,
+        )
+    }
     // Named, like every definition here whose last parameter is a dispatcher with a default.
     single { CatalogueIdentityBackfill(channelDao = get()) }
     single { WatchHistoryRepository(get(), get()) }
-    single { CategoryRepository(get(), get()) }
+    single {
+        CategoryRepository(
+            channelDao = get(),
+            categoryOverrideDao = get(),
+            profiles = get(),
+            mergeDuplicates = get<PlayerSettingsRepository>().mergeDuplicateTitles,
+        )
+    }
     // Named, unlike the four positional `get()`s this replaced: the fifth argument is a
     // dispatcher with a default, and appending one more `get()` would have handed Koin's
     // answer for `Flow<Set<TitleScript>>` to `matchDispatcher`.
@@ -128,6 +143,7 @@ val dataModule: Module = module {
             titleMetadataDao = get(),
             metadataRepository = get(),
             hiddenScripts = get<ScriptFilterRepository>().hiddenScripts,
+            mergeDuplicates = get<PlayerSettingsRepository>().mergeDuplicateTitles,
         )
     }
     // A singleton because its scope is the application's: a scan started in settings has to

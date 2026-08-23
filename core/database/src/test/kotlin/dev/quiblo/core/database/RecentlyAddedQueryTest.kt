@@ -173,7 +173,13 @@ class RecentlyAddedQueryTest {
     }
 
     private suspend fun recents(limit: Int, since: Long = 0L) = db.channelDao()
-        .observeRecentlyAdded(profileId = 1L, sourceId = SOURCE_ID, sinceEpochMillis = since, limit = limit)
+        .observeRecentlyAdded(
+            profileId = 1L,
+            sourceId = SOURCE_ID,
+            sinceEpochMillis = since,
+            limit = limit,
+            mergeDuplicates = 0,
+        )
         .first()
 
     private suspend fun seedSource() {

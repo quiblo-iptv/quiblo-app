@@ -56,6 +56,7 @@ import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshots.SnapshotStateList
@@ -81,6 +82,9 @@ import dev.quiblo.core.model.Channel
 import dev.quiblo.core.model.MediaKind
 import dev.quiblo.core.model.WatchOrigin
 import dev.quiblo.designsystem.ProfileAvatar
+import dev.quiblo.designsystem.ambientBackdrop
+import dev.quiblo.designsystem.driftingGlow
+import dev.quiblo.designsystem.rememberAmbient
 import dev.quiblo.tv.BuildConfig
 import dev.quiblo.tv.R
 import dev.quiblo.tv.ui.browse.TvForYouScreen
@@ -89,11 +93,8 @@ import dev.quiblo.tv.ui.common.AmbientRequest
 import dev.quiblo.tv.ui.common.LocalAmbientSink
 import dev.quiblo.tv.ui.common.LocalTvReturn
 import dev.quiblo.tv.ui.common.TvReturnSignal
-import dev.quiblo.tv.ui.common.ambientBackdrop
-import dev.quiblo.tv.ui.common.driftingGlow
 import dev.quiblo.tv.ui.common.insistOnFocus
 import dev.quiblo.tv.ui.common.onTap
-import dev.quiblo.tv.ui.common.rememberAmbient
 import dev.quiblo.tv.ui.common.tryRequestFocus
 import dev.quiblo.tv.ui.consent.TvConsentScreen
 import dev.quiblo.tv.ui.detail.TvMovieScreen
@@ -138,7 +139,9 @@ fun TvApp(
     insetForKeyboard: Boolean = false,
     initialShowSplash: Boolean = true,
 ) {
-    var showSplash by remember { mutableStateOf(initialShowSplash) }
+    // Saved, not remembered: a recreated activity is not a cold start, and a splash that
+    // replays on one is five seconds in front of an app the viewer is already inside.
+    var showSplash by rememberSaveable { mutableStateOf(initialShowSplash) }
 
     Crossfade(targetState = showSplash, label = "tvSplashCrossfade") { inSplash ->
         if (inSplash) {

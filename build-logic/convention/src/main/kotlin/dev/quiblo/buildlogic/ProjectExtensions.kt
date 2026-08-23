@@ -85,7 +85,17 @@ fun Project.failOnWarnings() {
  * The `:core:model` and `:source:*` modules are plain JVM modules, so Compose cannot
  * reach them structurally. The Android `:core:*` modules could pick it up transitively,
  * so this asserts on the resolved compile classpath rather than trusting convention.
+ *
+ * **`runtime-annotation` is the one exception, and it is not a loophole.** It is a jar of
+ * annotations — `@Stable`, `@Immutable` — with no runtime, no compiler plugin and no UI in it,
+ * and it arrives here through `androidx.navigationevent`, which every AndroidX Activity pulls in.
+ * Excluding it keeps the rule saying what it means: no Compose *runtime* and no Compose *UI* in
+ * a module a non-Compose frontend has to consume. Anything else in `androidx.compose` still
+ * fails the build, and the exception is by exact artifact name rather than by prefix so that a
+ * future `runtime-android` cannot slip in behind it.
  */
+private val ANNOTATIONS_ONLY = setOf("runtime-annotation", "runtime-annotation-android")
+
 fun Project.enforceNoCompose() {
     val checkNoCompose = tasks.register("checkNoCompose") {
         group = "verification"
@@ -99,7 +109,7 @@ fun Project.enforceNoCompose() {
                             .mapNotNull { it.requested as? ModuleComponentSelector }
                             .filter {
                                 (it.group.startsWith("androidx.compose") || it.group.startsWith("org.jetbrains.compose")) &&
-                                    !it.module.startsWith("runtime-annotation")
+                                    it.module !in ANNOTATIONS_ONLY
                             }
                             .map { "${configuration.name} -> ${it.group}:${it.module}" }
                     }.getOrDefault(emptyList())

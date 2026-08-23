@@ -109,6 +109,29 @@ class TvSearchResultsFitTest {
         )
     }
 
+    /**
+     * The year filter costs the results no height, and that is why it is on the same strip.
+     *
+     * A second row of chips is the crop this file exists to catch, so the years share the one
+     * strip the genres are on and a chip at its head says which list is showing. This asserts the
+     * arrangement kept its promise: with years to offer as well, a focused result still fits.
+     */
+    @Test
+    fun `a focused result still fits with the year filter offered as well`() {
+        compose.setContent { Harness(isAdvanced = true) }
+        compose.onNodeWithText(resultTitle(0, 0)).requestFocus()
+        compose.waitForIdle()
+
+        val viewport = viewportHeight()
+        val bottom = focusedVisualBottom(resultTitle(0, 0))
+
+        assertTrue(
+            "A focused result runs to ${"%.1f".format(bottom)}px in a ${viewport}px panel with " +
+                "the year filter offered. The years have taken a row of their own.",
+            bottom <= viewport,
+        )
+    }
+
     /** The same, with the filters shut — the case that has more room and should be easier. */
     @Test
     fun `a focused result keeps its whole title on screen with the filters shut`() {
@@ -203,6 +226,7 @@ class TvSearchResultsFitTest {
             movies = emptyList(),
             series = results(),
             genres = GENRES,
+            years = YEARS,
         )
 
         Box(modifier = Modifier.size(width = PANEL_WIDTH, height = PANEL_HEIGHT)) {
@@ -216,6 +240,7 @@ class TvSearchResultsFitTest {
                     isAdvanced = isAdvanced,
                     onQueryChange = {},
                     onSelectGenre = {},
+                    onSelectYear = {},
                     onToggleIncludeHidden = {},
                     onToggleIncludeLive = {},
                     onClear = {},
@@ -261,6 +286,8 @@ class TvSearchResultsFitTest {
         const val RESULTS = 8
 
         /** Enough chips that the strip is a full row, as it is on a scanned catalogue. */
+        val YEARS = listOf(2026, 2025, 2024, 2019, 1996)
+
         val GENRES = listOf("Drama", "Comedy", "Action", "Thriller", "Documentary", "Family")
 
         /** Must match `TvPosterRows`. A focused poster grows by this about its own centre. */

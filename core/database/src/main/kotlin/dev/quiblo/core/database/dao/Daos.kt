@@ -162,6 +162,19 @@ interface ChannelDao {
      * separate queries, so the four combinations cannot drift apart. Filtering in SQL is
      * what keeps search inside the 200ms budget across 20,000 rows (AC-FAV-05).
      *
+     * **`mergeDuplicates` is the same shape and the same reasoning, and this is where it is
+     * explained for the five other queries that carry it.** A panel listing one film in SD, HD,
+     * FHD and 4K sends four rows; with merging on, only the provider's own first listing of each
+     * `(searchTitle, identityYear, kind)` survives, and `TitleVersionsDao` hands the detail
+     * screen the rest. It is a predicate rather than a `GROUP BY` because the paged version of
+     * this query has to return whole rows and a page that shrinks after SQLite has counted it is
+     * a page the pager cannot reason about; and it is in SQL rather than in Kotlin because a
+     * twenty-row page that becomes five on the way to the screen scrolls wrong.
+     *
+     * A row with no computed identity — `searchTitle = ''`, the value a title that cleans away to
+     * nothing gets — is never merged. A hundred of those share one key and merging on it would
+     * collapse a hundred unrelated channels into one.
+     *
      * @param groupTitle null for "all categories".
      * @param query empty for "no search". Must already be escaped with [escapeForLike].
      * @param favoritesOnly 1 to restrict to favourites, 0 for everything.
@@ -178,6 +191,11 @@ interface ChannelDao {
           AND (:query = '' OR c.name LIKE '%' || :query || '%' ESCAPE '\')
           AND (:favoritesOnly = 0 OR f.stableKey IS NOT NULL)
           AND (c.scriptMask = :unknownMask OR (:hiddenMask & c.scriptMask) = 0)
+          AND (:mergeDuplicates = 0 OR c.searchTitle = '' OR c.id = (
+                SELECT v.id FROM channels v
+                WHERE v.sourceId = c.sourceId AND v.kind = c.kind
+                  AND v.searchTitle = c.searchTitle AND v.identityYear = c.identityYear
+                ORDER BY v.sortIndex ASC, v.id ASC LIMIT 1))
         ORDER BY c.sortIndex ASC
         """,
     )
@@ -189,6 +207,8 @@ interface ChannelDao {
         groupTitle: String?,
         query: String,
         favoritesOnly: Int,
+        /** 1 to show one row per title, 0 to show every listing the provider sent. */
+        mergeDuplicates: Int,
         /**
          * The writing systems the viewer has hidden, as a bitmask. `0` hides nothing.
          *
@@ -234,6 +254,11 @@ interface ChannelDao {
           AND (:query = '' OR c.name LIKE '%' || :query || '%' ESCAPE '\')
           AND (:favoritesOnly = 0 OR f.stableKey IS NOT NULL)
           AND (c.scriptMask = :unknownMask OR (:hiddenMask & c.scriptMask) = 0)
+          AND (:mergeDuplicates = 0 OR c.searchTitle = '' OR c.id = (
+                SELECT v.id FROM channels v
+                WHERE v.sourceId = c.sourceId AND v.kind = c.kind
+                  AND v.searchTitle = c.searchTitle AND v.identityYear = c.identityYear
+                ORDER BY v.sortIndex ASC, v.id ASC LIMIT 1))
         ORDER BY c.sortIndex ASC
         """,
     )
@@ -245,6 +270,7 @@ interface ChannelDao {
         groupTitle: String?,
         query: String,
         favoritesOnly: Int,
+        mergeDuplicates: Int,
         hiddenMask: Int,
         unknownMask: Int,
     ): PagingSource<Int, ChannelWithFavorite>
@@ -329,13 +355,18 @@ interface ChannelDao {
      */
     @Query(
         """
-        SELECT groupTitle, COUNT(*) AS itemCount FROM channels
-        WHERE sourceId = :sourceId AND kind = :kind
-        GROUP BY groupTitle
-        ORDER BY MIN(COALESCE(categoryIndex, 2147483647)) ASC, MIN(sortIndex) ASC
+        SELECT groupTitle, COUNT(*) AS itemCount FROM channels c
+        WHERE c.sourceId = :sourceId AND c.kind = :kind
+          AND (:mergeDuplicates = 0 OR c.searchTitle = '' OR c.id = (
+                SELECT v.id FROM channels v
+                WHERE v.sourceId = c.sourceId AND v.kind = c.kind
+                  AND v.searchTitle = c.searchTitle AND v.identityYear = c.identityYear
+                ORDER BY v.sortIndex ASC, v.id ASC LIMIT 1))
+        GROUP BY c.groupTitle
+        ORDER BY MIN(COALESCE(c.categoryIndex, 2147483647)) ASC, MIN(c.sortIndex) ASC
         """,
     )
-    fun observeCategoriesByKind(sourceId: Long, kind: String): Flow<List<CategoryCount>>
+    fun observeCategoriesByKind(sourceId: Long, kind: String, mergeDuplicates: Int): Flow<List<CategoryCount>>
 
     /**
      * One kind's worth of matches for a search term, capped.
@@ -364,8 +395,13 @@ interface ChannelDao {
           AND c.name LIKE '%' || :query || '%' ESCAPE '\'
           AND (:includeHidden OR c.groupTitle NOT IN (
                 SELECT o.originalTitle FROM category_overrides o
-                WHERE o.kind = c.kind AND o.isHidden = 1))
+                WHERE o.profileId = :profileId AND o.kind = c.kind AND o.isHidden = 1))
           AND (c.scriptMask = :unknownMask OR (:hiddenMask & c.scriptMask) = 0)
+          AND (:mergeDuplicates = 0 OR c.searchTitle = '' OR c.id = (
+                SELECT v.id FROM channels v
+                WHERE v.sourceId = c.sourceId AND v.kind = c.kind
+                  AND v.searchTitle = c.searchTitle AND v.identityYear = c.identityYear
+                ORDER BY v.sortIndex ASC, v.id ASC LIMIT 1))
         ORDER BY c.sortIndex ASC
         LIMIT :limit
         """,
@@ -388,6 +424,8 @@ interface ChannelDao {
          * advanced-search toggle asking for it back.
          */
         includeHidden: Boolean,
+        /** 1 to answer with one row per title, exactly as in [observeBrowse]. */
+        mergeDuplicates: Int,
         /** The hidden writing systems as a bitmask, exactly as in [observeBrowse]. */
         hiddenMask: Int,
         /** The "not computed yet" mask, exactly as in [observeBrowse]. */
@@ -415,6 +453,12 @@ interface ChannelDao {
      * A blank `searchTitle` is excluded. It is the existing "there was nothing here worth looking
      * up" value, and a hundred junk rows share it — joining on it would file them all under
      * whatever genre the one cached blank key happens to carry.
+     *
+     * **A year narrows the same join.** `:year = 0` means "any", which is how one query serves a
+     * genre alone, a year alone, and both together. The year compared is the service's
+     * `releaseYear` and the provider's `year` only where the service gave none: the provider's is
+     * read out of a string somebody typed into a playlist, and a filter that trusted it first
+     * would file a 2019 remake under whatever the panel's title happened to say.
      */
     @Query(
         """
@@ -429,25 +473,33 @@ interface ChannelDao {
           AND c.searchTitle != ''
           AND m.isMiss = 0
           AND (:query = '' OR c.name LIKE '%' || :query || '%' ESCAPE '\')
-          AND (char(10) || COALESCE(m.genres, '') || char(10))
-              LIKE '%' || char(10) || :genre || char(10) || '%'
+          AND (:genre = '' OR (char(10) || COALESCE(m.genres, '') || char(10))
+              LIKE '%' || char(10) || :genre || char(10) || '%')
+          AND (:year = 0 OR COALESCE(m.releaseYear, m.year) = :year)
           AND (:includeHidden OR c.groupTitle NOT IN (
                 SELECT o.originalTitle FROM category_overrides o
-                WHERE o.kind = c.kind AND o.isHidden = 1))
+                WHERE o.profileId = :profileId AND o.kind = c.kind AND o.isHidden = 1))
           AND (c.scriptMask = :unknownMask OR (:hiddenMask & c.scriptMask) = 0)
+          AND (:mergeDuplicates = 0 OR c.searchTitle = '' OR c.id = (
+                SELECT v.id FROM channels v
+                WHERE v.sourceId = c.sourceId AND v.kind = c.kind
+                  AND v.searchTitle = c.searchTitle AND v.identityYear = c.identityYear
+                ORDER BY v.sortIndex ASC, v.id ASC LIMIT 1))
         ORDER BY c.sortIndex ASC
         LIMIT :limit
         """,
     )
     @Suppress("LongParameterList")
-    suspend fun searchByGenre(
+    suspend fun searchByMetadata(
         profileId: Long,
         sourceId: Long,
         kind: String,
         genre: String,
+        year: Int,
         query: String,
         limit: Int,
         includeHidden: Boolean,
+        mergeDuplicates: Int,
         hiddenMask: Int,
         unknownMask: Int,
     ): List<ChannelWithFavorite>
@@ -478,6 +530,11 @@ interface ChannelDao {
           AND c.kind IN ('VOD', 'SERIES')
           AND c.addedAtEpochMillis IS NOT NULL
           AND c.addedAtEpochMillis >= :sinceEpochMillis
+          AND (:mergeDuplicates = 0 OR c.searchTitle = '' OR c.id = (
+                SELECT v.id FROM channels v
+                WHERE v.sourceId = c.sourceId AND v.kind = c.kind
+                  AND v.searchTitle = c.searchTitle AND v.identityYear = c.identityYear
+                ORDER BY v.sortIndex ASC, v.id ASC LIMIT 1))
         ORDER BY c.addedAtEpochMillis DESC, c.sortIndex ASC
         LIMIT :limit
         """,
@@ -487,6 +544,7 @@ interface ChannelDao {
         sourceId: Long,
         sinceEpochMillis: Long,
         limit: Int,
+        mergeDuplicates: Int,
     ): Flow<List<ChannelWithFavorite>>
 
     /**
@@ -555,10 +613,10 @@ interface ChannelDao {
           AND c.kind IN ('VOD', 'SERIES')
           AND (:includeHidden OR c.groupTitle NOT IN (
                 SELECT o.originalTitle FROM category_overrides o
-                WHERE o.kind = c.kind AND o.isHidden = 1))
+                WHERE o.profileId = :profileId AND o.kind = c.kind AND o.isHidden = 1))
         """,
     )
-    suspend fun titlesForMetadata(sourceId: Long, includeHidden: Boolean): List<ChannelTitle>
+    suspend fun titlesForMetadata(sourceId: Long, includeHidden: Boolean, profileId: Long): List<ChannelTitle>
 
     /**
      * A batch of rows that predate schema 19 and still carry no computed identity.
@@ -962,14 +1020,16 @@ interface ProgrammeDao {
  * What the metadata cache knows about one title, minus everything a filter has no use for.
  *
  * The plot, the cast and two artwork URLs are the bulk of a cached row and none of them
- * answer "which of these is a crime film". Read as a projection so the genre index stays a
- * few kilobytes rather than the whole cache.
+ * answer "which of these is a crime film" or "which of these is from 2019". Read as a
+ * projection so the filter index stays a few kilobytes rather than the whole cache.
  */
-data class TitleGenreRow(
+data class TitleFilterRow(
     val searchTitle: String,
     val kind: String,
     /** Part of the key since #024, and read because the join is on the whole key. */
     val year: Int,
+    /** What the service says the year is, which is what the year filter offers and matches on. */
+    val releaseYear: Int?,
     val genres: String?,
     val isMiss: Boolean,
 )
@@ -1007,8 +1067,8 @@ interface TitleMetadataDao {
      * asked about; it is known, and pretending otherwise would make the figure creep
      * upward forever without ever arriving.
      */
-    @Query("SELECT searchTitle, kind, year, genres, isMiss FROM title_metadata")
-    suspend fun allGenreRows(): List<TitleGenreRow>
+    @Query("SELECT searchTitle, kind, year, releaseYear, genres, isMiss FROM title_metadata")
+    suspend fun allFilterRows(): List<TitleFilterRow>
 
     /**
      * Everything the scorer reasons over, for the whole cache, in one read.
@@ -1084,13 +1144,46 @@ interface ChannelLogoDao {
 }
 
 @Dao
+interface TitleVersionDao {
+
+    /**
+     * Every listing of one title, in the provider's own order.
+     *
+     * The identity is the same three columns the merge predicate groups on and the metadata cache
+     * is keyed by — cleaned title, year and kind — so what the detail screen offers is exactly
+     * what browse folded away, and neither can drift from the other by being computed differently.
+     *
+     * An empty `searchTitle` returns nothing rather than everything: it is the "cleaned away to
+     * nothing" value shared by every unnameable row in the catalogue.
+     */
+    @Query(
+        """
+        SELECT * FROM channels
+        WHERE sourceId = :sourceId AND kind = :kind
+          AND searchTitle = :searchTitle AND identityYear = :identityYear
+          AND searchTitle != ''
+        ORDER BY sortIndex ASC, id ASC
+        """,
+    )
+    fun observeVersions(
+        sourceId: Long,
+        kind: String,
+        searchTitle: String,
+        identityYear: Int,
+    ): Flow<List<ChannelEntity>>
+}
+
+@Dao
 interface CategoryOverrideDao {
 
-    @Query("SELECT * FROM category_overrides WHERE kind = :kind")
-    fun observeForKind(kind: String): Flow<List<CategoryOverrideEntity>>
+    @Query("SELECT * FROM category_overrides WHERE profileId = :profileId AND kind = :kind")
+    fun observeForKind(profileId: Long, kind: String): Flow<List<CategoryOverrideEntity>>
 
-    @Query("SELECT originalTitle FROM category_overrides WHERE kind = :kind AND isHidden = 1")
-    fun observeHiddenTitles(kind: String): Flow<List<String>>
+    @Query(
+        "SELECT originalTitle FROM category_overrides " +
+            "WHERE profileId = :profileId AND kind = :kind AND isHidden = 1",
+    )
+    fun observeHiddenTitles(profileId: Long, kind: String): Flow<List<String>>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(entity: CategoryOverrideEntity)
@@ -1104,8 +1197,11 @@ interface CategoryOverrideDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertAll(entities: List<CategoryOverrideEntity>)
 
-    @Query("DELETE FROM category_overrides WHERE kind = :kind AND originalTitle = :originalTitle")
-    suspend fun clear(kind: String, originalTitle: String)
+    @Query(
+        "DELETE FROM category_overrides " +
+            "WHERE profileId = :profileId AND kind = :kind AND originalTitle = :originalTitle",
+    )
+    suspend fun clear(profileId: Long, kind: String, originalTitle: String)
 }
 
 @Dao

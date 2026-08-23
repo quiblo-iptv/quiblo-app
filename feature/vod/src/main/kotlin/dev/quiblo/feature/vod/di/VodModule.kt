@@ -34,6 +34,7 @@ val vodModule: Module = module {
             metadataRepository = get(),
             historyRepository = get(),
             opinions = get(),
+            versions = get(),
         )
     }
 }

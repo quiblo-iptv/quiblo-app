@@ -33,6 +33,14 @@
     <string name="tv_consent_playlist_skip">Skip for later</string>
     <string name="tv_consent_playlist_not_now">Not now</string>
     <string name="tv_consent_playlist_retry">Try again</string>
+    <!-- The fourth page. Nothing on screen says a metadata key exists, so a viewer who never
+         opens Settings never finds out why their films have no posters. -->
+    <string name="tv_consent_metadata_title">Posters and plots</string>
+    <string name="tv_consent_metadata_body">A free key from The Movie Database turns your list of filenames into a catalogue: posters, plots, cast, scores, and the genre and year filters in search.
+
+Make one on the page below — it is quicker on a phone than on a remote — then type it in here. You can do this later instead, under Settings.</string>
+    <string name="tv_consent_metadata_open">Open The Movie Database</string>
+    <string name="tv_consent_metadata_skip">Skip for later</string>
 
     <!-- Profiles -->
     <string name="tv_profile_welcome">Welcome to Quiblo</string>
@@ -170,8 +178,11 @@
     <string name="tv_settings_search">Search</string>
     <string name="tv_settings_search_live">Live channels in advanced search</string>
     <string name="tv_settings_search_live_detail">Off. A live channel carries no genre, so a genre filter can only match it on its name.</string>
+    <string name="tv_settings_merge_titles">Merge duplicate titles</string>
+    <string name="tv_settings_merge_titles_detail">Show a film once when your provider lists it in several qualities. The other copies are offered on the film\'s own screen.</string>
     <string name="tv_settings_categories">Categories</string>
     <string name="tv_settings_category_kind">Editing categories for</string>
+    <string name="tv_settings_category_whose">Hiding, renaming and reordering are yours alone. Everyone else on this television keeps their own list.</string>
     <string name="tv_settings_category_summary">%1$d categories, %2$d hidden</string>
     <string name="tv_settings_category_enter">Press to edit</string>
     <string name="tv_settings_category_leave">Press Back to leave</string>
@@ -203,6 +214,7 @@
     <string name="tv_settings_scan_unavailable">The Movie Database could not be reached. %1$d titles kept. Check the connection and try again.</string>
     <string name="tv_settings_save">Save</string>
     <string name="tv_settings_clear">Clear</string>
+    <string name="tv_settings_tmdb_open">Get a key</string>
     <string name="tv_settings_backup">Backup</string>
     <string name="tv_settings_backup_label">Your configuration</string>
     <string name="tv_settings_backup_detail">Passwords are never written to the file — you will re-enter them after importing.</string>
@@ -270,6 +282,13 @@
     <string name="tv_detail_dislike">Not for me?</string>
     <string name="tv_continue_remove_confirm">Remove? Press again</string>
     <string name="tv_detail_refresh">Refresh information</string>
+    <!-- The heading over the chips that swap between a provider's copies of one title. -->
+    <string name="tv_detail_versions">Also available as</string>
+    <string name="tv_hero_refresh">Show different featured titles</string>
+    <string name="tv_search_filter_genres">Genres</string>
+    <string name="tv_search_filter_years">Years</string>
+    <!-- A filter chip naming what it is filtering by: "Years · 2019". -->
+    <string name="tv_search_filter_chosen">%1$s · %2$s</string>
     <string name="tv_series_all_episodes">All episodes</string>
     <string name="tv_series_merge_seasons">Merge seasons</string>
     <string name="tv_series_newest_first">Newest first</string>

@@ -128,12 +128,26 @@ class PagedBrowseMatchesUnpagedTest {
         assertSameAnswer(hiddenMask = TitleScript.Arabic.bit)
     }
 
+    /**
+     * The merge predicate is on both queries or on neither.
+     *
+     * It is the newest reason the two can drift: a predicate added to the flow and forgotten on
+     * the pager would show a phone one row per title and a television four, from the same setting.
+     */
+    @Test
+    fun `merging duplicates gives the same answer paged and unpaged`() = runTest {
+        seed()
+
+        assertSameAnswer(mergeDuplicates = 1)
+    }
+
     @Suppress("LongParameterList")
     private suspend fun assertSameAnswer(
         groupTitle: String? = null,
         query: String = "",
         favoritesOnly: Int = 0,
         hiddenMask: Int = 0,
+        mergeDuplicates: Int = 0,
     ) {
         val unpaged = db.channelDao().observeBrowse(
             profileId = PROFILE_ID,
@@ -142,6 +156,7 @@ class PagedBrowseMatchesUnpagedTest {
             groupTitle = groupTitle,
             query = query,
             favoritesOnly = favoritesOnly,
+            mergeDuplicates = mergeDuplicates,
             hiddenMask = hiddenMask,
             unknownMask = SCRIPT_MASK_UNKNOWN,
         ).first()
@@ -153,6 +168,7 @@ class PagedBrowseMatchesUnpagedTest {
             groupTitle = groupTitle,
             query = query,
             favoritesOnly = favoritesOnly,
+            mergeDuplicates = mergeDuplicates,
             hiddenMask = hiddenMask,
             unknownMask = SCRIPT_MASK_UNKNOWN,
         )
@@ -193,7 +209,12 @@ class PagedBrowseMatchesUnpagedTest {
             ),
         )
         db.categoryOverrideDao().upsert(
-            CategoryOverrideEntity(kind = "VOD", originalTitle = "Adult", isHidden = true),
+            CategoryOverrideEntity(
+                profileId = PROFILE_ID,
+                kind = "VOD",
+                originalTitle = "Adult",
+                isHidden = true,
+            ),
         )
     }
 

@@ -23,26 +23,46 @@ import dev.quiblo.core.database.dao.ChannelDao
 import dev.quiblo.core.database.entity.CategoryOverrideEntity
 import dev.quiblo.core.model.Category
 import dev.quiblo.core.model.MediaKind
+import dev.quiblo.core.model.Profile
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 
 /**
- * Categories, with the user's local edits applied.
+ * Categories, with one viewer's local edits applied.
  *
  * Separate from `ChannelRepository` because it answers a different question. That class
  * reads content; this one reads and writes the small set of preferences a user has
  * expressed *about* content, and folding the two together was what pushed the first past
  * every size threshold the project has.
  *
- * Both edits — hiding and renaming — are local. Nothing is sent to the provider, hiding
- * deletes no channels, and the provider's own title stays the key, because it is the only
+ * Every edit — hiding, renaming and reordering — is local. Nothing is sent to the provider,
+ * hiding deletes no channels, and the provider's own title stays the key, because it is the only
  * thing that survives a refresh reassigning every id in the database.
+ *
+ * **And every edit belongs to the profile that made it.** Hiding a shelf, renaming one into your
+ * own language and dragging one to the top are all the same statement favourites are — this is
+ * what *I* want my list to look like — and one of them deciding it for the whole household was
+ * the fault. The reads follow the active profile, so switching person redraws the list rather
+ * than needing anything to be reloaded.
  */
+@OptIn(ExperimentalCoroutinesApi::class)
 class CategoryRepository(
     private val channelDao: ChannelDao,
     private val categoryOverrideDao: CategoryOverrideDao,
+    private val profiles: ProfileRepository,
+    /**
+     * Whether one title listed in four qualities counts once (`PlayerSettingsRepository`).
+     *
+     * Only the counts beside each category depend on it here, and they have to: a shelf that says
+     * "48 items" over a list showing twelve is the merge setting telling a viewer their catalogue
+     * is broken.
+     */
+    private val mergeDuplicates: Flow<Boolean> = flowOf(false),
 ) {
 
     /**
@@ -62,6 +82,7 @@ class CategoryRepository(
         val existing = currentOverride(kind, originalTitle)
         categoryOverrideDao.upsert(
             CategoryOverrideEntity(
+                profileId = profiles.activeProfileId,
                 kind = kind.name,
                 originalTitle = originalTitle,
                 customName = existing?.customName,
@@ -92,13 +113,17 @@ class CategoryRepository(
         val to = (from + by).coerceIn(0, ordered.lastIndex)
         if (to == from) return
 
+        val profileId = profiles.activeProfileId
         val moved = ordered.toMutableList().apply { add(to, removeAt(from)) }
-        val existing = categoryOverrideDao.observeForKind(kind.name).first().associateBy { it.originalTitle }
+        val existing = categoryOverrideDao.observeForKind(profileId, kind.name)
+            .first()
+            .associateBy { it.originalTitle }
 
         categoryOverrideDao.upsertAll(
             moved.mapIndexed { index, title ->
                 val override = existing[title]
                 CategoryOverrideEntity(
+                    profileId = profileId,
                     kind = kind.name,
                     originalTitle = title,
                     customName = override?.customName,
@@ -116,12 +141,13 @@ class CategoryRepository(
         // A row that neither renames, hides nor moves is noise. Removing it keeps the table a
         // record of deliberate edits rather than of every category ever looked at.
         if (cleaned == null && existing?.isHidden != true && existing?.userOrder == null) {
-            categoryOverrideDao.clear(kind.name, originalTitle)
+            categoryOverrideDao.clear(profiles.activeProfileId, kind.name, originalTitle)
             return
         }
 
         categoryOverrideDao.upsert(
             CategoryOverrideEntity(
+                profileId = profiles.activeProfileId,
                 kind = kind.name,
                 originalTitle = originalTitle,
                 customName = cleaned,
@@ -132,16 +158,33 @@ class CategoryRepository(
     }
 
     private suspend fun currentOverride(kind: MediaKind, originalTitle: String) =
-        categoryOverrideDao.observeForKind(kind.name).first().firstOrNull { it.originalTitle == originalTitle }
+        categoryOverrideDao.observeForKind(profiles.activeProfileId, kind.name)
+            .first()
+            .firstOrNull { it.originalTitle == originalTitle }
 
     private companion object {
         /** Where a category the viewer has never moved sorts: after every one they have. */
         const val UNMOVED = Int.MAX_VALUE
     }
 
-    private fun withOverrides(sourceId: Long, kind: MediaKind): Flow<List<Category>> = combine(
-        channelDao.observeCategoriesByKind(sourceId, kind.name),
-        categoryOverrideDao.observeForKind(kind.name),
+    /**
+     * The categories, redrawn whenever the person watching changes.
+     *
+     * `flatMapLatest` on the active profile rather than a one-off read of its id: switching
+     * profile is a live event on every other screen in this app, and a list of shelves that kept
+     * the last person's hiding until something else happened to reload it would be the one place
+     * it was not.
+     */
+    private fun withOverrides(sourceId: Long, kind: MediaKind): Flow<List<Category>> =
+        profiles.activeProfile.flatMapLatest { profile ->
+            overridden(sourceId, kind, profile?.id ?: Profile.NONE_ID)
+        }
+
+    private fun overridden(sourceId: Long, kind: MediaKind, profileId: Long): Flow<List<Category>> = combine(
+        mergeDuplicates.flatMapLatest { merge ->
+            channelDao.observeCategoriesByKind(sourceId, kind.name, mergeDuplicates = if (merge) 1 else 0)
+        },
+        categoryOverrideDao.observeForKind(profileId, kind.name),
     ) { counts, overrides ->
         val byTitle = overrides.associateBy { it.originalTitle }
         counts.map { it.toDomain(sourceId) }

@@ -26,6 +26,8 @@ import dev.quiblo.core.data.SeriesPreference
 import dev.quiblo.core.data.SeriesPreferenceRepository
 import dev.quiblo.core.data.TitleMetadataRepository
 import dev.quiblo.core.data.TitleOpinionRepository
+import dev.quiblo.core.data.TitleVersion
+import dev.quiblo.core.data.TitleVersionsRepository
 import dev.quiblo.core.data.WatchHistoryRepository
 import dev.quiblo.core.data.arrangedBy
 import dev.quiblo.core.model.Channel
@@ -108,10 +110,21 @@ sealed interface SeriesDetailUiState {
         val isFavorite: Boolean = false,
         /** What this viewer said about the series, if anything. See `TitleOpinionRepository`. */
         val opinion: Opinion = Opinion.NONE,
+        /**
+         * The other ways the provider lists this series — the 4K copy, the subtitled cut.
+         *
+         * Empty unless the merge setting is on and there is more than one, for the reason
+         * `TitleVersionsRepository` gives.
+         */
+        val versions: List<TitleVersion> = emptyList(),
     ) : SeriesDetailUiState
     data class Error(val error: SourceError) : SeriesDetailUiState
 }
 
+// One repository per question this screen answers — the catalogue, the metadata, the resume
+// point, how this viewer reads a series, what they thought of it, and which copies of it the
+// provider carries. Bundling any two of them would be a type that exists to satisfy a count.
+@Suppress("LongParameterList")
 class SeriesDetailViewModel(
     private val channelId: Long,
     private val channelRepository: ChannelRepository,
@@ -119,6 +132,7 @@ class SeriesDetailViewModel(
     private val historyRepository: WatchHistoryRepository,
     private val preferences: SeriesPreferenceRepository,
     private val opinions: TitleOpinionRepository,
+    private val versions: TitleVersionsRepository,
 ) : ViewModel() {
 
     private var isRefreshing = false
@@ -162,6 +176,7 @@ class SeriesDetailViewModel(
 
                     observeFavorite(channel)
                     observeOpinion(channel)
+                    observeVersions(channel)
                     observeResumePosition(episodes.map { it.streamUrl })
                     observePreference(channel.stableKey)
                     enrich(channel)
@@ -182,6 +197,17 @@ class SeriesDetailViewModel(
         viewModelScope.launch {
             val next = if (current.opinion == opinion) Opinion.NONE else opinion
             opinions.set(current.channel.name, MediaKind.SERIES, next)
+        }
+    }
+
+    /** The other listings of this series, watched for as long as the screen is open. */
+    private fun observeVersions(channel: Channel) {
+        viewModelScope.launch {
+            versions.observeVersions(channel).collect { found ->
+                (_uiState.value as? SeriesDetailUiState.Success)?.let {
+                    _uiState.value = it.copy(versions = found)
+                }
+            }
         }
     }
 

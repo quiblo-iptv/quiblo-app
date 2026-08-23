@@ -424,6 +424,48 @@ class MigrationTest {
         }
     }
 
+    /**
+     * Everybody keeps the list they had when category edits became one person's.
+     *
+     * The rows are copied to every profile rather than to whoever is signed in: attaching them to
+     * one person would silently empty the list for everyone else, which is the fault being fixed
+     * seen from the other side. What is asserted is both halves — that each profile has all three
+     * columns of the edit, and that nobody has somebody else's.
+     */
+    @Test
+    fun `22 to 23 gives every profile the category edits the household had`() {
+        helper.createDatabase(DB_NAME, 22).use { old ->
+            old.execSQL(
+                "INSERT INTO `profiles` (`id`, `name`, `isGuest`, `createdAtEpochMillis`) " +
+                    "VALUES (1, 'Mahmoud', 0, 0), (2, 'Someone else', 0, 0)",
+            )
+            old.execSQL(
+                "INSERT INTO `category_overrides` " +
+                    "(`kind`, `originalTitle`, `customName`, `isHidden`, `userOrder`) " +
+                    "VALUES ('VOD', 'AR-Channels', 'Arabic', 1, 3)",
+            )
+        }
+
+        val db = helper.runMigrationsAndValidate(DB_NAME, 23, true, MIGRATION_22_23)
+
+        db.query(
+            "SELECT `profileId`, `customName`, `isHidden`, `userOrder` FROM `category_overrides` " +
+                "ORDER BY `profileId`",
+        ).use { cursor ->
+            assertTrue("the viewer's category edits did not survive the upgrade", cursor.moveToFirst())
+            assertEquals(1, cursor.getInt(0))
+            assertEquals("Arabic", cursor.getString(1))
+            assertEquals(1, cursor.getInt(2))
+            assertEquals(3, cursor.getInt(3))
+
+            assertTrue("the second profile was left without the edits it had yesterday", cursor.moveToNext())
+            assertEquals(2, cursor.getInt(0))
+            assertEquals("Arabic", cursor.getString(1))
+
+            assertFalse("an edit was copied to somebody who does not exist", cursor.moveToNext())
+        }
+    }
+
     @Test
     fun `10 to 11 adopts existing favourites rather than dropping them`() {
         // The opposite promise to the one above, and the one that matters more: this is the

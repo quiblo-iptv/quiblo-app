@@ -53,116 +53,168 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.sin
 
 /**
- * Creative launch screen: animated solid-white Quiblo brand mark, title, audio sting, and version tag.
+ * The launch screen: the mark, the name, a sting, and the version it is about to run.
  *
- * Lands immediately on the app when the zoom hits at ~1.9s without waiting for reverb decay.
+ * **One composable for both frontends, and that is the point of it being here.** The phone and
+ * the television want different sizes and a different length of sting, which is four parameters;
+ * they were a file each, three hundred and seventy lines apiece, differing in those four values
+ * and in nothing else. The copy on the television had already drifted — a second hand-drawn brand
+ * mark with the wrong geometry — which is what a copy does while nobody is reading both.
+ *
+ * The zoom lands on the last [ZOOM_DURATION_MILLIS] of [durationMillis], so a caller sets one
+ * number and the timing follows it.
  */
 @Composable
 fun QuibloSplashScreen(
     versionName: String,
     modifier: Modifier = Modifier,
-    logoSize: Dp = 210.dp,
+    logoSize: Dp = LOGO_SIZE,
+    titleSize: TextUnit = TITLE_SIZE,
+    logoTitleSpacing: Dp = LOGO_TITLE_SPACING,
     durationMillis: Long = DEFAULT_SPLASH_DURATION_MILLIS,
+    insetForSystemBars: Boolean = true,
     playSound: Boolean = true,
     onSplashComplete: () -> Unit = {},
 ) {
-    val context = LocalContext.current
-
-    if (playSound) {
-        DisposableEffect(Unit) {
-            var player: MediaPlayer? = null
-            try {
-                player = MediaPlayer.create(context, R.raw.splash_sound)?.apply {
-                    setOnCompletionListener { mp ->
-                        try {
-                            mp.release()
-                        } catch (_: Throwable) {
-                            // Ignore release errors
-                        }
-                    }
-                    start()
-                }
-            } catch (_: Throwable) {
-                // Ignore audio failure if audio device is unavailable
-            }
-            onDispose {
-                try {
-                    player?.stop()
-                    player?.release()
-                } catch (_: Throwable) {
-                    // Ignore release errors
-                }
-            }
-        }
-    }
+    if (playSound) SplashSting()
 
     val introAlpha = remember { Animatable(0f) }
-    val introScale = remember { Animatable(0.85f) }
+    val introScale = remember { Animatable(INTRO_SCALE_FROM) }
     val zoomScale = remember { Animatable(1f) }
     val exitAlpha = remember { Animatable(1f) }
 
-    LaunchedEffect(Unit) {
-        // 1. Entrance animation (0ms to 400ms)
+    LaunchedEffect(durationMillis) {
         launch {
-            introAlpha.animateTo(
-                targetValue = 1f,
-                animationSpec = tween(INTRO_DURATION_MILLIS, easing = FastOutSlowInEasing),
-            )
+            introAlpha.animateTo(1f, tween(INTRO_DURATION_MILLIS, easing = FastOutSlowInEasing))
         }
         launch {
-            introScale.animateTo(
-                targetValue = 1f,
-                animationSpec = tween(INTRO_DURATION_MILLIS, easing = FastOutSlowInEasing),
-            )
+            introScale.animateTo(1f, tween(INTRO_DURATION_MILLIS, easing = FastOutSlowInEasing))
         }
 
-        // 2. Resting duration: aligns the zoom explosion directly with the audio peak at ~1.9s
-        val effectiveZoomStart = if (durationMillis != DEFAULT_SPLASH_DURATION_MILLIS) {
-            (durationMillis - ZOOM_DURATION_MILLIS).coerceAtLeast(0L)
-        } else {
-            ZOOM_START_DELAY_MILLIS
-        }
-        delay(effectiveZoomStart)
+        // Everything before the zoom is rest. The zoom is what the sting's crescendo is under,
+        // so it is timed from the end rather than from the start.
+        delay((durationMillis - ZOOM_DURATION_MILLIS).coerceAtLeast(0L))
 
-        // 3. Netflix-style camera zoom-through hitting exactly at the audio peak
         launch {
             zoomScale.animateTo(
-                targetValue = NETFLIX_ZOOM_MAX_SCALE,
+                targetValue = ZOOM_MAX_SCALE,
                 animationSpec = tween(
                     ZOOM_DURATION_MILLIS.toInt(),
-                    easing = CubicBezierEasing(0.65f, 0f, 0.85f, 0.2f),
+                    easing = CubicBezierEasing(ZOOM_EASE_A, 0f, ZOOM_EASE_B, ZOOM_EASE_C),
                 ),
             )
         }
         launch {
             delay(ZOOM_FADEOUT_DELAY_MILLIS)
-            exitAlpha.animateTo(
-                targetValue = 0f,
-                animationSpec = tween(ZOOM_FADEOUT_DURATION_MILLIS, easing = LinearEasing),
-            )
+            exitAlpha.animateTo(0f, tween(ZOOM_FADEOUT_DURATION_MILLIS, easing = LinearEasing))
         }
 
         delay(ZOOM_DURATION_MILLIS)
         onSplashComplete()
     }
 
-    val infiniteTransition = rememberInfiniteTransition(label = "splashAnimations")
-    val glowPulse by infiniteTransition.animateFloat(
+    val contentAlpha = introAlpha.value * exitAlpha.value
+    val contentScale = introScale.value * zoomScale.value
+
+    Box(
+        modifier = modifier
+            .fillMaxSize()
+            .background(
+                Brush.radialGradient(
+                    colors = listOf(BACKDROP_NEAR, BACKDROP_MID, Color.Black),
+                    center = Offset.Unspecified,
+                    radius = Float.POSITIVE_INFINITY,
+                ),
+            )
+            .then(
+                // A television has no status bar to avoid and insets of its own that mean
+                // something else; the phone would draw its version tag under the gesture bar.
+                if (insetForSystemBars) Modifier.statusBarsPadding().navigationBarsPadding() else Modifier,
+            ),
+    ) {
+        SplashGlow(contentAlpha = contentAlpha, zoomScale = zoomScale.value)
+
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center,
+            modifier = Modifier
+                .align(Alignment.Center)
+                .graphicsLayer {
+                    // Sit on the glow's centre rather than the box's, so the light is behind the
+                    // mark instead of below it.
+                    translationY = size.height * (LOGO_VERTICAL_BIAS - HALF)
+                }
+                .scale(contentScale)
+                .alpha(contentAlpha),
+        ) {
+            QuibloMark(modifier = Modifier.size(logoSize), colour = Color.White)
+
+            Spacer(modifier = Modifier.height(logoTitleSpacing))
+
+            Text(
+                text = QUIBLO,
+                color = Color.White,
+                fontSize = titleSize,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = TITLE_TRACKING,
+            )
+        }
+
+        Text(
+            text = if (versionName.startsWith("v")) versionName else "v$versionName",
+            color = Color.White.copy(alpha = (VERSION_ALPHA * contentAlpha).coerceIn(0f, 1f)),
+            fontSize = VERSION_TEXT_SIZE,
+            fontWeight = FontWeight.Medium,
+            letterSpacing = VERSION_TRACKING,
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .padding(end = VERSION_END_PADDING, bottom = VERSION_BOTTOM_PADDING)
+                .alpha(contentAlpha)
+                .testTag(SPLASH_VERSION_TAG),
+        )
+    }
+}
+
+/**
+ * The sting, and the one place it is released.
+ *
+ * **Released on dispose and nowhere else.** It was also released from an `onCompletion`
+ * listener, so a splash that outlived its own sound released a player the listener had already
+ * freed — an `IllegalStateException` into a `catch` that swallowed it. One owner, one release.
+ */
+@Composable
+private fun SplashSting() {
+    val context = LocalContext.current
+    DisposableEffect(Unit) {
+        // Null when the device will not give us an audio track at all, which a television box
+        // with nothing plugged into it does.
+        val player = runCatching { MediaPlayer.create(context, R.raw.splash_sound) }.getOrNull()
+        runCatching { player?.start() }
+        onDispose { runCatching { player?.release() } }
+    }
+}
+
+/** The light behind the mark: two pools on a slow orbit, and a pulse under the logo itself. */
+@Composable
+private fun SplashGlow(contentAlpha: Float, zoomScale: Float) {
+    val transition = rememberInfiniteTransition(label = "splashAnimations")
+    val glowPulse by transition.animateFloat(
         initialValue = GLOW_PULSE_MIN,
         targetValue = GLOW_PULSE_MAX,
         animationSpec = infiniteRepeatable(
@@ -171,195 +223,136 @@ fun QuibloSplashScreen(
         ),
         label = "splashGlowPulse",
     )
-
-    val ambientAngle by infiniteTransition.animateFloat(
+    val ambientAngle by transition.animateFloat(
         initialValue = 0f,
-        targetValue = 360f,
+        targetValue = FULL_TURN,
         animationSpec = infiniteRepeatable(
             animation = tween(AMBIENT_DRIFT_DURATION_MILLIS, easing = LinearEasing),
         ),
         label = "splashAmbientAngle",
     )
 
-    val currentContentAlpha = introAlpha.value * exitAlpha.value
-    val currentContentScale = introScale.value * zoomScale.value
+    Canvas(modifier = Modifier.fillMaxSize()) {
+        // The pools widen with the zoom, so the light travels through the camera with the mark.
+        val flare = (zoomScale - 1f) * GLOW_ZOOM_FLARE_FACTOR + 1f
+        val radians = ambientAngle * (PI.toFloat() / HALF_TURN)
+        val orbitX = cos(radians) * AMBIENT_ORBIT_REACH_X
+        val orbitY = sin(radians) * AMBIENT_ORBIT_REACH_Y
 
-    Box(
-        modifier = modifier
-            .fillMaxSize()
-            .background(
-                Brush.radialGradient(
-                    colors = listOf(
-                        Color(0xFF14172B),
-                        Color(0xFF090A12),
-                        Color(0xFF000000),
-                    ),
-                    center = Offset.Unspecified,
-                    radius = Float.POSITIVE_INFINITY,
+        pool(
+            colour = POOL_NEAR,
+            alpha = POOL_NEAR_ALPHA * contentAlpha,
+            centre = Offset(size.width * (POOL_NEAR_X + orbitX), size.height * (POOL_NEAR_Y + orbitY)),
+            radius = size.minDimension * POOL_RADIUS_FACTOR * flare,
+        )
+        pool(
+            colour = POOL_FAR,
+            alpha = POOL_FAR_ALPHA * contentAlpha,
+            centre = Offset(size.width * (POOL_FAR_X - orbitX), size.height * (POOL_FAR_Y - orbitY)),
+            radius = size.minDimension * POOL_RADIUS_FACTOR * flare,
+        )
+
+        val centre = Offset(size.width / 2f, size.height * LOGO_VERTICAL_BIAS)
+        val radius = size.minDimension * GLOW_RADIUS_FACTOR * flare
+        drawCircle(
+            brush = Brush.radialGradient(
+                colors = listOf(
+                    GLOW_INNER.copy(alpha = (glowPulse * contentAlpha).coerceIn(0f, 1f)),
+                    GLOW_OUTER.copy(alpha = (glowPulse * GLOW_OUTER_SCALE * contentAlpha).coerceIn(0f, 1f)),
+                    Color.Transparent,
                 ),
-            )
-            .statusBarsPadding()
-            .navigationBarsPadding(),
-    ) {
-        // Animated drifting ambient lighting backdrop
-        Canvas(modifier = Modifier.fillMaxSize()) {
-            val flareScale = (zoomScale.value - 1f) * GLOW_ZOOM_FLARE_FACTOR + 1f
-            val radians = ambientAngle * (Math.PI.toFloat() / 180f)
-            val orbitX = cos(radians) * AMBIENT_ORBIT_REACH_X
-            val orbitY = sin(radians) * AMBIENT_ORBIT_REACH_Y
-
-            // Top-left orbiting ambient pool
-            val pool1Alpha = (0.28f * currentContentAlpha).coerceIn(0f, 1f)
-            drawCircle(
-                brush = Brush.radialGradient(
-                    colors = listOf(
-                        Color(0xFF5C6BC0).copy(alpha = pool1Alpha),
-                        Color.Transparent,
-                    ),
-                    center = Offset(size.width * (0.22f + orbitX), size.height * (0.20f + orbitY)),
-                    radius = size.minDimension * 0.75f * flareScale,
-                ),
-                center = Offset(size.width * (0.22f + orbitX), size.height * (0.20f + orbitY)),
-                radius = size.minDimension * 0.75f * flareScale,
-            )
-
-            // Bottom-right orbiting ambient pool
-            val pool2Alpha = (0.24f * currentContentAlpha).coerceIn(0f, 1f)
-            drawCircle(
-                brush = Brush.radialGradient(
-                    colors = listOf(
-                        Color(0xFF7E57C2).copy(alpha = pool2Alpha),
-                        Color.Transparent,
-                    ),
-                    center = Offset(size.width * (0.78f - orbitX), size.height * (0.78f - orbitY)),
-                    radius = size.minDimension * 0.75f * flareScale,
-                ),
-                center = Offset(size.width * (0.78f - orbitX), size.height * (0.78f - orbitY)),
-                radius = size.minDimension * 0.75f * flareScale,
-            )
-
-            // Center pulsating glow behind the central logo
-            val innerAlpha = (glowPulse * currentContentAlpha).coerceIn(0f, 1f)
-            val outerAlpha = ((glowPulse * GLOW_OUTER_SCALE) * currentContentAlpha).coerceIn(0f, 1f)
-            drawCircle(
-                brush = Brush.radialGradient(
-                    colors = listOf(
-                        Color(0xFF7986CB).copy(alpha = innerAlpha),
-                        Color(0xFF3F51B5).copy(alpha = outerAlpha),
-                        Color.Transparent,
-                    ),
-                    center = Offset(size.width / 2f, size.height * LOGO_VERTICAL_BIAS),
-                    radius = size.minDimension * GLOW_RADIUS_FACTOR * flareScale,
-                ),
-                center = Offset(size.width / 2f, size.height * LOGO_VERTICAL_BIAS),
-                radius = size.minDimension * GLOW_RADIUS_FACTOR * flareScale,
-            )
-        }
-
-        // Central branding: Large Pure White Logo + Title directly below
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center,
-            modifier = Modifier
-                .align(Alignment.Center)
-                .scale(currentContentScale)
-                .alpha(currentContentAlpha),
-        ) {
-            QuibloLogoMark(
-                modifier = Modifier.size(logoSize),
-                color = Color.White,
-            )
-
-            Spacer(modifier = Modifier.height(6.dp))
-
-            Text(
-                text = "Quiblo",
-                color = Color.White,
-                fontSize = 46.sp,
-                fontWeight = FontWeight.Bold,
-                letterSpacing = 2.sp,
-            )
-        }
-
-        // Version tag: Cleanly placed at the bottom right
-        Text(
-            text = if (versionName.startsWith("v")) versionName else "v$versionName",
-            color = Color.White.copy(alpha = (0.75f * currentContentAlpha).coerceIn(0f, 1f)),
-            fontSize = 14.sp,
-            fontWeight = FontWeight.Medium,
-            letterSpacing = 0.8.sp,
-            modifier = Modifier
-                .align(Alignment.BottomEnd)
-                .padding(end = 32.dp, bottom = 28.dp)
-                .alpha(currentContentAlpha)
-                .testTag("splash_version_text"),
+                center = centre,
+                radius = radius,
+            ),
+            center = centre,
+            radius = radius,
         )
     }
 }
+
+/** One pool of light, drawn where it is told. */
+private fun DrawScope.pool(
+    colour: Color,
+    alpha: Float,
+    centre: Offset,
+    radius: Float,
+) {
+    drawCircle(
+        brush = Brush.radialGradient(
+            colors = listOf(colour.copy(alpha = alpha.coerceIn(0f, 1f)), Color.Transparent),
+            center = centre,
+            radius = radius,
+        ),
+        center = centre,
+        radius = radius,
+    )
+}
+
+/** Where the version tag is, for the tests that check it is on screen. */
+const val SPLASH_VERSION_TAG = "splash_version_text"
+
+/** The name, which is a brand rather than copy and so is not translated. */
+private const val QUIBLO = "Quiblo"
+
+/** The phone's sizes. The television passes its own — see `TvSplashScreen`. */
+private val LOGO_SIZE = 150.dp
+private val TITLE_SIZE = 46.sp
+private val LOGO_TITLE_SPACING = 6.dp
 
 /**
- * The Quiblo Brand Mark: Pure white outer letter Q ring, triangular play symbol, and angled tail.
+ * How long the whole thing lasts on a phone.
+ *
+ * Short enough to be a launch screen rather than an interruption: the sound runs five seconds
+ * and the picture does not wait for its reverb to decay.
  */
-@Composable
-fun QuibloLogoMark(
-    modifier: Modifier = Modifier,
-    color: Color = Color.White,
-) {
-    Canvas(modifier = modifier) {
-        val w = size.width
-        val scale = w / CANVAS_BASE_SIZE
-
-        val strokeWidth = 5.5f * scale
-        val ringCenter = Offset(54f * scale, 54f * scale)
-        val ringRadius = 18f * scale
-
-        // The outer ring of the Q
-        drawCircle(
-            color = color,
-            center = ringCenter,
-            radius = ringRadius,
-            style = Stroke(width = strokeWidth),
-        )
-
-        // The tail of the Q (breaking through bottom-right)
-        drawLine(
-            color = color,
-            start = Offset(64f * scale, 64f * scale),
-            end = Offset(74f * scale, 74f * scale),
-            strokeWidth = strokeWidth,
-            cap = StrokeCap.Round,
-        )
-
-        // The play mark (triangle in center)
-        val playPath = Path().apply {
-            moveTo(49f * scale, 45f * scale)
-            lineTo(49f * scale, 63f * scale)
-            lineTo(65f * scale, 54f * scale)
-            close()
-        }
-
-        drawPath(
-            path = playPath,
-            color = color,
-        )
-    }
-}
-
 private const val DEFAULT_SPLASH_DURATION_MILLIS = 2450L
+
 private const val INTRO_DURATION_MILLIS = 400
-private const val ZOOM_START_DELAY_MILLIS = 1750L
+private const val INTRO_SCALE_FROM = 0.85f
+
+/** The camera moving through the mark. The last stretch of the splash, always. */
 private const val ZOOM_DURATION_MILLIS = 700L
+private const val ZOOM_MAX_SCALE = 20f
+private const val ZOOM_EASE_A = 0.65f
+private const val ZOOM_EASE_B = 0.85f
+private const val ZOOM_EASE_C = 0.2f
 private const val ZOOM_FADEOUT_DELAY_MILLIS = 350L
 private const val ZOOM_FADEOUT_DURATION_MILLIS = 350
-private const val NETFLIX_ZOOM_MAX_SCALE = 20f
+
 private const val GLOW_ZOOM_FLARE_FACTOR = 0.25f
 private const val GLOW_PULSE_DURATION_MILLIS = 1800
 private const val GLOW_PULSE_MIN = 0.25f
 private const val GLOW_PULSE_MAX = 0.45f
 private const val GLOW_OUTER_SCALE = 0.5f
 private const val GLOW_RADIUS_FACTOR = 0.55f
+private val GLOW_INNER = Color(0xFF7986CB)
+private val GLOW_OUTER = Color(0xFF3F51B5)
+
 private const val AMBIENT_DRIFT_DURATION_MILLIS = 7000
 private const val AMBIENT_ORBIT_REACH_X = 0.12f
 private const val AMBIENT_ORBIT_REACH_Y = 0.08f
+private val POOL_NEAR = Color(0xFF5C6BC0)
+private val POOL_FAR = Color(0xFF7E57C2)
+private const val POOL_NEAR_ALPHA = 0.28f
+private const val POOL_FAR_ALPHA = 0.24f
+private const val POOL_NEAR_X = 0.22f
+private const val POOL_NEAR_Y = 0.20f
+private const val POOL_FAR_X = 0.78f
+private const val POOL_FAR_Y = 0.78f
+private const val POOL_RADIUS_FACTOR = 0.75f
+
+private val BACKDROP_NEAR = Color(0xFF14172B)
+private val BACKDROP_MID = Color(0xFF090A12)
+
+/** The mark sits a little above the true centre, and the glow is centred on the same line. */
 private const val LOGO_VERTICAL_BIAS = 0.48f
-private const val CANVAS_BASE_SIZE = 108f
+private const val HALF = 0.5f
+private const val FULL_TURN = 360f
+private const val HALF_TURN = 180f
+
+private const val VERSION_ALPHA = 0.75f
+private val VERSION_TEXT_SIZE = 14.sp
+private val VERSION_TRACKING = 0.8.sp
+private val VERSION_END_PADDING = 32.dp
+private val VERSION_BOTTOM_PADDING = 28.dp
+private val TITLE_TRACKING = 2.sp

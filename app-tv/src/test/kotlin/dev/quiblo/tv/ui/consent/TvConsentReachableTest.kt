@@ -28,9 +28,12 @@ import androidx.compose.ui.test.performKeyInput
 import androidx.compose.ui.test.pressKey
 import androidx.compose.ui.test.requestFocus
 import dev.quiblo.core.data.SourceRepository
+import dev.quiblo.feature.settings.SettingsViewModel
+import dev.quiblo.feature.settings.TmdbCheck
 import dev.quiblo.feature.sources.SourcesViewModel
 import io.mockk.every
 import io.mockk.mockk
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
 import org.junit.Assert.assertEquals
 import org.junit.Rule
@@ -66,7 +69,7 @@ class TvConsentReachableTest {
     private var accepted = 0
 
     @Test
-    fun `all three screens are read and accepted with the centre key alone`() {
+    fun `all four screens are read and accepted with the centre key alone`() {
         showTheScreen { accepted++ }
 
         compose.onNodeWithText(NEXT).assertIsDisplayed()
@@ -83,7 +86,33 @@ class TvConsentReachableTest {
         // point: a viewer with no playlist to hand must be able to reach the way past.
         press(Key.DirectionRight)
         press(Key.DirectionCenter)
-        assertEquals("Skipping is what accepts, on the third page.", 1, accepted)
+        assertEquals("Skipping the playlist turns the page; it does not accept.", 0, accepted)
+
+        compose.onNodeWithText(METADATA_TITLE).assertIsDisplayed()
+        skipTheKey()
+        assertEquals("Skipping the key is what accepts, on the fourth page.", 1, accepted)
+    }
+
+    /**
+     * The key page can be got past without typing anything, and says where a key comes from.
+     *
+     * Unlike a playlist, the app works without one — so a first-launch page asking for a key
+     * that could not be skipped would be a wall in front of a working app. The address is
+     * asserted because a television box often has no browser: the button beside the field is a
+     * shortcut, and the words are the part everybody can use.
+     */
+    @Test
+    fun `the fourth page offers a key, a way to get one, and a way past`() {
+        showTheScreen()
+        press(Key.DirectionCenter)
+        press(Key.DirectionCenter)
+        press(Key.DirectionRight)
+        press(Key.DirectionCenter)
+
+        compose.onNodeWithText(METADATA_TITLE).assertIsDisplayed()
+        compose.onNodeWithText(TMDB_URL, substring = true).assertIsDisplayed()
+        compose.onNodeWithText(GET_A_KEY).assertIsDisplayed()
+        compose.onNodeWithText(SKIP).assertIsDisplayed()
     }
 
     /**
@@ -174,10 +203,32 @@ class TvConsentReachableTest {
         }
         val viewModel = SourcesViewModel(repository)
 
-        compose.setContent { TvConsentScreen(onAccept = onAccept, viewModel = viewModel) }
+        // The settings one is stubbed: the fourth page reads two flows off it and writes a key
+        // through it, and building the real one here would drag in every setting this app has.
+        val settings = mockk<SettingsViewModel>(relaxed = true) {
+            every { tmdbApiKey } returns MutableStateFlow(null)
+            every { tmdbCheck } returns MutableStateFlow<TmdbCheck>(TmdbCheck.Idle)
+        }
+
+        compose.setContent {
+            TvConsentScreen(onAccept = onAccept, viewModel = viewModel, settingsViewModel = settings)
+        }
         compose.waitForIdle()
         compose.onNodeWithText(NEXT).requestFocus()
         compose.waitForIdle()
+    }
+
+    /**
+     * Walks off the key field and onto the way out.
+     *
+     * The page composes the field first because that is what it is for, so the remote arrives on
+     * it and the way past is below. Down and centre is what a viewer does, and it is what this
+     * asserts is possible.
+     */
+    private fun skipTheKey() {
+        compose.onNodeWithText(SKIP).requestFocus()
+        compose.waitForIdle()
+        press(Key.DirectionCenter)
     }
 
     private fun press(key: Key) {
@@ -189,6 +240,13 @@ class TvConsentReachableTest {
         const val NEXT = "Next"
         const val ADD_PLAYLIST = "Add a playlist"
         const val SKIP = "Skip for later"
+        const val GET_A_KEY = "Get a key"
+
+        /** From `tv_consent_metadata_title`. */
+        const val METADATA_TITLE = "Posters and plots"
+
+        /** From `TMDB_API_KEY_URL`, which the page prints for a box with no browser. */
+        const val TMDB_URL = "themoviedb.org/settings/api"
 
         /** From `tv_consent_terms_body`. */
         const val RESPONSIBILITY = "you are responsible for them"

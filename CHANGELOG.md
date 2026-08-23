@@ -15,6 +15,24 @@ Formatted after [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and ve
 
 ## Unreleased
 
+### Added
+
+- **Merge duplicate titles, in Settings.** A provider that lists one film in SD, HD, FHD and 4K sends four rows; turn this on and the catalogue, the search results, the recently-added row and the category counts show it once. The copies that were folded away are offered on the film's or series' own screen, so switching to the 4K one is a press. Off by default, because merging hides rows a provider sent.
+- **First launch asks for a Movie Database key, and offers to open the page that makes one.** A fourth page after the playlist, skippable in one press: nothing on screen said a key existed, so anybody who never opened Settings never found out why their films had no posters. Settings has the same *Get a key* button on both the phone and the television.
+- **Advanced search on the television filters by year.** The Years chip beside Genres lists every year the app has metadata for, newest first, and narrows films and series to it — on its own or together with a genre. It shares the one chip strip rather than taking a row of its own, because a second row is what pushes a focused result off the bottom of the screen.
+
+### Changed
+
+- **Hiding, renaming and reordering categories now belongs to the profile that did it.** One person hiding the adult shelves, or renaming one into their own language, used to decide it for everybody on the device. Everything that existed is copied to every profile on upgrade, so nobody's list changes; they go their own way from there. Switching profile redraws the shelves immediately.
+- **The launch screen, the ambient light and the brand mark are one implementation each, shared by the phone and the television.** They were a copy each, which is how the television's mark came to be drawn wrong while the phone's was right.
+
+### Fixed
+
+- **The button that changes the featured titles is back on the television home screen.** It was removed while the hero slider was being tidied and the code behind it was left in place, so the slider offered whatever five titles it had picked and no way to ask for five more.
+- **The launch screen no longer plays again every time the screen rotates.** Rotating a phone, or changing the theme, recreates the app's window; the splash treated that as a fresh start and put five seconds in front of an app the viewer was already inside.
+- **The Quiblo mark on the launch screen is the app's own mark again.** Both launch screens had drawn a hand-made copy of it with the ring, the tail and the play triangle in the wrong places.
+- **The television build is a megabyte smaller.** It shipped the launch sound twice — once compressed, once not.
+
 ## 0.24.0
 
 ### Added

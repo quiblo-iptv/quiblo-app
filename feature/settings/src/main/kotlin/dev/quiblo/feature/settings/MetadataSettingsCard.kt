@@ -31,12 +31,14 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -44,6 +46,8 @@ import androidx.compose.ui.unit.dp
 import dev.quiblo.core.data.MetadataScanState
 import dev.quiblo.core.data.ScanRefusal
 import dev.quiblo.core.data.progressFraction
+import dev.quiblo.designsystem.TMDB_API_KEY_URL
+import dev.quiblo.designsystem.openLink
 
 /**
  * Optional film information from The Movie Database.
@@ -70,6 +74,7 @@ internal fun MetadataSettingsCard(
     onDismissScan: () -> Unit,
 ) {
     var draft by remember(savedKey) { mutableStateOf(savedKey.orEmpty()) }
+    val context = LocalContext.current
 
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -113,6 +118,12 @@ internal fun MetadataSettingsCard(
                     OutlinedButton(onClick = onClear) {
                         Text(stringResource(R.string.settings_metadata_clear))
                     }
+                }
+                // A field for a key nobody has is a dead end, and the page that makes one is
+                // three clicks into a site nothing here links to. Nothing depends on it opening
+                // — see [openLink] — and the summary above names the address in words.
+                TextButton(onClick = { openLink(context, TMDB_API_KEY_URL) }) {
+                    Text(stringResource(R.string.settings_metadata_get_key))
                 }
             }
 

@@ -35,6 +35,7 @@ val seriesModule: Module = module {
             historyRepository = get(),
             preferences = get(),
             opinions = get(),
+            versions = get(),
         )
     }
 }

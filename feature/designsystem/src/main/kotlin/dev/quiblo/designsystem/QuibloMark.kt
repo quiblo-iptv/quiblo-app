@@ -16,7 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-package dev.quiblo.tv.ui.common
+package dev.quiblo.designsystem
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.runtime.Composable

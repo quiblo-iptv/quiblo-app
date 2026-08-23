@@ -44,6 +44,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -66,6 +67,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.quiblo.core.model.Channel
 import dev.quiblo.core.model.MediaKind
+import dev.quiblo.designsystem.QuibloMark
 import dev.quiblo.feature.browse.SearchUiState
 import dev.quiblo.feature.browse.SearchViewModel
 import dev.quiblo.feature.browse.labelRes
@@ -76,7 +78,6 @@ import dev.quiblo.tv.ui.browse.TvRowItem
 import dev.quiblo.tv.ui.common.AmbientRequest
 import dev.quiblo.tv.ui.common.FIELD_CORNER
 import dev.quiblo.tv.ui.common.LocalAmbientSink
-import dev.quiblo.tv.ui.common.QuibloMark
 import dev.quiblo.tv.ui.common.TvChip
 import dev.quiblo.tv.ui.common.TvTextField
 import dev.quiblo.tv.ui.common.TvToggle
@@ -131,6 +132,7 @@ fun TvSearchScreen(
         onOpen = onOpen,
         onQueryChange = viewModel::search,
         onSelectGenre = viewModel::selectGenre,
+        onSelectYear = viewModel::selectYear,
         onToggleIncludeHidden = viewModel::setIncludeHidden,
         onToggleIncludeLive = viewModel::setIncludeLive,
         onToggleAdvanced = viewModel::setAdvanced,
@@ -156,6 +158,7 @@ internal fun TvSearchPanel(
     onOpen: (List<Channel>, Int) -> Unit,
     onQueryChange: (String) -> Unit,
     onSelectGenre: (String?) -> Unit,
+    onSelectYear: (Int?) -> Unit,
     onToggleIncludeHidden: (Boolean) -> Unit,
     onToggleIncludeLive: (Boolean) -> Unit,
     onToggleAdvanced: (Boolean) -> Unit,
@@ -229,6 +232,7 @@ internal fun TvSearchPanel(
             isAdvanced = isAdvanced,
             onQueryChange = onQueryChange,
             onSelectGenre = onSelectGenre,
+            onSelectYear = onSelectYear,
             onToggleIncludeHidden = onToggleIncludeHidden,
             onToggleIncludeLive = onToggleIncludeLive,
             onClear = onClear,
@@ -303,6 +307,7 @@ internal fun ColumnScope.SearchHeader(
     isAdvanced: Boolean,
     onQueryChange: (String) -> Unit,
     onSelectGenre: (String?) -> Unit,
+    onSelectYear: (Int?) -> Unit,
     onToggleIncludeHidden: (Boolean) -> Unit,
     onToggleIncludeLive: (Boolean) -> Unit,
     onClear: () -> Unit,
@@ -456,6 +461,20 @@ internal fun ColumnScope.SearchHeader(
                     verticalPadding = 6.dp,
                 )
 
+                /*
+                 * The two switches, on the right of the field's own row (`027` #6).
+                 *
+                 * **They were chips at the head of the genre strip, and that was two faults in one
+                 * place.** A switch drawn as a chip looks like a genre that happens to be chosen,
+                 * which is the first; and living in the same scrolling strip as the genres put
+                 * them behind however many suggestions the term had produced — six of them on a
+                 * common word — so reaching *Include hidden* meant walking past a row of titles.
+                 * A filter that decides what a search returns does not belong downstream of the
+                 * search's own answers.
+                 *
+                 * Up here they are one press right of Advanced, which is the control that reveals
+                 * them, and they are on the row a viewer is already looking at.
+                 */
                 if (isAdvanced) {
                     Spacer(modifier = Modifier.width(COLUMN_GAP_COMPACT))
                     TvToggle(
@@ -537,6 +556,10 @@ internal fun ColumnScope.SearchHeader(
         )
     }
 
+    // Which filter the strip is listing. The screen's, not the view model's: it changes what is
+    // drawn and never what is queried, and a chosen genre stays chosen while the years are shown.
+    var strip by rememberSaveable { mutableStateOf(SearchStrip.GENRES) }
+
     LazyRow(
         horizontalArrangement = Arrangement.spacedBy(
             space = 10.dp,
@@ -579,24 +602,84 @@ internal fun ColumnScope.SearchHeader(
         }
 
         if (isAdvanced) {
-            // Genres only. The two switches that decide what a search *looks at* are up on the
-            // field's row now — see the note there for why they cannot live in this strip.
-            items(items = state.genres, key = { it }) { genre ->
+            /*
+             * Which of the two filters this strip is listing.
+             *
+             * **Two head chips rather than two strips, because there is no room for a second
+             * row.** `TvSearchResultsFitTest` measures what is above the results, and a focused
+             * poster already reaches within a few pixels of the bottom edge of a 1080 panel;
+             * another row of chips is the crop that test exists to catch. So the strip holds one
+             * list at a time and these say which — a selector, not a switch: neither chip changes
+             * meaning when it is pressed, and each says what it is filtering by when something is.
+             */
+            item(key = GENRES_KEY) {
                 TvChip(
-                    label = genre,
-                    isSelected = genre == state.selectedGenre,
-                    // Choosing, and only choosing (`027` #7). Pressing the chosen genre again
-                    // used to clear it, so the one chip a viewer is most likely to walk onto was
-                    // the one that undid their filter. Clear is at the head of this strip and is
-                    // the only thing that means "no genre".
-                    onClick = { onSelectGenre(genre) },
+                    label = filterLabel(stringResource(R.string.tv_search_filter_genres), state.selectedGenre),
+                    isSelected = strip == SearchStrip.GENRES,
+                    onClick = { strip = SearchStrip.GENRES },
                     horizontalPadding = 12.dp,
                     verticalPadding = 6.dp,
                 )
             }
+
+            // Only when the cache knows of any. A control that lists nothing is the hollow shape
+            // this project deletes rather than draws.
+            if (state.years.isNotEmpty()) {
+                item(key = YEARS_KEY) {
+                    TvChip(
+                        label = filterLabel(
+                            stringResource(R.string.tv_search_filter_years),
+                            state.selectedYear?.toString(),
+                        ),
+                        isSelected = strip == SearchStrip.YEARS,
+                        onClick = { strip = SearchStrip.YEARS },
+                        horizontalPadding = 12.dp,
+                        verticalPadding = 6.dp,
+                    )
+                }
+            }
+
+            if (strip == SearchStrip.GENRES) {
+                // Genres. The two switches that decide what a search *looks at* are up on the
+                // field's row — see the note there for why they cannot live in this strip.
+                items(items = state.genres, key = { "genre-$it" }) { genre ->
+                    TvChip(
+                        label = genre,
+                        isSelected = genre == state.selectedGenre,
+                        // Choosing, and only choosing (`027` #7). Pressing the chosen genre again
+                        // used to clear it, so the one chip a viewer is most likely to walk onto
+                        // was the one that undid their filter. Clear is at the head of this strip
+                        // and is the only thing that means "no genre".
+                        onClick = { onSelectGenre(genre) },
+                        horizontalPadding = 12.dp,
+                        verticalPadding = 6.dp,
+                    )
+                }
+            } else {
+                // Newest first, and only years the cache has a title for. Pressing the chosen
+                // year again clears it — unlike the genres, nothing else in this strip means
+                // "any year", and the chosen one is the chip the remote arrives on.
+                items(items = state.years, key = { "year-$it" }) { year ->
+                    TvChip(
+                        label = year.toString(),
+                        isSelected = year == state.selectedYear,
+                        onClick = { onSelectYear(year) },
+                        horizontalPadding = 12.dp,
+                        verticalPadding = 6.dp,
+                    )
+                }
+            }
         }
     }
 }
+
+/** Which list the one chip strip is holding. */
+private enum class SearchStrip { GENRES, YEARS }
+
+/** "Years", or "Years · 2019" once one is chosen. The strip cannot show both lists at once. */
+@Composable
+private fun filterLabel(name: String, chosen: String?): String =
+    if (chosen == null) name else stringResource(R.string.tv_search_filter_chosen, name, chosen)
 
 /**
  * What to say about the genre filter, if anything.
@@ -696,16 +779,27 @@ private val RESTING_FIELD_WIDTH = 560.dp
 /** Wide enough for a film title typed in full, and no wider — the hint shares the line. */
 private val FIELD_WIDTH = 420.dp
 
-/** Narrower when advanced filters are taking up the row. */
+/**
+ * Narrower again once the switches are on the row beside it.
+ *
+ * Advanced puts three more controls on the field's line. Something has to give and it is the
+ * field: a title is still typed in full at 380dp, and the alternative — the switches wrapping to
+ * a line of their own — costs the results the height they need.
+ */
 private val FIELD_WIDTH_ADVANCED = 380.dp
 
-/** Narrower gap for when the row is crowded with filters. */
+/**
+ * Air between the field and what is beside it.
+ *
+ * 28 rather than the settings screen's 40, because this row holds Advanced and two switches when
+ * it is open and the same gap four times over pushed the last switch off the panel.
+ */
 private val COLUMN_GAP_COMPACT = 28.dp
 
 /** Between the resting field and Advanced under it. Close enough to read as one control's row. */
 private val RESTING_ADVANCED_GAP = 20.dp
 
-/** Narrower toggle gap for crowded rows. */
+/** Between the two switches. Nearer to each other than either is to Advanced, because they pair. */
 private val TOGGLE_GAP_COMPACT = 16.dp
 
 /**
@@ -729,8 +823,14 @@ private const val OPTICAL_CENTRE = 0.46f
  *
  * The chips also read better nearer the field they belong to, but that is a bonus and not the
  * reason. If anything above the results grows again, that test is what will say so.
+ *
+ * **12 rather than 4 since the genre hint stopped being drawn over results.** That line was worth
+ * a row of its own and it is now hidden the moment there are results to read, which is where the
+ * air came from. `TvSearchResultsFitTest` is what says the eight dp were actually spare.
  */
 private val CHIP_STRIP_PADDING = 12.dp
 
 /** Stable, so the chip row is not rebuilt when the genres behind it change. */
 private const val CLEAR_KEY = "__clear__"
+private const val GENRES_KEY = "__genres__"
+private const val YEARS_KEY = "__years__"

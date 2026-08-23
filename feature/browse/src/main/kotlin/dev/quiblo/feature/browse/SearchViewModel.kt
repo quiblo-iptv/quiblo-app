@@ -51,6 +51,10 @@ data class SearchUiState(
     val selectedGenre: String? = null,
     /** Genres the cached metadata can actually filter by, alphabetically. */
     val genres: List<String> = emptyList(),
+    /** The year being filtered by, or null for every year. */
+    val selectedYear: Int? = null,
+    /** Years the cached metadata can actually filter by, newest first. */
+    val years: List<Int> = emptyList(),
     /** How much of the catalogue has been described, for the hint under the filter. */
     val coveragePercent: Int = 0,
     /** Whether the genre index is still being built. See `GenreState.isLoading` (#018). */
@@ -103,7 +107,7 @@ data class SearchUiState(
     val isAdvanced: Boolean = false,
 ) {
     /** True once a question has been asked, which is what moves the bar off the middle. */
-    val isActive: Boolean get() = query.isNotBlank() || selectedGenre != null
+    val isActive: Boolean get() = query.isNotBlank() || selectedGenre != null || selectedYear != null
 
     val hasResults: Boolean get() = live.isNotEmpty() || movies.isNotEmpty() || series.isNotEmpty()
 }
@@ -141,6 +145,7 @@ class SearchViewModel(
 
     private val query = MutableStateFlow("")
     private val selectedGenre = MutableStateFlow<String?>(null)
+    private val selectedYear = MutableStateFlow<Int?>(null)
     private val includeHidden = MutableStateFlow(false)
 
     /**
@@ -177,9 +182,10 @@ class SearchViewModel(
                 genreIndex.value = GenreState(isLoading = false)
                 return@launch
             }
-            val index = searchRepository.genreIndex(sourceId)
+            val index = searchRepository.filterIndex(sourceId)
             genreIndex.value = GenreState(
                 genres = index.genres,
+                years = index.years,
                 coveragePercent = index.coveragePercent,
                 isDisabled = index.isMetadataDisabled,
                 isLoading = false,
@@ -208,13 +214,15 @@ class SearchViewModel(
      */
     private val results: StateFlow<SearchResults> = combine(
         query.debounce { if (it.isBlank()) 0L else SEARCH_DEBOUNCE_MILLIS },
-        selectedGenre,
+        combine(selectedGenre, selectedYear) { genre, year -> genre to year },
         includeHidden,
         activeSourceId,
         includeLive,
-    ) { text, genre, hidden, sourceId, live -> Ask(text, genre, hidden, sourceId, live) }
+    ) { text, filters, hidden, sourceId, live ->
+        Ask(text, filters.first, filters.second, hidden, sourceId, live)
+    }
         .mapLatest { ask ->
-            if (ask.sourceId == null || (ask.text.isBlank() && ask.genre == null)) {
+            if (ask.sourceId == null || ask.isEmpty) {
                 isSearching.value = false
                 return@mapLatest SearchResults()
             }
@@ -224,6 +232,7 @@ class SearchViewModel(
                 query = ask.text,
                 options = SearchOptions(
                     genre = ask.genre,
+                    year = ask.year,
                     includeHidden = ask.includeHidden,
                     includeLive = ask.includeLive,
                 ),
@@ -233,7 +242,7 @@ class SearchViewModel(
 
     val uiState: StateFlow<SearchUiState> = combine(
         query,
-        selectedGenre,
+        combine(selectedGenre, selectedYear) { genre, year -> genre to year },
         genreIndex,
         results,
         combine(
@@ -247,11 +256,13 @@ class SearchViewModel(
         ) { scores, art, searching, sourceId, switches ->
             Extras(scores, art, searching, sourceId != null, switches)
         },
-    ) { text, genre, index, found, extras ->
+    ) { text, filters, index, found, extras ->
         SearchUiState(
             query = text,
-            selectedGenre = genre,
+            selectedGenre = filters.first,
             genres = index.genres,
+            selectedYear = filters.second,
+            years = index.years,
             coveragePercent = index.coveragePercent,
             isMetadataDisabled = index.isDisabled,
             areGenresLoading = index.isLoading,
@@ -289,6 +300,17 @@ class SearchViewModel(
         selectedGenre.value = genre
     }
 
+    /**
+     * Narrows to one year of release, or to every year again.
+     *
+     * Unlike a genre chip this one does toggle: the years are a long strip and the chip a viewer
+     * is filtering by is the one they walk onto first, so "press it again" is the shortest way
+     * back out of a year — and unlike a genre, nothing else on the strip means "any year".
+     */
+    fun selectYear(year: Int?) {
+        selectedYear.value = if (year == selectedYear.value) null else year
+    }
+
     /** Looks in hidden categories and hidden writing systems too, for this search only. */
     fun setIncludeHidden(include: Boolean) {
         includeHidden.value = include
@@ -312,6 +334,7 @@ class SearchViewModel(
     fun clear() {
         query.value = ""
         selectedGenre.value = null
+        selectedYear.value = null
         includeHidden.value = false
         // Back to whatever the rule says rather than to false, because "off" is not what this
         // switch was before it was touched — see [includeLiveOverride].
@@ -348,6 +371,7 @@ class SearchViewModel(
     /** The genre filter's own state, read once and then unchanging for the session. */
     private data class GenreState(
         val genres: List<String> = emptyList(),
+        val years: List<Int> = emptyList(),
         val coveragePercent: Int = 0,
         val isDisabled: Boolean = false,
         /**
@@ -365,10 +389,14 @@ class SearchViewModel(
     private data class Ask(
         val text: String,
         val genre: String?,
+        val year: Int?,
         val includeHidden: Boolean,
         val sourceId: Long?,
         val includeLive: Boolean,
-    )
+    ) {
+        /** Nothing typed and nothing chosen, which is a screen waiting rather than a question. */
+        val isEmpty: Boolean get() = text.isBlank() && genre == null && year == null
+    }
 
     /** The three switches above the results, bundled to fit `combine`'s arity. */
     private data class Switches(

@@ -44,6 +44,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -68,7 +69,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.zIndex
 import androidx.tv.material3.Icon
+import androidx.tv.material3.IconButton
+import androidx.tv.material3.IconButtonDefaults
 import coil3.compose.AsyncImage
 import dev.quiblo.core.common.cleanedForDisplay
 import dev.quiblo.core.model.Channel
@@ -90,6 +94,7 @@ fun TvHeroSlider(
     items: List<HeroItem>,
     onPlay: (Channel) -> Unit,
     onToggleFavorite: (Channel) -> Unit = {},
+    onRefresh: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     if (items.isEmpty()) return
@@ -138,6 +143,28 @@ fun TvHeroSlider(
                 .align(Alignment.BottomCenter)
                 .padding(bottom = 24.dp),
         )
+
+        // Another five featured titles, for a viewer who does not want any of these five. Below
+        // the tab bar rather than beside it: the bar is what the remote walks up into from here,
+        // and a control sharing that line would be reached on the way out of the slider.
+        IconButton(
+            onClick = onRefresh,
+            scale = IconButtonDefaults.scale(focusedScale = REFRESH_FOCUSED_SCALE),
+            colors = IconButtonDefaults.colors(
+                containerColor = Color.Transparent,
+                focusedContainerColor = Color.White.copy(alpha = REFRESH_FOCUSED_FILL),
+            ),
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .padding(top = REFRESH_TOP_PADDING, end = REFRESH_END_PADDING)
+                .zIndex(1f),
+        ) {
+            Icon(
+                imageVector = Icons.Default.Refresh,
+                contentDescription = stringResource(R.string.tv_hero_refresh),
+                tint = Color.White.copy(alpha = REFRESH_TINT_ALPHA),
+            )
+        }
     }
 }
 
@@ -419,3 +446,12 @@ private fun HeroPaginationDots(
 
 private val HERO_HEIGHT = 560.dp
 private const val HERO_CYCLE_MILLIS = 8_000L
+
+/* The refresh control's own numbers: quiet until the remote reaches it, unmistakable when it does. */
+private const val REFRESH_FOCUSED_SCALE = 1.2f
+private const val REFRESH_FOCUSED_FILL = 0.2f
+private const val REFRESH_TINT_ALPHA = 0.8f
+
+/** Clear of the tab bar above it, which is 100dp of chrome on this panel. */
+private val REFRESH_TOP_PADDING = 100.dp
+private val REFRESH_END_PADDING = 64.dp

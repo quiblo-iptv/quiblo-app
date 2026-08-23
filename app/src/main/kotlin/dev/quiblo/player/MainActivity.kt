@@ -25,7 +25,7 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.animation.Crossfade
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.quiblo.core.data.PlayerSettingsRepository
@@ -48,7 +48,10 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
         setContent {
-            var showSplash by remember { mutableStateOf(true) }
+            // Saved, not remembered: the activity is recreated on a rotation and on a theme
+            // change, and a splash that replays every time one happens is a five-second wall in
+            // front of an app the viewer is already inside.
+            var showSplash by rememberSaveable { mutableStateOf(true) }
 
             // Collected here rather than inside the theme so the whole tree recomposes
             // against one value, and a change applies without restarting the app.

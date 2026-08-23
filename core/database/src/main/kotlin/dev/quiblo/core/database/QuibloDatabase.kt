@@ -36,6 +36,7 @@ import dev.quiblo.core.database.dao.SeriesPreferenceDao
 import dev.quiblo.core.database.dao.SourceDao
 import dev.quiblo.core.database.dao.TitleMetadataDao
 import dev.quiblo.core.database.dao.TitleOpinionDao
+import dev.quiblo.core.database.dao.TitleVersionDao
 import dev.quiblo.core.database.dao.WatchEventDao
 import dev.quiblo.core.database.entity.CategoryOverrideEntity
 import dev.quiblo.core.database.entity.ChannelEntity
@@ -61,7 +62,7 @@ import dev.quiblo.core.database.entity.WatchEventEntity
  * constant, so the version the app ships and the version the upgrade path is tested against
  * cannot drift apart.
  */
-const val SCHEMA_VERSION = 22
+const val SCHEMA_VERSION = 23
 
 /**
  * Every migration, in order, in one place.
@@ -93,6 +94,7 @@ val ALL_MIGRATIONS = arrayOf(
     MIGRATION_19_20,
     MIGRATION_20_21,
     MIGRATION_21_22,
+    MIGRATION_22_23,
 )
 
 /**
@@ -139,6 +141,8 @@ abstract class QuibloDatabase : RoomDatabase() {
     abstract fun channelLogoDao(): ChannelLogoDao
 
     abstract fun categoryOverrideDao(): CategoryOverrideDao
+
+    abstract fun titleVersionDao(): TitleVersionDao
 
     abstract fun programmeDao(): ProgrammeDao
 

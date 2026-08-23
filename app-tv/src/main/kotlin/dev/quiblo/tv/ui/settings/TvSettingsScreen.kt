@@ -87,6 +87,8 @@ import dev.quiblo.core.model.Category
 import dev.quiblo.core.model.MaxBitrateCap
 import dev.quiblo.core.model.MediaKind
 import dev.quiblo.core.model.SeekInterval
+import dev.quiblo.designsystem.TMDB_API_KEY_URL
+import dev.quiblo.designsystem.openLink
 import dev.quiblo.feature.settings.BackupUiState
 import dev.quiblo.feature.settings.SettingsViewModel
 import dev.quiblo.feature.settings.THIRD_PARTY_LICENSES
@@ -142,6 +144,7 @@ fun TvSettingsScreen(
     val cachedTitles by viewModel.cachedTitleCount.collectAsStateWithLifecycle()
     val hiddenScripts by viewModel.hiddenScripts.collectAsStateWithLifecycle()
     val showLiveInSearch by viewModel.showLiveInSearch.collectAsStateWithLifecycle()
+    val mergeDuplicateTitles by viewModel.mergeDuplicateTitles.collectAsStateWithLifecycle()
     val ambientPlayer by viewModel.ambientPlayer.collectAsStateWithLifecycle()
 
     // Collapsed by default: twelve components are an obligation to make available, not
@@ -367,22 +370,18 @@ fun TvSettingsScreen(
             }
         }
 
-        item { SectionHeading(stringResource(R.string.tv_settings_search)) }
-
-        item {
-            OptionRow(
-                label = stringResource(R.string.tv_settings_search_live),
-                description = stringResource(R.string.tv_settings_search_live_detail),
-                options = listOf(false, true),
-                selected = showLiveInSearch,
-                labelFor = {
-                    stringResource(if (it) R.string.tv_settings_on else R.string.tv_settings_off)
-                },
-                onSelect = viewModel::setShowLiveInSearch,
-            )
-        }
+        catalogueSettings(
+            showLiveInSearch = showLiveInSearch,
+            onShowLiveInSearch = viewModel::setShowLiveInSearch,
+            mergeDuplicateTitles = mergeDuplicateTitles,
+            onMergeDuplicateTitles = viewModel::setMergeDuplicateTitles,
+        )
 
         item { SectionHeading(stringResource(R.string.tv_settings_categories)) }
+
+        // Whose list this is. Said on the screen because a viewer hiding a shelf has no other
+        // way of knowing whether they are hiding it from the household or from themselves.
+        item { Attribution(stringResource(R.string.tv_settings_category_whose)) }
 
         item {
             OptionRow(
@@ -564,6 +563,10 @@ private fun LicenseRow(entry: ThirdPartyLicense) {
  *
  * Held locally until Save rather than written per keystroke: a key is meaningless
  * half-entered, and writing one would clear the cached metadata on every character.
+ *
+ * **Get a key is beside Save because a field for a key nobody has is a dead end.** The address
+ * is in the line above it as well: a television box often has no browser, and the likely way
+ * anybody makes one of these is on the phone in their hand — see [openLink].
  */
 @Composable
 internal fun TmdbKeyRow(
@@ -573,6 +576,7 @@ internal fun TmdbKeyRow(
     onClear: () -> Unit,
 ) {
     var draft by remember(currentKey) { mutableStateOf(currentKey.orEmpty()) }
+    val context = LocalContext.current
 
     /*
      * Laid out as `OptionRow` lays out every other row on this screen, because #022 was that it
@@ -625,6 +629,11 @@ internal fun TmdbKeyRow(
                 label = stringResource(R.string.tv_settings_clear),
                 isSelected = false,
                 onClick = onClear,
+            )
+            TvChip(
+                label = stringResource(R.string.tv_settings_tmdb_open),
+                isSelected = false,
+                onClick = { openLink(context, TMDB_API_KEY_URL) },
             )
 
             // The service is the only thing that can say whether a key works, so the answer
@@ -1240,6 +1249,44 @@ private fun backupMessage(state: BackupUiState): String? = when (state) {
         state.supportedVersion,
     )
     BackupUiState.Failed -> stringResource(R.string.tv_settings_backup_failed)
+}
+
+/**
+ * The two switches that decide what the catalogue *is* rather than how it looks.
+ *
+ * Its own function because `TvSettingsScreen` is one long `LazyColumn` and detekt counts every
+ * branch in it: two more rows was the press that took it over the complexity threshold. The
+ * boundary is a real one — everything here changes what a query returns.
+ */
+private fun LazyListScope.catalogueSettings(
+    showLiveInSearch: Boolean,
+    onShowLiveInSearch: (Boolean) -> Unit,
+    mergeDuplicateTitles: Boolean,
+    onMergeDuplicateTitles: (Boolean) -> Unit,
+) {
+    item { SectionHeading(stringResource(R.string.tv_settings_search)) }
+
+    item {
+        OptionRow(
+            label = stringResource(R.string.tv_settings_search_live),
+            description = stringResource(R.string.tv_settings_search_live_detail),
+            options = listOf(false, true),
+            selected = showLiveInSearch,
+            labelFor = { stringResource(if (it) R.string.tv_settings_on else R.string.tv_settings_off) },
+            onSelect = onShowLiveInSearch,
+        )
+    }
+
+    item {
+        OptionRow(
+            label = stringResource(R.string.tv_settings_merge_titles),
+            description = stringResource(R.string.tv_settings_merge_titles_detail),
+            options = listOf(false, true),
+            selected = mergeDuplicateTitles,
+            labelFor = { stringResource(if (it) R.string.tv_settings_on else R.string.tv_settings_off) },
+            onSelect = onMergeDuplicateTitles,
+        )
+    }
 }
 
 @Composable

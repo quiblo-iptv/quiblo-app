@@ -123,6 +123,51 @@ class GenreAndScriptQueryTest {
         )
     }
 
+    /**
+     * A year narrows the same join a genre does, and either works without the other.
+     *
+     * Two films called Dune, one from each year, is the sharpest case this catalogue has: a year
+     * filter that matched on the cleaned title alone would return both.
+     */
+    @Test
+    fun `a year returns only the titles the service dates to it`() = runTest {
+        seed()
+
+        assertEquals(
+            listOf("Dune (2021)"),
+            genre(genre = "", kind = "VOD", year = 2021).map { it.channel.name },
+        )
+    }
+
+    /**
+     * The provider's year answers when the service gave none.
+     *
+     * A cache row written before `releaseYear` existed still has the year read out of the
+     * provider's own title, and dropping those titles out of the filter would make a catalogue
+     * look thinner the older its cache is.
+     */
+    @Test
+    fun `a year falls back to the year in the provider's title`() = runTest {
+        seed()
+
+        assertEquals(
+            listOf("Dune (1984)"),
+            genre(genre = "", kind = "VOD", year = 1984).map { it.channel.name },
+        )
+    }
+
+    /** A year and a genre narrow together, rather than one replacing the other. */
+    @Test
+    fun `a year and a genre both apply`() = runTest {
+        seed()
+
+        assertEquals(emptyList<String>(), genre("Adventure", kind = "VOD", year = 2021).map { it.channel.name })
+        assertEquals(
+            listOf("Dune (1984)"),
+            genre("Adventure", kind = "VOD", year = 1984).map { it.channel.name },
+        )
+    }
+
     /** A cached miss is an answer about nothing, and must not put a title in a genre. */
     @Test
     fun `a cached miss files nothing under any genre`() = runTest {
@@ -284,25 +329,28 @@ class GenreAndScriptQueryTest {
             unknownMask = SCRIPT_MASK_UNKNOWN,
         ).first()
 
-    private suspend fun genre(genre: String, kind: String) = db.channelDao().searchByGenre(
+    private suspend fun genre(genre: String, kind: String, year: Int = 0) = db.channelDao().searchByMetadata(
         profileId = 1L,
         sourceId = SOURCE_ID,
         kind = kind,
         genre = genre,
+        year = year,
         query = "",
         limit = 40,
         includeHidden = true,
+        mergeDuplicates = 0,
         hiddenMask = 0,
         unknownMask = SCRIPT_MASK_UNKNOWN,
     )
 
-    private suspend fun browse(hiddenMask: Int) = db.channelDao().observeBrowse(
+    private suspend fun browse(hiddenMask: Int, mergeDuplicates: Int = 0) = db.channelDao().observeBrowse(
         profileId = 1L,
         sourceId = SOURCE_ID,
         kind = "VOD",
         groupTitle = null,
         query = "",
         favoritesOnly = 0,
+        mergeDuplicates = mergeDuplicates,
         hiddenMask = hiddenMask,
         unknownMask = SCRIPT_MASK_UNKNOWN,
     ).first()
@@ -329,7 +377,14 @@ class GenreAndScriptQueryTest {
             ),
         )
         listOf(
-            metadata(searchTitle = "dune", kind = "VOD", year = 2021, genres = "Science Fiction\nDrama"),
+            metadata(
+                searchTitle = "dune",
+                kind = "VOD",
+                year = 2021,
+                releaseYear = 2021,
+                genres = "Science Fiction\nDrama",
+            ),
+            // No `releaseYear`: an older cache row, from before the service was asked for one.
             metadata(searchTitle = "dune", kind = "VOD", year = 1984, genres = "Adventure"),
             metadata(searchTitle = "cached miss", kind = "VOD", genres = "Horror", isMiss = true),
             // The blank key, carrying a genre nothing may be filed under by accident.
@@ -361,16 +416,19 @@ class GenreAndScriptQueryTest {
         scriptMask = scriptMask,
     )
 
+    @Suppress("LongParameterList")
     private fun metadata(
         searchTitle: String,
         kind: String,
         year: Int = 0,
+        releaseYear: Int? = null,
         genres: String,
         isMiss: Boolean = false,
     ) = TitleMetadataEntity(
         searchTitle = searchTitle,
         kind = kind,
         year = year,
+        releaseYear = releaseYear,
         genres = genres,
         isMiss = isMiss,
         fetchedAtEpochMillis = 0L,

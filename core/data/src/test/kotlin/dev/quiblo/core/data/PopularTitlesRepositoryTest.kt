@@ -114,7 +114,7 @@ class PopularTitlesRepositoryTest {
         coEvery { client.popular(any(), any()) } returns
             TmdbPopular.Refused(TmdbAnswer.Refused(TmdbRefusal.RATE_LIMITED))
         coEvery { dao.all() } returns listOf(entity(kind = MediaKind.VOD, rank = 1, title = "Dune"))
-        coEvery { channelDao.titlesForMetadata(SOURCE_ID, any()) } returns
+        coEvery { channelDao.titlesForMetadata(SOURCE_ID, any(), any()) } returns
             listOf(ChannelTitle(id = 7L, name = "Dune (2021) [4K]", kind = MediaKind.VOD.name))
 
         val row = repository.popular(SOURCE_ID)
@@ -137,7 +137,7 @@ class PopularTitlesRepositoryTest {
             entity(kind = MediaKind.VOD, rank = 1, title = "Nothing Here"),
             entity(kind = MediaKind.VOD, rank = 2, title = "Dune"),
         )
-        coEvery { channelDao.titlesForMetadata(SOURCE_ID, any()) } returns
+        coEvery { channelDao.titlesForMetadata(SOURCE_ID, any(), any()) } returns
             listOf(ChannelTitle(id = 7L, name = "Dune (2021) [4K]", kind = MediaKind.VOD.name))
 
         val row = repository.popular(SOURCE_ID)
@@ -164,7 +164,7 @@ class PopularTitlesRepositoryTest {
             (1..20).map { entity(MediaKind.VOD, it, "Film $it") } +
             (1..20).map { entity(MediaKind.SERIES, it, "Show $it") }
         // The provider carries none of the top ten of either, and plenty below them.
-        coEvery { channelDao.titlesForMetadata(SOURCE_ID, any()) } returns
+        coEvery { channelDao.titlesForMetadata(SOURCE_ID, any(), any()) } returns
             (11..20).map { ChannelTitle(it.toLong(), "Film $it", MediaKind.VOD.name) } +
             (11..20).map { ChannelTitle(it + 100L, "Show $it", MediaKind.SERIES.name) }
 
@@ -192,7 +192,7 @@ class PopularTitlesRepositoryTest {
     fun `nothing matched is still a row`() = runTest {
         coEvery { dao.oldestFetchedAt() } returns NOW
         coEvery { dao.all() } returns listOf(entity(MediaKind.VOD, 1, "Dune"))
-        coEvery { channelDao.titlesForMetadata(SOURCE_ID, any()) } returns emptyList()
+        coEvery { channelDao.titlesForMetadata(SOURCE_ID, any(), any()) } returns emptyList()
 
         val row = repository.popular(SOURCE_ID)
 

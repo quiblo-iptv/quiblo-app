@@ -49,8 +49,11 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -64,13 +67,13 @@ import dev.quiblo.core.data.ScanRefusal
 import dev.quiblo.core.model.Channel
 import dev.quiblo.core.model.Opinion
 import dev.quiblo.core.model.releaseYearIn
+import dev.quiblo.designsystem.ambientBackdrop
+import dev.quiblo.designsystem.rememberAmbient
 import dev.quiblo.feature.browse.runtimeLabel
 import dev.quiblo.feature.browse.runtimeLabelFromMinutes
 import dev.quiblo.feature.vod.MovieDetailUiState
 import dev.quiblo.feature.vod.MovieDetailViewModel
 import dev.quiblo.tv.R
-import dev.quiblo.tv.ui.common.ambientBackdrop
-import dev.quiblo.tv.ui.common.rememberAmbient
 import kotlinx.coroutines.launch
 import org.koin.androidx.compose.koinViewModel
 import org.koin.core.parameter.parametersOf
@@ -93,16 +96,31 @@ fun TvMovieScreen(
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    /*
+     * Which listing of this film is on screen.
+     *
+     * A provider that carries one film in four qualities gives it four rows, and with the merge
+     * setting on the catalogue shows one of them; the picker below swaps between them here rather
+     * than by opening another screen. It is the view model's key as well as its argument, so
+     * switching builds the film's own view model — the resume point, the favourite and the rating
+     * all belong to the row being watched, and a screen that kept one and played another would
+     * offer to resume a copy the viewer had never opened.
+     */
+    var shownId by rememberSaveable(channel.id) { mutableLongStateOf(channel.id) }
+
     val viewModel: MovieDetailViewModel = koinViewModel(
-        key = "tv-movie-${channel.id}",
-        parameters = { parametersOf(channel.id) },
+        key = "tv-movie-$shownId",
+        parameters = { parametersOf(shownId) },
     )
     val state by viewModel.uiState.collectAsStateWithLifecycle()
 
+    // TMDB's poster first, the provider's cover second, its logo last — the same order the phone
+    // screen uses. A provider logo is often a channel bug rather than artwork, and light taken
+    // from one is light from the wrong picture.
     val artworkUrl = (state as? MovieDetailUiState.Ready)?.let { ready ->
-        ready.channel.logoUrl?.takeIf { it.isNotBlank() }
-            ?: ready.details?.coverUrl
-            ?: ready.metadata?.posterUrl
+        ready.metadata?.posterUrl
+            ?: ready.details?.coverUrl?.takeIf { it.isNotBlank() }
+            ?: ready.channel.logoUrl
     } ?: channel.logoUrl
     val ambient = rememberAmbient(artworkUrl)
 
@@ -114,7 +132,7 @@ fun TvMovieScreen(
     BackHandler(onBack = onBack)
 
     Box(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxSize()
             .background(Color.Black)
             .ambientBackdrop(ambient),
@@ -132,7 +150,7 @@ fun TvMovieScreen(
                 onRemoveFromHistory = viewModel::removeFromHistory,
                 onRefreshMetadata = viewModel::refreshMetadata,
                 onRate = viewModel::rate,
-                modifier = modifier,
+                onSelectVersion = { shownId = it },
             )
         }
     }
@@ -152,7 +170,8 @@ private fun Loaded(
     onRemoveFromHistory: () -> Unit,
     onRefreshMetadata: () -> Unit,
     onRate: (Opinion) -> Unit,
-    modifier: Modifier,
+    onSelectVersion: (Long) -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     val firstAction = remember { FocusRequester() }
     val scrollState = rememberScrollState()
@@ -335,6 +354,12 @@ private fun Loaded(
                             )
                         }
                     }
+
+                    TvVersionRow(
+                        versions = state.versions,
+                        shownId = state.channel.id,
+                        onSelect = onSelectVersion,
+                    )
 
                     state.refreshResult?.let { result ->
                         Text(

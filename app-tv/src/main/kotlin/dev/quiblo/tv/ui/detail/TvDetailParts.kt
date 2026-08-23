@@ -21,10 +21,13 @@ package dev.quiblo.tv.ui.detail
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.focusGroup
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
@@ -32,6 +35,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Movie
@@ -46,15 +50,20 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.SubcomposeAsyncImage
 import dev.quiblo.core.common.cleanedForDisplay
+import dev.quiblo.core.data.TitleVersion
 import dev.quiblo.core.model.TitleMetadata
 import dev.quiblo.designsystem.AutoDirection
+import dev.quiblo.tv.R
+import dev.quiblo.tv.ui.common.TvChip
 import dev.quiblo.tv.ui.common.travellingGlow
 
 /**
@@ -204,7 +213,7 @@ private fun detailButtonBackgroundColor(isFocused: Boolean, isPrimary: Boolean):
 
 @Composable
 private fun DetailButtonContent(
-    icon: androidx.compose.ui.graphics.vector.ImageVector?,
+    icon: ImageVector?,
     label: String?,
     contentDescription: String?,
     isFocused: Boolean,
@@ -248,7 +257,7 @@ fun DetailButton(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     label: String? = null,
-    icon: androidx.compose.ui.graphics.vector.ImageVector? = null,
+    icon: ImageVector? = null,
     contentDescription: String? = null,
     isPrimary: Boolean = false,
     onFocus: (() -> Unit)? = null,
@@ -351,3 +360,46 @@ private const val OVERVIEW_MAX_LINES = 3
 
 /** A third of the search field's, which is the brightest thing this modifier is used at. */
 private const val PRIMARY_GLOW = 0.34f
+
+/**
+ * The other ways the provider lists this title, as a row of chips.
+ *
+ * **The other half of the merge setting.** With merging on, the catalogue shows one row where a
+ * panel sent four — the SD, HD, FHD and 4K copies of one film — and this is where the other three
+ * went. Without it, merging would be a setting that loses a viewer their 4K copy.
+ *
+ * Absent when there is nothing to choose between, which is every title on a panel that lists each
+ * one once, and every title at all while merging is off. A picker offering the thing already on
+ * screen is the hollow-control shape this project deletes rather than draws.
+ *
+ * Chips rather than a menu, for the reason everything else on this screen is: a television has no
+ * modals, and four labels on a row are three presses closer than four in a box.
+ */
+@Composable
+fun TvVersionRow(versions: List<TitleVersion>, shownId: Long, onSelect: (Long) -> Unit) {
+    if (versions.size < 2) return
+
+    Column(modifier = Modifier.padding(top = 14.dp)) {
+        Text(
+            text = stringResource(R.string.tv_detail_versions),
+            color = Color.White.copy(alpha = 0.55f),
+            fontSize = 13.sp,
+        )
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier
+                .padding(top = 6.dp)
+                .horizontalScroll(rememberScrollState())
+                // Its own group, so walking along it does not step out into the buttons above.
+                .focusGroup(),
+        ) {
+            versions.forEach { version ->
+                TvChip(
+                    label = version.label,
+                    isSelected = version.channel.id == shownId,
+                    onClick = { onSelect(version.channel.id) },
+                )
+            }
+        }
+    }
+}

@@ -694,3 +694,52 @@ val MIGRATION_21_22 = object : Migration(21, 22) {
         db.execSQL("ALTER TABLE `title_metadata` ADD COLUMN `popularity` REAL DEFAULT NULL")
     }
 }
+
+/**
+ * Category edits become one viewer's rather than the whole household's.
+ *
+ * Hiding, renaming and reordering a shelf are the same kind of statement a favourite is — this is
+ * what *I* want my list to look like — and until now one person hiding the adult categories, or
+ * renaming a shelf into their own language, decided it for everybody who used the television.
+ *
+ * **Every existing edit is copied to every existing profile**, so nobody's list changes on the way
+ * over and they diverge from there. The alternative — attaching them to whoever happens to be
+ * signed in — would silently empty the list for everybody else, which is the same fault seen from
+ * the other side.
+ *
+ * A table is rebuilt rather than altered because the primary key changes, and SQLite cannot add a
+ * column to one. The copy runs before the old table is dropped, and both are inside the
+ * migration's own transaction, so an interrupted upgrade leaves the old table intact.
+ *
+ * An installation with no profile row at all loses its edits here, and there is no way around it:
+ * the rows have nowhere to go. It also cannot happen in practice — the profile gate is the first
+ * thing after the terms, and nothing can reach the category editor without passing it.
+ */
+val MIGRATION_22_23 = object : Migration(22, 23) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS `category_overrides_new` (
+                `profileId` INTEGER NOT NULL,
+                `kind` TEXT NOT NULL,
+                `originalTitle` TEXT NOT NULL,
+                `customName` TEXT DEFAULT NULL,
+                `isHidden` INTEGER NOT NULL,
+                `userOrder` INTEGER DEFAULT NULL,
+                PRIMARY KEY(`profileId`, `kind`, `originalTitle`),
+                FOREIGN KEY(`profileId`) REFERENCES `profiles`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE
+            )
+            """.trimIndent(),
+        )
+        db.execSQL(
+            """
+            INSERT OR REPLACE INTO `category_overrides_new`
+                (`profileId`, `kind`, `originalTitle`, `customName`, `isHidden`, `userOrder`)
+            SELECT p.`id`, o.`kind`, o.`originalTitle`, o.`customName`, o.`isHidden`, o.`userOrder`
+            FROM `category_overrides` o CROSS JOIN `profiles` p
+            """.trimIndent(),
+        )
+        db.execSQL("DROP TABLE `category_overrides`")
+        db.execSQL("ALTER TABLE `category_overrides_new` RENAME TO `category_overrides`")
+    }
+}

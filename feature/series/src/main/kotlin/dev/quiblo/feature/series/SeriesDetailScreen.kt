@@ -90,6 +90,7 @@ import dev.quiblo.designsystem.ambientBackdrop
 import dev.quiblo.designsystem.rememberAmbient
 import dev.quiblo.feature.browse.DetailOverlayActions
 import dev.quiblo.feature.browse.TitleFacts
+import dev.quiblo.feature.browse.VersionPicker
 import dev.quiblo.feature.browse.runtimeLabel
 import dev.quiblo.source.api.SourceError
 import org.koin.androidx.compose.koinViewModel
@@ -108,6 +109,8 @@ fun SeriesDetailScreen(
      * for the two buttons that override it.
      */
     onEpisodeClick: (Episode, Channel, Long?) -> Unit,
+    /** Opens another of the provider's copies of this series. See [VersionPicker]. */
+    onOpenVersion: (Long) -> Unit = {},
     modifier: Modifier = Modifier,
     viewModel: SeriesDetailViewModel = koinViewModel(parameters = { parametersOf(channelId) }),
 ) {
@@ -155,6 +158,7 @@ fun SeriesDetailScreen(
                     onRefreshMetadata = viewModel::refreshMetadata,
                     onMerged = viewModel::setMerged,
                     onDescending = viewModel::setDescending,
+                    onOpenVersion = onOpenVersion,
                 )
             }
         }
@@ -318,6 +322,7 @@ private fun SeriesDetailContent(
     onRefreshMetadata: () -> Unit,
     onMerged: (Boolean) -> Unit,
     onDescending: (Boolean) -> Unit,
+    onOpenVersion: (Long) -> Unit,
 ) {
     val channel = state.channel
     val details = state.details
@@ -341,6 +346,17 @@ private fun SeriesDetailContent(
     ) {
         item {
             SeriesHeader(channel = channel, details = details, metadata = state.metadata)
+        }
+
+        // Under the header and above everything about episodes: which copy of a series you are
+        // reading comes before which episode of it you want.
+        item {
+            VersionPicker(
+                versions = state.versions,
+                shownId = channel.id,
+                onSelect = onOpenVersion,
+                modifier = Modifier.padding(horizontal = 16.dp),
+            )
         }
 
         // Always here, unlike the resume controls: somebody who watched this series elsewhere has

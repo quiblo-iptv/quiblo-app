@@ -85,7 +85,13 @@ class RecommendationRepository(
         // proposing something unprompted, and proposing out of a shelf the viewer has put away
         // is the app arguing with them. A hidden writing system is the same argument, and it is
         // answered where these ids become rows — `ChannelRepository.channelsByIds`, BUG-031.
-        val titles = channelDao.titlesForMetadata(sourceId, includeHidden = false)
+        // This viewer's hiding, because these are this viewer's suggestions: a shelf somebody
+        // has hidden is a shelf they have said they do not want suggested.
+        val titles = channelDao.titlesForMetadata(
+            sourceId = sourceId,
+            includeHidden = false,
+            profileId = profiles.activeProfileId,
+        )
 
         val signals = PlaySignals(
             plays = watchEvents.playsByStableKey(sourceId),

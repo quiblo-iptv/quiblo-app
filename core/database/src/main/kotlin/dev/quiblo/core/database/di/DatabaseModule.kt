@@ -41,6 +41,7 @@ val databaseModule: Module = module {
     single { get<QuibloDatabase>().titleMetadataDao() }
     single { get<QuibloDatabase>().channelLogoDao() }
     single { get<QuibloDatabase>().categoryOverrideDao() }
+    single { get<QuibloDatabase>().titleVersionDao() }
     single { get<QuibloDatabase>().channelDao() }
     single { get<QuibloDatabase>().resumePositionDao() }
     single { get<QuibloDatabase>().favoriteDao() }

@@ -23,6 +23,7 @@ import dev.quiblo.core.data.SeriesPreference
 import dev.quiblo.core.data.SeriesPreferenceRepository
 import dev.quiblo.core.data.TitleMetadataRepository
 import dev.quiblo.core.data.TitleOpinionRepository
+import dev.quiblo.core.data.TitleVersionsRepository
 import dev.quiblo.core.data.WatchHistoryRepository
 import dev.quiblo.core.model.Channel
 import dev.quiblo.core.model.Episode
@@ -97,6 +98,12 @@ class SeriesDetailViewModelTest {
         ),
     )
 
+    // Nothing to choose between: merging is off by default, and the copies a provider carries are
+    // covered where they are computed rather than here.
+    private val versions: TitleVersionsRepository = mockk {
+        every { observeVersions(any()) } returns flowOf(emptyList())
+    }
+
     @BeforeEach
     fun setUp() {
         Dispatchers.setMain(testDispatcher)
@@ -127,6 +134,7 @@ class SeriesDetailViewModelTest {
             historyRepository = historyRepository,
             preferences = preferences,
             opinions = opinions,
+            versions = versions,
         )
         testDispatcher.scheduler.advanceUntilIdle()
 
@@ -149,6 +157,7 @@ class SeriesDetailViewModelTest {
             historyRepository = historyRepository,
             preferences = preferences,
             opinions = opinions,
+            versions = versions,
         )
         testDispatcher.scheduler.advanceUntilIdle()
 
@@ -173,6 +182,7 @@ class SeriesDetailViewModelTest {
             historyRepository = historyRepository,
             preferences = preferences,
             opinions = opinions,
+            versions = versions,
         )
         testDispatcher.scheduler.advanceUntilIdle()
         viewModel.removeFromHistory()
@@ -201,6 +211,7 @@ class SeriesDetailViewModelTest {
             historyRepository = historyRepository,
             preferences = preferences,
             opinions = opinions,
+            versions = versions,
         )
         testDispatcher.scheduler.advanceUntilIdle()
 
@@ -221,6 +232,7 @@ class SeriesDetailViewModelTest {
             historyRepository = historyRepository,
             preferences = preferences,
             opinions = opinions,
+            versions = versions,
         )
         testDispatcher.scheduler.advanceUntilIdle()
 
@@ -244,6 +256,7 @@ class SeriesDetailViewModelTest {
             historyRepository = historyRepository,
             preferences = preferences,
             opinions = opinions,
+            versions = versions,
         )
         testDispatcher.scheduler.advanceUntilIdle()
 
@@ -265,6 +278,7 @@ class SeriesDetailViewModelTest {
             historyRepository = historyRepository,
             preferences = preferences,
             opinions = opinions,
+            versions = versions,
         )
         testDispatcher.scheduler.advanceUntilIdle()
 

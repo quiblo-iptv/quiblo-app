@@ -22,6 +22,7 @@ import dev.quiblo.core.database.dao.ChannelDao
 import dev.quiblo.core.database.dao.PopularTitleDao
 import dev.quiblo.core.database.entity.PopularTitleEntity
 import dev.quiblo.core.model.MediaKind
+import dev.quiblo.core.model.Profile
 import dev.quiblo.source.tmdb.PopularTitle
 import dev.quiblo.source.tmdb.TmdbClient
 import dev.quiblo.source.tmdb.TmdbPopular
@@ -113,7 +114,9 @@ class PopularTitlesRepository(
         // leave the row shorter than the cap. That is the honest order — the alternative is
         // reaching further down TMDB's list to backfill places a hidden title vacated, which
         // would make the filter change which titles are popular.
-        val titles = channelDao.titlesForMetadata(sourceId, includeHidden = true)
+        // Every category, so no profile: with `includeHidden` on, nothing is filtered by whose
+        // hiding it is and there is nobody to ask about.
+        val titles = channelDao.titlesForMetadata(sourceId, includeHidden = true, profileId = Profile.NONE_ID)
 
         return withContext(matchDispatcher) {
             val index = CatalogueIndex(titles)

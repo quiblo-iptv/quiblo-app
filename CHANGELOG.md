@@ -15,6 +15,8 @@ Formatted after [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and ve
 
 ## Unreleased
 
+## 0.25.0
+
 ### Added
 
 - **Merge duplicate titles, in Settings.** A provider that lists one film in SD, HD, FHD and 4K sends four rows; turn this on and the catalogue, the search results, the recently-added row and the category counts show it once. The copies that were folded away are offered on the film's or series' own screen, so switching to the 4K one is a press. Off by default, because merging hides rows a provider sent.

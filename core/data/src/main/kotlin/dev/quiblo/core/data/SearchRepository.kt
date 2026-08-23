@@ -62,8 +62,19 @@ data class SearchResults(
  * defaults, and a call site that wants to change one of them should not have to name the rest.
  */
 data class SearchOptions(
-    /** Narrows to one genre, which is the only thing advanced search filters by. */
+    /** Narrows to one genre. */
     val genre: String? = null,
+    /**
+     * Narrows to one year of release, as the metadata service dates it.
+     *
+     * Null is "any year". A year and a genre narrow together — they are two answers to the same
+     * question, not two questions — and either alone works as well as both.
+     *
+     * Live channels are left out whenever a year is chosen, for the reason [includeLive] gives
+     * about genres: a television channel is not from a year, and matching one on the digits in
+     * its name would fill a column nobody asked for.
+     */
+    val year: Int? = null,
     /**
      * Searches what the viewer has hidden as well — both hidden categories and hidden writing
      * systems.
@@ -106,8 +117,16 @@ const val DEFAULT_LIMIT_PER_KIND = 40
  * on a cache that has seen a tenth of a catalogue is telling less than the whole truth, and a
  * filter that silently omits nine films in ten is worse than one that says so.
  */
-data class GenreIndex(
+data class FilterIndex(
     val genres: List<String> = emptyList(),
+    /**
+     * Every year the cache has a title for, newest first.
+     *
+     * Newest first because that is the order a viewer looks for a year in, and because the top of
+     * the strip is the only part reachable without walking: a catalogue that reaches back to the
+     * fifties has seventy of these.
+     */
+    val years: List<Int> = emptyList(),
     val coveragePercent: Int = 0,
     /** True when no metadata key is configured at all, which is a different emptiness. */
     val isMetadataDisabled: Boolean = false,
@@ -158,34 +177,36 @@ class SearchRepository(
         options: SearchOptions = SearchOptions(),
     ): SearchResults {
         val term = query.trim()
-        if (term.isBlank() && options.genre.isNullOrBlank()) return SearchResults()
+        if (term.isBlank() && options.genre.isNullOrBlank() && options.year == null) return SearchResults()
 
         // Read once for this search rather than per result list, so all three lists are
         // filtered against the same answer even if the setting changes mid-query.
         val hidden = if (options.includeHidden) emptySet() else hiddenScripts.first()
         val ask = Ask(sourceId, term, options.limitPerKind, options.includeHidden, hidden)
-        return if (options.genre.isNullOrBlank()) {
+        return if (options.genre.isNullOrBlank() && options.year == null) {
             SearchResults(
                 live = if (options.includeLive) ask.matches(MediaKind.LIVE, term) else emptyList(),
                 movies = ask.matches(MediaKind.VOD, term),
                 series = ask.matches(MediaKind.SERIES, term),
             )
         } else {
-            byGenre(ask, options.genre, options.includeLive)
+            byMetadata(ask, options)
         }
     }
 
     /**
-     * Which genres can be filtered by, and how much of the catalogue is described.
+     * What advanced search can filter by — genres and years — and how much of the catalogue is
+     * described.
      *
-     * Derived from the cache rather than from a fixed list of genre names, because a genre
-     * only means anything here if something the viewer owns is filed under it. Offering
-     * "Western" against a catalogue holding none is a control that can only disappoint.
+     * Derived from the cache rather than from fixed lists, because a genre or a year only means
+     * anything here if something the viewer owns is filed under it. Offering "Western" against a
+     * catalogue holding none, or 1974 against a catalogue that starts in 1990, is a control that
+     * can only disappoint.
      */
-    suspend fun genreIndex(sourceId: Long): GenreIndex {
-        if (!metadataRepository.isEnabled) return GenreIndex(isMetadataDisabled = true)
+    suspend fun filterIndex(sourceId: Long): FilterIndex {
+        if (!metadataRepository.isEnabled) return FilterIndex(isMetadataDisabled = true)
 
-        val cached = titleMetadataDao.allGenreRows()
+        val cached = titleMetadataDao.allFilterRows()
 
         // Two counts rather than a pass over the catalogue. This used to clean every film and
         // series title in Kotlin to find out how many of them the cache knew — the same fifty
@@ -196,16 +217,28 @@ class SearchRepository(
         val known = channelDao.countDescribedTitles(sourceId)
 
         return withContext(matchDispatcher) {
-            val genres = cached
+            val described = cached.filterNot { it.isMiss }
+
+            val genres = described
                 .asSequence()
-                .filterNot { it.isMiss }
                 .flatMap { it.genres.orEmpty().splitGenres() }
                 .distinct()
                 .sorted()
                 .toList()
 
-            GenreIndex(
+            // The service's year, and the provider's only where the service gave none — the same
+            // order the query matches in, so every chip offered finds something.
+            val years = described
+                .asSequence()
+                .mapNotNull { row -> row.releaseYear ?: row.year.takeIf { it > 0 } }
+                .filter { it in EARLIEST_YEAR..LATEST_YEAR }
+                .distinct()
+                .sortedDescending()
+                .toList()
+
+            FilterIndex(
                 genres = genres,
+                years = years,
                 coveragePercent = coverage(wanted = wanted, known = known),
             )
         }
@@ -277,21 +310,37 @@ class SearchRepository(
     }
 
     /**
-     * The genre filter.
+     * The genre and year filters, which are one query.
      *
      * Films and series are matched through the metadata cache, which is keyed by a cleaned
      * title — so the catalogue's titles are cleaned the same way and looked up. Live channels
-     * have no metadata and never will, so they are matched on the genre word appearing in the
-     * channel's own name. That is a weaker rule and deliberately so: it is how a channel
-     * called "CRIME NETWORK HD" comes back for "Crime", which is what a viewer expects, and
-     * the alternative is a live column that is always empty.
+     * have no metadata and never will, so a genre reaches them only through the genre word
+     * appearing in the channel's own name. That is a weaker rule and deliberately so: it is how
+     * a channel called "CRIME NETWORK HD" comes back for "Crime", which is what a viewer
+     * expects, and the alternative is a live column that is always empty.
+     *
+     * **A year has no such fallback and gets none.** The digits in a channel's name are its
+     * number, its bitrate or its quality far more often than they are a year, so a year filter
+     * leaves the live column out rather than filling it with coincidences.
      */
-    private suspend fun byGenre(ask: Ask, genre: String, includeLive: Boolean): SearchResults =
-        SearchResults(
-            live = if (includeLive) ask.liveByGenre(genre) else emptyList(),
-            movies = ask.inGenre(MediaKind.VOD, genre),
-            series = ask.inGenre(MediaKind.SERIES, genre),
+    private suspend fun byMetadata(ask: Ask, options: SearchOptions): SearchResults {
+        val genre = options.genre.orEmpty()
+        val year = options.year ?: ANY_YEAR
+
+        // A year excludes live outright; a genre alone still reaches live channels through their
+        // names, which is the weaker rule [liveByGenre] exists for.
+        val live = when {
+            !options.includeLive || options.year != null -> emptyList()
+            genre.isBlank() -> emptyList()
+            else -> ask.liveByGenre(genre)
+        }
+
+        return SearchResults(
+            live = live,
+            movies = ask.inMetadata(MediaKind.VOD, genre, year),
+            series = ask.inMetadata(MediaKind.SERIES, genre, year),
         )
+    }
 
     /**
      * One column of a genre search, as one indexed query.
@@ -307,14 +356,15 @@ class SearchRepository(
      * applied per query here, so neither column can starve the other whatever order SQLite
      * returns rows in.
      */
-    private suspend fun Ask.inGenre(kind: MediaKind, genre: String): List<Channel> {
+    private suspend fun Ask.inMetadata(kind: MediaKind, genre: String, year: Int): List<Channel> {
         val asked = if (hidden.isEmpty()) limit else limit * SCRIPT_OVERSCAN
         return channelDao
-            .searchByGenre(
+            .searchByMetadata(
                 profileId = profiles.activeProfileId,
                 sourceId = sourceId,
                 kind = kind.name,
                 genre = genre,
+                year = year,
                 query = escapeForLike(term),
                 limit = asked,
                 includeHidden = includeHidden,
@@ -372,6 +422,19 @@ class SearchRepository(
         const val SCRIPT_OVERSCAN = 2
 
         const val PERCENT = 100
+
+        /** What the query reads as "any year". Zero is never a year a title was released in. */
+        const val ANY_YEAR = 0
+
+        /**
+         * The window a year chip can fall in.
+         *
+         * A provider's title carries whatever somebody typed into it, and `Alien 2` has been
+         * filed as a 1979 film and as a year 2 one. Both ends are here so a junk row cannot put
+         * a chip on the strip that finds nothing.
+         */
+        const val EARLIEST_YEAR = 1888
+        const val LATEST_YEAR = 2100
     }
 }
 

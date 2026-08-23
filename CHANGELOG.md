@@ -15,6 +15,10 @@ Formatted after [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and ve
 
 ## Unreleased
 
+### Added
+
+- **Advanced search on the television filters by year.** The Years chip beside Genres lists every year the app has metadata for, newest first, and narrows films and series to it — on its own or together with a genre. It shares the one chip strip rather than taking a row of its own, because a second row is what pushes a focused result off the bottom of the screen.
+
 ### Fixed
 
 - **The button that changes the featured titles is back on the television home screen.** It was removed while the hero slider was being tidied and the code behind it was left in place, so the slider offered whatever five titles it had picked and no way to ask for five more.

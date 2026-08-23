@@ -415,6 +415,12 @@ interface ChannelDao {
      * A blank `searchTitle` is excluded. It is the existing "there was nothing here worth looking
      * up" value, and a hundred junk rows share it — joining on it would file them all under
      * whatever genre the one cached blank key happens to carry.
+     *
+     * **A year narrows the same join.** `:year = 0` means "any", which is how one query serves a
+     * genre alone, a year alone, and both together. The year compared is the service's
+     * `releaseYear` and the provider's `year` only where the service gave none: the provider's is
+     * read out of a string somebody typed into a playlist, and a filter that trusted it first
+     * would file a 2019 remake under whatever the panel's title happened to say.
      */
     @Query(
         """
@@ -429,8 +435,9 @@ interface ChannelDao {
           AND c.searchTitle != ''
           AND m.isMiss = 0
           AND (:query = '' OR c.name LIKE '%' || :query || '%' ESCAPE '\')
-          AND (char(10) || COALESCE(m.genres, '') || char(10))
-              LIKE '%' || char(10) || :genre || char(10) || '%'
+          AND (:genre = '' OR (char(10) || COALESCE(m.genres, '') || char(10))
+              LIKE '%' || char(10) || :genre || char(10) || '%')
+          AND (:year = 0 OR COALESCE(m.releaseYear, m.year) = :year)
           AND (:includeHidden OR c.groupTitle NOT IN (
                 SELECT o.originalTitle FROM category_overrides o
                 WHERE o.kind = c.kind AND o.isHidden = 1))
@@ -440,11 +447,12 @@ interface ChannelDao {
         """,
     )
     @Suppress("LongParameterList")
-    suspend fun searchByGenre(
+    suspend fun searchByMetadata(
         profileId: Long,
         sourceId: Long,
         kind: String,
         genre: String,
+        year: Int,
         query: String,
         limit: Int,
         includeHidden: Boolean,
@@ -962,14 +970,16 @@ interface ProgrammeDao {
  * What the metadata cache knows about one title, minus everything a filter has no use for.
  *
  * The plot, the cast and two artwork URLs are the bulk of a cached row and none of them
- * answer "which of these is a crime film". Read as a projection so the genre index stays a
- * few kilobytes rather than the whole cache.
+ * answer "which of these is a crime film" or "which of these is from 2019". Read as a
+ * projection so the filter index stays a few kilobytes rather than the whole cache.
  */
-data class TitleGenreRow(
+data class TitleFilterRow(
     val searchTitle: String,
     val kind: String,
     /** Part of the key since #024, and read because the join is on the whole key. */
     val year: Int,
+    /** What the service says the year is, which is what the year filter offers and matches on. */
+    val releaseYear: Int?,
     val genres: String?,
     val isMiss: Boolean,
 )
@@ -1007,8 +1017,8 @@ interface TitleMetadataDao {
      * asked about; it is known, and pretending otherwise would make the figure creep
      * upward forever without ever arriving.
      */
-    @Query("SELECT searchTitle, kind, year, genres, isMiss FROM title_metadata")
-    suspend fun allGenreRows(): List<TitleGenreRow>
+    @Query("SELECT searchTitle, kind, year, releaseYear, genres, isMiss FROM title_metadata")
+    suspend fun allFilterRows(): List<TitleFilterRow>
 
     /**
      * Everything the scorer reasons over, for the whole cache, in one read.

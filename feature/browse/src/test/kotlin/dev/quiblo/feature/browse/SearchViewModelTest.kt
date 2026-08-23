@@ -18,7 +18,7 @@
 
 package dev.quiblo.feature.browse
 
-import dev.quiblo.core.data.GenreIndex
+import dev.quiblo.core.data.FilterIndex
 import dev.quiblo.core.data.PlayerSettingsRepository
 import dev.quiblo.core.data.SearchOptions
 import dev.quiblo.core.data.SearchRepository
@@ -72,7 +72,7 @@ class SearchViewModelTest {
         // Off, which is the shipped default: an advanced search leaves live channels out unless
         // somebody has said otherwise.
         every { playerSettings.showLiveInSearch } returns flowOf(false)
-        coEvery { searchRepository.genreIndex(any()) } returns GenreIndex(genres = GENRES)
+        coEvery { searchRepository.filterIndex(any()) } returns FilterIndex(genres = GENRES, years = YEARS)
         coEvery { searchRepository.search(any(), any(), any()) } returns SearchResults()
     }
 
@@ -119,6 +119,51 @@ class SearchViewModelTest {
         advanceUntilIdle()
 
         assertEquals(null, viewModel.uiState.value.selectedGenre)
+    }
+
+    /**
+     * A year chip does toggle, and that is deliberate.
+     *
+     * Unlike the genres, nothing else in that strip means "any year" — Clear empties the whole
+     * search — and the chosen year is the chip a remote arrives on. Pressing it again is the
+     * shortest way back out of a year, and there is no second meaning to be trapped by: the chip
+     * either has a year on it or it does not.
+     */
+    @Test
+    fun `pressing the chosen year again clears it`() = runTest {
+        val viewModel = searchViewModel()
+        advanceUntilIdle()
+
+        viewModel.selectYear(2019)
+        advanceUntilIdle()
+        assertEquals(2019, viewModel.uiState.value.selectedYear)
+
+        viewModel.selectYear(2019)
+        advanceUntilIdle()
+
+        assertEquals(null, viewModel.uiState.value.selectedYear)
+    }
+
+    /** A year alone is a question, so it is asked without anything being typed. */
+    @Test
+    fun `a year with no term still searches`() = runTest {
+        val viewModel = searchViewModel()
+        advanceUntilIdle()
+
+        viewModel.selectYear(1996)
+        advanceUntilIdle()
+
+        assertEquals(1996, optionsOfLastSearch().year)
+        assertTrue(viewModel.uiState.value.isActive)
+    }
+
+    /** The years the strip offers are the cache's, and they reach the screen. */
+    @Test
+    fun `the years the cache holds are on the state`() = runTest {
+        val viewModel = searchViewModel()
+        advanceUntilIdle()
+
+        assertEquals(YEARS, viewModel.uiState.value.years)
     }
 
     /**
@@ -228,5 +273,6 @@ class SearchViewModelTest {
         )
 
         val GENRES = listOf("Drama", "Comedy")
+        val YEARS = listOf(2019, 1996)
     }
 }

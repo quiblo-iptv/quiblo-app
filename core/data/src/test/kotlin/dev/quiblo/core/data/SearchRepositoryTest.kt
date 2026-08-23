@@ -21,7 +21,7 @@ package dev.quiblo.core.data
 import dev.quiblo.core.common.TitleScript
 import dev.quiblo.core.database.dao.ChannelDao
 import dev.quiblo.core.database.dao.ChannelWithFavorite
-import dev.quiblo.core.database.dao.TitleGenreRow
+import dev.quiblo.core.database.dao.TitleFilterRow
 import dev.quiblo.core.database.dao.TitleMetadataDao
 import dev.quiblo.core.database.entity.ChannelEntity
 import dev.quiblo.core.model.MediaKind
@@ -112,8 +112,8 @@ class SearchRepositoryTest {
     @DisplayName("a genre asks one query per column and never reads the catalogue")
     fun `the genre filter is one query per kind and no catalogue pass`() = runTest {
         coEvery {
-            channelDao.searchByGenre(
-                any(), SOURCE_ID, MediaKind.VOD.name, "Crime", any(), any(), any(), any(), any(),
+            channelDao.searchByMetadata(
+                any(), SOURCE_ID, MediaKind.VOD.name, "Crime", any(), any(), any(), any(), any(), any(),
             )
         } returns listOf(row(id = 10L, name = "Fargo (1996) [FHD]", kind = MediaKind.VOD))
 
@@ -128,19 +128,90 @@ class SearchRepositoryTest {
         coVerify(exactly = 0) { channelDao.findAllByIds(any(), any()) }
     }
 
+    /**
+     * A year is a question the metadata join can answer, and live channels cannot.
+     *
+     * The digits in a channel's name are its number, its bitrate or its quality far more often
+     * than they are a year, so the live column is left out rather than filled with coincidences.
+     */
     @Test
-    @DisplayName("a genre a viewer has never looked at is not offered")
-    fun `the genre index lists only genres the cache actually holds`() = runTest {
-        coEvery { titleMetadataDao.allGenreRows() } returns listOf(
-            TitleGenreRow("fargo", MediaKind.VOD.name, NO_YEAR, "Crime\nDrama", isMiss = false),
-            TitleGenreRow("speed", MediaKind.VOD.name, NO_YEAR, "Action\nCrime", isMiss = false),
-            // A miss carries no genres and must not be mistaken for one.
-            TitleGenreRow("some unfindable title", MediaKind.VOD.name, NO_YEAR, null, isMiss = true),
+    @DisplayName("a year filters films and series and leaves live channels alone")
+    fun `a year asks the metadata query and never asks for live channels`() = runTest {
+        coEvery {
+            channelDao.searchByMetadata(
+                any(), SOURCE_ID, MediaKind.VOD.name, "", 2019, any(), any(), any(), any(), any(),
+            )
+        } returns listOf(row(id = 11L, name = "Parasite (2019)", kind = MediaKind.VOD))
+
+        val results = repository.search(
+            sourceId = SOURCE_ID,
+            query = "",
+            options = SearchOptions(year = 2019),
+        )
+
+        assertEquals(listOf("Parasite (2019)"), results.movies.map { it.name })
+        assertEquals(emptyList<String>(), results.live.map { it.name })
+        coVerify(exactly = 0) {
+            channelDao.search(any(), any(), MediaKind.LIVE.name, any(), any(), any(), any(), any())
+        }
+    }
+
+    /** A year and a genre are two halves of one question, and travel to the query together. */
+    @Test
+    fun `a year and a genre are asked for in the same query`() = runTest {
+        coEvery {
+            channelDao.searchByMetadata(
+                any(), SOURCE_ID, MediaKind.VOD.name, "Crime", 2019, any(), any(), any(), any(), any(),
+            )
+        } returns listOf(row(id = 12L, name = "Parasite (2019)", kind = MediaKind.VOD))
+
+        val results = repository.search(
+            sourceId = SOURCE_ID,
+            query = "",
+            options = SearchOptions(genre = "Crime", year = 2019),
+        )
+
+        assertEquals(listOf("Parasite (2019)"), results.movies.map { it.name })
+    }
+
+    /**
+     * The years offered are the years the cache holds, newest first.
+     *
+     * The service's year is what a chip means; the provider's is the fallback for a row cached
+     * before the column existed. A miss dates nothing and must not put a year on the strip.
+     */
+    @Test
+    @DisplayName("a year nothing in the catalogue was released in is not offered")
+    fun `the filter index lists the years the cache holds, newest first`() = runTest {
+        coEvery { titleMetadataDao.allFilterRows() } returns listOf(
+            TitleFilterRow("fargo", MediaKind.VOD.name, NO_YEAR, 1996, "Crime", isMiss = false),
+            TitleFilterRow("parasite", MediaKind.VOD.name, NO_YEAR, 2019, "Thriller", isMiss = false),
+            // No service year: the provider's title said 1984, and that is what it is filed under.
+            TitleFilterRow("dune", MediaKind.VOD.name, 1984, null, "Adventure", isMiss = false),
+            // A miss knows nothing, including when anything came out.
+            TitleFilterRow("unfindable", MediaKind.VOD.name, 2001, 2001, null, isMiss = true),
         )
         coEvery { channelDao.countDistinctTitles(SOURCE_ID) } returns 0
         coEvery { channelDao.countDescribedTitles(SOURCE_ID) } returns 0
 
-        val index = repository.genreIndex(SOURCE_ID)
+        val index = repository.filterIndex(SOURCE_ID)
+
+        assertEquals(listOf(2019, 1996, 1984), index.years)
+    }
+
+    @Test
+    @DisplayName("a genre a viewer has never looked at is not offered")
+    fun `the genre index lists only genres the cache actually holds`() = runTest {
+        coEvery { titleMetadataDao.allFilterRows() } returns listOf(
+            TitleFilterRow("fargo", MediaKind.VOD.name, NO_YEAR, 1996, "Crime\nDrama", isMiss = false),
+            TitleFilterRow("speed", MediaKind.VOD.name, NO_YEAR, 1994, "Action\nCrime", isMiss = false),
+            // A miss carries no genres and must not be mistaken for one.
+            TitleFilterRow("some unfindable title", MediaKind.VOD.name, NO_YEAR, null, null, isMiss = true),
+        )
+        coEvery { channelDao.countDistinctTitles(SOURCE_ID) } returns 0
+        coEvery { channelDao.countDescribedTitles(SOURCE_ID) } returns 0
+
+        val index = repository.filterIndex(SOURCE_ID)
 
         assertEquals(listOf("Action", "Crime", "Drama"), index.genres)
     }
@@ -156,13 +227,13 @@ class SearchRepositoryTest {
     @Test
     @DisplayName("coverage is a fraction of counted titles, not a pass over the catalogue")
     fun `coverage divides the two counts and reads nothing else`() = runTest {
-        coEvery { titleMetadataDao.allGenreRows() } returns listOf(
-            TitleGenreRow("the matrix", MediaKind.VOD.name, 1999, "Action", isMiss = false),
+        coEvery { titleMetadataDao.allFilterRows() } returns listOf(
+            TitleFilterRow("the matrix", MediaKind.VOD.name, 1999, 1999, "Action", isMiss = false),
         )
         coEvery { channelDao.countDistinctTitles(SOURCE_ID) } returns 2
         coEvery { channelDao.countDescribedTitles(SOURCE_ID) } returns 1
 
-        val index = repository.genreIndex(SOURCE_ID)
+        val index = repository.filterIndex(SOURCE_ID)
 
         assertEquals(50, index.coveragePercent)
         coVerify(exactly = 0) { channelDao.titlesForMetadata(any(), any()) }
@@ -171,11 +242,11 @@ class SearchRepositoryTest {
     /** A source with nothing worth looking up reports nothing, rather than dividing by zero. */
     @Test
     fun `coverage of an empty catalogue is zero`() = runTest {
-        coEvery { titleMetadataDao.allGenreRows() } returns emptyList()
+        coEvery { titleMetadataDao.allFilterRows() } returns emptyList()
         coEvery { channelDao.countDistinctTitles(SOURCE_ID) } returns 0
         coEvery { channelDao.countDescribedTitles(SOURCE_ID) } returns 0
 
-        assertEquals(0, repository.genreIndex(SOURCE_ID).coveragePercent)
+        assertEquals(0, repository.filterIndex(SOURCE_ID).coveragePercent)
     }
 
     @Test
@@ -183,11 +254,11 @@ class SearchRepositoryTest {
     fun `the genre index says so when metadata is switched off`() = runTest {
         every { metadataRepository.isEnabled } returns false
 
-        val index = repository.genreIndex(SOURCE_ID)
+        val index = repository.filterIndex(SOURCE_ID)
 
         assertTrue(index.isMetadataDisabled)
         assertEquals(emptyList<String>(), index.genres)
-        coVerify(exactly = 0) { titleMetadataDao.allGenreRows() }
+        coVerify(exactly = 0) { titleMetadataDao.allFilterRows() }
     }
 
     /**
@@ -260,13 +331,13 @@ class SearchRepositoryTest {
         // every series. The cap is per query now, so neither column can starve the other
         // whatever that order is — which is `019`'s fix, kept rather than re-derived.
         coEvery {
-            channelDao.searchByGenre(
-                any(), SOURCE_ID, MediaKind.VOD.name, "Crime", any(), any(), any(), any(), any(),
+            channelDao.searchByMetadata(
+                any(), SOURCE_ID, MediaKind.VOD.name, "Crime", any(), any(), any(), any(), any(), any(),
             )
         } answers { (1..CROWD).map { row(id = it.toLong(), name = "Film $it", kind = MediaKind.VOD) } }
         coEvery {
-            channelDao.searchByGenre(
-                any(), SOURCE_ID, MediaKind.SERIES.name, "Crime", any(), any(), any(), any(), any(),
+            channelDao.searchByMetadata(
+                any(), SOURCE_ID, MediaKind.SERIES.name, "Crime", any(), any(), any(), any(), any(), any(),
             )
         } answers { (1..CROWD).map { row(id = it.toLong(), name = "Series $it", kind = MediaKind.SERIES) } }
 

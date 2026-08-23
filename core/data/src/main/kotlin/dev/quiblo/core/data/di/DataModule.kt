@@ -117,7 +117,7 @@ val dataModule: Module = module {
     // Named, like every definition here whose last parameter is a dispatcher with a default.
     single { CatalogueIdentityBackfill(channelDao = get()) }
     single { WatchHistoryRepository(get(), get()) }
-    single { CategoryRepository(get(), get()) }
+    single { CategoryRepository(channelDao = get(), categoryOverrideDao = get(), profiles = get()) }
     // Named, unlike the four positional `get()`s this replaced: the fifth argument is a
     // dispatcher with a default, and appending one more `get()` would have handed Koin's
     // answer for `Flow<Set<TitleScript>>` to `matchDispatcher`.

@@ -364,7 +364,7 @@ interface ChannelDao {
           AND c.name LIKE '%' || :query || '%' ESCAPE '\'
           AND (:includeHidden OR c.groupTitle NOT IN (
                 SELECT o.originalTitle FROM category_overrides o
-                WHERE o.kind = c.kind AND o.isHidden = 1))
+                WHERE o.profileId = :profileId AND o.kind = c.kind AND o.isHidden = 1))
           AND (c.scriptMask = :unknownMask OR (:hiddenMask & c.scriptMask) = 0)
         ORDER BY c.sortIndex ASC
         LIMIT :limit
@@ -440,7 +440,7 @@ interface ChannelDao {
           AND (:year = 0 OR COALESCE(m.releaseYear, m.year) = :year)
           AND (:includeHidden OR c.groupTitle NOT IN (
                 SELECT o.originalTitle FROM category_overrides o
-                WHERE o.kind = c.kind AND o.isHidden = 1))
+                WHERE o.profileId = :profileId AND o.kind = c.kind AND o.isHidden = 1))
           AND (c.scriptMask = :unknownMask OR (:hiddenMask & c.scriptMask) = 0)
         ORDER BY c.sortIndex ASC
         LIMIT :limit
@@ -563,10 +563,10 @@ interface ChannelDao {
           AND c.kind IN ('VOD', 'SERIES')
           AND (:includeHidden OR c.groupTitle NOT IN (
                 SELECT o.originalTitle FROM category_overrides o
-                WHERE o.kind = c.kind AND o.isHidden = 1))
+                WHERE o.profileId = :profileId AND o.kind = c.kind AND o.isHidden = 1))
         """,
     )
-    suspend fun titlesForMetadata(sourceId: Long, includeHidden: Boolean): List<ChannelTitle>
+    suspend fun titlesForMetadata(sourceId: Long, includeHidden: Boolean, profileId: Long): List<ChannelTitle>
 
     /**
      * A batch of rows that predate schema 19 and still carry no computed identity.
@@ -1096,11 +1096,14 @@ interface ChannelLogoDao {
 @Dao
 interface CategoryOverrideDao {
 
-    @Query("SELECT * FROM category_overrides WHERE kind = :kind")
-    fun observeForKind(kind: String): Flow<List<CategoryOverrideEntity>>
+    @Query("SELECT * FROM category_overrides WHERE profileId = :profileId AND kind = :kind")
+    fun observeForKind(profileId: Long, kind: String): Flow<List<CategoryOverrideEntity>>
 
-    @Query("SELECT originalTitle FROM category_overrides WHERE kind = :kind AND isHidden = 1")
-    fun observeHiddenTitles(kind: String): Flow<List<String>>
+    @Query(
+        "SELECT originalTitle FROM category_overrides " +
+            "WHERE profileId = :profileId AND kind = :kind AND isHidden = 1",
+    )
+    fun observeHiddenTitles(profileId: Long, kind: String): Flow<List<String>>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(entity: CategoryOverrideEntity)
@@ -1114,8 +1117,11 @@ interface CategoryOverrideDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertAll(entities: List<CategoryOverrideEntity>)
 
-    @Query("DELETE FROM category_overrides WHERE kind = :kind AND originalTitle = :originalTitle")
-    suspend fun clear(kind: String, originalTitle: String)
+    @Query(
+        "DELETE FROM category_overrides " +
+            "WHERE profileId = :profileId AND kind = :kind AND originalTitle = :originalTitle",
+    )
+    suspend fun clear(profileId: Long, kind: String, originalTitle: String)
 }
 
 @Dao

@@ -193,7 +193,12 @@ class PagedBrowseMatchesUnpagedTest {
             ),
         )
         db.categoryOverrideDao().upsert(
-            CategoryOverrideEntity(kind = "VOD", originalTitle = "Adult", isHidden = true),
+            CategoryOverrideEntity(
+                profileId = PROFILE_ID,
+                kind = "VOD",
+                originalTitle = "Adult",
+                isHidden = true,
+            ),
         )
     }
 

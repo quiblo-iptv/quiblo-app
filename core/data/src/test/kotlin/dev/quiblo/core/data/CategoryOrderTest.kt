@@ -23,6 +23,7 @@ import dev.quiblo.core.database.dao.CategoryOverrideDao
 import dev.quiblo.core.database.dao.ChannelDao
 import dev.quiblo.core.database.entity.CategoryOverrideEntity
 import dev.quiblo.core.model.MediaKind
+import dev.quiblo.core.model.Profile
 import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
@@ -52,12 +53,23 @@ class CategoryOrderTest {
     private val overrideDao: CategoryOverrideDao = mockk(relaxed = true)
     private val overrides = MutableStateFlow<List<CategoryOverrideEntity>>(emptyList())
 
-    private val repository = CategoryRepository(channelDao, overrideDao)
+    private val activeProfile = MutableStateFlow<Profile?>(VIEWER)
+
+    private val profiles: ProfileRepository = mockk {
+        every { activeProfile } returns this@CategoryOrderTest.activeProfile
+        every { activeProfileId } returns VIEWER.id
+    }
+
+    private val repository = CategoryRepository(
+        channelDao = channelDao,
+        categoryOverrideDao = overrideDao,
+        profiles = profiles,
+    )
 
     private fun catalogueOf(vararg titles: String) {
         every { channelDao.observeCategoriesByKind(SOURCE_ID, MediaKind.VOD.name) } returns
             flowOf(titles.map { CategoryCount(groupTitle = it, itemCount = 1) })
-        every { overrideDao.observeForKind(MediaKind.VOD.name) } returns overrides
+        every { overrideDao.observeForKind(VIEWER.id, MediaKind.VOD.name) } returns overrides
     }
 
     @Test
@@ -119,6 +131,44 @@ class CategoryOrderTest {
         assertEquals(true, films.isHidden)
     }
 
+    /**
+     * Switching person redraws the shelves, without anything else having to happen.
+     *
+     * The reads follow the active profile rather than reading its id once. A list that kept the
+     * last viewer's hiding until some other event reloaded it would be the one screen in this app
+     * where switching profile did not take effect, and the failure is silent — the shelves simply
+     * stay wrong.
+     */
+    @Test
+    fun `switching profile redraws the list with that viewer's edits`() = runTest {
+        catalogueOf("Films", "Series", "Kids")
+        overrides.value = listOf(override("Kids", userOrder = 0))
+
+        val otherOverrides = MutableStateFlow(
+            listOf(
+                CategoryOverrideEntity(
+                    profileId = OTHER.id,
+                    kind = MediaKind.VOD.name,
+                    originalTitle = "Series",
+                    userOrder = 0,
+                ),
+            ),
+        )
+        every { overrideDao.observeForKind(OTHER.id, MediaKind.VOD.name) } returns otherOverrides
+
+        assertEquals(
+            listOf("Kids", "Films", "Series"),
+            repository.observeAllCategories(SOURCE_ID, MediaKind.VOD).first().map { it.title },
+        )
+
+        activeProfile.value = OTHER
+
+        assertEquals(
+            listOf("Series", "Films", "Kids"),
+            repository.observeAllCategories(SOURCE_ID, MediaKind.VOD).first().map { it.title },
+        )
+    }
+
     @Test
     fun `a move off either end is not a move`() = runTest {
         catalogueOf("Films", "Series")
@@ -136,6 +186,7 @@ class CategoryOrderTest {
         isHidden: Boolean = false,
         userOrder: Int? = null,
     ) = CategoryOverrideEntity(
+        profileId = VIEWER.id,
         kind = MediaKind.VOD.name,
         originalTitle = title,
         customName = customName,
@@ -145,5 +196,9 @@ class CategoryOrderTest {
 
     private companion object {
         const val SOURCE_ID = 4L
+
+        /** Every edit here belongs to somebody, because since schema 23 every edit does. */
+        val VIEWER = Profile(id = 3L, name = "A viewer")
+        val OTHER = Profile(id = 4L, name = "Somebody else")
     }
 }

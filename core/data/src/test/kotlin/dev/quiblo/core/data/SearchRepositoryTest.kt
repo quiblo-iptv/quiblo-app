@@ -72,7 +72,7 @@ class SearchRepositoryTest {
 
         assertTrue(results.isEmpty)
         coVerify(exactly = 0) { channelDao.search(any(), any(), any(), any(), any(), any(), any(), any()) }
-        coVerify(exactly = 0) { channelDao.titlesForMetadata(any(), any()) }
+        coVerify(exactly = 0) { channelDao.titlesForMetadata(any(), any(), any()) }
     }
 
     @Test
@@ -124,7 +124,7 @@ class SearchRepositoryTest {
         )
 
         assertEquals(listOf("Fargo (1996) [FHD]"), results.movies.map { it.name })
-        coVerify(exactly = 0) { channelDao.titlesForMetadata(any(), any()) }
+        coVerify(exactly = 0) { channelDao.titlesForMetadata(any(), any(), any()) }
         coVerify(exactly = 0) { channelDao.findAllByIds(any(), any()) }
     }
 
@@ -236,7 +236,7 @@ class SearchRepositoryTest {
         val index = repository.filterIndex(SOURCE_ID)
 
         assertEquals(50, index.coveragePercent)
-        coVerify(exactly = 0) { channelDao.titlesForMetadata(any(), any()) }
+        coVerify(exactly = 0) { channelDao.titlesForMetadata(any(), any(), any()) }
     }
 
     /** A source with nothing worth looking up reports nothing, rather than dividing by zero. */

@@ -386,6 +386,10 @@ fun TvSettingsScreen(
 
         item { SectionHeading(stringResource(R.string.tv_settings_categories)) }
 
+        // Whose list this is. Said on the screen because a viewer hiding a shelf has no other
+        // way of knowing whether they are hiding it from the household or from themselves.
+        item { Attribution(stringResource(R.string.tv_settings_category_whose)) }
+
         item {
             OptionRow(
                 label = stringResource(R.string.tv_settings_category_kind),

@@ -23,6 +23,7 @@ import androidx.test.platform.app.InstrumentationRegistry
 import dev.quiblo.core.common.SCRIPT_MASK_UNKNOWN
 import dev.quiblo.core.database.entity.CategoryOverrideEntity
 import dev.quiblo.core.database.entity.ChannelEntity
+import dev.quiblo.core.database.entity.ProfileEntity
 import dev.quiblo.core.database.entity.SourceEntity
 import kotlinx.coroutines.test.runTest
 import org.junit.After
@@ -108,6 +109,7 @@ class HiddenCategorySearchTest {
         seed()
         db.categoryOverrideDao().upsert(
             CategoryOverrideEntity(
+                profileId = PROFILE_ID,
                 kind = "VOD",
                 originalTitle = "Arabic films",
                 customName = "Films in Arabic",
@@ -118,6 +120,28 @@ class HiddenCategorySearchTest {
         assertEquals(2, search(kind = "VOD").size)
     }
 
+    /**
+     * Hiding is one viewer's, and the query is what has to say so.
+     *
+     * The reason the column exists: one household member hiding the adult shelf used to hide it
+     * from everybody. Asserted through `search` rather than by reading the table, because a
+     * per-profile row that every query ignores would pass a read and fail a viewer.
+     */
+    @Test
+    fun `a category hidden by one viewer is still searched for another`() = runTest {
+        seed()
+        hide(kind = "VOD", category = "Arabic films")
+
+        assertEquals(
+            listOf("Dune shown"),
+            search(kind = "VOD").map { it.channel.name },
+        )
+        assertEquals(
+            listOf("Dune shown", "Dune hidden"),
+            search(kind = "VOD", profileId = OTHER_PROFILE_ID).map { it.channel.name },
+        )
+    }
+
     /** The genre filter reads its own list of titles, and it obeys the same rule. */
     @Test
     fun `the genre filter's title list drops hidden categories too`() = runTest {
@@ -126,17 +150,19 @@ class HiddenCategorySearchTest {
 
         assertEquals(
             listOf("Dune shown"),
-            db.channelDao().titlesForMetadata(SOURCE_ID, includeHidden = false).map { it.name },
+            db.channelDao()
+                .titlesForMetadata(SOURCE_ID, includeHidden = false, profileId = PROFILE_ID)
+                .map { it.name },
         )
         assertEquals(
             2,
-            db.channelDao().titlesForMetadata(SOURCE_ID, includeHidden = true).size,
+            db.channelDao().titlesForMetadata(SOURCE_ID, includeHidden = true, profileId = PROFILE_ID).size,
         )
     }
 
-    private suspend fun search(kind: String, includeHidden: Boolean = false) =
+    private suspend fun search(kind: String, includeHidden: Boolean = false, profileId: Long = PROFILE_ID) =
         db.channelDao().search(
-            profileId = 1L,
+            profileId = profileId,
             sourceId = SOURCE_ID,
             kind = kind,
             query = "Dune",
@@ -148,9 +174,14 @@ class HiddenCategorySearchTest {
             unknownMask = SCRIPT_MASK_UNKNOWN,
         )
 
-    private suspend fun hide(kind: String, category: String) {
+    private suspend fun hide(kind: String, category: String, profileId: Long = PROFILE_ID) {
         db.categoryOverrideDao().upsert(
-            CategoryOverrideEntity(kind = kind, originalTitle = category, isHidden = true),
+            CategoryOverrideEntity(
+                profileId = profileId,
+                kind = kind,
+                originalTitle = category,
+                isHidden = true,
+            ),
         )
     }
 
@@ -164,6 +195,10 @@ class HiddenCategorySearchTest {
                 createdAtEpochMillis = 0L,
             ),
         )
+        // Two of them, because hiding is one viewer's since schema 23 and a test with one
+        // profile cannot tell "hidden for me" from "hidden for everybody".
+        db.profileDao().insert(ProfileEntity(id = PROFILE_ID, name = "A viewer", createdAtEpochMillis = 0L))
+        db.profileDao().insert(ProfileEntity(id = OTHER_PROFILE_ID, name = "Somebody else", createdAtEpochMillis = 0L))
         db.channelDao().insertAll(
             listOf(
                 channel(id = 1, name = "Dune shown", kind = "VOD", category = "English films"),
@@ -185,5 +220,7 @@ class HiddenCategorySearchTest {
 
     private companion object {
         const val SOURCE_ID = 7L
+        const val PROFILE_ID = 1L
+        const val OTHER_PROFILE_ID = 2L
     }
 }

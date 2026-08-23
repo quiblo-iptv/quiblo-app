@@ -180,6 +180,7 @@ Make one on the page below — it is quicker on a phone than on a remote — the
     <string name="tv_settings_search_live_detail">Off. A live channel carries no genre, so a genre filter can only match it on its name.</string>
     <string name="tv_settings_categories">Categories</string>
     <string name="tv_settings_category_kind">Editing categories for</string>
+    <string name="tv_settings_category_whose">Hiding, renaming and reordering are yours alone. Everyone else on this television keeps their own list.</string>
     <string name="tv_settings_category_summary">%1$d categories, %2$d hidden</string>
     <string name="tv_settings_category_enter">Press to edit</string>
     <string name="tv_settings_category_leave">Press Back to leave</string>

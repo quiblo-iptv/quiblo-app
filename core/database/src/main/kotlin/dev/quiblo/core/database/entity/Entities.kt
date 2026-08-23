@@ -444,15 +444,33 @@ data class ChannelLogoEntity(
 )
 
 /**
- * A user's local edits to one provider category.
+ * One viewer's local edits to one provider category.
  *
  * Keyed by kind and the provider's own title rather than by any id, because a category has
  * no id — it is derived by grouping channels — and because the provider's title is what
  * survives a refresh. Renaming is local only: nothing is sent anywhere, and the original
  * title is retained as the key so the edit reattaches after every reload.
+ *
+ * **Per profile, and it was not until schema 23.** Hiding, renaming and reordering are the same
+ * kind of statement favourites are — this is what *I* want my list to look like — and one
+ * household member hiding the adult categories, or renaming a shelf into their own language,
+ * decided it for everybody. The upgrade copies what existed to every profile, so nobody's list
+ * changes on the way over; they diverge from there.
  */
-@Entity(tableName = "category_overrides", primaryKeys = ["kind", "originalTitle"])
+@Entity(
+    tableName = "category_overrides",
+    primaryKeys = ["profileId", "kind", "originalTitle"],
+    foreignKeys = [
+        ForeignKey(
+            entity = ProfileEntity::class,
+            parentColumns = ["id"],
+            childColumns = ["profileId"],
+            onDelete = ForeignKey.CASCADE,
+        ),
+    ],
+)
 data class CategoryOverrideEntity(
+    val profileId: Long,
     val kind: String,
     val originalTitle: String,
     /** Null means "use the provider's name". Absence and a blank rename are the same thing. */

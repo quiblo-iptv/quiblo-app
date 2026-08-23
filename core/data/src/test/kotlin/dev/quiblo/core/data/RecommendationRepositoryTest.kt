@@ -92,7 +92,7 @@ class RecommendationRepositoryTest {
         assertTrue(repository.suggestions(SOURCE_ID).isEmpty())
         // And it does not read the catalogue to find that out: sixty thousand rows for an answer
         // already known is the cost this early return exists to avoid.
-        coVerify(exactly = 0) { channelDao.titlesForMetadata(any(), any()) }
+        coVerify(exactly = 0) { channelDao.titlesForMetadata(any(), any(), any()) }
     }
 
     /**
@@ -111,7 +111,7 @@ class RecommendationRepositoryTest {
             (1..Recommender.MINIMUM_DISTINCT_TITLES)
                 .map { factRow("starred $it", "Animation", kind = MediaKind.SERIES) } +
             factRow("naruto", "Animation", kind = MediaKind.SERIES)
-        coEvery { channelDao.titlesForMetadata(SOURCE_ID, includeHidden = false) } returns
+        coEvery { channelDao.titlesForMetadata(SOURCE_ID, includeHidden = false, profileId = any()) } returns
             listOf(ChannelTitle(id = 9L, name = "Naruto", kind = MediaKind.SERIES.name))
 
         val suggestions = repository.suggestions(SOURCE_ID)
@@ -133,7 +133,7 @@ class RecommendationRepositoryTest {
         coEvery { titleMetadataDao.allFactRows() } returns
             learned().map { factRow(it.title.lowercase(), "Animation", kind = MediaKind.SERIES) } +
             factRow("naruto", "Animation", kind = MediaKind.SERIES)
-        coEvery { channelDao.titlesForMetadata(SOURCE_ID, includeHidden = false) } returns
+        coEvery { channelDao.titlesForMetadata(SOURCE_ID, includeHidden = false, profileId = any()) } returns
             listOf(ChannelTitle(id = 9L, name = "Naruto", kind = MediaKind.SERIES.name))
 
         val suggestions = repository.suggestions(SOURCE_ID)
@@ -156,13 +156,13 @@ class RecommendationRepositoryTest {
             factRow("naruto", "Animation", kind = MediaKind.SERIES)
         // The hidden ones are simply not in this answer: the exclusion is the query's, and what is
         // asserted here is that this is the query asked.
-        coEvery { channelDao.titlesForMetadata(SOURCE_ID, includeHidden = false) } returns
+        coEvery { channelDao.titlesForMetadata(SOURCE_ID, includeHidden = false, profileId = any()) } returns
             listOf(ChannelTitle(id = 9L, name = "Naruto", kind = MediaKind.SERIES.name))
 
         val suggestions = repository.suggestions(SOURCE_ID)
 
         assertEquals(listOf(9L), suggestions.map { it.channelId })
-        coVerify(exactly = 0) { channelDao.titlesForMetadata(SOURCE_ID, includeHidden = true) }
+        coVerify(exactly = 0) { channelDao.titlesForMetadata(SOURCE_ID, includeHidden = true, profileId = any()) }
     }
 
     @Test

@@ -21,6 +21,7 @@ package dev.quiblo.core.data
 import dev.quiblo.core.database.DurabilityCheckpoint
 import dev.quiblo.core.database.dao.ChannelDao
 import dev.quiblo.core.model.MediaKind
+import dev.quiblo.core.model.Profile
 import dev.quiblo.source.tmdb.TmdbAnswer
 import dev.quiblo.source.tmdb.TmdbRefusal
 import kotlinx.coroutines.CancellationException
@@ -285,7 +286,7 @@ class TitleMetadataScanner(
 
         // Hidden categories are scanned too. Hiding is a choice about what a viewer wants to see
         // today, and unhiding a category should not then cost an hour of lookups.
-        channelDao.titlesForMetadata(sourceId, includeHidden = true).forEach { row ->
+        channelDao.titlesForMetadata(sourceId, includeHidden = true, profileId = Profile.NONE_ID).forEach { row ->
             val identity = row.name.cacheIdentity(row.kind) ?: return@forEach
             val kind = row.kind.toMediaKindOrNull() ?: return@forEach
             if (identity in cached) return@forEach

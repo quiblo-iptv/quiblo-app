@@ -24,6 +24,8 @@ import dev.quiblo.core.data.ChannelRepository
 import dev.quiblo.core.data.MetadataRefresh
 import dev.quiblo.core.data.TitleMetadataRepository
 import dev.quiblo.core.data.TitleOpinionRepository
+import dev.quiblo.core.data.TitleVersion
+import dev.quiblo.core.data.TitleVersionsRepository
 import dev.quiblo.core.data.WatchHistoryRepository
 import dev.quiblo.core.model.Channel
 import dev.quiblo.core.model.MediaKind
@@ -93,6 +95,14 @@ sealed interface MovieDetailUiState {
          * rather than a middle one — see `TitleOpinionRepository`.
          */
         val opinion: Opinion = Opinion.NONE,
+        /**
+         * The other ways the provider lists this film — the 4K copy, the subtitled cut.
+         *
+         * Empty unless the merge setting is on and there is more than one, because without
+         * merging every listing is already its own row in the catalogue and a picker for rows a
+         * viewer can already see is a control with nothing to do.
+         */
+        val versions: List<TitleVersion> = emptyList(),
     ) : MovieDetailUiState {
 
         val canResume: Boolean get() = resumePositionMillis > RESUME_THRESHOLD_MILLIS
@@ -122,6 +132,7 @@ class MovieDetailViewModel(
     private val metadataRepository: TitleMetadataRepository,
     private val historyRepository: WatchHistoryRepository,
     private val opinions: TitleOpinionRepository,
+    private val versions: TitleVersionsRepository,
 ) : ViewModel() {
 
     private var isRefreshing = false
@@ -208,6 +219,7 @@ class MovieDetailViewModel(
             observeFavorite(channel)
             observeResumePosition(channel)
             observeOpinion(channel)
+            observeVersions(channel)
 
             val details = (channelRepository.getVodDetails(channelId) as? VodDetailsResult.Success)?.details
             (_uiState.value as? MovieDetailUiState.Ready)?.let { _uiState.value = it.copy(details = details) }
@@ -247,6 +259,23 @@ class MovieDetailViewModel(
         viewModelScope.launch {
             val next = if (current.opinion == opinion) Opinion.NONE else opinion
             opinions.set(current.channel.name, MediaKind.VOD, next)
+        }
+    }
+
+    /**
+     * The other listings of this film, for as long as the screen is open.
+     *
+     * Observed rather than read once, for the same reason the favourite is: a refresh replaces
+     * every row of the catalogue, and a list read at open would point at ids that no longer
+     * exist by the time somebody presses one.
+     */
+    private fun observeVersions(channel: Channel) {
+        viewModelScope.launch {
+            versions.observeVersions(channel).collect { found ->
+                (_uiState.value as? MovieDetailUiState.Ready)?.let {
+                    _uiState.value = it.copy(versions = found)
+                }
+            }
         }
     }
 

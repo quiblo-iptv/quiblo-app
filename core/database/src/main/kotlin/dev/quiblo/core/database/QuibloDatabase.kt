@@ -36,6 +36,7 @@ import dev.quiblo.core.database.dao.SeriesPreferenceDao
 import dev.quiblo.core.database.dao.SourceDao
 import dev.quiblo.core.database.dao.TitleMetadataDao
 import dev.quiblo.core.database.dao.TitleOpinionDao
+import dev.quiblo.core.database.dao.TitleVersionDao
 import dev.quiblo.core.database.dao.WatchEventDao
 import dev.quiblo.core.database.entity.CategoryOverrideEntity
 import dev.quiblo.core.database.entity.ChannelEntity
@@ -140,6 +141,8 @@ abstract class QuibloDatabase : RoomDatabase() {
     abstract fun channelLogoDao(): ChannelLogoDao
 
     abstract fun categoryOverrideDao(): CategoryOverrideDao
+
+    abstract fun titleVersionDao(): TitleVersionDao
 
     abstract fun programmeDao(): ProgrammeDao
 

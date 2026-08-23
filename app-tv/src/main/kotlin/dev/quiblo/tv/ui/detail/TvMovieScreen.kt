@@ -49,8 +49,11 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -93,9 +96,21 @@ fun TvMovieScreen(
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    /*
+     * Which listing of this film is on screen.
+     *
+     * A provider that carries one film in four qualities gives it four rows, and with the merge
+     * setting on the catalogue shows one of them; the picker below swaps between them here rather
+     * than by opening another screen. It is the view model's key as well as its argument, so
+     * switching builds the film's own view model — the resume point, the favourite and the rating
+     * all belong to the row being watched, and a screen that kept one and played another would
+     * offer to resume a copy the viewer had never opened.
+     */
+    var shownId by rememberSaveable(channel.id) { mutableLongStateOf(channel.id) }
+
     val viewModel: MovieDetailViewModel = koinViewModel(
-        key = "tv-movie-${channel.id}",
-        parameters = { parametersOf(channel.id) },
+        key = "tv-movie-$shownId",
+        parameters = { parametersOf(shownId) },
     )
     val state by viewModel.uiState.collectAsStateWithLifecycle()
 
@@ -135,6 +150,7 @@ fun TvMovieScreen(
                 onRemoveFromHistory = viewModel::removeFromHistory,
                 onRefreshMetadata = viewModel::refreshMetadata,
                 onRate = viewModel::rate,
+                onSelectVersion = { shownId = it },
             )
         }
     }
@@ -154,6 +170,7 @@ private fun Loaded(
     onRemoveFromHistory: () -> Unit,
     onRefreshMetadata: () -> Unit,
     onRate: (Opinion) -> Unit,
+    onSelectVersion: (Long) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val firstAction = remember { FocusRequester() }
@@ -337,6 +354,12 @@ private fun Loaded(
                             )
                         }
                     }
+
+                    TvVersionRow(
+                        versions = state.versions,
+                        shownId = state.channel.id,
+                        onSelect = onSelectVersion,
+                    )
 
                     state.refreshResult?.let { result ->
                         Text(

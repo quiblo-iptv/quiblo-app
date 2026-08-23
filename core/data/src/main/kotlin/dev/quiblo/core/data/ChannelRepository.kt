@@ -87,6 +87,26 @@ import java.util.concurrent.ConcurrentHashMap
 // a phone grid must not read a catalogue to draw a screenful. Splitting them across two classes
 // would put one table's reads behind two names and leave the count where it is.
 @Suppress("LongParameterList", "TooManyFunctions")
+/**
+ * The three things every catalogue query needs and no screen should have to pass: who is
+ * watching, what they cannot read, and whether one title listed four times is drawn once.
+ *
+ * A value rather than three `combine` arguments destructured by position, because the pair this
+ * replaced was already being destructured by position and a third would have made the next
+ * mistake a silent one.
+ */
+private data class Ask(val profile: Profile?, val hidden: Set<TitleScript>, val merge: Boolean)
+
+/*
+ * Nine parameters and sixteen functions, and both counts are the shape of the thing rather than a
+ * class that has outgrown itself. Six of the nine are collaborators every catalogue query needs —
+ * the two DAOs, who is watching, what they cannot read, whether duplicates are merged, and the
+ * clock — and three have defaults so that a test states only what it is about. The functions are
+ * one per question a catalogue is asked: browse, browse paged, category rows, favourites,
+ * recently added, and the writes beside them. Splitting either count would put one table's
+ * questions behind two names and leave the counts unchanged.
+ */
+@Suppress("LongParameterList", "TooManyFunctions")
 @OptIn(ExperimentalCoroutinesApi::class)
 class ChannelRepository(
     private val channelDao: ChannelDao,
@@ -117,6 +137,14 @@ class ChannelRepository(
      * without standing up a DataStore, and so the default is the honest one: hide nothing.
      */
     private val hiddenScripts: Flow<Set<TitleScript>> = flowOf(emptySet()),
+    /**
+     * Whether one title listed in four qualities is drawn once (`PlayerSettingsRepository`).
+     *
+     * A flow for the same reason [hiddenScripts] is one, and read here rather than at the screens
+     * because it changes the *query*: a page of twenty rows filtered down to five on the way to a
+     * grid is a page that scrolls wrong.
+     */
+    private val mergeDuplicates: Flow<Boolean> = flowOf(false),
 ) {
 
     /**
@@ -139,8 +167,8 @@ class ChannelRepository(
         // used to run in Kotlin over every row of every emission, and it is now a bitmask
         // predicate the query itself applies. A row that will be hidden is no longer read, no
         // longer mapped, and no longer walked character by character to decide.
-        combine(profiles.activeProfile, hiddenScripts) { profile, hidden -> profile to hidden }
-            .flatMapLatest { (profile, hidden) ->
+        combine(profiles.activeProfile, hiddenScripts, mergeDuplicates, ::Ask)
+            .flatMapLatest { (profile, hidden, merge) ->
                 channelDao.observeBrowse(
                     profileId = profile?.id ?: Profile.NONE_ID,
                     sourceId = sourceId,
@@ -150,6 +178,7 @@ class ChannelRepository(
                     // handing SQL a wildcard. See escapeForLike.
                     query = escapeForLike(query.trim()),
                     favoritesOnly = if (favoritesOnly) 1 else 0,
+                    mergeDuplicates = if (merge) 1 else 0,
                     hiddenMask = hidden.toMask(),
                     unknownMask = SCRIPT_MASK_UNKNOWN,
                 ).map { rows ->
@@ -184,8 +213,8 @@ class ChannelRepository(
         query: String = "",
         favoritesOnly: Boolean = false,
     ): Flow<PagingData<Channel>> =
-        combine(profiles.activeProfile, hiddenScripts) { profile, hidden -> profile to hidden }
-            .flatMapLatest { (profile, hidden) ->
+        combine(profiles.activeProfile, hiddenScripts, mergeDuplicates, ::Ask)
+            .flatMapLatest { (profile, hidden, merge) ->
                 Pager(
                     config = PagingConfig(
                         pageSize = PAGE_SIZE,
@@ -206,6 +235,7 @@ class ChannelRepository(
                         groupTitle = groupTitle,
                         query = escapeForLike(query.trim()),
                         favoritesOnly = if (favoritesOnly) 1 else 0,
+                        mergeDuplicates = if (merge) 1 else 0,
                         hiddenMask = hidden.toMask(),
                         unknownMask = SCRIPT_MASK_UNKNOWN,
                     )
@@ -327,12 +357,15 @@ class ChannelRepository(
         sourceId: Long,
         limit: Int,
         sinceEpochMillis: Long,
-    ): Flow<RecentlyAddedFeed> = channelDao.observeRecentlyAdded(
-        profileId = profileId,
-        sourceId = sourceId,
-        sinceEpochMillis = sinceEpochMillis,
-        limit = limit,
-    ).map { rows -> rows.map { it.channel.toDomain(isFavorite = it.isFavorite) } }
+    ): Flow<RecentlyAddedFeed> = mergeDuplicates.flatMapLatest { merge ->
+        channelDao.observeRecentlyAdded(
+            profileId = profileId,
+            sourceId = sourceId,
+            sinceEpochMillis = sinceEpochMillis,
+            limit = limit,
+            mergeDuplicates = if (merge) 1 else 0,
+        )
+    }.map { rows -> rows.map { it.channel.toDomain(isFavorite = it.isFavorite) } }
         .hidingUnreadableScripts(hiddenScripts) { it.name }
         .map { RecentlyAddedFeed(items = it, orderedByDate = true) }
 

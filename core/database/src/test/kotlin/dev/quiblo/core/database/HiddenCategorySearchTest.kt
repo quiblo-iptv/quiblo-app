@@ -168,6 +168,7 @@ class HiddenCategorySearchTest {
             query = "Dune",
             limit = 40,
             includeHidden = includeHidden,
+            mergeDuplicates = 0,
             // Nothing hidden by writing system here: this test is about categories, and the
             // two filters are deliberately independent.
             hiddenMask = 0,

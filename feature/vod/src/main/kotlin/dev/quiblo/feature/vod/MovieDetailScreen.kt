@@ -82,6 +82,7 @@ import dev.quiblo.designsystem.ambientBackdrop
 import dev.quiblo.designsystem.rememberAmbient
 import dev.quiblo.feature.browse.DetailOverlayActions
 import dev.quiblo.feature.browse.TitleFacts
+import dev.quiblo.feature.browse.VersionPicker
 import dev.quiblo.feature.browse.runtimeLabel
 import dev.quiblo.feature.browse.runtimeLabelFromMinutes
 import org.koin.androidx.compose.koinViewModel
@@ -100,6 +101,8 @@ fun MovieDetailScreen(
     channelId: Long,
     onBack: () -> Unit,
     onPlay: (Channel, Long) -> Unit,
+    /** Opens another of the provider's copies of this film. See [VersionPicker]. */
+    onOpenVersion: (Long) -> Unit = {},
     modifier: Modifier = Modifier,
     viewModel: MovieDetailViewModel = koinViewModel(parameters = { parametersOf(channelId) }),
 ) {
@@ -145,6 +148,7 @@ fun MovieDetailScreen(
                 onRemoveFromHistory = viewModel::removeFromHistory,
                 onRate = viewModel::rate,
                 onRefreshMetadata = viewModel::refreshMetadata,
+                onOpenVersion = onOpenVersion,
             )
         }
 
@@ -175,6 +179,7 @@ private fun MovieDetail(
     onRemoveFromHistory: () -> Unit,
     onRefreshMetadata: () -> Unit,
     onRate: (Opinion) -> Unit,
+    onOpenVersion: (Long) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     // TMDB artwork first when it exists: it is a real poster at a known size, where a
@@ -220,6 +225,7 @@ private fun MovieDetail(
                     onRemoveFromHistory = onRemoveFromHistory,
                     onRefreshMetadata = onRefreshMetadata,
                     onRate = onRate,
+                    onOpenVersion = onOpenVersion,
                     modifier = Modifier.padding(top = 12.dp),
                 )
             }
@@ -239,6 +245,7 @@ private fun MovieDetail(
             onRemoveFromHistory = onRemoveFromHistory,
             onRefreshMetadata = onRefreshMetadata,
             onRate = onRate,
+            onOpenVersion = onOpenVersion,
             modifier = Modifier.padding(16.dp),
         )
     }
@@ -253,6 +260,7 @@ private fun Details(
     onRemoveFromHistory: () -> Unit,
     onRefreshMetadata: () -> Unit,
     onRate: (Opinion) -> Unit,
+    onOpenVersion: (Long) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Column(modifier = modifier) {
@@ -264,6 +272,12 @@ private fun Details(
             onPlay = onPlay,
             onRemoveFromHistory = onRemoveFromHistory,
             onRate = onRate,
+        )
+
+        VersionPicker(
+            versions = state.versions,
+            shownId = state.channel.id,
+            onSelect = onOpenVersion,
         )
 
         RefreshMetadata(

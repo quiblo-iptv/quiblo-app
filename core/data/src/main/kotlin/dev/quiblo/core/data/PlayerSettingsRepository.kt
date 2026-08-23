@@ -66,6 +66,16 @@ class PlayerSettingsRepository(private val store: PlayerSettingsStore) {
 
     suspend fun setShowLiveInSearch(enabled: Boolean) = store.setShowLiveInSearch(enabled)
 
+    /**
+     * Whether one film listed in four qualities is shown once. Off unless the viewer asks.
+     *
+     * Read by the catalogue queries rather than filtered afterwards: a page of twenty rows that
+     * turns into five in Kotlin is a page that shrinks as it is scrolled.
+     */
+    val mergeDuplicateTitles: Flow<Boolean> = store.mergeDuplicateTitles
+
+    suspend fun setMergeDuplicateTitles(enabled: Boolean) = store.setMergeDuplicateTitles(enabled)
+
     /** Whether the player lights its black bars from the picture. On unless switched off. */
     val ambientPlayer: Flow<Boolean> = store.ambientPlayer
 

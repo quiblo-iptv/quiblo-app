@@ -85,7 +85,7 @@ class ChannelRepositoryTest {
         // the claim testable at all — the mapped value itself carries no evidence of where
         // it was made.
         var upstreamThread = ""
-        every { channelDao.observeBrowse(any(), any(), any(), any(), any(), any(), any(), any()) } returns flow {
+        every { channelDao.observeBrowse(any(), any(), any(), any(), any(), any(), any(), any(), any()) } returns flow {
             upstreamThread = Thread.currentThread().name
             emit(listOf(row(id = 1L, name = "BBC One")))
         }
@@ -134,7 +134,7 @@ class ChannelRepositoryTest {
 
     @Test
     fun `carries the favourite flag through the mapping`() = runTest {
-        every { channelDao.observeBrowse(any(), any(), any(), any(), any(), any(), any(), any()) } returns flow {
+        every { channelDao.observeBrowse(any(), any(), any(), any(), any(), any(), any(), any(), any()) } returns flow {
             emit(
                 listOf(
                     row(id = 1L, name = "BBC One", isFavorite = true),
@@ -154,7 +154,7 @@ class ChannelRepositoryTest {
     @Test
     fun `a dated source is asked for its dates, and nothing else`() = runTest {
         every { channelDao.observeHasAddedDates(SOURCE_ID) } returns flowOf(true)
-        every { channelDao.observeRecentlyAdded(any(), any(), any(), any()) } returns
+        every { channelDao.observeRecentlyAdded(any(), any(), any(), any(), any()) } returns
             flowOf(listOf(row(id = 1L, name = "New film")))
 
         val feed = repository.observeRecentlyAdded(SOURCE_ID, limit = 40, sinceEpochMillis = 100L).first()

@@ -61,8 +61,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -95,6 +97,7 @@ import dev.quiblo.tv.ui.detail.DetailButton
 import dev.quiblo.tv.ui.detail.DetailFacts
 import dev.quiblo.tv.ui.detail.DetailOverview
 import dev.quiblo.tv.ui.detail.DetailTitle
+import dev.quiblo.tv.ui.detail.TvVersionRow
 import dev.quiblo.tv.ui.detail.genresOrEmpty
 import dev.quiblo.tv.ui.detail.messageRes
 import dev.quiblo.tv.ui.detail.openDetailScreen
@@ -129,9 +132,13 @@ fun TvSeriesScreen(
     modifier: Modifier = Modifier,
     focusEpisodeId: String? = null,
 ) {
+    // Which listing of this series is on screen. See the same note on `TvMovieScreen`: the key
+    // as well as the argument, so the resume point and the favourite belong to the row playing.
+    var shownId by rememberSaveable(channel.id) { mutableLongStateOf(channel.id) }
+
     val viewModel: SeriesDetailViewModel = koinViewModel(
-        key = "tv-series-${channel.id}",
-        parameters = { parametersOf(channel.id) },
+        key = "tv-series-$shownId",
+        parameters = { parametersOf(shownId) },
     )
     val state by viewModel.uiState.collectAsStateWithLifecycle()
 
@@ -178,6 +185,7 @@ fun TvSeriesScreen(
                 onRate = viewModel::rate,
                 onMerged = viewModel::setMerged,
                 onDescending = viewModel::setDescending,
+                onSelectVersion = { shownId = it },
                 focusEpisodeId = focusEpisodeId,
             )
         }
@@ -261,6 +269,7 @@ private fun Loaded(
     onRate: (Opinion) -> Unit,
     onMerged: (Boolean) -> Unit,
     onDescending: (Boolean) -> Unit,
+    onSelectVersion: (Long) -> Unit,
     focusEpisodeId: String?,
 ) {
     val seasons = state.seasons.ifEmpty { state.details.seasons }
@@ -375,6 +384,16 @@ private fun Loaded(
                 )
             }
             return@LazyColumn
+        }
+
+        // Before the arrangement chips, because which copy of a series you are reading comes
+        // before how you would like its seasons laid out.
+        item(key = "versions") {
+            TvVersionRow(
+                versions = state.versions,
+                shownId = state.channel.id,
+                onSelect = onSelectVersion,
+            )
         }
 
         item(key = "arrangement") {

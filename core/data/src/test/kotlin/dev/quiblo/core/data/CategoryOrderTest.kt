@@ -67,7 +67,7 @@ class CategoryOrderTest {
     )
 
     private fun catalogueOf(vararg titles: String) {
-        every { channelDao.observeCategoriesByKind(SOURCE_ID, MediaKind.VOD.name) } returns
+        every { channelDao.observeCategoriesByKind(SOURCE_ID, MediaKind.VOD.name, any()) } returns
             flowOf(titles.map { CategoryCount(groupTitle = it, itemCount = 1) })
         every { overrideDao.observeForKind(VIEWER.id, MediaKind.VOD.name) } returns overrides
     }

@@ -178,6 +178,8 @@ Make one on the page below — it is quicker on a phone than on a remote — the
     <string name="tv_settings_search">Search</string>
     <string name="tv_settings_search_live">Live channels in advanced search</string>
     <string name="tv_settings_search_live_detail">Off. A live channel carries no genre, so a genre filter can only match it on its name.</string>
+    <string name="tv_settings_merge_titles">Merge duplicate titles</string>
+    <string name="tv_settings_merge_titles_detail">Show a film once when your provider lists it in several qualities. The other copies are offered on the film\'s own screen.</string>
     <string name="tv_settings_categories">Categories</string>
     <string name="tv_settings_category_kind">Editing categories for</string>
     <string name="tv_settings_category_whose">Hiding, renaming and reordering are yours alone. Everyone else on this television keeps their own list.</string>
@@ -280,6 +282,8 @@ Make one on the page below — it is quicker on a phone than on a remote — the
     <string name="tv_detail_dislike">Not for me?</string>
     <string name="tv_continue_remove_confirm">Remove? Press again</string>
     <string name="tv_detail_refresh">Refresh information</string>
+    <!-- The heading over the chips that swap between a provider's copies of one title. -->
+    <string name="tv_detail_versions">Also available as</string>
     <string name="tv_hero_refresh">Show different featured titles</string>
     <string name="tv_search_filter_genres">Genres</string>
     <string name="tv_search_filter_years">Years</string>

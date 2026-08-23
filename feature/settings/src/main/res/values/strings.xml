@@ -83,6 +83,8 @@
     <string name="settings_metadata_scan_key_rejected">The Movie Database rejected the key. %1$d titles kept. Check the key above.</string>
     <string name="settings_metadata_scan_unavailable">The Movie Database could not be reached. %1$d titles kept. Check your connection and try again.</string>
 
+    <string name="settings_merge_titles_title">Merge duplicate titles</string>
+    <string name="settings_merge_titles_summary">Providers often list one film several times — SD, HD, 4K, a subtitled cut. Turn this on to see it once, with the other copies offered on the film\'s own screen. Off shows everything your provider sent.</string>
     <string name="settings_categories_title">Categories</string>
     <string name="settings_categories_summary">Turn categories off to hide them from browsing, or rename them. These are yours alone — everyone else on this device keeps their own list. Both are local: nothing is sent to your provider, and hiding removes nothing.</string>
     <string name="settings_categories_live">Live TV</string>

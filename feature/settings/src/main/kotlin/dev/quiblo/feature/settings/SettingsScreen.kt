@@ -78,6 +78,7 @@ fun SettingsScreen(
     val appearance by viewModel.appearance.collectAsStateWithLifecycle()
     val hiddenScripts by viewModel.hiddenScripts.collectAsStateWithLifecycle()
     val channelLogosEnabled by viewModel.channelLogosEnabled.collectAsStateWithLifecycle()
+    val mergeDuplicateTitles by viewModel.mergeDuplicateTitles.collectAsStateWithLifecycle()
     val context = LocalContext.current
 
     // SAF, so the file lands wherever the user chooses and the app needs no storage
@@ -188,6 +189,13 @@ fun SettingsScreen(
             ChannelLogoSettingsCard(
                 isEnabled = channelLogosEnabled,
                 onToggle = viewModel::setChannelLogosEnabled,
+            )
+        }
+
+        cardItem {
+            DuplicateTitlesSettingsCard(
+                isEnabled = mergeDuplicateTitles,
+                onToggle = viewModel::setMergeDuplicateTitles,
             )
         }
 

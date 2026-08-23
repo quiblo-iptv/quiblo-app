@@ -162,6 +162,19 @@ interface ChannelDao {
      * separate queries, so the four combinations cannot drift apart. Filtering in SQL is
      * what keeps search inside the 200ms budget across 20,000 rows (AC-FAV-05).
      *
+     * **`mergeDuplicates` is the same shape and the same reasoning, and this is where it is
+     * explained for the five other queries that carry it.** A panel listing one film in SD, HD,
+     * FHD and 4K sends four rows; with merging on, only the provider's own first listing of each
+     * `(searchTitle, identityYear, kind)` survives, and `TitleVersionsDao` hands the detail
+     * screen the rest. It is a predicate rather than a `GROUP BY` because the paged version of
+     * this query has to return whole rows and a page that shrinks after SQLite has counted it is
+     * a page the pager cannot reason about; and it is in SQL rather than in Kotlin because a
+     * twenty-row page that becomes five on the way to the screen scrolls wrong.
+     *
+     * A row with no computed identity — `searchTitle = ''`, the value a title that cleans away to
+     * nothing gets — is never merged. A hundred of those share one key and merging on it would
+     * collapse a hundred unrelated channels into one.
+     *
      * @param groupTitle null for "all categories".
      * @param query empty for "no search". Must already be escaped with [escapeForLike].
      * @param favoritesOnly 1 to restrict to favourites, 0 for everything.
@@ -178,6 +191,11 @@ interface ChannelDao {
           AND (:query = '' OR c.name LIKE '%' || :query || '%' ESCAPE '\')
           AND (:favoritesOnly = 0 OR f.stableKey IS NOT NULL)
           AND (c.scriptMask = :unknownMask OR (:hiddenMask & c.scriptMask) = 0)
+          AND (:mergeDuplicates = 0 OR c.searchTitle = '' OR c.id = (
+                SELECT v.id FROM channels v
+                WHERE v.sourceId = c.sourceId AND v.kind = c.kind
+                  AND v.searchTitle = c.searchTitle AND v.identityYear = c.identityYear
+                ORDER BY v.sortIndex ASC, v.id ASC LIMIT 1))
         ORDER BY c.sortIndex ASC
         """,
     )
@@ -189,6 +207,8 @@ interface ChannelDao {
         groupTitle: String?,
         query: String,
         favoritesOnly: Int,
+        /** 1 to show one row per title, 0 to show every listing the provider sent. */
+        mergeDuplicates: Int,
         /**
          * The writing systems the viewer has hidden, as a bitmask. `0` hides nothing.
          *
@@ -234,6 +254,11 @@ interface ChannelDao {
           AND (:query = '' OR c.name LIKE '%' || :query || '%' ESCAPE '\')
           AND (:favoritesOnly = 0 OR f.stableKey IS NOT NULL)
           AND (c.scriptMask = :unknownMask OR (:hiddenMask & c.scriptMask) = 0)
+          AND (:mergeDuplicates = 0 OR c.searchTitle = '' OR c.id = (
+                SELECT v.id FROM channels v
+                WHERE v.sourceId = c.sourceId AND v.kind = c.kind
+                  AND v.searchTitle = c.searchTitle AND v.identityYear = c.identityYear
+                ORDER BY v.sortIndex ASC, v.id ASC LIMIT 1))
         ORDER BY c.sortIndex ASC
         """,
     )
@@ -245,6 +270,7 @@ interface ChannelDao {
         groupTitle: String?,
         query: String,
         favoritesOnly: Int,
+        mergeDuplicates: Int,
         hiddenMask: Int,
         unknownMask: Int,
     ): PagingSource<Int, ChannelWithFavorite>
@@ -329,13 +355,18 @@ interface ChannelDao {
      */
     @Query(
         """
-        SELECT groupTitle, COUNT(*) AS itemCount FROM channels
-        WHERE sourceId = :sourceId AND kind = :kind
-        GROUP BY groupTitle
-        ORDER BY MIN(COALESCE(categoryIndex, 2147483647)) ASC, MIN(sortIndex) ASC
+        SELECT groupTitle, COUNT(*) AS itemCount FROM channels c
+        WHERE c.sourceId = :sourceId AND c.kind = :kind
+          AND (:mergeDuplicates = 0 OR c.searchTitle = '' OR c.id = (
+                SELECT v.id FROM channels v
+                WHERE v.sourceId = c.sourceId AND v.kind = c.kind
+                  AND v.searchTitle = c.searchTitle AND v.identityYear = c.identityYear
+                ORDER BY v.sortIndex ASC, v.id ASC LIMIT 1))
+        GROUP BY c.groupTitle
+        ORDER BY MIN(COALESCE(c.categoryIndex, 2147483647)) ASC, MIN(c.sortIndex) ASC
         """,
     )
-    fun observeCategoriesByKind(sourceId: Long, kind: String): Flow<List<CategoryCount>>
+    fun observeCategoriesByKind(sourceId: Long, kind: String, mergeDuplicates: Int): Flow<List<CategoryCount>>
 
     /**
      * One kind's worth of matches for a search term, capped.
@@ -366,6 +397,11 @@ interface ChannelDao {
                 SELECT o.originalTitle FROM category_overrides o
                 WHERE o.profileId = :profileId AND o.kind = c.kind AND o.isHidden = 1))
           AND (c.scriptMask = :unknownMask OR (:hiddenMask & c.scriptMask) = 0)
+          AND (:mergeDuplicates = 0 OR c.searchTitle = '' OR c.id = (
+                SELECT v.id FROM channels v
+                WHERE v.sourceId = c.sourceId AND v.kind = c.kind
+                  AND v.searchTitle = c.searchTitle AND v.identityYear = c.identityYear
+                ORDER BY v.sortIndex ASC, v.id ASC LIMIT 1))
         ORDER BY c.sortIndex ASC
         LIMIT :limit
         """,
@@ -388,6 +424,8 @@ interface ChannelDao {
          * advanced-search toggle asking for it back.
          */
         includeHidden: Boolean,
+        /** 1 to answer with one row per title, exactly as in [observeBrowse]. */
+        mergeDuplicates: Int,
         /** The hidden writing systems as a bitmask, exactly as in [observeBrowse]. */
         hiddenMask: Int,
         /** The "not computed yet" mask, exactly as in [observeBrowse]. */
@@ -442,6 +480,11 @@ interface ChannelDao {
                 SELECT o.originalTitle FROM category_overrides o
                 WHERE o.profileId = :profileId AND o.kind = c.kind AND o.isHidden = 1))
           AND (c.scriptMask = :unknownMask OR (:hiddenMask & c.scriptMask) = 0)
+          AND (:mergeDuplicates = 0 OR c.searchTitle = '' OR c.id = (
+                SELECT v.id FROM channels v
+                WHERE v.sourceId = c.sourceId AND v.kind = c.kind
+                  AND v.searchTitle = c.searchTitle AND v.identityYear = c.identityYear
+                ORDER BY v.sortIndex ASC, v.id ASC LIMIT 1))
         ORDER BY c.sortIndex ASC
         LIMIT :limit
         """,
@@ -456,6 +499,7 @@ interface ChannelDao {
         query: String,
         limit: Int,
         includeHidden: Boolean,
+        mergeDuplicates: Int,
         hiddenMask: Int,
         unknownMask: Int,
     ): List<ChannelWithFavorite>
@@ -486,6 +530,11 @@ interface ChannelDao {
           AND c.kind IN ('VOD', 'SERIES')
           AND c.addedAtEpochMillis IS NOT NULL
           AND c.addedAtEpochMillis >= :sinceEpochMillis
+          AND (:mergeDuplicates = 0 OR c.searchTitle = '' OR c.id = (
+                SELECT v.id FROM channels v
+                WHERE v.sourceId = c.sourceId AND v.kind = c.kind
+                  AND v.searchTitle = c.searchTitle AND v.identityYear = c.identityYear
+                ORDER BY v.sortIndex ASC, v.id ASC LIMIT 1))
         ORDER BY c.addedAtEpochMillis DESC, c.sortIndex ASC
         LIMIT :limit
         """,
@@ -495,6 +544,7 @@ interface ChannelDao {
         sourceId: Long,
         sinceEpochMillis: Long,
         limit: Int,
+        mergeDuplicates: Int,
     ): Flow<List<ChannelWithFavorite>>
 
     /**
@@ -1091,6 +1141,36 @@ interface ChannelLogoDao {
     companion object {
         private const val INSERT_CHUNK_SIZE = 500
     }
+}
+
+@Dao
+interface TitleVersionDao {
+
+    /**
+     * Every listing of one title, in the provider's own order.
+     *
+     * The identity is the same three columns the merge predicate groups on and the metadata cache
+     * is keyed by — cleaned title, year and kind — so what the detail screen offers is exactly
+     * what browse folded away, and neither can drift from the other by being computed differently.
+     *
+     * An empty `searchTitle` returns nothing rather than everything: it is the "cleaned away to
+     * nothing" value shared by every unnameable row in the catalogue.
+     */
+    @Query(
+        """
+        SELECT * FROM channels
+        WHERE sourceId = :sourceId AND kind = :kind
+          AND searchTitle = :searchTitle AND identityYear = :identityYear
+          AND searchTitle != ''
+        ORDER BY sortIndex ASC, id ASC
+        """,
+    )
+    fun observeVersions(
+        sourceId: Long,
+        kind: String,
+        searchTitle: String,
+        identityYear: Int,
+    ): Flow<List<ChannelEntity>>
 }
 
 @Dao

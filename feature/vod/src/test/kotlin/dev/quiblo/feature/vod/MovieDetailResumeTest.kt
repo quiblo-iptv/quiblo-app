@@ -21,6 +21,7 @@ package dev.quiblo.feature.vod
 import dev.quiblo.core.data.ChannelRepository
 import dev.quiblo.core.data.TitleMetadataRepository
 import dev.quiblo.core.data.TitleOpinionRepository
+import dev.quiblo.core.data.TitleVersionsRepository
 import dev.quiblo.core.data.WatchHistoryRepository
 import dev.quiblo.core.model.Channel
 import dev.quiblo.core.model.MediaKind
@@ -133,12 +134,19 @@ class MovieDetailResumeTest {
         assertFalse(viewModel.ready().canResume)
     }
 
+    // Nothing to choose between: the merge setting is off by default and this test is about the
+    // resume point. `TitleVersionLabelTest` and `MergedTitlesQueryTest` cover the other half.
+    private val versions: TitleVersionsRepository = mockk {
+        every { observeVersions(any()) } returns flowOf(emptyList())
+    }
+
     private fun viewModel() = MovieDetailViewModel(
         channelId = CHANNEL.id,
         channelRepository = channelRepository,
         metadataRepository = metadataRepository,
         historyRepository = historyRepository,
         opinions = opinions,
+        versions = versions,
     )
 
     private fun MovieDetailViewModel.ready() = uiState.value as MovieDetailUiState.Ready

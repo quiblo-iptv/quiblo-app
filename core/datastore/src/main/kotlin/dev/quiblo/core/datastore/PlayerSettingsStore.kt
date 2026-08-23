@@ -143,6 +143,30 @@ class PlayerSettingsStore(context: Context) {
     }
 
     /**
+     * Whether one film listed four times is shown once.
+     *
+     * A panel that carries a film in SD, HD, FHD and 4K lists it four times, and a panel that
+     * also carries a subtitled cut lists it eight; the browse grid then reads as a catalogue four
+     * times its real size in which nothing can be found twice. When this is on, the lists show
+     * the provider's first listing of each title and the detail screen offers the rest.
+     *
+     * **Off by default, and that is a deliberate subtraction like [showLiveInSearch].** Merging
+     * hides rows a provider sent, and hiding rows nobody asked to hide is how a viewer comes to
+     * believe their account is missing something. A title that is genuinely two different films
+     * with the same name and year would be merged too — rare, and worth saying no by default.
+     *
+     * App-wide rather than per profile, like everything else in this file: it is a statement
+     * about what the catalogue *is*, not about what one person wants to see of it.
+     */
+    val mergeDuplicateTitles: Flow<Boolean> = dataStore.data.map { preferences ->
+        preferences[MERGE_DUPLICATE_TITLES] ?: false
+    }
+
+    suspend fun setMergeDuplicateTitles(enabled: Boolean) {
+        dataStore.edit { it[MERGE_DUPLICATE_TITLES] = enabled }
+    }
+
+    /**
      * Whether the player lights its black bars with the colours of the picture.
      *
      * **On by default**, because it is what the screen should have looked like from the start: a
@@ -228,6 +252,7 @@ class PlayerSettingsStore(context: Context) {
         val DYNAMIC_COLOR = booleanPreferencesKey("dynamic_color")
         val SHOW_LIVE_IN_SEARCH = booleanPreferencesKey("show_live_in_search")
         val AMBIENT_PLAYER = booleanPreferencesKey("ambient_player")
+        val MERGE_DUPLICATE_TITLES = booleanPreferencesKey("merge_duplicate_titles")
         val HIDDEN_SCRIPTS = stringSetPreferencesKey("hidden_scripts")
         val SUBTITLE_MATCH_SYSTEM = booleanPreferencesKey("subtitle_match_system")
         val SUBTITLE_SIZE = stringPreferencesKey("subtitle_size")

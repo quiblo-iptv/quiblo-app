@@ -283,6 +283,14 @@ class SettingsViewModel(
         playerSettingsRepository.setShowLiveInSearch(enabled)
     }
 
+    /** Whether one title listed in four qualities is shown once. Off unless it is asked for. */
+    val mergeDuplicateTitles: StateFlow<Boolean> = playerSettingsRepository.mergeDuplicateTitles
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(SUBSCRIPTION_TIMEOUT_MILLIS), false)
+
+    fun setMergeDuplicateTitles(enabled: Boolean) = viewModelScope.launch {
+        playerSettingsRepository.setMergeDuplicateTitles(enabled)
+    }
+
     /**
      * Whether the player lights its black bars from the picture. On unless switched off.
      *

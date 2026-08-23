@@ -65,6 +65,16 @@ fun QuibloNavHost(
             MovieDetailScreen(
                 channelId = entry.toRoute<MovieDetailRoute>().channelId,
                 onBack = { navController.popBackStack() },
+                // Another copy of the same film — the 4K one, the subtitled one. It replaces
+                // this screen rather than stacking on it: two detail screens for one film is
+                // two presses of Back to leave a film the viewer opened once.
+                onOpenVersion = { versionId ->
+                    navController.navigate(MovieDetailRoute(versionId)) {
+                        popUpTo(MovieDetailRoute(entry.toRoute<MovieDetailRoute>().channelId)) {
+                            inclusive = true
+                        }
+                    }
+                },
                 onPlay = { channel, startMillis ->
                     navController.navigate(
                         PlayerRoute(channelId = channel.id, startPositionMillis = startMillis),
@@ -84,6 +94,12 @@ fun QuibloNavHost(
             SeriesDetailScreen(
                 channelId = route.channelId,
                 onBack = { navController.popBackStack() },
+                // Replaces rather than stacks, for the reason the film screen's does.
+                onOpenVersion = { versionId ->
+                    navController.navigate(SeriesDetailRoute(versionId)) {
+                        popUpTo(SeriesDetailRoute(route.channelId)) { inclusive = true }
+                    }
+                },
                 onEpisodeClick = { episode, seriesChannel, startMillis ->
                     navController.navigate(
                         PlayerRoute(

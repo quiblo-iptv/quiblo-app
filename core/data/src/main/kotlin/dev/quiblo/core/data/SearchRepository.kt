@@ -145,6 +145,9 @@ data class FilterIndex(
  * three open Flows would re-run on every write to the channel table while somebody is still
  * typing, and the answer would be recomputed for a term they had already moved past.
  */
+// Seven collaborators, and the last three have defaults so a test states only what it is about.
+// Every one of them is read by the single query this class exists to make.
+@Suppress("LongParameterList")
 class SearchRepository(
     private val channelDao: ChannelDao,
     /** Whose favourites the results should show as favourited. */
@@ -162,6 +165,13 @@ class SearchRepository(
     private val matchDispatcher: CoroutineDispatcher = Dispatchers.Default,
     /** The writing systems this viewer has hidden — see [ScriptFilterRepository]. */
     private val hiddenScripts: Flow<Set<TitleScript>> = flowOf(emptySet()),
+    /**
+     * Whether one title listed in four qualities answers once (`PlayerSettingsRepository`).
+     *
+     * Read once per search alongside [hiddenScripts] and for the same reason: all three columns
+     * are then filtered against one answer even if the setting changes mid-query.
+     */
+    private val mergeDuplicates: Flow<Boolean> = flowOf(false),
 ) {
 
     /**
@@ -182,7 +192,14 @@ class SearchRepository(
         // Read once for this search rather than per result list, so all three lists are
         // filtered against the same answer even if the setting changes mid-query.
         val hidden = if (options.includeHidden) emptySet() else hiddenScripts.first()
-        val ask = Ask(sourceId, term, options.limitPerKind, options.includeHidden, hidden)
+        val ask = Ask(
+            sourceId = sourceId,
+            term = term,
+            limit = options.limitPerKind,
+            includeHidden = options.includeHidden,
+            hidden = hidden,
+            merge = mergeDuplicates.first(),
+        )
         return if (options.genre.isNullOrBlank() && options.year == null) {
             SearchResults(
                 live = if (options.includeLive) ask.matches(MediaKind.LIVE, term) else emptyList(),
@@ -299,6 +316,7 @@ class SearchRepository(
                 query = escapeForLike(text),
                 limit = asked,
                 includeHidden = includeHidden,
+                mergeDuplicates = if (merge) 1 else 0,
                 hiddenMask = hidden.toMask(),
                 unknownMask = SCRIPT_MASK_UNKNOWN,
             )
@@ -368,6 +386,7 @@ class SearchRepository(
                 query = escapeForLike(term),
                 limit = asked,
                 includeHidden = includeHidden,
+                mergeDuplicates = if (merge) 1 else 0,
                 hiddenMask = hidden.toMask(),
                 unknownMask = SCRIPT_MASK_UNKNOWN,
             )
@@ -401,6 +420,8 @@ class SearchRepository(
         val limit: Int,
         val includeHidden: Boolean,
         val hidden: Set<TitleScript>,
+        /** One row per title, rather than one per quality the provider carries it in. */
+        val merge: Boolean,
     )
 
     private companion object {

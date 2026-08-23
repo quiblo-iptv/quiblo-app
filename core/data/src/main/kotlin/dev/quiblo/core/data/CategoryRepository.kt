@@ -29,6 +29,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 
 /**
@@ -54,6 +55,14 @@ class CategoryRepository(
     private val channelDao: ChannelDao,
     private val categoryOverrideDao: CategoryOverrideDao,
     private val profiles: ProfileRepository,
+    /**
+     * Whether one title listed in four qualities counts once (`PlayerSettingsRepository`).
+     *
+     * Only the counts beside each category depend on it here, and they have to: a shelf that says
+     * "48 items" over a list showing twelve is the merge setting telling a viewer their catalogue
+     * is broken.
+     */
+    private val mergeDuplicates: Flow<Boolean> = flowOf(false),
 ) {
 
     /**
@@ -172,7 +181,9 @@ class CategoryRepository(
         }
 
     private fun overridden(sourceId: Long, kind: MediaKind, profileId: Long): Flow<List<Category>> = combine(
-        channelDao.observeCategoriesByKind(sourceId, kind.name),
+        mergeDuplicates.flatMapLatest { merge ->
+            channelDao.observeCategoriesByKind(sourceId, kind.name, mergeDuplicates = if (merge) 1 else 0)
+        },
         categoryOverrideDao.observeForKind(profileId, kind.name),
     ) { counts, overrides ->
         val byTitle = overrides.associateBy { it.originalTitle }

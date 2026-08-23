@@ -338,17 +338,19 @@ class GenreAndScriptQueryTest {
         query = "",
         limit = 40,
         includeHidden = true,
+        mergeDuplicates = 0,
         hiddenMask = 0,
         unknownMask = SCRIPT_MASK_UNKNOWN,
     )
 
-    private suspend fun browse(hiddenMask: Int) = db.channelDao().observeBrowse(
+    private suspend fun browse(hiddenMask: Int, mergeDuplicates: Int = 0) = db.channelDao().observeBrowse(
         profileId = 1L,
         sourceId = SOURCE_ID,
         kind = "VOD",
         groupTitle = null,
         query = "",
         favoritesOnly = 0,
+        mergeDuplicates = mergeDuplicates,
         hiddenMask = hiddenMask,
         unknownMask = SCRIPT_MASK_UNKNOWN,
     ).first()

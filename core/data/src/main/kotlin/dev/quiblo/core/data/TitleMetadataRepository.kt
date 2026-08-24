@@ -90,6 +90,25 @@ class TitleMetadataRepository(
         cachedOrFetched(title, kind, acceptPartial = true)
 
     /**
+     * The same lookup as [previewFor], with the reason a null was a null.
+     *
+     * **A tile that asked once and was refused must be able to ask again**, and a null cannot say
+     * whether it should. A browse screen remembers which tiles it has requested so that scrolling
+     * does not re-ask for what it already has; when the answer was a rate limit or an unreachable
+     * host, that memory is what left a poster blank for the rest of the session while the same
+     * title opened with a cover on its detail screen, which is the report.
+     *
+     * [PreviewOutcome.NoMatch] is still an answer and is still worth remembering: the miss is
+     * cached in the database, so a caller that forgets it pays a local read rather than a request.
+     */
+    suspend fun previewOutcomeFor(title: String, kind: MediaKind): PreviewOutcome =
+        when (val answer = answerFor(title, kind, acceptPartial = true)) {
+            is TmdbAnswer.Found -> PreviewOutcome.Found(answer.metadata)
+            TmdbAnswer.NoMatch -> PreviewOutcome.NoMatch
+            is TmdbAnswer.Refused -> PreviewOutcome.Unanswered
+        }
+
+    /**
      * Everything the cache holds for [title], or null if nothing is cached.
      *
      * Does not touch the network.
@@ -435,3 +454,22 @@ private fun TitleMetadata.toEntity(identity: TitleIdentity, kind: String, fetche
     isMiss = false,
     isPartial = isPartial,
 )
+
+/**
+ * How a poster tile's lookup went.
+ *
+ * The three outcomes of [TmdbAnswer] as this layer's own type, so that a screen can tell "asked
+ * and there is nothing" from "never got an answer" without the feature modules depending on the
+ * TMDB source module for the distinction.
+ */
+sealed interface PreviewOutcome {
+
+    /** The service answered, and this is what it said. */
+    data class Found(val metadata: TitleMetadata) : PreviewOutcome
+
+    /** The service answered and holds nothing under this title. Cached; asking again is cheap. */
+    data object NoMatch : PreviewOutcome
+
+    /** Nothing was asked, or nothing usable came back. Worth trying again later. */
+    data object Unanswered : PreviewOutcome
+}

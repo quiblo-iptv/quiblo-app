@@ -29,6 +29,7 @@ import dev.quiblo.core.model.TitleMetadata
 import dev.quiblo.source.tmdb.TmdbAnswer
 import dev.quiblo.source.tmdb.TmdbClient
 import dev.quiblo.source.tmdb.TmdbKind
+import dev.quiblo.source.tmdb.TmdbRefusal
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -70,6 +71,26 @@ class TitleMetadataRepositoryTest {
         assertEquals(8.2, repository.ratingFor("The Matrix (1999)", MediaKind.VOD))
 
         coVerify(exactly = 1) { client.summary(any(), any(), any(), any()) }
+    }
+
+    @Test
+    @DisplayName("a tile told apart from a refusal, so a blank poster can ask again")
+    fun `a refusal is reported as unanswered rather than as no match`() = runTest {
+        coEvery { client.summary(any(), any(), any(), any()) } returns
+            TmdbAnswer.Refused(TmdbRefusal.RATE_LIMITED)
+
+        assertEquals(
+            PreviewOutcome.Unanswered,
+            repository.previewOutcomeFor("The Matrix (1999)", MediaKind.VOD),
+        )
+
+        // And a title the service answered about is a different outcome, which is the whole
+        // reason the distinction exists: one is worth asking again and the other is not.
+        coEvery { client.summary(any(), any(), any(), any()) } returns TmdbAnswer.NoMatch
+        assertEquals(
+            PreviewOutcome.NoMatch,
+            repository.previewOutcomeFor("Not A Film At All", MediaKind.VOD),
+        )
     }
 
     @Test

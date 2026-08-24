@@ -19,6 +19,7 @@
 package dev.quiblo.tv.ui.browse
 
 import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -58,6 +59,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
@@ -348,21 +350,21 @@ private fun HeroFavoriteButton(
      * unambiguously, by whether the heart is filled or hollow; saying it four more times in a
      * colour that means something else is not emphasis, it is noise with a wrong meaning.
      *
-     * So the box, the border and the tint follow *focus* only, exactly as the Play button beside
-     * it does — the two now read as one row of controls rather than as one control and one alarm.
+     * **No box and no border at all now (`030` #4)**, where the last shape kept a faint plate and
+     * a hairline whatever the remote was doing. A control that is drawn as a button when nothing
+     * is on it is a second thing competing with Play for the eye, on the one element of this app
+     * that is looked at from across a room. What is left is the heart: it grows and goes solid
+     * white when the remote arrives, and it fills when the title is favourited. Those are two
+     * different signals on two different properties, which is what lets them be read at once.
      */
+    val scale by animateFloatAsState(
+        targetValue = if (isFocused) HEART_FOCUSED_SCALE else 1f,
+        label = "heroHeartScale",
+    )
+
     Box(
         modifier = modifier
             .size(42.dp)
-            .clip(RoundedCornerShape(8.dp))
-            .background(
-                if (isFocused) Color.White.copy(alpha = 0.35f) else Color.White.copy(alpha = 0.15f),
-            )
-            .border(
-                width = if (isFocused) 2.dp else 1.dp,
-                color = if (isFocused) Color.White else Color.White.copy(alpha = 0.3f),
-                shape = RoundedCornerShape(8.dp),
-            )
             .clickable(
                 interactionSource = interactionSource,
                 indication = null,
@@ -375,8 +377,13 @@ private fun HeroFavoriteButton(
             contentDescription = stringResource(
                 if (isFavorite) R.string.tv_detail_unfavourite else R.string.tv_detail_favourite,
             ),
-            tint = Color.White,
-            modifier = Modifier.size(22.dp),
+            tint = if (isFocused) Color.White else Color.White.copy(alpha = HEART_RESTING_ALPHA),
+            modifier = Modifier
+                .size(24.dp)
+                .graphicsLayer {
+                    scaleX = scale
+                    scaleY = scale
+                },
         )
     }
 }
@@ -447,6 +454,10 @@ private fun HeroPaginationDots(
         }
     }
 }
+
+/** Focus is the whole affordance now that the heart has no plate under it. */
+private const val HEART_FOCUSED_SCALE = 1.3f
+private const val HEART_RESTING_ALPHA = 0.75f
 
 private val HERO_HEIGHT = 560.dp
 private const val HERO_CYCLE_MILLIS = 8_000L

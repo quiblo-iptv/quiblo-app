@@ -36,6 +36,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
 import androidx.compose.ui.draw.drawBehind
@@ -86,6 +87,23 @@ data class AmbientColours(val start: Color, val end: Color) {
         val None = AmbientColours(Color.Transparent, Color.Transparent)
     }
 }
+
+/**
+ * Where a screen says which picture it wants the room lit from.
+ *
+ * **The light belongs to the shell, not to the screen that knows the picture.** `drawBehind`
+ * clips to the node it is on and the pools are sized as fractions of it, so a detail screen
+ * painting its own backdrop painted it inside whatever the shell had inset it by — a lit
+ * rectangle stopping in a hard edge partway across the screen, with the bars' plain surface
+ * colour either side of it. The screen knows the artwork; only the shell knows the window.
+ *
+ * Null for "no light", which is a title with no artwork. The shell reads that as black rather
+ * than as "keep whatever the last screen lit".
+ *
+ * The television has the same seam and answers it the same way, in `LocalAmbientSink` — richer
+ * there because Search wants light from nothing, which no phone screen asks for.
+ */
+val LocalAmbientArtwork = staticCompositionLocalOf<(String?) -> Unit> { {} }
 
 /**
  * Paints [colours] as two soft pools of light, and nothing else.

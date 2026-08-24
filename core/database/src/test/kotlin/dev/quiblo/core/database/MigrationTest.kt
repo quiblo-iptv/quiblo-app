@@ -466,6 +466,49 @@ class MigrationTest {
         }
     }
 
+    /**
+     * The index that makes merging usable, and nothing else.
+     *
+     * `0.25.0` merged duplicate titles with a correlated subquery and no index to order it by, so
+     * SQLite sorted each identity group once per row of that group. The separator rows a panel
+     * pads a live list with all clean to one identity, and one such group of ten thousand took
+     * 6.7 seconds per emission. This is the index that turns the subquery's `ORDER BY … LIMIT 1`
+     * into reading the first entry.
+     */
+    @Test
+    fun `23 to 24 indexes the merge identity and touches no rows`() {
+        helper.createDatabase(DB_NAME, 23).use { old ->
+            old.execSQL(
+                "INSERT INTO `sources` (`id`, `name`, `kind`, `url`, `createdAtEpochMillis`) " +
+                    "VALUES (1, 'Panel', 'M3U', 'https://e.invalid', 0)",
+            )
+            old.execSQL(
+                "INSERT INTO `channels` " +
+                    "(`id`, `sourceId`, `name`, `streamUrl`, `kind`, `groupTitle`, `stableKey`, " +
+                    "`sortIndex`, `searchTitle`, `identityYear`, `scriptMask`) " +
+                    "VALUES (1, 1, 'Dune (2021) SD', 'https://e.invalid/1', 'VOD', 'Films', 'dune-sd', " +
+                    "0, 'dune', 2021, 0)",
+            )
+        }
+
+        val db = helper.runMigrationsAndValidate(DB_NAME, 24, true, MIGRATION_23_24)
+
+        db.query(
+            "SELECT `name` FROM `sqlite_master` WHERE `type` = 'index' AND `tbl_name` = 'channels' " +
+                "AND `name` = 'index_channels_sourceId_kind_searchTitle_identityYear_sortIndex'",
+        ).use { cursor ->
+            assertTrue("the merge predicate is still without an index to order it by", cursor.moveToFirst())
+        }
+
+        db.query("SELECT `name`, `searchTitle`, `identityYear` FROM `channels`").use { cursor ->
+            assertTrue("the upgrade lost the catalogue", cursor.moveToFirst())
+            assertEquals("Dune (2021) SD", cursor.getString(0))
+            assertEquals("dune", cursor.getString(1))
+            assertEquals(2021, cursor.getInt(2))
+            assertFalse("the upgrade invented a row", cursor.moveToNext())
+        }
+    }
+
     @Test
     fun `10 to 11 adopts existing favourites rather than dropping them`() {
         // The opposite promise to the one above, and the one that matters more: this is the

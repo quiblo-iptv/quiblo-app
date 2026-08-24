@@ -92,6 +92,44 @@ class TitleVersionLabelTest {
         assertEquals(listOf("AR| Dune 2021", "EN| Dune 2021"), labels)
     }
 
+    /**
+     * A bracket cut in half by the shared beginning is not part of the label.
+     *
+     * A panel that writes the year one way in one listing and another way in the next shares only
+     * `Avatar ` between them, so the second listing's label began mid-bracket. Trimming took the
+     * `(` off the front, because it was an edge, and left the `)` where it was, because it was
+     * not — and the chip read `2009) HD`.
+     */
+    @Test
+    fun `a bracket the cut left without its partner is dropped`() {
+        val labels = labelVersions(
+            listOf(
+                channel(1, "Avatar 2009"),
+                channel(2, "Avatar (2009) HD"),
+            ),
+        ).map { it.label }
+
+        assertEquals(listOf("2009", "2009 HD"), labels)
+    }
+
+    /**
+     * Brackets that still come in pairs are the provider's own, and are left alone.
+     *
+     * A pair at the edge of a label is taken by the separator trim, exactly as `- [4K]` is above.
+     * This is about the pair in the middle, which nothing else touches and nothing should.
+     */
+    @Test
+    fun `a bracketed tag that survives the cut whole keeps its brackets`() {
+        val labels = labelVersions(
+            listOf(
+                channel(1, "Dune (2021) HD"),
+                channel(2, "Dune (2021) 4K (HDR) DUAL"),
+            ),
+        ).map { it.label }
+
+        assertEquals(listOf("HD", "4K (HDR) DUAL"), labels)
+    }
+
     private fun channel(id: Long, name: String) = Channel(
         id = id,
         sourceId = 1L,

@@ -743,3 +743,31 @@ val MIGRATION_22_23 = object : Migration(22, 23) {
         db.execSQL("ALTER TABLE `category_overrides_new` RENAME TO `category_overrides`")
     }
 }
+
+/**
+ * 23 to 24: merging a title listed four times stops being quadratic.
+ *
+ * One index, no data touched. `0.25.0` shipped the merge predicate — one correlated subquery per
+ * row, asking whether this row is the provider's first listing of its identity — against an index
+ * that covered the equality columns but not the order. SQLite answered it by sorting each identity
+ * group in a temporary B-tree once for every row in that group.
+ *
+ * A film listed in SD, HD, FHD and 4K is a group of four and costs nothing. The groups that
+ * matter are the ones a real live list is full of: the separator rows a panel pads its categories
+ * with — `### SPORTS ###` a thousand times over — clean to one identity between them. Ten
+ * thousand rows in one group took 6.7 seconds per emission on a desktop, and Room re-runs these
+ * queries on every write to `channels`. On a television it is a tab that never finishes loading.
+ *
+ * With `sortIndex` on the end of the index the subquery reads the first entry rather than sorting
+ * the group: the same query over the same rows drops to 21 milliseconds.
+ */
+val MIGRATION_23_24 = object : Migration(23, 24) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            """
+            CREATE INDEX IF NOT EXISTS `index_channels_sourceId_kind_searchTitle_identityYear_sortIndex`
+            ON `channels` (`sourceId`, `kind`, `searchTitle`, `identityYear`, `sortIndex`)
+            """.trimIndent(),
+        )
+    }
+}

@@ -103,6 +103,30 @@ data class SourceEntity(
          * wearing different clothes.
          */
         Index("searchTitle", "identityYear", "kind"),
+        /**
+         * The merge predicate's subquery, and the reason merging is usable at all.
+         *
+         * With merging on, every catalogue query asks one question per row: *is this the
+         * provider's first listing of its identity?* — a correlated subquery that reads
+         * `(sourceId, kind, searchTitle, identityYear)` and takes the lowest `sortIndex`.
+         * `Index("searchTitle", "identityYear", "kind")` above answers the equality half and
+         * nothing else, so SQLite built a temporary B-tree to sort each identity group **once
+         * per row of that group** — cost proportional to the square of the group's size.
+         *
+         * That is fine for a film listed four times and ruinous for the groups a real playlist
+         * actually contains: the separator rows a panel pads its live list with — `### SPORTS ###`
+         * a thousand times over — all clean to one identity. One ten-thousand-row group took
+         * 6.7 seconds per emission on a desktop, which on a television is a tab that never
+         * finishes loading.
+         *
+         * Ordered filter-then-sort, exactly as `Index("sourceId", "kind", "sortIndex")` is: the
+         * four equality columns first, `sortIndex` last so the subquery's `ORDER BY … LIMIT 1`
+         * reads the first index entry instead of sorting the group. `id` is not listed because
+         * it is the rowid, which SQLite already appends to every index — it is the tiebreaker
+         * whether or not it is named. Same data, same query: 6.7 seconds becomes 21
+         * milliseconds.
+         */
+        Index("sourceId", "kind", "searchTitle", "identityYear", "sortIndex"),
     ],
 )
 data class ChannelEntity(

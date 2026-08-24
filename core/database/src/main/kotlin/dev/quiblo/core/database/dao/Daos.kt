@@ -309,6 +309,11 @@ interface ChannelDao {
               AND c.kind = :kind
               AND (:query = '' OR c.name LIKE '%' || :query || '%' ESCAPE '\')
               AND (c.scriptMask = :unknownMask OR (:hiddenMask & c.scriptMask) = 0)
+              AND (:mergeDuplicates = 0 OR c.searchTitle = '' OR c.id = (
+                    SELECT v.id FROM channels v
+                    WHERE v.sourceId = c.sourceId AND v.kind = c.kind
+                      AND v.searchTitle = c.searchTitle AND v.identityYear = c.identityYear
+                    ORDER BY v.sortIndex ASC, v.id ASC LIMIT 1))
         )
         WHERE rowInCategory <= :perCategory
         ORDER BY sortIndex ASC
@@ -326,6 +331,14 @@ interface ChannelDao {
         kind: String,
         query: String,
         perCategory: Int,
+        /**
+         * 1 to draw one tile per title, exactly as in [observeBrowse].
+         *
+         * Inside the window, not outside it: `ROW_NUMBER` has to count the rows that will be
+         * drawn. Applied after it, a category whose first four listings were four copies of one
+         * film would come back as one tile where the count beside it promised twenty.
+         */
+        mergeDuplicates: Int,
         hiddenMask: Int,
         unknownMask: Int,
     ): Flow<List<ChannelWithFavorite>>

@@ -190,6 +190,9 @@ interface ChannelDao {
           AND (:groupTitle IS NULL OR c.groupTitle = :groupTitle)
           AND (:query = '' OR c.name LIKE '%' || :query || '%' ESCAPE '\')
           AND (:favoritesOnly = 0 OR f.stableKey IS NOT NULL)
+          AND (:includeHiddenCategories = 1 OR c.groupTitle NOT IN (
+                SELECT o.originalTitle FROM category_overrides o
+                WHERE o.profileId = :profileId AND o.kind = c.kind AND o.isHidden = 1))
           AND (c.scriptMask = :unknownMask OR (:hiddenMask & c.scriptMask) = 0)
           AND (:mergeDuplicates = 0 OR c.searchTitle = '' OR c.id = (
                 SELECT v.id FROM channels v
@@ -207,6 +210,20 @@ interface ChannelDao {
         groupTitle: String?,
         query: String,
         favoritesOnly: Int,
+        /**
+         * 1 to browse categories this profile has hidden as well, 0 to leave them out.
+         *
+         * **This predicate is `029` #6, and its absence was the reported fault.** Hiding a
+         * category has always removed it from the category list and from search; the browse feed
+         * itself never looked at the table, so every title in a hidden shelf was still in the grid
+         * and in the television's rows — the setting appeared to do nothing at all on the screen a
+         * viewer hides a category *for*.
+         *
+         * Favourites pass 1. The rule is the script filter's, for the same reason: a viewer's own
+         * list is not the catalogue, and dropping something somebody chose by hand is not a filter
+         * but a loss.
+         */
+        includeHiddenCategories: Int,
         /** 1 to show one row per title, 0 to show every listing the provider sent. */
         mergeDuplicates: Int,
         /**
@@ -253,6 +270,9 @@ interface ChannelDao {
           AND (:groupTitle IS NULL OR c.groupTitle = :groupTitle)
           AND (:query = '' OR c.name LIKE '%' || :query || '%' ESCAPE '\')
           AND (:favoritesOnly = 0 OR f.stableKey IS NOT NULL)
+          AND (:includeHiddenCategories = 1 OR c.groupTitle NOT IN (
+                SELECT o.originalTitle FROM category_overrides o
+                WHERE o.profileId = :profileId AND o.kind = c.kind AND o.isHidden = 1))
           AND (c.scriptMask = :unknownMask OR (:hiddenMask & c.scriptMask) = 0)
           AND (:mergeDuplicates = 0 OR c.searchTitle = '' OR c.id = (
                 SELECT v.id FROM channels v
@@ -270,6 +290,8 @@ interface ChannelDao {
         groupTitle: String?,
         query: String,
         favoritesOnly: Int,
+        /** Exactly as in [observeBrowse]. */
+        includeHiddenCategories: Int,
         mergeDuplicates: Int,
         hiddenMask: Int,
         unknownMask: Int,
@@ -308,6 +330,9 @@ interface ChannelDao {
             WHERE c.sourceId = :sourceId
               AND c.kind = :kind
               AND (:query = '' OR c.name LIKE '%' || :query || '%' ESCAPE '\')
+              AND c.groupTitle NOT IN (
+                    SELECT o.originalTitle FROM category_overrides o
+                    WHERE o.profileId = :profileId AND o.kind = c.kind AND o.isHidden = 1)
               AND (c.scriptMask = :unknownMask OR (:hiddenMask & c.scriptMask) = 0)
               AND (:mergeDuplicates = 0 OR c.searchTitle = '' OR c.id = (
                     SELECT v.id FROM channels v
@@ -543,6 +568,9 @@ interface ChannelDao {
           AND c.kind IN ('VOD', 'SERIES')
           AND c.addedAtEpochMillis IS NOT NULL
           AND c.addedAtEpochMillis >= :sinceEpochMillis
+          AND c.groupTitle NOT IN (
+                SELECT o.originalTitle FROM category_overrides o
+                WHERE o.profileId = :profileId AND o.kind = c.kind AND o.isHidden = 1)
           AND (:mergeDuplicates = 0 OR c.searchTitle = '' OR c.id = (
                 SELECT v.id FROM channels v
                 WHERE v.sourceId = c.sourceId AND v.kind = c.kind
@@ -600,6 +628,9 @@ interface ChannelDao {
               AND f.profileId = :profileId
         WHERE c.sourceId = :sourceId
           AND c.kind = :kind
+          AND c.groupTitle NOT IN (
+                SELECT o.originalTitle FROM category_overrides o
+                WHERE o.profileId = :profileId AND o.kind = c.kind AND o.isHidden = 1)
         ORDER BY c.sortIndex DESC
         LIMIT :limit
         """,

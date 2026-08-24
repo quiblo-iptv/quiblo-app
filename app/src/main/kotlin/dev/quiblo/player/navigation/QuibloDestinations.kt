@@ -26,6 +26,7 @@ import androidx.compose.material.icons.filled.LiveTv
 import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material.icons.filled.Tv
 import androidx.compose.ui.graphics.vector.ImageVector
+import dev.quiblo.core.model.AppTab
 import dev.quiblo.player.R
 import kotlinx.serialization.Serializable
 
@@ -103,10 +104,26 @@ enum class TopLevelDestination(
     val route: Any,
     @param:StringRes val labelRes: Int,
     val icon: ImageVector,
+    /**
+     * Which switchable tab this is, or null for one that cannot be switched off (`029` #5).
+     *
+     * Sources is the null. It is the only way into the screen that adds a playlist, so an app
+     * whose bar could lose it is an app somebody can lock themselves out of configuring — and
+     * `AppTab` deliberately has no entry for it, which is what makes that unrepresentable rather
+     * than merely avoided.
+     */
+    val tab: AppTab? = null,
 ) {
-    LIVE(LiveRoute, R.string.destination_live, Icons.Filled.LiveTv),
-    VOD(VodRoute, R.string.destination_vod, Icons.Filled.Movie),
-    SERIES(SeriesRoute, R.string.destination_series, Icons.Filled.Tv),
-    FAVORITES(FavoritesRoute, R.string.destination_favorites, Icons.Filled.Favorite),
+    LIVE(LiveRoute, R.string.destination_live, Icons.Filled.LiveTv, AppTab.LIVE),
+    VOD(VodRoute, R.string.destination_vod, Icons.Filled.Movie, AppTab.MOVIES),
+    SERIES(SeriesRoute, R.string.destination_series, Icons.Filled.Tv, AppTab.SERIES),
+    FAVORITES(FavoritesRoute, R.string.destination_favorites, Icons.Filled.Favorite, AppTab.FAVOURITES),
     SOURCES(SourcesRoute, R.string.destination_sources, Icons.AutoMirrored.Filled.List),
+    ;
+
+    companion object {
+        /** The bar as this viewer has arranged it, with Sources always at the end of it. */
+        fun visible(hidden: Set<AppTab>): List<TopLevelDestination> =
+            entries.filter { it.tab == null || it.tab !in hidden }
+    }
 }

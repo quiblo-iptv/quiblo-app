@@ -40,6 +40,9 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.relocation.BringIntoViewResponder
@@ -74,11 +77,14 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.paging.compose.collectAsLazyPagingItems
 import coil3.compose.SubcomposeAsyncImage
 import dev.quiblo.core.common.cleanedForDisplay
+import dev.quiblo.core.data.PlayerSettingsRepository
 import dev.quiblo.core.model.Channel
 import dev.quiblo.core.model.MediaKind
 import dev.quiblo.feature.browse.BrowseScope
@@ -96,6 +102,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.koin.androidx.compose.koinViewModel
+import org.koin.compose.koinInject
 
 /**
  * Movies and Series: one horizontally scrolling row per category, stacked vertically.
@@ -108,6 +115,111 @@ import org.koin.androidx.compose.koinViewModel
 fun TvPosterRows(
     kind: MediaKind,
     /** Hands over the whole list, not just the item: the player needs it to zap. */
+    onPlay: (List<Channel>, Int) -> Unit,
+    onResume: (Channel) -> Unit,
+    modifier: Modifier = Modifier,
+    favouritesOnly: Boolean = false,
+) {
+    /*
+     * One grid or a shelf per category (`029` #3).
+     *
+     * **Two screens rather than one that draws both**, and the reason is the query behind them.
+     * Shelves read the first tiles of every category — capped in SQL, because a row shows about
+     * forty of what may be three thousand — and a single grid has no categories to cap by, so it
+     * has to be paged instead. Those are different scopes, chosen when the ViewModel is built, and
+     * a screen that switched between them would be a screen holding two.
+     *
+     * Favourites is never merged. It is a list somebody built by hand and it is grouped by kind
+     * rather than by the provider's categories, so there is nothing there to collapse.
+     */
+    val settings: PlayerSettingsRepository = koinInject()
+    val merged by settings.mergeCategories.collectAsStateWithLifecycle(false)
+
+    if (merged && !favouritesOnly) {
+        TvMergedGrid(kind = kind, onPlay = onPlay, modifier = modifier)
+    } else {
+        TvCategoryShelves(
+            kind = kind,
+            onPlay = onPlay,
+            onResume = onResume,
+            modifier = modifier,
+            favouritesOnly = favouritesOnly,
+        )
+    }
+}
+
+/**
+ * The catalogue as one grid, with the provider's shelves collapsed (`029` #3).
+ *
+ * Paged, unlike the shelves beside it, and that is not an implementation detail: this is the whole
+ * of a kind — tens of thousands of rows on a real account — where a row of shelves only ever asks
+ * for the first tiles of each. Reading the lot to draw a screenful is the cost `BrowseScope`
+ * exists to have removed, and it is exactly what a grid would pay without paging.
+ *
+ * No continue-watching row and no headings. Both belong to a screen with shelves: the row sits
+ * above them, and a heading over a grid of everything would say "everything".
+ */
+@Composable
+private fun TvMergedGrid(
+    kind: MediaKind,
+    onPlay: (List<Channel>, Int) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val viewModel: BrowseViewModel = koinViewModel(
+        // Its own key, because it is its own feed: the shelves' ViewModel is built with a scope
+        // that caps per category, and sharing the key would hand this screen that answer.
+        // not display text: a Koin scope key, never rendered.
+        key = "tv-merged-${kind.name}",
+        parameters = { browseParams(kind) },
+    )
+    val state by viewModel.uiState.collectAsStateWithLifecycle()
+    val items = viewModel.pagedItems.collectAsLazyPagingItems()
+
+    when {
+        state.isLoading -> Box(modifier = modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            CircularProgressIndicator(color = Color.White)
+        }
+
+        items.itemCount == 0 -> Box(modifier = modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            Text(
+                text = stringResource(R.string.tv_no_content),
+                color = Color.White.copy(alpha = 0.6f),
+                style = MaterialTheme.typography.headlineSmall,
+            )
+        }
+
+        else -> LazyVerticalGrid(
+            // Adaptive rather than a fixed count. A television panel is 960dp wide and a monitor
+            // running this build is not, and a column count chosen for one crops the other.
+            columns = GridCells.Adaptive(minSize = POSTER_WIDTH + FOCUS_GROWTH_HORIZONTAL * 2),
+            modifier = modifier.fillMaxSize(),
+            // Room for a focused poster to grow into at the edges of the grid, on the same
+            // reasoning as the rows: a `LazyVerticalGrid` clips to its own bounds.
+            contentPadding = PaddingValues(vertical = FOCUS_GROWTH, horizontal = FOCUS_GROWTH_HORIZONTAL),
+        ) {
+            items(count = items.itemCount) { index ->
+                val channel = items[index] ?: return@items
+                LaunchedEffect(channel.id) { viewModel.onPosterVisible(channel) }
+                TvPoster(
+                    tile = TvTile(channel),
+                    rating = state.ratings[channel.stableKey],
+                    fallbackArtworkUrl = state.posters[channel.stableKey],
+                    onClick = { onPlay(items.itemSnapshotList.items, index) },
+                )
+            }
+        }
+    }
+}
+
+/**
+ * Movies and Series as a shelf per category: the television's ordinary catalogue screen.
+ *
+ * Split from [TvPosterRows] when the merged grid arrived, so that neither shape carries a branch
+ * about the other. See [TvMergedGrid] for why they cannot be one composable.
+ */
+@Composable
+private fun TvCategoryShelves(
+    kind: MediaKind,
     onPlay: (List<Channel>, Int) -> Unit,
     /**
      * Opens a title the viewer had already started.
@@ -255,6 +367,15 @@ internal fun TvCategoryList(
      * the one place the answer is not already on the page.
      */
     showKindBadge: Boolean = false,
+    /**
+     * How wide a tile is drawn, for a screen that has less height than a catalogue does.
+     *
+     * **The default is the catalogue's own size and every catalogue screen takes it.** Search is
+     * the one caller that passes anything else: it keeps a field and a strip of genre chips above
+     * the results, so the row gets what is left of the panel — and what is left is not the same
+     * number on every television. See `posterWidthFor`.
+     */
+    posterWidth: Dp = POSTER_WIDTH,
     continueWatching: (@Composable () -> Unit)? = null,
     header: (@Composable () -> Unit)? = null,
 ) {
@@ -311,7 +432,7 @@ internal fun TvCategoryList(
         //
         // Full-bleed header: top padding is removed when a header is present, so a hero
         // slider can reach the screen edges and blend into the ambient light.
-        contentPadding = PaddingValues(top = if (header == null) 16.dp else 0.dp, bottom = 32.dp),
+        contentPadding = PaddingValues(top = if (header == null) LIST_TOP_PADDING else 0.dp, bottom = 32.dp),
         // Each row reserves FOCUS_GROWTH above and below itself, so the spacing between
         // rows is reduced by the same amount to keep the rhythm on screen unchanged.
         verticalArrangement = Arrangement.spacedBy(ROW_SPACING),
@@ -360,6 +481,7 @@ internal fun TvCategoryList(
                 focusedKey = focusedKey,
                 cursorFocus = cursorFocus,
                 onFocusedKeyChange = { focusedKey = it },
+                posterWidth = posterWidth,
                 modifier = rowModifier,
             )
         }
@@ -540,6 +662,7 @@ private fun CategoryRow(
     /** Attached to that one tile, wherever in the catalogue it turns out to be. */
     cursorFocus: FocusRequester? = null,
     onFocusedKeyChange: (String) -> Unit = {},
+    posterWidth: Dp = POSTER_WIDTH,
     modifier: Modifier = Modifier,
 ) {
     Column(modifier = modifier) {
@@ -548,7 +671,7 @@ private fun CategoryRow(
             color = Color.White.copy(alpha = 0.85f),
             fontSize = 18.sp,
             fontWeight = FontWeight.SemiBold,
-            modifier = Modifier.padding(top = 8.dp, bottom = TITLE_GAP),
+            modifier = Modifier.padding(top = HEADING_TOP_PADDING, bottom = TITLE_GAP),
         )
 
         // Room above and below for the focused poster to grow into. A `LazyRow` clips to its
@@ -586,6 +709,7 @@ private fun CategoryRow(
                     // when it is pressed would resize that tile mid-row.
                     caption = item.caption,
                     showCaption = style == TvRowStyle.RANKED || items.any { it.caption != null },
+                    posterWidth = posterWidth,
                 )
             }
         }
@@ -639,6 +763,8 @@ internal fun TvPoster(
      * defect #008 was**, and the long note below is the record of what that cost to find.
      */
     showCaption: Boolean = false,
+    /** See the same parameter on [TvCategoryList]. The catalogue never passes it. */
+    posterWidth: Dp = POSTER_WIDTH,
 ) {
     // A live channel's artwork is a small wide logo, not a poster. Cropping one to 2:3
     // shows a corner of a logo — the exact mistake PLAN-TV.md §3.3 exists to avoid — so a
@@ -749,7 +875,7 @@ internal fun TvPoster(
                  * is outside `graphicsLayer`, so a tile's measured bounds still never move.
                  */
                 .padding(horizontal = FOCUS_GROWTH_HORIZONTAL, vertical = FOCUS_GROWTH)
-                .width(POSTER_WIDTH)
+                .width(posterWidth)
                 .graphicsLayer {
                     scaleX = scale
                     scaleY = scale
@@ -1010,6 +1136,64 @@ private const val UNAVAILABLE_ARTWORK_ALPHA = 0.4f
 /** One line, at a fixed height so a tile without a caption measures like one with. */
 private val CAPTION_HEIGHT = 15.dp
 private val CAPTION_LINE_HEIGHT = 13.sp
+
+/**
+ * How wide a tile can be and still leave its row's heading on screen (`029` #4).
+ *
+ * **The heading is what gets lost, and losing it is the report.** Search stacks a field, an
+ * Advanced chip and a strip of genre chips above its results, so the poster row is handed whatever
+ * height is left — and how much that is depends on the panel. On the 960×540dp geometry this
+ * project tests at, everything fits; on a television that reports less, the row is taller than its
+ * viewport, the list scrolls the focused tile into view, and the heading above it goes off the
+ * top. A viewer then cannot tell whether they are looking at films or at series, which is the
+ * whole job the heading has.
+ *
+ * A fixed size cannot answer that for every panel, so the tile is sized from the room it is given:
+ * take the height, subtract everything in the row that is not artwork, and the rest is the poster.
+ * Clamped at both ends — never larger than the catalogue's own tile, because search is not the
+ * screen that should have the biggest posters in the app, and never smaller than [MIN_POSTER_WIDTH],
+ * below which artwork stops being recognisable from a sofa and shrinking further buys nothing.
+ *
+ * @param available the height the row and its heading have between them.
+ */
+internal fun posterWidthFor(available: Dp): Dp {
+    val forArtwork = available - ROW_CHROME_HEIGHT
+    return (forArtwork * POSTER_ASPECT_RATIO).coerceIn(MIN_POSTER_WIDTH, POSTER_WIDTH)
+}
+
+/**
+ * Everything in a row that is not the artwork itself, measured rather than guessed at.
+ *
+ * The heading and the gap under it, the room a focused tile grows into above and below, the tile's
+ * own title line, and the list's top padding. Every one of them is a constant in this file, so this
+ * is a sum rather than an estimate — and it will follow any of them being retuned.
+ */
+// A getter rather than a stored value, because half the constants it sums are declared below it
+// and a top-level `val` is initialised in file order — it would have read them as zero.
+private val ROW_CHROME_HEIGHT: Dp
+    get() = HEADING_TOP_PADDING + HEADING_LINE_HEIGHT + TITLE_GAP + FOCUS_GROWTH * 2 +
+        TILE_TITLE_HEIGHT + LIST_TOP_PADDING
+
+/** The heading's own line at 18sp, as the dp a layout has to find for it. */
+private val HEADING_LINE_HEIGHT = 24.dp
+
+/** The tile's title line at 14sp, plus the 8dp above it. */
+private val TILE_TITLE_HEIGHT = 26.dp
+
+/** Air above the heading, and the one number in [ROW_CHROME_HEIGHT] that is spent on nothing. */
+private val HEADING_TOP_PADDING = 8.dp
+
+/** Air above the first heading, so it is not flush against whatever is above the list. */
+private val LIST_TOP_PADDING = 16.dp
+
+/**
+ * Below this a poster is a coloured rectangle rather than artwork.
+ *
+ * Two thirds of the catalogue's tile. A row that cannot fit even this is a row on a panel too
+ * short for a poster row at all, and cropping is then the honest outcome — shrinking further would
+ * hide the crop by making the content unreadable instead.
+ */
+private val MIN_POSTER_WIDTH = 100.dp
 
 private val POSTER_WIDTH = 150.dp
 private const val POSTER_ASPECT_RATIO = 2f / 3f

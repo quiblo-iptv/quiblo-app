@@ -115,7 +115,7 @@ val dataModule: Module = module {
             mergeDuplicates = get<PlayerSettingsRepository>().mergeDuplicateTitles,
         )
     }
-    single { ScriptFilterRepository(get()) }
+    single { ScriptFilterRepository(store = get(), profiles = get()) }
     single {
         TitleVersionsRepository(
             dao = get(),
@@ -151,12 +151,12 @@ val dataModule: Module = module {
     single { TitleMetadataScanner(channelDao = get(), metadataRepository = get(), checkpoint = get()) }
     single { GuideRepository(get(), get(), get()) }
     single { BackupRepository(get(), get(), get(), transactions = get()) }
-    single { PlayerSettingsRepository(get()) }
+    single { PlayerSettingsRepository(store = get(), profiles = get()) }
     single { SubtitleRepository(dao = get(), files = AndroidPickedSubtitleFiles(get<Context>())) }
     single { TmdbClient(get<HttpClient>()) }
     single { TitleMetadataRepository(get(), get(), get()) }
     single { IptvOrgClient(get<HttpClient>()) }
-    single { ChannelLogoRepository(get(), get(), get()) }
+    single { ChannelLogoRepository(client = get(), store = get(), dao = get(), profiles = get()) }
     // Named for the same reason `SearchRepository` above is: both end in a dispatcher and a
     // clock that have defaults, and a positional `get()` too many hands Koin's answer for
     // something else to one of them. Koin resolves by type and does not type-check the order.

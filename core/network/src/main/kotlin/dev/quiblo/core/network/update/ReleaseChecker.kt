@@ -141,6 +141,16 @@ class ReleaseChecker(
         /** What the television's APK is called on every release the lane has published. */
         const val TV_ASSET_PREFIX = "quiblo-tv-"
 
+        /**
+         * The handset APK, and the `v` is load-bearing.
+         *
+         * The two files are `quiblo-vX.Y.Z.apk` and `quiblo-tv-vX.Y.Z.apk`, so a prefix of
+         * `quiblo-` matches both and the first asset GitHub happens to list wins — which is how a
+         * phone would be offered the television build. Including the version's own `v` is what
+         * makes the two prefixes disjoint.
+         */
+        const val PHONE_ASSET_PREFIX = "quiblo-v"
+
         private const val API_ROOT = "https://api.github.com/repos"
         private const val APK = ".apk"
         private const val CHECKSUM = ".sha256"

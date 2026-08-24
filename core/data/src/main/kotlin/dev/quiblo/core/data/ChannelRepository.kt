@@ -178,6 +178,10 @@ class ChannelRepository(
                     // handing SQL a wildcard. See escapeForLike.
                     query = escapeForLike(query.trim()),
                     favoritesOnly = if (favoritesOnly) 1 else 0,
+                    // A favourites feed browses hidden shelves too. See the parameter's own note:
+                    // a list somebody built by hand is not the catalogue, and a filter that
+                    // removes what they picked is a loss rather than a filter.
+                    includeHiddenCategories = if (favoritesOnly) 1 else 0,
                     mergeDuplicates = if (merge) 1 else 0,
                     hiddenMask = hidden.toMask(),
                     unknownMask = SCRIPT_MASK_UNKNOWN,
@@ -235,6 +239,7 @@ class ChannelRepository(
                         groupTitle = groupTitle,
                         query = escapeForLike(query.trim()),
                         favoritesOnly = if (favoritesOnly) 1 else 0,
+                        includeHiddenCategories = if (favoritesOnly) 1 else 0,
                         mergeDuplicates = if (merge) 1 else 0,
                         hiddenMask = hidden.toMask(),
                         unknownMask = SCRIPT_MASK_UNKNOWN,

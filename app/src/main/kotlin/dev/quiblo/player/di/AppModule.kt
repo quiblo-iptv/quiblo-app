@@ -51,4 +51,5 @@ val appModules: List<Module> = listOf(
     settingsModule,
     vodModule,
     syncModule,
+    updateModule,
 )

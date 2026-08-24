@@ -24,6 +24,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -47,7 +48,20 @@ import androidx.compose.ui.unit.dp
  * of view rather than a loss.
  */
 @Composable
-internal fun DuplicateTitlesSettingsCard(isEnabled: Boolean, onToggle: (Boolean) -> Unit) {
+internal fun DuplicateTitlesSettingsCard(
+    isEnabled: Boolean,
+    onToggle: (Boolean) -> Unit,
+    /**
+     * Whether the shelves are collapsed into one grid as well (`029` #3).
+     *
+     * A second switch inside the same card rather than a card of its own, because it is only
+     * meaningful while the first is on: a provider that lists one film four times usually files
+     * those four under four categories, so merging the copies leaves the same title reachable from
+     * several shelves and the catalogue still reads as several catalogues.
+     */
+    isCategoriesMerged: Boolean,
+    onToggleCategories: (Boolean) -> Unit,
+) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
@@ -71,6 +85,32 @@ internal fun DuplicateTitlesSettingsCard(isEnabled: Boolean, onToggle: (Boolean)
                     )
                 }
                 Switch(checked = isEnabled, onCheckedChange = onToggle)
+            }
+
+            // Hidden rather than disabled while merging is off. A greyed switch invites a press
+            // that does nothing and says nothing; a control that is not there yet is explained by
+            // the switch above it, which is the one that has to be turned on first.
+            if (isEnabled) {
+                HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = stringResource(R.string.settings_merge_categories_title),
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                        Text(
+                            text = stringResource(R.string.settings_merge_categories_summary),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(top = 4.dp),
+                        )
+                    }
+                    Switch(checked = isCategoriesMerged, onCheckedChange = onToggleCategories)
+                }
             }
         }
     }

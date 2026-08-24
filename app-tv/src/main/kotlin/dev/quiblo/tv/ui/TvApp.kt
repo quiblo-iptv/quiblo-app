@@ -56,6 +56,7 @@ import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.SaveableStateHolder
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.setValue
@@ -76,10 +77,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import dev.quiblo.core.data.PlayerSettingsRepository
 import dev.quiblo.core.data.ProfileRepository
 import dev.quiblo.core.datastore.ConsentStore
 import dev.quiblo.core.model.Channel
 import dev.quiblo.core.model.MediaKind
+import dev.quiblo.core.model.Profile
 import dev.quiblo.core.model.WatchOrigin
 import dev.quiblo.designsystem.ProfileAvatar
 import dev.quiblo.designsystem.ambientBackdrop
@@ -105,6 +108,7 @@ import dev.quiblo.tv.ui.profiles.TvProfileScreen
 import dev.quiblo.tv.ui.search.TvSearchScreen
 import dev.quiblo.tv.ui.series.TvSeriesScreen
 import dev.quiblo.tv.ui.settings.TvSettingsScreen
+import dev.quiblo.tv.ui.settings.TvUpdatePrompt
 import dev.quiblo.tv.ui.sources.TvSourcesScreen
 import dev.quiblo.tv.ui.splash.TvSplashScreen
 import kotlinx.coroutines.delay
@@ -242,6 +246,88 @@ private fun TvAppBehindConsent(onExit: () -> Unit) {
         if (backStack.isEmpty()) returning.arm()
     }
 
+    /*
+     * The room every screen in this app sits in.
+     *
+     * Black everywhere was the honest default and it reads as bleak: a television fills a dark
+     * room, and three metres of unlit rectangle is a void with posters floating in it rather
+     * than a background. Whatever has the remote says what it is showing through
+     * `LocalAmbientSink` and that picture lights the corners — the same answer Google TV and
+     * every set-top box arrive at, for the same reason.
+     *
+     * **It is here rather than inside `TvShell`, and that is `029` #1.** The shell is *replaced*
+     * by whatever opens over it — a film, a series, Settings — so a backdrop owned by the shell
+     * went out of composition along with it, and the sink the detail screens were reporting to
+     * was the composition local's own do-nothing default. Both detail screens have asked for
+     * their artwork's light since the day they were written; there was simply nothing listening
+     * and nothing drawing. A film opened from a lit catalogue went black.
+     *
+     * The black stays underneath. This is light added to it, never a replacement for it, so a
+     * poster with no usable colour in it leaves the screen exactly as it was.
+     */
+    var ambientRequest: AmbientRequest by remember { mutableStateOf(AmbientRequest.None) }
+    val ambient = rememberAmbient((ambientRequest as? AmbientRequest.Artwork)?.url)
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black)
+            .ambientBackdrop(ambient)
+            .then(if (ambientRequest is AmbientRequest.Drift) Modifier.driftingGlow() else Modifier),
+    ) {
+        CompositionLocalProvider(LocalAmbientSink provides { ambientRequest = it }) {
+            TvContent(
+                backStack = backStack,
+                returning = returning,
+                shellState = shellState,
+                selectedTab = selectedTab,
+                onSelectTab = { selectedTab = it },
+                pop = pop,
+                onExit = {
+                    scope.launch {
+                        profiles.signOut()
+                        onExit()
+                    }
+                },
+                onSwitchProfile = { profileSwitch() },
+                activeProfile = activeProfile,
+            )
+        }
+
+        /*
+         * "New version available", over whatever the app opened on (`029` #7).
+         *
+         * Outside the composition local above, and last inside the root `Box`, so it is drawn over
+         * every screen this shell can show — including a film, which is the one place a viewer
+         * would least want to meet it and the one place the shell is not composed at all.
+         *
+         * It draws nothing until there is an answer, and the answer is only ever "there is a newer
+         * one" — see `TvUpdateViewModel.checkOnLaunch`.
+         */
+        TvUpdatePrompt()
+    }
+}
+
+/**
+ * The shell, or whatever is open over it.
+ *
+ * Its own function since `029` #1 moved the ambient layer above both. The layer is one `Box` at
+ * the root with a `CompositionLocalProvider` inside it, and folding this back into [TvApp] would
+ * put the whole navigation decision inside those two — which is how the shell came to own the
+ * light in the first place, and why detail screens lost it.
+ */
+@Composable
+private fun TvContent(
+    backStack: SnapshotStateList<TvOverlay>,
+    returning: TvReturnSignal,
+    shellState: SaveableStateHolder,
+    selectedTab: Int,
+    onSelectTab: (Int) -> Unit,
+    pop: () -> Unit,
+    onExit: () -> Unit,
+    onSwitchProfile: () -> Unit,
+    activeProfile: Profile?,
+) {
     // Playing replaces the whole shell rather than sitting inside it: a television plays
     // full screen, and leaving the bar drawn over video would be the same mistake the phone
     // app made for a fortnight.
@@ -251,7 +337,7 @@ private fun TvAppBehindConsent(onExit: () -> Unit) {
             shellState.SaveableStateProvider(SHELL_STATE_KEY) {
                 TvShell(
                     selectedTab = selectedTab,
-                    onSelectTab = { selectedTab = it },
+                    onSelectTab = onSelectTab,
                     /*
                      * Closing the app, and forgetting who was watching on the way out.
                      *
@@ -266,18 +352,13 @@ private fun TvAppBehindConsent(onExit: () -> Unit) {
                      * The sign-out is awaited before finishing, because a write racing an activity that
                      * is going away is a write that sometimes happens.
                      */
-                    onExit = {
-                        scope.launch {
-                            profiles.signOut()
-                            onExit()
-                        }
-                    },
+                    onExit = onExit,
                     onOpenSettings = { backStack.add(TvOverlay.Settings) },
                     onOpen = { items, index, origin -> overlayFor(items, index, origin)?.let(backStack::add) },
                     onOpenChannel = { channel -> backStack.add(detailFor(channel)) },
                     // The same sign-out Settings offers, one press closer. Both land on the chooser,
                     // because there is only one thing "switch profile" can mean.
-                    onSwitchProfile = { profileSwitch() },
+                    onSwitchProfile = onSwitchProfile,
                     activeProfileName = activeProfile?.name,
                     activeProfileAvatar = activeProfile?.avatar,
                 )
@@ -290,7 +371,7 @@ private fun TvAppBehindConsent(onExit: () -> Unit) {
             onPop = pop,
             onReplaceTop = { backStack[backStack.lastIndex] = it },
             activeProfileName = activeProfile?.name,
-            onSwitchProfile = { profileSwitch() },
+            onSwitchProfile = onSwitchProfile,
         )
     }
 }
@@ -541,6 +622,28 @@ private fun TvShell(
      * let somebody make. Two presses rather than a dialog because this app has none, and a first
      * modal on the way out would be a poor place to grow one.
      */
+    /*
+     * The bar as this viewer has arranged it (`029` #5).
+     *
+     * Read here rather than passed down from [TvApp], because the shell is the only thing that
+     * draws a bar — and it follows the active profile, so handing the remote to somebody else
+     * redraws the tabs along with their favourites.
+     */
+    val settings: PlayerSettingsRepository = koinInject()
+    val hiddenTabs by settings.hiddenTabs.collectAsStateWithLifecycle(emptySet())
+    val tabs = remember(hiddenTabs) { TvTab.visible(hiddenTabs) }
+
+    /*
+     * Off a tab that has just been switched off.
+     *
+     * Hiding the tab you are standing on is the one way to be left looking at a screen with no
+     * way back to it, and it is a press away on the settings screen. Home is where it lands
+     * because Home cannot be hidden — see `TvTab.tab`.
+     */
+    LaunchedEffect(tabs) {
+        if (TvTab.entries[selectedTab] !in tabs) onSelectTab(TvTab.FOR_YOU.ordinal)
+    }
+
     BackHandler {
         when (tvBackAction(TvBackState(selectedTab, exitArmed))) {
             TvBackAction.GoToSearch -> {
@@ -557,45 +660,37 @@ private fun TvShell(
         }
     }
 
-    /*
-     * The room the catalogue sits in.
-     *
-     * Black everywhere was the honest default and it reads as bleak: a television fills a dark
-     * room, and three metres of unlit rectangle is a void with posters floating in it rather
-     * than a background. The focused tile says what it is showing through `LocalAmbientSink`
-     * and that picture lights the corners — the same answer Google TV and every set-top box
-     * arrive at, for the same reason.
-     *
-     * The black stays underneath. This is light added to it, never a replacement for it, so a
-     * poster with no usable colour in it leaves the screen exactly as it was.
-     */
-    var ambientRequest: AmbientRequest by remember { mutableStateOf(AmbientRequest.None) }
-    val ambient = rememberAmbient((ambientRequest as? AmbientRequest.Artwork)?.url)
-
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color.Black)
-            .ambientBackdrop(ambient)
-            .then(if (ambientRequest is AmbientRequest.Drift) Modifier.driftingGlow() else Modifier),
-    ) {
-        CompositionLocalProvider(LocalAmbientSink provides { ambientRequest = it }) {
-            val isForYou = TvTab.entries[selectedTab] == TvTab.FOR_YOU
-            if (isForYou) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .focusRequester(contentFocusRequester)
-                        .focusGroup(),
-                ) {
-                    tabState.SaveableStateProvider(TvTab.FOR_YOU) {
-                        TvForYouScreen(
-                            onPlay = { items, index -> onOpen(items, index, WatchOrigin.ROW) },
-                        )
-                    }
+    Box(modifier = Modifier.fillMaxSize()) {
+        val isForYou = TvTab.entries[selectedTab] == TvTab.FOR_YOU
+        if (isForYou) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .focusRequester(contentFocusRequester)
+                    .focusGroup(),
+            ) {
+                tabState.SaveableStateProvider(TvTab.FOR_YOU) {
+                    TvForYouScreen(
+                        onPlay = { items, index -> onOpen(items, index, WatchOrigin.ROW) },
+                    )
                 }
+            }
 
+            TvTopBar(
+                tabs = tabs,
+                selectedTab = selectedTab,
+                onSelect = onSelectTab,
+                focusRequester = barFocusRequester,
+                onEnterContent = { contentFocusRequester.tryRequestFocus() },
+                onOpenSettings = onOpenSettings,
+                onSwitchProfile = onSwitchProfile,
+                activeProfileName = activeProfileName,
+                activeProfileAvatar = activeProfileAvatar,
+            )
+        } else {
+            Column(modifier = Modifier.fillMaxSize()) {
                 TvTopBar(
+                    tabs = tabs,
                     selectedTab = selectedTab,
                     onSelect = onSelectTab,
                     focusRequester = barFocusRequester,
@@ -605,57 +700,44 @@ private fun TvShell(
                     activeProfileName = activeProfileName,
                     activeProfileAvatar = activeProfileAvatar,
                 )
-            } else {
-                Column(modifier = Modifier.fillMaxSize()) {
-                    TvTopBar(
-                        selectedTab = selectedTab,
-                        onSelect = onSelectTab,
-                        focusRequester = barFocusRequester,
-                        onEnterContent = { contentFocusRequester.tryRequestFocus() },
-                        onOpenSettings = onOpenSettings,
-                        onSwitchProfile = onSwitchProfile,
-                        activeProfileName = activeProfileName,
-                        activeProfileAvatar = activeProfileAvatar,
-                    )
 
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(start = SCREEN_PADDING, end = SCREEN_PADDING, bottom = SCREEN_PADDING)
-                            .focusRequester(contentFocusRequester)
-                            .focusGroup(),
-                    ) {
-                        tabState.SaveableStateProvider(TvTab.entries[selectedTab]) {
-                            when (TvTab.entries[selectedTab]) {
-                                TvTab.SEARCH -> TvSearchScreen(
-                                    onOpen = { items, index -> onOpen(items, index, WatchOrigin.SEARCH) },
-                                )
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(start = SCREEN_PADDING, end = SCREEN_PADDING, bottom = SCREEN_PADDING)
+                        .focusRequester(contentFocusRequester)
+                        .focusGroup(),
+                ) {
+                    tabState.SaveableStateProvider(TvTab.entries[selectedTab]) {
+                        when (TvTab.entries[selectedTab]) {
+                            TvTab.SEARCH -> TvSearchScreen(
+                                onOpen = { items, index -> onOpen(items, index, WatchOrigin.SEARCH) },
+                            )
 
-                                TvTab.LIVE -> TvLiveScreen(
-                                    onPlay = { items, index -> onOpen(items, index, WatchOrigin.ROW) },
-                                )
+                            TvTab.LIVE -> TvLiveScreen(
+                                onPlay = { items, index -> onOpen(items, index, WatchOrigin.ROW) },
+                            )
 
-                                TvTab.MOVIES -> TvPosterRows(
-                                    kind = MediaKind.VOD,
-                                    onPlay = { items, index -> onOpen(items, index, WatchOrigin.ROW) },
-                                    onResume = onOpenChannel,
-                                )
+                            TvTab.MOVIES -> TvPosterRows(
+                                kind = MediaKind.VOD,
+                                onPlay = { items, index -> onOpen(items, index, WatchOrigin.ROW) },
+                                onResume = onOpenChannel,
+                            )
 
-                                TvTab.SERIES -> TvPosterRows(
-                                    kind = MediaKind.SERIES,
-                                    onPlay = { items, index -> onOpen(items, index, WatchOrigin.ROW) },
-                                    onResume = onOpenChannel,
-                                )
+                            TvTab.SERIES -> TvPosterRows(
+                                kind = MediaKind.SERIES,
+                                onPlay = { items, index -> onOpen(items, index, WatchOrigin.ROW) },
+                                onResume = onOpenChannel,
+                            )
 
-                                TvTab.FAVOURITES -> TvPosterRows(
-                                    kind = MediaKind.VOD,
-                                    favouritesOnly = true,
-                                    onPlay = { items, index -> onOpen(items, index, WatchOrigin.FAVOURITE) },
-                                    onResume = onOpenChannel,
-                                )
+                            TvTab.FAVOURITES -> TvPosterRows(
+                                kind = MediaKind.VOD,
+                                favouritesOnly = true,
+                                onPlay = { items, index -> onOpen(items, index, WatchOrigin.FAVOURITE) },
+                                onResume = onOpenChannel,
+                            )
 
-                                TvTab.FOR_YOU -> Unit
-                            }
+                            TvTab.FOR_YOU -> Unit
                         }
                     }
                 }
@@ -720,6 +802,16 @@ private const val EXIT_NOTICE_ALPHA = 0.75f
  */
 @Composable
 private fun TvTopBar(
+    /**
+     * The tabs this viewer has left switched on, in bar order (`029` #5).
+     *
+     * The bar's cursor is a position in *this* list, not an ordinal in `TvTab`. Those are the
+     * same number only while nothing is hidden, and conflating them is how a bar with Live
+     * switched off would move the selection onto Live anyway — the shell then draws a tab the
+     * viewer cannot see and cannot get back to. Everything the bar reports is translated back
+     * into an ordinal before it leaves.
+     */
+    tabs: List<TvTab>,
     selectedTab: Int,
     onSelect: (Int) -> Unit,
     focusRequester: FocusRequester,
@@ -731,7 +823,11 @@ private fun TvTopBar(
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val isFocused by interactionSource.collectIsFocusedAsState()
-    val lastIndex = TvTab.entries.lastIndex
+    val lastIndex = tabs.lastIndex
+
+    // Where the cursor sits along the bar. Coerced rather than trusted: for the one frame between
+    // a tab being hidden and the shell moving off it, the selected tab is not in this list.
+    val cursor = tabs.indexOfFirst { it.ordinal == selectedTab }.coerceAtLeast(0)
 
     /**
      * Whether the remote is resting on the settings icon rather than on a tab.
@@ -767,10 +863,10 @@ private fun TvTopBar(
                 .focusRequester(focusRequester)
                 .onPreviewKeyEvent { event ->
                     if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
-                    when (val action = tvBarAction(event.key, TvBarState(selectedTab, spot), lastIndex)) {
+                    when (val action = tvBarAction(event.key, TvBarState(cursor, spot), lastIndex)) {
                         is TvBarAction.Move -> {
                             spot = action.state.spot
-                            if (action.state.selectedTab != selectedTab) onSelect(action.state.selectedTab)
+                            if (action.state.selectedTab != cursor) onSelect(tabs[action.state.selectedTab].ordinal)
                             true
                         }
 
@@ -797,7 +893,7 @@ private fun TvTopBar(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(28.dp),
         ) {
-            TvTab.entries.forEachIndexed { index, tab ->
+            tabs.forEach { tab ->
                 // Bright only when the bar itself holds the remote *and* the remote is on the
                 // tabs rather than one of the icons past them. While focus is down in the content
                 // the selected tab stays legible but recedes, which is how a viewer tells where a
@@ -808,21 +904,21 @@ private fun TvTopBar(
                     IconTab(
                         icon = Icons.Filled.Search,
                         contentDescription = stringResource(tab.labelRes),
-                        isSelected = index == selectedTab,
+                        isSelected = tab.ordinal == selectedTab,
                         isBarFocused = isBarFocused,
                         modifier = Modifier.onTap {
                             spot = TvBarSpot.TABS
-                            onSelect(index)
+                            onSelect(tab.ordinal)
                         },
                     )
                 } else {
                     TextTab(
                         label = stringResource(tab.labelRes),
-                        isSelected = index == selectedTab,
+                        isSelected = tab.ordinal == selectedTab,
                         isBarFocused = isBarFocused,
                         modifier = Modifier.onTap {
                             spot = TvBarSpot.TABS
-                            onSelect(index)
+                            onSelect(tab.ordinal)
                         },
                     )
                 }

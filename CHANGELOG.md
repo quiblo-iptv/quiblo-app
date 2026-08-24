@@ -15,6 +15,20 @@ Formatted after [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and ve
 
 ## Unreleased
 
+### Added
+
+- **Settings are yours, not the television's.** Every setting a person chooses — theme, playback tuning, subtitle style, hidden writing systems, channel logos, the merge settings, which tabs you see and which shelves you have hidden — now belongs to the profile that chose it, and switching profile redraws the app immediately. The settings screen is in two halves so it says which is which: **Profile** for what you chose, **App** for the television itself — sources, the Movie Database key, backup and updates. Everything already configured is shown to every profile, so nothing changes until somebody changes it.
+- **Hide the tabs you never use.** Live, Movies, Series and Favourites can each be switched off in Settings, per profile. An M3U with no films no longer shows a Movies tab that opens on nothing. Search, Sources and the television's Home stay, and the last visible tab cannot be turned off.
+- **One grid instead of shelves.** A second switch beside *Merge duplicate titles*: providers file the same film under `FILMS HD`, `FILMS 4K` and `FILMS AR`, so merging the copies still left it reachable from three shelves. Turn this on and the shelves go, leaving one grid of everything.
+- **The app tells you when there is a newer version.** Quiblo is installed from an APK and has no store behind it, so a build eight months old had no way of saying so. It now asks its own releases page once each time it opens and offers *Update now* or *Later*. The television downloads and verifies the release exactly as the button in Settings does; the phone opens the releases page. **It says nothing at all** unless there is something newer — not "up to date", not "could not reach". One switch in Settings turns the whole thing off, and off means no request is made.
+
+### Fixed
+
+- **Hiding a category now hides it.** Switching a category off removed it from the category list and from search, and left every title in it sitting in the catalogue — in the phone's grid, in the television's rows and in Recently Added. The browse queries never looked at the setting at all. They do now, and hidden shelves are hidden everywhere except Favourites, where something you picked by hand is never removed.
+- **A film or series screen on the television is lit again.** The ambient light belonged to the shell, and the shell is taken down whenever a detail screen opens over it — so the two screens with the best artwork in the app were the two that stayed black. The light moved up a level and covers everything the app can show.
+- **The favourite control on the television's hero slider is no longer red.** A filled icon, a red tint, a red panel and a red border all said the same thing four times, in the one colour a television uses for errors. The heart is filled when a title is a favourite and hollow when it is not, and the chrome around it follows focus like every other control on that row.
+- **Search result headings stay on screen on a real television panel.** *Live*, *Movies* and *Series* were there on a phone and on the emulator and gone on the television: the poster row was a fixed size, so on a shorter panel it did not fit under the search field and the list scrolled the heading away. The tiles are now sized from the room the row is actually given.
+
 ## 0.25.1
 
 ### Fixed

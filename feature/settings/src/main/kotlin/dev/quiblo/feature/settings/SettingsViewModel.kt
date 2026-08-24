@@ -31,6 +31,7 @@ import dev.quiblo.core.data.TitleMetadataRepository
 import dev.quiblo.core.data.TitleMetadataScanner
 import dev.quiblo.core.data.backup.BackupRepository
 import dev.quiblo.core.data.backup.ImportResult
+import dev.quiblo.core.model.AppTab
 import dev.quiblo.core.model.Appearance
 import dev.quiblo.core.model.AutoNextDelay
 import dev.quiblo.core.model.BufferMode
@@ -289,6 +290,42 @@ class SettingsViewModel(
 
     fun setMergeDuplicateTitles(enabled: Boolean) = viewModelScope.launch {
         playerSettingsRepository.setMergeDuplicateTitles(enabled)
+    }
+
+    /**
+     * Whether the catalogue is one grid rather than a shelf per category (`029` #3).
+     *
+     * Reported as off whenever merging duplicates is off, because that is what the repository
+     * reports — collapsing shelves without merging copies gives one grid with every film in it
+     * four times. The card that draws this switch hides it for the same reason.
+     */
+    val mergeCategories: StateFlow<Boolean> = playerSettingsRepository.mergeCategories
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(SUBSCRIPTION_TIMEOUT_MILLIS), false)
+
+    fun setMergeCategories(enabled: Boolean) = viewModelScope.launch {
+        playerSettingsRepository.setMergeCategories(enabled)
+    }
+
+    /** Which tabs this viewer has switched off (`029` #5). */
+    val hiddenTabs: StateFlow<Set<AppTab>> = playerSettingsRepository.hiddenTabs
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(SUBSCRIPTION_TIMEOUT_MILLIS), emptySet())
+
+    fun setTabHidden(tab: AppTab, hidden: Boolean) = viewModelScope.launch {
+        playerSettingsRepository.setTabHidden(tab, hidden)
+    }
+
+    /**
+     * Whether the app asks about a newer release when it opens (`029` #7).
+     *
+     * App-wide, and the initial value is `true` because that is the default: a switch that reads
+     * off for the instant before the store answers is a switch that looks like it has been turned
+     * off for you.
+     */
+    val checkUpdatesOnLaunch: StateFlow<Boolean> = playerSettingsRepository.checkUpdatesOnLaunch
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(SUBSCRIPTION_TIMEOUT_MILLIS), true)
+
+    fun setCheckUpdatesOnLaunch(enabled: Boolean) = viewModelScope.launch {
+        playerSettingsRepository.setCheckUpdatesOnLaunch(enabled)
     }
 
     /**

@@ -22,9 +22,12 @@ import dev.quiblo.core.database.dao.ChannelLogoDao
 import dev.quiblo.core.database.entity.ChannelLogoEntity
 import dev.quiblo.core.datastore.ChannelLogoStore
 import dev.quiblo.core.model.Channel
+import dev.quiblo.core.model.Profile
 import dev.quiblo.source.iptvorg.IptvOrgClient
 import dev.quiblo.source.iptvorg.iptvOrgMatchKey
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
@@ -39,14 +42,24 @@ import kotlinx.coroutines.sync.withLock
  * and downloading it once per session would be several megabytes to answer a question about
  * a logo.
  */
+@OptIn(ExperimentalCoroutinesApi::class)
 class ChannelLogoRepository(
     private val client: IptvOrgClient,
     private val store: ChannelLogoStore,
     private val dao: ChannelLogoDao,
+    private val profiles: ProfileRepository,
     private val now: () -> Long = System::currentTimeMillis,
 ) {
 
-    val isEnabled: Flow<Boolean> = store.isEnabled
+    /**
+     * Whether this viewer wants missing logos filled in. Per profile since `029` #6.
+     *
+     * The cached index behind it is not — it is one file shared by the television — so switching
+     * to a profile that has this off stops the lookups without discarding what was downloaded.
+     */
+    val isEnabled: Flow<Boolean> = profiles.activeProfile.flatMapLatest { profile ->
+        store.isEnabled(profile?.id ?: Profile.NONE_ID)
+    }
 
     /**
      * One download at a time.
@@ -69,7 +82,7 @@ class ChannelLogoRepository(
      * guess from a public list would be a downgrade dressed as a feature.
      */
     suspend fun logoFor(channel: Channel): String? {
-        if (!store.isEnabledNow()) return null
+        if (!store.isEnabledNow(profiles.activeProfileId)) return null
         if (!ensureIndex()) return null
 
         // The provider's own id first. Many playlists set `tvg-id` to exactly the iptv-org
@@ -109,9 +122,15 @@ class ChannelLogoRepository(
      * Switching it off drops the cached index as well. Someone turning this off is asking
      * the app to stop using a third party's data, and keeping several megabytes of it on
      * their device to serve from would be answering a different question.
+     *
+     * **The switch is this profile's and the index is the television's**, so switching off also
+     * costs another profile that still wants logos its download. That is the right way round: the
+     * promise this setting stands for is about data on the device, and honouring it only for
+     * whoever happens to be watching would not be honouring it. The other profile's next browse
+     * fetches the file again.
      */
     suspend fun setEnabled(enabled: Boolean) {
-        store.setEnabled(enabled)
+        store.setEnabled(profiles.activeProfileId, enabled)
         if (!enabled) dao.clear()
     }
 

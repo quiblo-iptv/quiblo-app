@@ -338,25 +338,29 @@ private fun HeroFavoriteButton(
     val interactionSource = remember { MutableInteractionSource() }
     val isFocused by interactionSource.collectIsFocusedAsState()
 
+    /*
+     * The chrome says where the remote is. The heart says what the state is (`029` #2).
+     *
+     * **It was red — filled, tinted, on a red ground, inside a red border — and red on a
+     * television means one thing.** A slider that paints a red rectangle round a control the
+     * moment a title is favourited reads as an error or a recording light, on the largest and
+     * most glanced-at element in the app. Whether something is favourited is already said, once,
+     * unambiguously, by whether the heart is filled or hollow; saying it four more times in a
+     * colour that means something else is not emphasis, it is noise with a wrong meaning.
+     *
+     * So the box, the border and the tint follow *focus* only, exactly as the Play button beside
+     * it does — the two now read as one row of controls rather than as one control and one alarm.
+     */
     Box(
         modifier = modifier
             .size(42.dp)
             .clip(RoundedCornerShape(8.dp))
             .background(
-                when {
-                    isFocused && isFavorite -> Color.Red.copy(alpha = 0.45f)
-                    isFocused -> Color.White.copy(alpha = 0.35f)
-                    isFavorite -> Color.Red.copy(alpha = 0.25f)
-                    else -> Color.White.copy(alpha = 0.15f)
-                },
+                if (isFocused) Color.White.copy(alpha = 0.35f) else Color.White.copy(alpha = 0.15f),
             )
             .border(
                 width = if (isFocused) 2.dp else 1.dp,
-                color = when {
-                    isFocused -> Color.White
-                    isFavorite -> Color.Red
-                    else -> Color.White.copy(alpha = 0.3f)
-                },
+                color = if (isFocused) Color.White else Color.White.copy(alpha = 0.3f),
                 shape = RoundedCornerShape(8.dp),
             )
             .clickable(
@@ -371,7 +375,7 @@ private fun HeroFavoriteButton(
             contentDescription = stringResource(
                 if (isFavorite) R.string.tv_detail_unfavourite else R.string.tv_detail_favourite,
             ),
-            tint = if (isFavorite) Color(0xFFFF4B4B) else Color.White,
+            tint = Color.White,
             modifier = Modifier.size(22.dp),
         )
     }

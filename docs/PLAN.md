@@ -136,7 +136,7 @@ Listed only so the architecture stays ready for it, in rough priority order:
 1. Android TV / Google TV frontend — new `:feature-tv:*` modules over the same `:core`
 2. XMLTV EPG, starting with the `url-tvg` attribute already present in many M3U headers
 3. Catch-up / timeshift
-4. ~~Multiple profiles~~, parental PIN — **profiles landed 2026-08-09** (FREEZE Amendment 6): favourites and resume positions per person, plus a guest that keeps nothing. The PIN half stays parked, deliberately
+4. ~~Multiple profiles~~, parental PIN — **profiles landed 2026-08-09** (FREEZE Amendment 6): favourites and resume positions per person, plus a guest that keeps nothing. Widened 2026-08-24 (Amendment 12) so a profile owns every setting a person chooses, including which tabs and shelves they see. The PIN half stays parked, deliberately — hiding a tab is a preference, and a control that *appears* to restrict is worse than no control
 5. Picture-in-picture, background audio
 6. Desktop (Compose Multiplatform JVM)
 7. Web frontend for LG webOS / Tizen / Xbox — a separate TypeScript codebase against the same documented data contract

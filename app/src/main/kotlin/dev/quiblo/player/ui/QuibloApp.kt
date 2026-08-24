@@ -18,6 +18,8 @@
 
 package dev.quiblo.player.ui
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
@@ -25,14 +27,21 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.navigation.NavDestination
 import androidx.navigation.NavDestination.Companion.hasRoute
@@ -40,6 +49,9 @@ import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import dev.quiblo.designsystem.LocalAmbientArtwork
+import dev.quiblo.designsystem.ambientBackdrop
+import dev.quiblo.designsystem.rememberAmbient
 import dev.quiblo.player.R
 import dev.quiblo.player.navigation.MovieDetailRoute
 import dev.quiblo.player.navigation.PlayerRoute
@@ -71,52 +83,81 @@ fun QuibloApp() {
         currentDestination.matches(MovieDetailRoute::class) ||
         currentDestination.matches(SeriesDetailRoute::class)
 
-    Scaffold(
-        modifier = Modifier.fillMaxSize(),
-        topBar = {
-            if (!ownsItsAppBar) {
-                TopAppBar(
-                    title = { Text(text = stringResource(currentDestination.titleRes())) },
-                    actions = {
-                        IconButton(onClick = { navController.navigateSingleTop(SettingsRoute) }) {
-                            Icon(
-                                imageVector = Icons.Filled.Settings,
-                                contentDescription = stringResource(R.string.destination_settings),
-                            )
-                        }
-                    },
-                )
-            }
-        },
-        bottomBar = {
-            if (!isPlayer) {
-                NavigationBar {
-                    TopLevelDestination.entries.forEach { destination ->
-                        val selected = currentDestination.matches(destination.route::class)
-                        NavigationBarItem(
-                            selected = selected,
-                            onClick = { navController.navigateSingleTop(destination.route) },
-                            icon = {
-                                Icon(
-                                    imageVector = destination.icon,
-                                    contentDescription = null,
-                                )
+    /*
+     * The room the catalogue sits in, and it is the shell's to paint.
+     *
+     * A detail screen knows which poster is on it; only this knows how big the window is.
+     * `drawBehind` clips to the node it is on and the pools are sized as fractions of it, so
+     * when the film screen painted its own backdrop it painted it inside the Scaffold's content
+     * padding — light that stopped in a hard edge under the status bar and above the navigation
+     * bar, with plain surface colour either side. Same seam the television had, same answer:
+     * one full-bleed layer at the root, fed from wherever. See [LocalAmbientArtwork].
+     */
+    var ambientArtwork: String? by remember { mutableStateOf(null) }
+    val ambient = rememberAmbient(ambientArtwork)
+
+    // Cleared on the way out of any screen that lit it, so backing out of a film does not leave
+    // its colours behind an unrelated list.
+    DisposableEffect(currentDestination) { onDispose { ambientArtwork = null } }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background)
+            .ambientBackdrop(ambient),
+    ) {
+        CompositionLocalProvider(LocalAmbientArtwork provides { ambientArtwork = it }) {
+            Scaffold(
+                // Transparent, so the light painted behind this reaches the screen rather than stopping
+                // at the Scaffold's own opaque surface.
+                containerColor = Color.Transparent,
+                modifier = Modifier.fillMaxSize(),
+                topBar = {
+                    if (!ownsItsAppBar) {
+                        TopAppBar(
+                            title = { Text(text = stringResource(currentDestination.titleRes())) },
+                            actions = {
+                                IconButton(onClick = { navController.navigateSingleTop(SettingsRoute) }) {
+                                    Icon(
+                                        imageVector = Icons.Filled.Settings,
+                                        contentDescription = stringResource(R.string.destination_settings),
+                                    )
+                                }
                             },
-                            label = { Text(text = stringResource(destination.labelRes)) },
                         )
                     }
-                }
+                },
+                bottomBar = {
+                    if (!isPlayer) {
+                        NavigationBar {
+                            TopLevelDestination.entries.forEach { destination ->
+                                val selected = currentDestination.matches(destination.route::class)
+                                NavigationBarItem(
+                                    selected = selected,
+                                    onClick = { navController.navigateSingleTop(destination.route) },
+                                    icon = {
+                                        Icon(
+                                            imageVector = destination.icon,
+                                            contentDescription = null,
+                                        )
+                                    },
+                                    label = { Text(text = stringResource(destination.labelRes)) },
+                                )
+                            }
+                        }
+                    }
+                },
+            ) { innerPadding ->
+                QuibloNavHost(
+                    navController = navController,
+                    // Hiding the bars is not enough to reach the screen edges. Scaffold still
+                    // reports the window insets in its content padding, so the player was inset by
+                    // the status bar height and drew a strip of surface colour above the video.
+                    // Full screen has to mean ignoring that padding, not just removing the bars.
+                    modifier = if (isPlayer) Modifier else Modifier.padding(innerPadding),
+                )
             }
-        },
-    ) { innerPadding ->
-        QuibloNavHost(
-            navController = navController,
-            // Hiding the bars is not enough to reach the screen edges. Scaffold still
-            // reports the window insets in its content padding, so the player was inset by
-            // the status bar height and drew a strip of surface colour above the video.
-            // Full screen has to mean ignoring that padding, not just removing the bars.
-            modifier = if (isPlayer) Modifier else Modifier.padding(innerPadding),
-        )
+        }
     }
 }
 

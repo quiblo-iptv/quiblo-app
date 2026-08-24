@@ -19,7 +19,6 @@
 package dev.quiblo.tv.ui.detail
 
 import androidx.activity.compose.BackHandler
-import androidx.compose.foundation.background
 import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -67,13 +66,13 @@ import dev.quiblo.core.data.ScanRefusal
 import dev.quiblo.core.model.Channel
 import dev.quiblo.core.model.Opinion
 import dev.quiblo.core.model.releaseYearIn
-import dev.quiblo.designsystem.ambientBackdrop
-import dev.quiblo.designsystem.rememberAmbient
 import dev.quiblo.feature.browse.runtimeLabel
 import dev.quiblo.feature.browse.runtimeLabelFromMinutes
 import dev.quiblo.feature.vod.MovieDetailUiState
 import dev.quiblo.feature.vod.MovieDetailViewModel
 import dev.quiblo.tv.R
+import dev.quiblo.tv.ui.common.AmbientRequest
+import dev.quiblo.tv.ui.common.LocalAmbientSink
 import kotlinx.coroutines.launch
 import org.koin.androidx.compose.koinViewModel
 import org.koin.core.parameter.parametersOf
@@ -122,7 +121,19 @@ fun TvMovieScreen(
             ?: ready.details?.coverUrl?.takeIf { it.isNotBlank() }
             ?: ready.channel.logoUrl
     } ?: channel.logoUrl
-    val ambient = rememberAmbient(artworkUrl)
+    /*
+     * Reported to the shell rather than painted here, and that is the whole of the fix.
+     *
+     * This screen is drawn inside the shell's `SCREEN_PADDING`, and `drawBehind` clips to the
+     * node it is on while the pools are sized as fractions of it — so a backdrop painted here
+     * came out inset on all four sides and stopped in a hard edge partway across the screen. It
+     * read as a lit rectangle on a dark screen rather than as light in a room, which is the
+     * failure `AmbientRequest` was written for and which Search hit first.
+     *
+     * One full-bleed layer at the root, fed from wherever. See `LocalAmbientSink`.
+     */
+    val ambientSink = LocalAmbientSink.current
+    LaunchedEffect(artworkUrl) { ambientSink(AmbientRequest.Artwork(artworkUrl)) }
 
     // The resume point is watched rather than re-read on returning to the foreground. A read on
     // resume raced the player's own write of the position it had just finished with, and lost it
@@ -131,12 +142,7 @@ fun TvMovieScreen(
 
     BackHandler(onBack = onBack)
 
-    Box(
-        modifier = modifier
-            .fillMaxSize()
-            .background(Color.Black)
-            .ambientBackdrop(ambient),
-    ) {
+    Box(modifier = modifier.fillMaxSize()) {
         when (val current = state) {
             MovieDetailUiState.Loading -> DetailMessage(stringResource(R.string.tv_detail_loading))
 

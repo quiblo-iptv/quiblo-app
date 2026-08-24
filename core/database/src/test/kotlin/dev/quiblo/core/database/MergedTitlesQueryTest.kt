@@ -124,6 +124,39 @@ class MergedTitlesQueryTest {
         )
     }
 
+    /**
+     * The television's poster grid follows the same merge, or it draws what its count denies.
+     *
+     * It was the one catalogue read left out of `0.25.0`: the shelf said four because
+     * `observeCategoriesByKind` had merged, and the row under it drew six because this had not.
+     * The cap is a window function, so the merge has to be inside the window — applied after it,
+     * a category whose first rows were four copies of one film would come back as one tile.
+     */
+    @Test
+    fun `the poster grid draws what the category count promised`() = runTest {
+        seed()
+
+        assertEquals(
+            listOf("Dune (2021) SD", "Dune (2021) HD", "Dune (2021) 4K", "Heat (1995)", "؟؟؟", "Unnameable"),
+            categoryRows(mergeDuplicates = 0).map { it.channel.name },
+        )
+        assertEquals(
+            listOf("Dune (2021) SD", "Heat (1995)", "؟؟؟", "Unnameable"),
+            categoryRows(mergeDuplicates = 1).map { it.channel.name },
+        )
+    }
+
+    private suspend fun categoryRows(mergeDuplicates: Int) = db.channelDao().observeCategoryRows(
+        profileId = 1L,
+        sourceId = SOURCE_ID,
+        kind = "VOD",
+        query = "",
+        perCategory = 40,
+        mergeDuplicates = mergeDuplicates,
+        hiddenMask = 0,
+        unknownMask = SCRIPT_MASK_UNKNOWN,
+    ).first()
+
     private suspend fun browse(mergeDuplicates: Int) = db.channelDao().observeBrowse(
         profileId = 1L,
         sourceId = SOURCE_ID,

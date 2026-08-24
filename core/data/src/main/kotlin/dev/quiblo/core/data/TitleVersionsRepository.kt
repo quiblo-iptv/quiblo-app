@@ -94,9 +94,45 @@ class TitleVersionsRepository(
 internal fun labelVersions(channels: List<Channel>): List<TitleVersion> {
     val shared = channels.map { it.name }.commonPrefix()
     return channels.map { channel ->
-        val remainder = channel.name.drop(shared.length).trim().trim { it in TRIM_CHARS }
+        val remainder = channel.name.drop(shared.length)
+            .trim()
+            .trim { it in TRIM_CHARS }
+            .dropUnmatchedBrackets()
         TitleVersion(channel = channel, label = remainder.ifBlank { channel.name })
     }
+}
+
+/**
+ * Drops the brackets the cut left without a partner.
+ *
+ * The shared beginning is cut at a character, and a provider that writes the year one way in one
+ * listing and another way in the next — `Avatar 2009` beside `Avatar (2009) HD` — shares only
+ * `Avatar `. What is left of the second is `(2009) HD`; trimming takes the `(` off the front
+ * because it is an edge, and leaves the `)` in the middle because it is not, so the chip reads
+ * `2009) HD`.
+ *
+ * **The brackets that survive are the ones that still come in pairs.** A closing bracket with no
+ * opener before it is the cut showing through, and so is an opener with no closer after it.
+ * Removing them is the smallest edit that cannot invent a label: `(2009) HD` becomes `2009 HD`,
+ * and a listing genuinely called `Dune (Extended)` keeps every character it had.
+ */
+private fun String.dropUnmatchedBrackets(): String {
+    val unmatched = mutableSetOf<Int>()
+    val openers = ArrayDeque<Int>()
+    forEachIndexed { index, char ->
+        when (char) {
+            in BRACKET_OPENERS -> openers.addLast(index)
+            in BRACKET_CLOSERS -> if (openers.isEmpty()) unmatched += index else openers.removeLast()
+        }
+    }
+    unmatched += openers
+    if (unmatched.isEmpty()) return this
+
+    return filterIndexed { index, _ -> index !in unmatched }
+        // Cutting a bracket out of the middle leaves the spaces that were either side of it.
+        .replace(REPEATED_SPACE, " ")
+        .trim()
+        .trim { it in TRIM_CHARS }
 }
 
 /** The longest beginning every one of these shares, cut at a character rather than at a word. */
@@ -112,3 +148,10 @@ private fun List<String>.commonPrefix(): String {
 
 /** What a provider joins a quality tag on with, and what is left dangling when one is cut off. */
 private const val TRIM_CHARS = " -–|:.[]()_"
+
+/** Bracket halves, in the pairs [dropUnmatchedBrackets] matches them up in. */
+private const val BRACKET_OPENERS = "([{"
+private const val BRACKET_CLOSERS = ")]}"
+
+/** Two or more spaces, which is what removing a bracket from the middle of a name leaves. */
+private val REPEATED_SPACE = Regex(" {2,}")

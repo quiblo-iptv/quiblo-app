@@ -85,12 +85,12 @@ import dev.quiblo.core.model.Channel
 import dev.quiblo.core.model.Episode
 import dev.quiblo.core.model.Opinion
 import dev.quiblo.core.model.Season
-import dev.quiblo.designsystem.ambientBackdrop
-import dev.quiblo.designsystem.rememberAmbient
 import dev.quiblo.feature.browse.runtimeLabel
 import dev.quiblo.feature.series.SeriesDetailUiState
 import dev.quiblo.feature.series.SeriesDetailViewModel
 import dev.quiblo.tv.R
+import dev.quiblo.tv.ui.common.AmbientRequest
+import dev.quiblo.tv.ui.common.LocalAmbientSink
 import dev.quiblo.tv.ui.detail.DETAIL_COLUMN_GAP
 import dev.quiblo.tv.ui.detail.DetailArtwork
 import dev.quiblo.tv.ui.detail.DetailButton
@@ -150,7 +150,19 @@ fun TvSeriesScreen(
             ?: success.details.coverUrl?.takeIf { it.isNotBlank() }
             ?: success.channel.logoUrl
     } ?: channel.logoUrl
-    val ambient = rememberAmbient(artworkUrl)
+    /*
+     * Reported to the shell rather than painted here, and that is the whole of the fix.
+     *
+     * This screen is drawn inside the shell's `SCREEN_PADDING`, and `drawBehind` clips to the
+     * node it is on while the pools are sized as fractions of it — so a backdrop painted here
+     * came out inset on all four sides and stopped in a hard edge partway across the screen. It
+     * read as a lit rectangle on a dark screen rather than as light in a room, which is the
+     * failure `AmbientRequest` was written for and which Search hit first.
+     *
+     * One full-bleed layer at the root, fed from wherever. See `LocalAmbientSink`.
+     */
+    val ambientSink = LocalAmbientSink.current
+    LaunchedEffect(artworkUrl) { ambientSink(AmbientRequest.Artwork(artworkUrl)) }
 
     // The resume point is watched rather than re-read on returning to the foreground. A read on
     // resume raced the player's own write of the position it had just finished with, and lost it
@@ -159,12 +171,7 @@ fun TvSeriesScreen(
 
     BackHandler(onBack = onBack)
 
-    Box(
-        modifier = modifier
-            .fillMaxSize()
-            .background(Color.Black)
-            .ambientBackdrop(ambient),
-    ) {
+    Box(modifier = modifier.fillMaxSize()) {
         when (val current = state) {
             is SeriesDetailUiState.Loading -> Centered { CircularProgressIndicator(color = Color.White) }
 

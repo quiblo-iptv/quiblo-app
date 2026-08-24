@@ -262,14 +262,19 @@ class ChannelRepository(
         query: String = "",
         perCategory: Int = DEFAULT_PER_CATEGORY,
     ): Flow<List<Channel>> =
-        combine(profiles.activeProfile, hiddenScripts) { profile, hidden -> profile to hidden }
-            .flatMapLatest { (profile, hidden) ->
+        combine(profiles.activeProfile, hiddenScripts, mergeDuplicates, ::Ask)
+            .flatMapLatest { (profile, hidden, merge) ->
                 channelDao.observeCategoryRows(
                     profileId = profile?.id ?: Profile.NONE_ID,
                     sourceId = sourceId,
                     kind = kind.name,
                     query = escapeForLike(query.trim()),
                     perCategory = perCategory,
+                    // The television's poster grid was the one catalogue read left out of the
+                    // merge, so its rows drew four copies of a film under a category count that
+                    // had already merged them — the shelf saying "12 items" over twenty tiles,
+                    // which is the mismatch the counts were merged to avoid.
+                    mergeDuplicates = if (merge) 1 else 0,
                     hiddenMask = hidden.toMask(),
                     unknownMask = SCRIPT_MASK_UNKNOWN,
                 ).map { rows ->

@@ -15,6 +15,13 @@ Formatted after [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and ve
 
 ## Unreleased
 
+### Fixed
+
+- **Merging duplicate titles no longer stops the Live, Movies and Series tabs from loading.** The merge asked one question per row — *is this the provider's first listing of its identity?* — with no index to order it by, so the database sorted each group of same-named rows once for every row in that group. Four copies of a film cost nothing; the thousand separator rows a panel pads its live list with cost seconds each time anything changed. The index that fixes it takes a query that ran for 6.7 seconds down to 21 milliseconds over the same catalogue.
+- **A merged title's copies are labelled without a stray bracket.** A provider that writes the year one way in one listing and another way in the next left the chips reading `2009) HD`: the shared beginning was cut in the middle of `(2009)` and only the opening bracket was tidied away. Brackets left without their partner are now dropped, so the chip reads `2009 HD`.
+- **The television's poster rows follow the merge setting, like everything beside them.** They were the one catalogue list left out of it, so a shelf whose count had merged four copies of a film into one still drew all four underneath.
+- **The ambient light on a film or series screen fills the screen instead of stopping in a hard edge.** It was painted by the detail screen, which is drawn inside the shell's padding, so the light was inset on every side with plain surface colour around it — a lit rectangle rather than a lit room. The shell paints it now, on both the phone and the television, which is where the television's other screens already had it.
+
 ## 0.25.0
 
 ### Added

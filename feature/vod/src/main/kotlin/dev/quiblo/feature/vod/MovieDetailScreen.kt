@@ -57,6 +57,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -78,8 +79,7 @@ import dev.quiblo.core.model.TitleMetadata
 import dev.quiblo.core.model.VodDetails
 import dev.quiblo.core.model.releaseYearIn
 import dev.quiblo.designsystem.AutoDirection
-import dev.quiblo.designsystem.ambientBackdrop
-import dev.quiblo.designsystem.rememberAmbient
+import dev.quiblo.designsystem.LocalAmbientArtwork
 import dev.quiblo.feature.browse.DetailOverlayActions
 import dev.quiblo.feature.browse.TitleFacts
 import dev.quiblo.feature.browse.VersionPicker
@@ -113,7 +113,15 @@ fun MovieDetailScreen(
             ?: ready.details?.coverUrl?.takeIf { it.isNotBlank() }
             ?: ready.channel.logoUrl
     }
-    val ambient = rememberAmbient(artworkUrl)
+    /*
+     * Reported to the shell rather than painted here. `drawBehind` clips to the node it is on
+     * and the pools are sized as fractions of it, so a backdrop painted on this screen was
+     * painted inside the Scaffold's content padding — light that stopped in a hard edge under
+     * the status bar and above the navigation bar. The screen knows the poster; only the shell
+     * knows the window. See [LocalAmbientArtwork].
+     */
+    val ambientSink = LocalAmbientArtwork.current
+    LaunchedEffect(artworkUrl) { ambientSink(artworkUrl) }
 
     // The resume point is watched rather than re-read on returning to the foreground. A read on
     // resume raced the player's own write of the position it had just finished with, and lost it
@@ -122,11 +130,7 @@ fun MovieDetailScreen(
 
     // No app bar. The screen states the film's name in full, at a readable size, a few
     // pixels below where a title bar would have repeated it — see [DetailOverlayActions].
-    Box(
-        modifier = modifier
-            .fillMaxSize()
-            .ambientBackdrop(ambient),
-    ) {
+    Box(modifier = modifier.fillMaxSize()) {
         when (val state = uiState) {
             MovieDetailUiState.Loading -> Box(
                 modifier = Modifier.fillMaxSize(),

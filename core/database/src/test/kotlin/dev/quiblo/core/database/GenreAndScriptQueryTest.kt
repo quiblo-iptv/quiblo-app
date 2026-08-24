@@ -318,13 +318,14 @@ class GenreAndScriptQueryTest {
         assertEquals(4, categoryRows(perCategory = 40, hiddenMask = TitleScript.Arabic.bit).size)
     }
 
-    private suspend fun categoryRows(perCategory: Int, hiddenMask: Int = 0) =
+    private suspend fun categoryRows(perCategory: Int, hiddenMask: Int = 0, mergeDuplicates: Int = 0) =
         db.channelDao().observeCategoryRows(
             profileId = 1L,
             sourceId = SOURCE_ID,
             kind = "VOD",
             query = "",
             perCategory = perCategory,
+            mergeDuplicates = mergeDuplicates,
             hiddenMask = hiddenMask,
             unknownMask = SCRIPT_MASK_UNKNOWN,
         ).first()

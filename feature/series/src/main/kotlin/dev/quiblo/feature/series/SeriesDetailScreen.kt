@@ -60,6 +60,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
@@ -86,8 +87,7 @@ import dev.quiblo.core.model.Season
 import dev.quiblo.core.model.SeriesDetails
 import dev.quiblo.core.model.TitleMetadata
 import dev.quiblo.designsystem.AutoDirection
-import dev.quiblo.designsystem.ambientBackdrop
-import dev.quiblo.designsystem.rememberAmbient
+import dev.quiblo.designsystem.LocalAmbientArtwork
 import dev.quiblo.feature.browse.DetailOverlayActions
 import dev.quiblo.feature.browse.TitleFacts
 import dev.quiblo.feature.browse.VersionPicker
@@ -121,7 +121,15 @@ fun SeriesDetailScreen(
             ?: success.details.coverUrl?.takeIf { it.isNotBlank() }
             ?: success.channel.logoUrl
     }
-    val ambient = rememberAmbient(artwork)
+    /*
+     * Reported to the shell rather than painted here. `drawBehind` clips to the node it is on
+     * and the pools are sized as fractions of it, so a backdrop painted on this screen was
+     * painted inside the Scaffold's content padding — light that stopped in a hard edge under
+     * the status bar and above the navigation bar. The screen knows the poster; only the shell
+     * knows the window. See [LocalAmbientArtwork].
+     */
+    val ambientSink = LocalAmbientArtwork.current
+    LaunchedEffect(artwork) { ambientSink(artwork) }
 
     // The resume point is watched rather than re-read on returning to the foreground. A read on
     // resume raced the player's own write of the position it had just finished with, and lost it
@@ -130,11 +138,7 @@ fun SeriesDetailScreen(
 
     // No app bar, for the same reason as the film screen: the header states the series'
     // name in full a few pixels below where a title bar would have repeated it.
-    Box(
-        modifier = modifier
-            .fillMaxSize()
-            .ambientBackdrop(ambient),
-    ) {
+    Box(modifier = modifier.fillMaxSize()) {
         when (val state = uiState) {
             is SeriesDetailUiState.Loading -> {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {

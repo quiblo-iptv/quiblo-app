@@ -15,6 +15,8 @@ Formatted after [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and ve
 
 ## Unreleased
 
+## 0.26.0
+
 ### Added
 
 - **Settings are yours, not the television's.** Every setting a person chooses — theme, playback tuning, subtitle style, hidden writing systems, channel logos, the merge settings, which tabs you see and which shelves you have hidden — now belongs to the profile that chose it, and switching profile redraws the app immediately. The settings screen is in two halves so it says which is which: **Profile** for what you chose, **App** for the television itself — sources, the Movie Database key, backup and updates. Everything already configured is shown to every profile, so nothing changes until somebody changes it.

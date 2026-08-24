@@ -43,6 +43,7 @@ val tvUpdateModule: Module = module {
         TvUpdateViewModel(
             checker = get(),
             downloader = get(),
+            settings = get(),
             currentVersion = BuildConfig.VERSION_NAME,
             updatesDirectory = TvApkInstaller.updatesDirectory(get<Context>()),
         )

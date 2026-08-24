@@ -23,9 +23,12 @@ import dev.quiblo.core.common.TitleScript
 import dev.quiblo.core.common.isInHiddenScript
 import dev.quiblo.core.common.toMask
 import dev.quiblo.core.datastore.PlayerSettingsStore
+import dev.quiblo.core.model.Profile
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flatMapLatest
 
 /**
  * Which writing systems the viewer has said they do not read (INC-F14).
@@ -38,19 +41,36 @@ import kotlinx.coroutines.flow.first
  *
  * Nothing is hidden until the viewer hides it.
  */
-class ScriptFilterRepository(private val store: PlayerSettingsStore) {
+@OptIn(ExperimentalCoroutinesApi::class)
+class ScriptFilterRepository(
+    private val store: PlayerSettingsStore,
+    private val profiles: ProfileRepository,
+) {
 
-    val hiddenScripts: Flow<Set<TitleScript>> = store.hiddenScripts
+    /**
+     * Per profile since `029` #6, and re-read when the profile changes.
+     *
+     * It used to be one answer for the television, argued from the catalogue being one catalogue.
+     * But what a person can read is a fact about the person: a household with an Arabic speaker
+     * and an English one had to choose whose titles disappeared.
+     */
+    val hiddenScripts: Flow<Set<TitleScript>> = profiles.activeProfile.flatMapLatest { profile ->
+        store.hiddenScripts(profile?.id ?: Profile.NONE_ID)
+    }
 
     suspend fun setHidden(script: TitleScript, hidden: Boolean) {
-        val current = store.hiddenScripts.first()
+        val profileId = profiles.activeProfileId
+        val current = store.hiddenScripts(profileId).first()
         val updated = if (hidden) current + script else current - script
-        if (updated != current) store.setHiddenScripts(updated)
+        if (updated != current) store.setHiddenScripts(profileId, updated)
     }
 
     /** Turns the filter off in one action, for a viewer who cannot find what they hid. */
     suspend fun showEverything() {
-        if (store.hiddenScripts.first().isNotEmpty()) store.setHiddenScripts(emptySet())
+        val profileId = profiles.activeProfileId
+        if (store.hiddenScripts(profileId).first().isNotEmpty()) {
+            store.setHiddenScripts(profileId, emptySet())
+        }
     }
 }
 

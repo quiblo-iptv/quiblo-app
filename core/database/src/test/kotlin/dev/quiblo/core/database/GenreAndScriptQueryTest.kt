@@ -351,6 +351,7 @@ class GenreAndScriptQueryTest {
         groupTitle = null,
         query = "",
         favoritesOnly = 0,
+        includeHiddenCategories = 0,
         mergeDuplicates = mergeDuplicates,
         hiddenMask = hiddenMask,
         unknownMask = SCRIPT_MASK_UNKNOWN,

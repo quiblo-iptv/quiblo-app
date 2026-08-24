@@ -28,6 +28,7 @@ import dev.quiblo.core.data.ChannelRepository
 import dev.quiblo.core.data.FeedRowCacheRepository
 import dev.quiblo.core.data.GuideOutcome
 import dev.quiblo.core.data.GuideRepository
+import dev.quiblo.core.data.PlayerSettingsRepository
 import dev.quiblo.core.data.PopularEntry
 import dev.quiblo.core.data.PopularTitlesRepository
 import dev.quiblo.core.data.RecommendationRepository
@@ -342,6 +343,7 @@ class BrowseViewModel(
     private val popularTitles: PopularTitlesRepository,
     private val recommendations: RecommendationRepository,
     private val feedRowCache: FeedRowCacheRepository,
+    private val playerSettings: PlayerSettingsRepository,
     /** Injected like every repository's, rather than read off the wall clock inline. */
     private val now: () -> Long = System::currentTimeMillis,
 ) : ViewModel() {
@@ -738,7 +740,18 @@ class BrowseViewModel(
      */
     private fun categoriesFor(sourceId: Long): Flow<List<Category>> =
         if (feed.scope in CATALOGUE_SCOPES) {
-            categoryRepository.observeCategories(sourceId, feed.kind)
+            /*
+             * No categories at all when the viewer has collapsed them (`029` #3).
+             *
+             * Reported as an empty list rather than as a second flag on the state, because every
+             * screen that draws categories already has to handle a provider that sent none — the
+             * phone hides its filter chip, and the television groups everything under one heading.
+             * Answering "there are none" is therefore the whole feature on both, and neither
+             * screen needs a branch it did not already have.
+             */
+            playerSettings.mergeCategories.flatMapLatest { merged ->
+                if (merged) flowOf(emptyList()) else categoryRepository.observeCategories(sourceId, feed.kind)
+            }
         } else {
             flowOf(emptyList())
         }

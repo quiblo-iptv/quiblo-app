@@ -22,6 +22,7 @@ import android.net.Uri
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.annotation.StringRes
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -61,6 +62,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
@@ -81,6 +83,7 @@ import dev.quiblo.core.common.TitleScript
 import dev.quiblo.core.data.MetadataScanState
 import dev.quiblo.core.data.ScanRefusal
 import dev.quiblo.core.data.progressFraction
+import dev.quiblo.core.model.AppTab
 import dev.quiblo.core.model.AutoNextDelay
 import dev.quiblo.core.model.BufferMode
 import dev.quiblo.core.model.Category
@@ -117,6 +120,7 @@ import org.koin.androidx.compose.koinViewModel
  * already had to delete once.
  */
 @Composable
+@Suppress("CyclomaticComplexMethod")
 fun TvSettingsScreen(
     onBack: () -> Unit,
     /**
@@ -145,7 +149,25 @@ fun TvSettingsScreen(
     val hiddenScripts by viewModel.hiddenScripts.collectAsStateWithLifecycle()
     val showLiveInSearch by viewModel.showLiveInSearch.collectAsStateWithLifecycle()
     val mergeDuplicateTitles by viewModel.mergeDuplicateTitles.collectAsStateWithLifecycle()
+    val mergeCategories by viewModel.mergeCategories.collectAsStateWithLifecycle()
+    val hiddenTabs by viewModel.hiddenTabs.collectAsStateWithLifecycle()
+    val checkUpdatesOnLaunch by viewModel.checkUpdatesOnLaunch.collectAsStateWithLifecycle()
     val ambientPlayer by viewModel.ambientPlayer.collectAsStateWithLifecycle()
+
+    /*
+     * Which half of the screen is showing (`029` #6).
+     *
+     * **The split is the fix, not a tidy-up.** Everything on this screen used to be app-wide while
+     * favourites, resume points and hidden shelves were per profile, and nothing on screen said
+     * which was which — so a household had two people with their own lists and one shared theme,
+     * one shared set of hidden writing systems, one shared idea of which shelves existed. Now
+     * everything a person chooses is filed under that person and sits behind **Profile**; what is
+     * left on **App** is the television itself.
+     *
+     * `rememberSaveable`, so opening a document picker for a backup and coming back does not land
+     * the viewer on the other half.
+     */
+    var section by rememberSaveable { mutableStateOf(TvSettingsSection.PROFILE) }
 
     // Collapsed by default: twelve components are an obligation to make available, not
     // twelve rows to walk past on the way to anything else.
@@ -200,225 +222,327 @@ fun TvSettingsScreen(
 
         // Whose settings these partly are. First, because a viewer who finds somebody else's
         // favourites is looking for this and nothing else on the screen.
-        item { SectionHeading(stringResource(R.string.tv_settings_profile)) }
-
         item {
-            ActionRow(
-                label = activeProfileName ?: stringResource(R.string.tv_profile_guest),
-                description = stringResource(R.string.tv_settings_profile_detail),
-                action = stringResource(R.string.tv_settings_profile_switch),
-                onClick = onSwitchProfile,
+            SectionTabs(
+                selected = section,
+                onSelect = { section = it },
             )
         }
 
-        item { SectionHeading(stringResource(R.string.tv_settings_sources)) }
+        if (section == TvSettingsSection.PROFILE) {
+            item { SectionHeading(stringResource(R.string.tv_settings_profile)) }
 
-        item {
-            ActionRow(
-                label = stringResource(R.string.tv_settings_sources_label),
-                description = stringResource(R.string.tv_settings_sources_detail),
-                action = stringResource(R.string.tv_settings_sources_manage),
-                onClick = onOpenSources,
-            )
-        }
-
-        item { SectionHeading(stringResource(R.string.tv_settings_playback)) }
-
-        item {
-            OptionRow(
-                label = stringResource(R.string.tv_settings_seek_interval),
-                options = SeekInterval.entries,
-                selected = playerSettings.seekInterval,
-                labelFor = { stringResource(R.string.tv_settings_seconds, it.seconds) },
-                onSelect = viewModel::setSeekInterval,
-            )
-        }
-
-        // Directly under the seek interval, because both answer "what happens without me".
-        item {
-            OptionRow(
-                label = stringResource(R.string.tv_settings_auto_next),
-                description = stringResource(R.string.tv_settings_auto_next_detail),
-                options = AutoNextDelay.entries,
-                selected = playerSettings.autoNextDelay,
-                labelFor = { delay ->
-                    if (delay == AutoNextDelay.OFF) {
-                        stringResource(R.string.tv_settings_off)
-                    } else {
-                        stringResource(R.string.tv_settings_seconds, delay.seconds)
-                    }
-                },
-                onSelect = viewModel::setAutoNextDelay,
-            )
-        }
-
-        item {
-            OptionRow(
-                label = stringResource(R.string.tv_settings_buffer),
-                options = BufferMode.entries,
-                selected = playerSettings.bufferMode,
-                labelFor = { it.name.lowercase().replaceFirstChar(Char::uppercase) },
-                onSelect = viewModel::setBufferMode,
-            )
-        }
-
-        // On by default, and here rather than buried: it changes what the screen looks like for
-        // the whole length of a film, and a viewer who does not want it should not have to guess
-        // whether the app has one.
-        item {
-            OptionRow(
-                label = stringResource(R.string.tv_settings_ambient),
-                description = stringResource(R.string.tv_settings_ambient_detail),
-                options = listOf(true, false),
-                selected = ambientPlayer,
-                labelFor = {
-                    stringResource(if (it) R.string.tv_settings_on else R.string.tv_settings_off)
-                },
-                onSelect = viewModel::setAmbientPlayer,
-            )
-        }
-
-        item {
-            OptionRow(
-                label = stringResource(R.string.tv_settings_bitrate),
-                options = MaxBitrateCap.entries,
-                selected = playerSettings.maxBitrate,
-                labelFor = { cap ->
-                    cap.bitsPerSecond
-                        ?.let { stringResource(R.string.tv_settings_mbps, it / MBPS) }
-                        ?: stringResource(R.string.tv_settings_unlimited)
-                },
-                onSelect = viewModel::setMaxBitrate,
-            )
-        }
-
-        item { SectionHeading(stringResource(R.string.tv_settings_artwork)) }
-
-        item {
-            OptionRow(
-                label = stringResource(R.string.tv_settings_channel_logos),
-                description = stringResource(R.string.tv_settings_channel_logos_detail),
-                options = listOf(false, true),
-                selected = channelLogosEnabled,
-                labelFor = {
-                    stringResource(if (it) R.string.tv_settings_on else R.string.tv_settings_off)
-                },
-                onSelect = viewModel::setChannelLogosEnabled,
-            )
-        }
-
-        /*
-         * Attribution for the two services, which is a condition of using them rather than a
-         * courtesy — TMDB's terms require this sentence, close to verbatim, wherever their data
-         * appears.
-         *
-         * The phone has carried both since these features were built and the television carried
-         * neither, which is the same fault as the missing licences screen and was found the same
-         * way: by asking what the *other* app shows.
-         *
-         * Shown beside the control that turns each one on, rather than collected somewhere
-         * tidier. A viewer deciding whether to enable a service is the one moment the sentence
-         * is worth reading.
-         */
-        item { Attribution(stringResource(R.string.tv_settings_channel_logos_attribution)) }
-
-        item {
-            TmdbKeyRow(
-                currentKey = tmdbApiKey,
-                check = tmdbCheck,
-                onSave = viewModel::saveTmdbKey,
-                onClear = viewModel::clearTmdbKey,
-            )
-        }
-
-        item { Attribution(stringResource(R.string.tv_settings_tmdb_attribution)) }
-
-        // Only with a key, because without one there is nothing to ask and the control would
-        // be the sort of button that does nothing this project has already deleted nine of.
-        if (!tmdbApiKey.isNullOrBlank()) {
-            item {
-                MetadataScanRow(
-                    state = scanState,
-                    cachedTitles = cachedTitles,
-                    onStart = viewModel::startMetadataScan,
-                    onCancel = viewModel::cancelMetadataScan,
-                    onDismiss = viewModel::dismissMetadataScan,
-                )
-            }
-        }
-
-        item { SectionHeading(stringResource(R.string.tv_settings_scripts)) }
-
-        item {
-            ScriptRow(
-                hidden = hiddenScripts,
-                onToggle = { script -> viewModel.setScriptHidden(script, script !in hiddenScripts) },
-            )
-        }
-
-        if (hiddenScripts.isNotEmpty()) {
             item {
                 ActionRow(
-                    label = stringResource(R.string.tv_settings_scripts_show_all),
-                    description = stringResource(
-                        R.string.tv_settings_scripts_hidden_count,
-                        hiddenScripts.size,
-                    ),
-                    action = stringResource(R.string.tv_settings_scripts_show_all_action),
-                    onClick = viewModel::showEveryScript,
+                    label = activeProfileName ?: stringResource(R.string.tv_profile_guest),
+                    description = stringResource(R.string.tv_settings_profile_detail),
+                    action = stringResource(R.string.tv_settings_profile_switch),
+                    onClick = onSwitchProfile,
                 )
             }
-        }
 
-        catalogueSettings(
-            showLiveInSearch = showLiveInSearch,
-            onShowLiveInSearch = viewModel::setShowLiveInSearch,
-            mergeDuplicateTitles = mergeDuplicateTitles,
-            onMergeDuplicateTitles = viewModel::setMergeDuplicateTitles,
-        )
+            item { SectionHeading(stringResource(R.string.tv_settings_tabs)) }
 
-        item { SectionHeading(stringResource(R.string.tv_settings_categories)) }
+            item { Attribution(stringResource(R.string.tv_settings_tabs_detail)) }
 
-        // Whose list this is. Said on the screen because a viewer hiding a shelf has no other
-        // way of knowing whether they are hiding it from the household or from themselves.
-        item { Attribution(stringResource(R.string.tv_settings_category_whose)) }
+            item {
+                TabVisibilityRow(
+                    hidden = hiddenTabs,
+                    onToggle = { tab -> viewModel.setTabHidden(tab, tab !in hiddenTabs) },
+                )
+            }
 
-        item {
-            OptionRow(
-                label = stringResource(R.string.tv_settings_category_kind),
-                options = listOf(MediaKind.LIVE, MediaKind.VOD, MediaKind.SERIES),
-                selected = categoryKind,
-                labelFor = { it.name.lowercase().replaceFirstChar(Char::uppercase) },
-                onSelect = viewModel::selectCategoryKind,
+            item { SectionHeading(stringResource(R.string.tv_settings_playback)) }
+
+            item {
+                OptionRow(
+                    label = stringResource(R.string.tv_settings_seek_interval),
+                    options = SeekInterval.entries,
+                    selected = playerSettings.seekInterval,
+                    labelFor = { stringResource(R.string.tv_settings_seconds, it.seconds) },
+                    onSelect = viewModel::setSeekInterval,
+                )
+            }
+
+            // Directly under the seek interval, because both answer "what happens without me".
+            item {
+                OptionRow(
+                    label = stringResource(R.string.tv_settings_auto_next),
+                    description = stringResource(R.string.tv_settings_auto_next_detail),
+                    options = AutoNextDelay.entries,
+                    selected = playerSettings.autoNextDelay,
+                    labelFor = { delay ->
+                        if (delay == AutoNextDelay.OFF) {
+                            stringResource(R.string.tv_settings_off)
+                        } else {
+                            stringResource(R.string.tv_settings_seconds, delay.seconds)
+                        }
+                    },
+                    onSelect = viewModel::setAutoNextDelay,
+                )
+            }
+
+            item {
+                OptionRow(
+                    label = stringResource(R.string.tv_settings_buffer),
+                    options = BufferMode.entries,
+                    selected = playerSettings.bufferMode,
+                    labelFor = { it.name.lowercase().replaceFirstChar(Char::uppercase) },
+                    onSelect = viewModel::setBufferMode,
+                )
+            }
+
+            // On by default, and here rather than buried: it changes what the screen looks like
+            // for the whole length of a film, and a viewer who does not want it should not have to
+            // guess whether the app has one.
+            item {
+                OptionRow(
+                    label = stringResource(R.string.tv_settings_ambient),
+                    description = stringResource(R.string.tv_settings_ambient_detail),
+                    options = listOf(true, false),
+                    selected = ambientPlayer,
+                    labelFor = {
+                        stringResource(if (it) R.string.tv_settings_on else R.string.tv_settings_off)
+                    },
+                    onSelect = viewModel::setAmbientPlayer,
+                )
+            }
+
+            item {
+                OptionRow(
+                    label = stringResource(R.string.tv_settings_bitrate),
+                    options = MaxBitrateCap.entries,
+                    selected = playerSettings.maxBitrate,
+                    labelFor = { cap ->
+                        cap.bitsPerSecond
+                            ?.let { stringResource(R.string.tv_settings_mbps, it / MBPS) }
+                            ?: stringResource(R.string.tv_settings_unlimited)
+                    },
+                    onSelect = viewModel::setMaxBitrate,
+                )
+            }
+
+            item { SectionHeading(stringResource(R.string.tv_settings_artwork)) }
+
+            item {
+                OptionRow(
+                    label = stringResource(R.string.tv_settings_channel_logos),
+                    description = stringResource(R.string.tv_settings_channel_logos_detail),
+                    options = listOf(false, true),
+                    selected = channelLogosEnabled,
+                    labelFor = {
+                        stringResource(if (it) R.string.tv_settings_on else R.string.tv_settings_off)
+                    },
+                    onSelect = viewModel::setChannelLogosEnabled,
+                )
+            }
+
+            /*
+             * Attribution for the reference list, which is a condition of using it rather than a
+             * courtesy.
+             *
+             * Shown beside the control that turns it on, rather than collected somewhere tidier. A
+             * viewer deciding whether to enable a service is the one moment the sentence is worth
+             * reading — which is also why it stays on this half of the screen while the key that
+             * enables the *other* service moved to App.
+             */
+            item { Attribution(stringResource(R.string.tv_settings_channel_logos_attribution)) }
+
+            item { SectionHeading(stringResource(R.string.tv_settings_scripts)) }
+
+            item {
+                ScriptRow(
+                    hidden = hiddenScripts,
+                    onToggle = { script -> viewModel.setScriptHidden(script, script !in hiddenScripts) },
+                )
+            }
+
+            if (hiddenScripts.isNotEmpty()) {
+                item {
+                    ActionRow(
+                        label = stringResource(R.string.tv_settings_scripts_show_all),
+                        description = stringResource(
+                            R.string.tv_settings_scripts_hidden_count,
+                            hiddenScripts.size,
+                        ),
+                        action = stringResource(R.string.tv_settings_scripts_show_all_action),
+                        onClick = viewModel::showEveryScript,
+                    )
+                }
+            }
+
+            catalogueSettings(
+                showLiveInSearch = showLiveInSearch,
+                onShowLiveInSearch = viewModel::setShowLiveInSearch,
+                mergeDuplicateTitles = mergeDuplicateTitles,
+                onMergeDuplicateTitles = viewModel::setMergeDuplicateTitles,
+                mergeCategories = mergeCategories,
+                onMergeCategories = viewModel::setMergeCategories,
+            )
+
+            item { SectionHeading(stringResource(R.string.tv_settings_categories)) }
+
+            // Whose list this is. Said on the screen because a viewer hiding a shelf has no other
+            // way of knowing whether they are hiding it from the household or from themselves.
+            item { Attribution(stringResource(R.string.tv_settings_category_whose)) }
+
+            item {
+                OptionRow(
+                    label = stringResource(R.string.tv_settings_category_kind),
+                    options = listOf(MediaKind.LIVE, MediaKind.VOD, MediaKind.SERIES),
+                    selected = categoryKind,
+                    labelFor = { it.name.lowercase().replaceFirstChar(Char::uppercase) },
+                    onSelect = viewModel::selectCategoryKind,
+                )
+            }
+
+            item {
+                CategoryBox(
+                    categories = categories,
+                    kind = categoryKind,
+                    onToggleHidden = { viewModel.setCategoryHidden(it, !it.isHidden) },
+                    onRename = { category, name -> viewModel.renameCategory(category, name) },
+                    onMove = { category, by -> viewModel.moveCategory(category, by) },
+                )
+            }
+        } else {
+            item { SectionHeading(stringResource(R.string.tv_settings_sources)) }
+
+            item {
+                ActionRow(
+                    label = stringResource(R.string.tv_settings_sources_label),
+                    description = stringResource(R.string.tv_settings_sources_detail),
+                    action = stringResource(R.string.tv_settings_sources_manage),
+                    onClick = onOpenSources,
+                )
+            }
+
+            item { SectionHeading(stringResource(R.string.tv_settings_metadata)) }
+
+            item {
+                TmdbKeyRow(
+                    currentKey = tmdbApiKey,
+                    check = tmdbCheck,
+                    onSave = viewModel::saveTmdbKey,
+                    onClear = viewModel::clearTmdbKey,
+                )
+            }
+
+            // TMDB's terms require this sentence, close to verbatim, wherever their data appears.
+            item { Attribution(stringResource(R.string.tv_settings_tmdb_attribution)) }
+
+            // Only with a key, because without one there is nothing to ask and the control would
+            // be the sort of button that does nothing this project has already deleted nine of.
+            if (!tmdbApiKey.isNullOrBlank()) {
+                item {
+                    MetadataScanRow(
+                        state = scanState,
+                        cachedTitles = cachedTitles,
+                        onStart = viewModel::startMetadataScan,
+                        onCancel = viewModel::cancelMetadataScan,
+                        onDismiss = viewModel::dismissMetadataScan,
+                    )
+                }
+            }
+
+            item { SectionHeading(stringResource(R.string.tv_settings_backup)) }
+
+            item {
+                BackupRow(
+                    state = backupState,
+                    onExport = { exportLauncher.launch(BACKUP_FILE_NAME) },
+                    onImport = { importLauncher.launch(arrayOf(BACKUP_MIME_TYPE, ANY_MIME_TYPE)) },
+                )
+            }
+
+            item { SectionHeading(stringResource(R.string.tv_settings_updates)) }
+
+            item {
+                OptionRow(
+                    label = stringResource(R.string.tv_settings_update_on_launch),
+                    description = stringResource(R.string.tv_settings_update_on_launch_detail),
+                    options = listOf(false, true),
+                    selected = checkUpdatesOnLaunch,
+                    labelFor = {
+                        stringResource(if (it) R.string.tv_settings_on else R.string.tv_settings_off)
+                    },
+                    onSelect = viewModel::setCheckUpdatesOnLaunch,
+                )
+            }
+
+            aboutSection(
+                licensesShown = licensesShown,
+                onToggleLicenses = { licensesShown = !licensesShown },
+                updateRow = { TvUpdateRow() },
             )
         }
-
-        item {
-            CategoryBox(
-                categories = categories,
-                kind = categoryKind,
-                onToggleHidden = { viewModel.setCategoryHidden(it, !it.isHidden) },
-                onRename = { category, name -> viewModel.renameCategory(category, name) },
-                onMove = { category, by -> viewModel.moveCategory(category, by) },
-            )
-        }
-
-        item { SectionHeading(stringResource(R.string.tv_settings_backup)) }
-
-        item {
-            BackupRow(
-                state = backupState,
-                onExport = { exportLauncher.launch(BACKUP_FILE_NAME) },
-                onImport = { importLauncher.launch(arrayOf(BACKUP_MIME_TYPE, ANY_MIME_TYPE)) },
-            )
-        }
-
-        aboutSection(
-            licensesShown = licensesShown,
-            onToggleLicenses = { licensesShown = !licensesShown },
-            updateRow = { TvUpdateRow() },
-        )
     }
+}
+
+/**
+ * The two halves of the settings screen. See the note on `section` in [TvSettingsScreen].
+ */
+internal enum class TvSettingsSection(@param:StringRes val labelRes: Int) {
+    PROFILE(R.string.tv_settings_section_profile),
+    APP(R.string.tv_settings_section_app),
+}
+
+/**
+ * The two halves, as a row of chips at the top of the list.
+ *
+ * Chips rather than a tab bar, because this screen has no bar and a remote already knows what a
+ * row of chips does here — every setting below it is chosen the same way. They are the first
+ * focusable in the list, so opening Settings and pressing right walks between the halves before
+ * anything else, and pressing down enters whichever one is showing.
+ */
+@Composable
+private fun SectionTabs(selected: TvSettingsSection, onSelect: (TvSettingsSection) -> Unit) {
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        modifier = Modifier.padding(bottom = 6.dp),
+    ) {
+        TvSettingsSection.entries.forEach { entry ->
+            TvChip(
+                label = stringResource(entry.labelRes),
+                isSelected = entry == selected,
+                onClick = { onSelect(entry) },
+            )
+        }
+    }
+}
+
+/**
+ * Which tabs stay in the bar (`029` #5).
+ *
+ * Drawn as what is *on* rather than what is hidden, for the reason the phone's card gives: a
+ * screen offering "hide Live" would show every chip unselected in a bar where everything is on,
+ * which reads as a screen that has not loaded.
+ *
+ * The last visible tab cannot be turned off — the repository refuses it, and the chip simply does
+ * not change. That is a clamp rather than a disabled chip because which one is last changes as the
+ * others are switched, and a control that greys out under the remote is worse than one that will
+ * not go.
+ */
+@Composable
+private fun TabVisibilityRow(hidden: Set<AppTab>, onToggle: (AppTab) -> Unit) {
+    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        AppTab.entries.forEach { tab ->
+            TvChip(
+                label = stringResource(tab.labelRes()),
+                isSelected = tab !in hidden,
+                onClick = { onToggle(tab) },
+            )
+        }
+    }
+}
+
+/** The television's own word for a switchable tab. The same four the bar draws. */
+@StringRes
+private fun AppTab.labelRes(): Int = when (this) {
+    AppTab.LIVE -> R.string.tv_tab_live
+    AppTab.MOVIES -> R.string.tv_tab_movies
+    AppTab.SERIES -> R.string.tv_tab_series
+    AppTab.FAVOURITES -> R.string.tv_tab_favourites
 }
 
 /**
@@ -1258,11 +1382,14 @@ private fun backupMessage(state: BackupUiState): String? = when (state) {
  * branch in it: two more rows was the press that took it over the complexity threshold. The
  * boundary is a real one — everything here changes what a query returns.
  */
+@Suppress("LongParameterList")
 private fun LazyListScope.catalogueSettings(
     showLiveInSearch: Boolean,
     onShowLiveInSearch: (Boolean) -> Unit,
     mergeDuplicateTitles: Boolean,
     onMergeDuplicateTitles: (Boolean) -> Unit,
+    mergeCategories: Boolean,
+    onMergeCategories: (Boolean) -> Unit,
 ) {
     item { SectionHeading(stringResource(R.string.tv_settings_search)) }
 
@@ -1286,6 +1413,27 @@ private fun LazyListScope.catalogueSettings(
             labelFor = { stringResource(if (it) R.string.tv_settings_on else R.string.tv_settings_off) },
             onSelect = onMergeDuplicateTitles,
         )
+    }
+
+    /*
+     * Absent rather than disabled while merging is off (`029` #3).
+     *
+     * Collapsing the shelves without merging the copies gives one grid in which every film appears
+     * four times in a row, which is the worst of both settings — so the row only exists once the
+     * setting it depends on is on. A chip that is drawn and does nothing is the sort of control
+     * this project has deleted nine of.
+     */
+    if (mergeDuplicateTitles) {
+        item {
+            OptionRow(
+                label = stringResource(R.string.tv_settings_merge_categories),
+                description = stringResource(R.string.tv_settings_merge_categories_detail),
+                options = listOf(false, true),
+                selected = mergeCategories,
+                labelFor = { stringResource(if (it) R.string.tv_settings_on else R.string.tv_settings_off) },
+                onSelect = onMergeCategories,
+            )
+        }
     }
 }
 

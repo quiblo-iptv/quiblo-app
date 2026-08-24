@@ -34,6 +34,10 @@ android {
 
 dependencies {
     implementation(projects.core.data)
+    // For the launch-time update check (`028` #7). The checker itself is network code and lives in
+    // `:core:network`; what is here is the ViewModel that decides whether to ask and the dialog
+    // that reports the answer, so that both apps get one implementation rather than two.
+    implementation(projects.core.network)
     implementation(projects.feature.designsystem)
     implementation(projects.core.model)
     implementation(projects.core.media)

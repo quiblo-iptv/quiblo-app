@@ -58,7 +58,7 @@ These must hold at every commit. A change that breaks one is a design regression
 2. **The source layer is abstracted.** `MediaSource` is an interface. `M3uSource` and `XtreamSource` are implementations. Adding Stalker, XMLTV, or any future protocol means adding one implementation and zero changes to feature modules.
 3. **EPG is source-agnostic.** Even though only Xtream supplies programme data in v1, the EPG storage and query layer accepts programmes from any provider. Adding XMLTV later must not require a schema migration.
 4. **Playback is behind an interface.** Feature code never touches `ExoPlayer` directly. It talks to a `PlayerController`. This is the seam where DRM slots in later.
-5. **The app never phones home.** The only outbound network traffic is to hosts the user explicitly configured. No analytics, no crash reporting SDK, no update check against a project-controlled server.
+5. **The app never phones home.** No analytics, no crash reporting SDK, no telemetry, and no server of ours. Outbound traffic goes to hosts the user configured, with one exception: a `GET` for the public release manifest on this project's GitHub releases page, once per launch, which sends nothing about the device or the viewer and can be switched off in Settings. See Amendment 13.
 6. **Credentials never leave the device.** Xtream username/password are stored encrypted and are never written to logs, exports, or crash traces.
 
 ## 5. Glossary
@@ -215,7 +215,13 @@ by one call per catalogue — rather than the full one. Nothing is fetched for l
 
 **Decision.** The app asks who is watching. A profile owns **favourites and resume positions**
 and nothing else; playlists, player settings, hidden categories and the metadata key stay
-app-wide. Alongside the named profiles there is **Guest**, whose favourites and resume points
+app-wide.
+
+*Superseded in part.* Hidden, renamed and reordered categories moved to the profile in `0.25.0`,
+and Amendment 12 moved every remaining setting except playlists, credentials, the metadata key,
+the backup file and the launch update check.
+
+Alongside the named profiles there is **Guest**, whose favourites and resume points
 are deleted when the session ends. There is no PIN and nothing is hidden from anybody.
 
 **Rationale.** `docs/PLAN.md` §6 parks "multiple profiles, parental PIN" in Phase 2, and this
@@ -512,7 +518,8 @@ convenience one.
 2. **Nothing is checked unprompted.** No launch check, no schedule, no worker. The check runs on
    a button press and on nothing else, which is what keeps §4.5 true: the app contacts the hosts
    a viewer named, and its own releases page only while somebody is standing in front of it
-   asking.
+   asking. *(Superseded for the launch check by Amendment 13, which adds one request per launch
+   behind a switch. No schedule and no worker still stand.)*
 3. **Nothing is installed unverified.** The `.sha256` the release lane publishes beside every APK
    is fetched first, and a file that does not match it is **deleted** rather than kept, renamed
    aside, or offered with a warning. A release publishing no checksum is refused outright: every
@@ -541,3 +548,95 @@ belongs to:
 
 **What does not change.** Every non-goal in §2 stands, nothing is sent anywhere, and no
 telemetry, account or server of ours is added by any of this.
+
+### Amendment 12 — a setting belongs to whoever chose it (2026-08-24)
+
+**Decision.** Every preference the app stores becomes **per profile**. Amendment 6 gave a profile
+favourites and resume points "and nothing else", and named playlists, player settings, hidden
+categories and the metadata key as app-wide; Amendment 6's list is narrowed here to **playlists,
+credentials, the metadata key, the backup file and the launch update check**. Everything else a
+person chooses — theme, dynamic colour, seek interval, buffering, bitrate cap, auto-next, subtitle
+style, ambient player light, hidden writing systems, channel logos, merge settings, the visible
+tabs, and the category edits Amendment 6 had already moved — follows the profile.
+
+**Rationale.** The comments in `PlayerSettingsStore` argued the app-wide case once per setting and
+were wrong in the same way each time: they reasoned from the catalogue being one catalogue, when a
+theme, a seek interval and a list of shelves are statements about what one *viewer* wants to look
+at. A household with two profiles had two sets of favourites and one shared everything else, and
+nothing on screen said which was which. That ambiguity is the report; this is the answer.
+
+**What stays on the device, and why each one.** A playlist and its credentials describe the
+account behind the television, and a household made to type an Xtream password once per person
+would rightly call that a bug. The metadata key is the same shape — one account, one rate limit —
+and per-profile keys would multiply requests against a service this project does not own. The
+backup file carries the device. The launch update check decides whether the *device* makes a
+request, which is Amendment 13's business and not a taste.
+
+**How it migrates.** Keys become `name@profileId`, with the old unscoped key as the **read
+fallback**. Deliberately not a one-off copy: an install configured once keeps every setting for
+every profile until somebody changes one, at which point only that profile moves. Nothing is lost,
+nobody is asked to set the app up again, and there is no moment where a half-run migration has
+written some keys and not others. No schema change and no `DataStore` migration step.
+
+**What it fixes on the way.** Hiding a category has been a per-profile edit since Amendment 6 and
+has never reached the catalogue: the browse queries carried no predicate against
+`category_overrides`, so a hidden shelf's titles stayed in the grid, in the television's rows and
+in Recently Added. `observeBrowse`, `pagedBrowse`, `observeCategoryRows`, `observeRecentlyAdded`
+and `observeLastInListOrder` gain it. Favourites are exempt, on the rule the script filter already
+follows: a list somebody built by hand is not the catalogue.
+
+**What is explicitly not in it.** No password, no PIN, no per-profile locking of anything.
+Hiding a tab or a shelf is a preference, not a restriction, and a control that *appears* to
+restrict is worse than no control. `PLAN.md` §6 keeps parental controls parked.
+
+**AC-PROF-03 is restated** in `ACCEPTANCE.md`, and AC-PROF-07 and AC-PROF-08 are added for the
+settings that now switch and for the tabs.
+
+### Amendment 13 — one check when the app opens (2026-08-24)
+
+**Decision.** Both applications ask this project's own GitHub releases page, **once per launch**,
+whether a newer version exists, and offer it if there is one. It is a setting, it is on by default,
+and off means no request is made at all.
+
+**What this amends.** Two things, and both are ours rather than a dependency's:
+
+- **§4.5** says "no update check against a project-controlled server". A releases page on GitHub is
+  not a server of ours — there is still no backend, no account and nothing sent — but the sentence
+  was written to forbid exactly this shape and pretending otherwise would be reading it in bad
+  faith. It becomes: *no analytics, no crash reporting SDK, no telemetry, and no server of ours.
+  The one unprompted request the app makes is a `GET` for the public release manifest, which sends
+  nothing about the device or the viewer and can be switched off.*
+- **Amendment 11, constraint 2** — "Nothing is checked unprompted. No launch check, no schedule, no
+  worker" — is superseded for the launch check only. **No schedule and no worker**: those stand.
+
+**Rationale.** Quiblo is distributed as an APK from a releases page and neither app has a store to
+update it from. `026` answered that with a button in Settings, and wrote the no-launch-check
+constraint down as the thing that kept §4.5 true. A button nobody presses is a fix nobody installs
+— which on a player is a security position, not a convenience one. The eight-month-old build is
+the failure mode, and it is not hypothetical for an app installed by sideload.
+
+**Four constraints, all of them decisions:**
+
+1. **It is a setting, and off means silent.** Off makes no request at all rather than hiding the
+   answer. It is app-wide rather than per profile — see Amendment 12 — because it decides whether
+   the device speaks, and a household where that depended on who pressed a profile first could not
+   answer "does this app phone out?" at all.
+2. **One host, one document, nothing sent.** The public releases JSON, the same one the button
+   fetches. No identifier, no version beacon, no payload; the installed version is compared on the
+   device.
+3. **Once per process**, so a profile switch or backing out to the shell does not ask again.
+4. **Silence is silence.** Only "there is a newer one" is ever shown. Up to date, offline and
+   unreachable are answers for the row in Settings, where somebody asked for them.
+
+**The phone does not download.** It opens the releases page in a browser. `REQUEST_INSTALL_PACKAGES`
+stays television-only, and **AC-NFR-04 is unchanged** — a phone build that acquires it still fails.
+The television downloads through the verified-checksum path Amendment 11 already describes, sharing
+one state machine with the settings row.
+
+**The consent copy is amended rather than left standing.** `tv_consent_terms_body` promised that
+nothing leaves the device except to the servers a viewer names; that is now false by one request,
+so the screen names the exception and the switch that turns it off. A promise kept everywhere but
+in the copy is not kept.
+
+**What does not change.** Every non-goal in §2 stands. No telemetry, no account, no server of ours,
+no background schedule, and nothing about the device or the viewer is ever sent.

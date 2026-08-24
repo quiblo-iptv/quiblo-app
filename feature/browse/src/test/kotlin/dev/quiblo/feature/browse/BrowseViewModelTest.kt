@@ -25,6 +25,7 @@ import dev.quiblo.core.data.ChannelRepository
 import dev.quiblo.core.data.FeedRowCacheRepository
 import dev.quiblo.core.data.GuideOutcome
 import dev.quiblo.core.data.GuideRepository
+import dev.quiblo.core.data.PlayerSettingsRepository
 import dev.quiblo.core.data.PopularEntry
 import dev.quiblo.core.data.PopularTitlesRepository
 import dev.quiblo.core.data.RecentlyAddedFeed
@@ -82,6 +83,17 @@ class BrowseViewModelTest {
     private val historyRepository: WatchHistoryRepository = mockk(relaxed = true)
     private val channelLogoRepository: ChannelLogoRepository = mockk(relaxed = true)
     private val feedRowCache: FeedRowCacheRepository = mockk(relaxed = true)
+
+    /**
+     * Merging shelves is off, which is every test in this file's assumption.
+     *
+     * Relaxed would answer `mergeCategories` with an empty flow, and an empty flow inside the
+     * `combine` that builds the feed means the feed never emits at all — so every assertion here
+     * would time out rather than fail, which is the worst way for a mock to be wrong.
+     */
+    private val playerSettings: PlayerSettingsRepository = mockk(relaxed = true) {
+        every { mergeCategories } returns flowOf(false)
+    }
 
     @BeforeEach
     fun setUp() {
@@ -385,6 +397,7 @@ class BrowseViewModelTest {
         popularTitles = popularTitles,
         recommendations = recommendations,
         feedRowCache = feedRowCache,
+        playerSettings = playerSettings,
     )
 
     private companion object {

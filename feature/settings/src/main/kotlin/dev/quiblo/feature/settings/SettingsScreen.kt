@@ -37,12 +37,15 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.PrimaryTabRow
+import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -54,7 +57,15 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import org.koin.androidx.compose.koinViewModel
 
 /**
- * Settings.
+ * Settings, in two halves (`029` #6).
+ *
+ * **The split is the fix, not a tidy-up.** Every setting on this screen used to be app-wide while
+ * favourites, resume points and hidden shelves were per profile — so a household had two people
+ * who each had their own list and one shared theme, one shared set of hidden writing systems and
+ * one shared idea of which shelves existed. Nothing on screen said which was which, and the answer
+ * changed with the setting. Now everything a person chooses is filed under that person and sits
+ * behind **Profile**; what is left on **App** is the television itself — the sources, the metadata
+ * key, the backup file and whether this device asks about updates.
  *
  * Everything here does something. The screen previously offered theme, buffer, bitrate and
  * seek pickers that were wired to nothing at all; they are gone, and what replaces them is
@@ -79,6 +90,9 @@ fun SettingsScreen(
     val hiddenScripts by viewModel.hiddenScripts.collectAsStateWithLifecycle()
     val channelLogosEnabled by viewModel.channelLogosEnabled.collectAsStateWithLifecycle()
     val mergeDuplicateTitles by viewModel.mergeDuplicateTitles.collectAsStateWithLifecycle()
+    val mergeCategories by viewModel.mergeCategories.collectAsStateWithLifecycle()
+    val hiddenTabs by viewModel.hiddenTabs.collectAsStateWithLifecycle()
+    val checkUpdatesOnLaunch by viewModel.checkUpdatesOnLaunch.collectAsStateWithLifecycle()
     val context = LocalContext.current
 
     // SAF, so the file lands wherever the user chooses and the app needs no storage
@@ -112,95 +126,140 @@ fun SettingsScreen(
     // locale or configuration change like every other string on the screen.
     val defaultFilename = stringResource(R.string.settings_backup_default_filename)
 
-    LazyColumn(
-        modifier = modifier
-            .fillMaxSize()
-            .padding(16.dp),
-    ) {
-        // No title here: the host screen's app bar already shows one, and repeating it
-        // reads as a rendering fault.
-        cardItem {
-            BackupCard(
-                isWorking = backupState is BackupUiState.Working,
-                onExport = { exportLauncher.launch(defaultFilename) },
-                onImport = { importLauncher.launch(arrayOf(BACKUP_MIME_TYPE, ANY_MIME_TYPE)) },
-            )
+    /*
+     * Which half is showing.
+     *
+     * `rememberSaveable`, so opening a file picker and coming back does not land the viewer on the
+     * other tab. It is screen state rather than a setting: nobody's stored preferences include
+     * which tab of the settings screen they last looked at.
+     */
+    var section by rememberSaveable { mutableStateOf(SettingsSection.PROFILE) }
+
+    Column(modifier = modifier.fillMaxSize()) {
+        PrimaryTabRow(selectedTabIndex = section.ordinal) {
+            SettingsSection.entries.forEach { entry ->
+                Tab(
+                    selected = entry == section,
+                    onClick = { section = entry },
+                    text = { Text(text = stringResource(entry.labelRes)) },
+                )
+            }
         }
 
-        cardItem {
-            AppearanceSettingsCard(
-                appearance = appearance,
-                onThemeMode = viewModel::setThemeMode,
-                onDynamicColor = viewModel::setDynamicColor,
-            )
-        }
+        when (section) {
+            SettingsSection.PROFILE -> LazyColumn(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(16.dp),
+            ) {
+                // No title here: the host screen's app bar already shows one, and repeating it
+                // reads as a rendering fault.
+                cardItem {
+                    ProfileCard(
+                        name = profilesState.active?.name,
+                        isGuest = profilesState.active?.isGuest == true,
+                        onSwitch = profilesViewModel::switchProfile,
+                    )
+                }
 
-        cardItem {
-            ProfileCard(
-                name = profilesState.active?.name,
-                isGuest = profilesState.active?.isGuest == true,
-                onSwitch = profilesViewModel::switchProfile,
-            )
-        }
+                cardItem {
+                    AppearanceSettingsCard(
+                        appearance = appearance,
+                        onThemeMode = viewModel::setThemeMode,
+                        onDynamicColor = viewModel::setDynamicColor,
+                    )
+                }
 
-        cardItem {
-            PlaybackSettingsCard(
-                settings = playerSettings,
-                onSeekInterval = viewModel::setSeekInterval,
-                onBufferMode = viewModel::setBufferMode,
-                onMaxBitrate = viewModel::setMaxBitrate,
-            )
-        }
+                cardItem {
+                    TabVisibilitySettingsCard(
+                        hidden = hiddenTabs,
+                        onSetHidden = viewModel::setTabHidden,
+                    )
+                }
 
-        cardItem {
-            ScriptSettingsCard(
-                hidden = hiddenScripts,
-                onSetHidden = viewModel::setScriptHidden,
-                onShowEverything = viewModel::showEveryScript,
-            )
-        }
+                cardItem {
+                    PlaybackSettingsCard(
+                        settings = playerSettings,
+                        onSeekInterval = viewModel::setSeekInterval,
+                        onBufferMode = viewModel::setBufferMode,
+                        onMaxBitrate = viewModel::setMaxBitrate,
+                    )
+                }
 
-        cardItem {
-            CategorySettingsCard(
-                selectedKind = categoryKind,
-                categories = categories,
-                onSelectKind = viewModel::selectCategoryKind,
-                onSetHidden = viewModel::setCategoryHidden,
-                onRename = viewModel::renameCategory,
-                onMove = viewModel::moveCategory,
-            )
-        }
+                cardItem {
+                    ScriptSettingsCard(
+                        hidden = hiddenScripts,
+                        onSetHidden = viewModel::setScriptHidden,
+                        onShowEverything = viewModel::showEveryScript,
+                    )
+                }
 
-        cardItem {
-            MetadataSettingsCard(
-                savedKey = tmdbKey,
-                check = tmdbCheck,
-                onSave = viewModel::saveTmdbKey,
-                onClear = viewModel::clearTmdbKey,
-                scan = metadataScan,
-                cachedTitles = cachedTitles,
-                onStartScan = viewModel::startMetadataScan,
-                onCancelScan = viewModel::cancelMetadataScan,
-                onDismissScan = viewModel::dismissMetadataScan,
-            )
-        }
+                cardItem {
+                    CategorySettingsCard(
+                        selectedKind = categoryKind,
+                        categories = categories,
+                        onSelectKind = viewModel::selectCategoryKind,
+                        onSetHidden = viewModel::setCategoryHidden,
+                        onRename = viewModel::renameCategory,
+                        onMove = viewModel::moveCategory,
+                    )
+                }
 
-        cardItem {
-            ChannelLogoSettingsCard(
-                isEnabled = channelLogosEnabled,
-                onToggle = viewModel::setChannelLogosEnabled,
-            )
-        }
+                cardItem {
+                    DuplicateTitlesSettingsCard(
+                        isEnabled = mergeDuplicateTitles,
+                        onToggle = viewModel::setMergeDuplicateTitles,
+                        isCategoriesMerged = mergeCategories,
+                        onToggleCategories = viewModel::setMergeCategories,
+                    )
+                }
 
-        cardItem {
-            DuplicateTitlesSettingsCard(
-                isEnabled = mergeDuplicateTitles,
-                onToggle = viewModel::setMergeDuplicateTitles,
-            )
-        }
+                cardItem {
+                    ChannelLogoSettingsCard(
+                        isEnabled = channelLogosEnabled,
+                        onToggle = viewModel::setChannelLogosEnabled,
+                    )
+                }
+            }
 
-        cardItem {
-            LicensesCard()
+            SettingsSection.APP -> LazyColumn(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(16.dp),
+            ) {
+                cardItem {
+                    BackupCard(
+                        isWorking = backupState is BackupUiState.Working,
+                        onExport = { exportLauncher.launch(defaultFilename) },
+                        onImport = { importLauncher.launch(arrayOf(BACKUP_MIME_TYPE, ANY_MIME_TYPE)) },
+                    )
+                }
+
+                cardItem {
+                    MetadataSettingsCard(
+                        savedKey = tmdbKey,
+                        check = tmdbCheck,
+                        onSave = viewModel::saveTmdbKey,
+                        onClear = viewModel::clearTmdbKey,
+                        scan = metadataScan,
+                        cachedTitles = cachedTitles,
+                        onStartScan = viewModel::startMetadataScan,
+                        onCancelScan = viewModel::cancelMetadataScan,
+                        onDismissScan = viewModel::dismissMetadataScan,
+                    )
+                }
+
+                cardItem {
+                    UpdateSettingsCard(
+                        isEnabled = checkUpdatesOnLaunch,
+                        onToggle = viewModel::setCheckUpdatesOnLaunch,
+                    )
+                }
+
+                cardItem {
+                    LicensesCard()
+                }
+            }
         }
     }
 

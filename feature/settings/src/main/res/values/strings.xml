@@ -85,6 +85,25 @@
 
     <string name="settings_merge_titles_title">Merge duplicate titles</string>
     <string name="settings_merge_titles_summary">Providers often list one film several times — SD, HD, 4K, a subtitled cut. Turn this on to see it once, with the other copies offered on the film\'s own screen. Off shows everything your provider sent.</string>
+    <string name="settings_merge_categories_title">One grid instead of shelves</string>
+    <string name="settings_merge_categories_summary">Providers file the same film under several categories — FILMS HD, FILMS 4K, FILMS AR. Turn this on to drop the shelves and browse everything in one grid.</string>
+
+    <string name="settings_section_profile">Profile</string>
+    <string name="settings_section_app">App</string>
+
+    <string name="settings_tabs_title">Tabs</string>
+    <string name="settings_tabs_summary">Which sections appear in the navigation bar. At least one has to stay on.</string>
+    <string name="settings_tab_live">Live TV</string>
+    <string name="settings_tab_movies">Movies</string>
+    <string name="settings_tab_series">Series</string>
+    <string name="settings_tab_favourites">Favourites</string>
+
+    <string name="settings_updates_title">Check for updates on launch</string>
+    <string name="settings_updates_summary">Quiblo is installed from an APK, so nothing tells you when a newer one exists. On, the app asks its own releases page once each time it opens and offers the update if there is one. Off makes no request at all.</string>
+    <string name="settings_update_available_title">New version available</string>
+    <string name="settings_update_available_body">Quiblo %1$s has been released. You are on %2$s.</string>
+    <string name="settings_update_now">Update now</string>
+    <string name="settings_update_later">Later</string>
     <string name="settings_categories_title">Categories</string>
     <string name="settings_categories_summary">Turn categories off to hide them from browsing, or rename them. These are yours alone — everyone else on this device keeps their own list. Both are local: nothing is sent to your provider, and hiding removes nothing.</string>
     <string name="settings_categories_live">Live TV</string>

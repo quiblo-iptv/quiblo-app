@@ -22,7 +22,7 @@ down at the bottom of `012` is the one this page is built around:
 
 So every row below says **what to look at**, not what was changed.
 
-Last updated: **2026-08-20**.
+Last updated: **2026-08-24**.
 
 ---
 
@@ -1318,11 +1318,15 @@ that cannot be reached twice.
 
 ### A19.16 — nothing is checked unprompted
 
+**Superseded 2026-08-24 by `029` #7 and FREEZE Amendment 13.** One request per launch is now
+expected, behind a switch that is on by default. The version of this row that still holds is
+[A21.11](#a2111--off-means-no-request), which asks the same question with the switch off.
+
 | | |
 | :---- | :---- |
-| **What to look at** | Watch the network on a launch, on a browse, on a playback — without opening Settings |
-| **Passes if** | Nothing goes to `api.github.com` |
-| **Fails if** | Anything does. The check is a button and nothing else, and `tv_consent_terms_body` is the promise it keeps |
+| **What to look at** | Watch the network on a browse and on a playback, having already let the launch check run |
+| **Passes if** | Nothing further goes to `api.github.com` |
+| **Fails if** | Anything does. Beyond the one launch check the button is still the only thing that asks |
 
 ### A19.17 — offline says offline
 
@@ -1412,6 +1416,150 @@ of them was found by opening a screen and looking at it.
 | **What to look at** | On a profile with at least five favourites — watched or not — open **For You** and scroll to the bottom |
 | **Passes if** | **You may like** is drawn, and each tile says which title caused it |
 | **Fails if** | The row is absent. Note the catalogue must have been *described*: the coverage figure under Advanced search says how much of it has |
+
+---
+
+## A21 — Round `029`: whose settings are these
+
+**Where:** both applications, and **two profiles** on the same device — most of this section is
+invisible with one. From [`029`](../agile/029_Whose_Settings_Are_These_of_Quiblo.md). The upgrade
+rows are the ones that matter: this round changes where settings are stored, and the promise is
+that nobody notices.
+
+### A21.1 — a film screen is lit
+
+| | |
+| :---- | :---- |
+| **Where** | Television |
+| **What to look at** | Open a film with strong artwork from Movies, then a series from Series |
+| **Passes if** | The corners of the screen carry colour taken from the poster, as the catalogue behind it does |
+| **Fails if** | The screen is black, or the light is a rectangle with hard edges rather than reaching the screen's own corners |
+
+### A21.2 — the heart is not an alarm
+
+| | |
+| :---- | :---- |
+| **Where** | Television, Home |
+| **What to look at** | Walk onto the heart on the hero slider and press it, favourited and not |
+| **Passes if** | The heart fills and empties. The box, the border and the tint change only with focus, and nothing on the row is red |
+| **Fails if** | Anything goes red, or the filled and hollow states are hard to tell apart from three metres |
+
+### A21.3 — the shelves collapse
+
+| | |
+| :---- | :---- |
+| **Where** | Both, on an account that files one film under several categories |
+| **What to look at** | Settings → Profile → turn on *Merge duplicate titles*, then the switch that appears under it. Open Movies |
+| **Passes if** | The television draws one grid with no headings; the phone's category chip is gone. Scrolling to the end loads more rather than stopping |
+| **Fails if** | The second switch is offered while merging is off, or the grid repeats the same film four times in a row |
+
+### A21.4 — the headings on a real panel
+
+| | |
+| :---- | :---- |
+| **Where** | **A physical television.** The emulator is where this passed and the panel is where it did not |
+| **What to look at** | Search a common word, open *Advanced*, then walk down onto a result |
+| **Passes if** | The row's heading — *Live*, *Movies*, *Series* — is on screen with the result focused, and the result's own title is whole |
+| **Fails if** | Either is cropped. Check it with the genre chips showing and with them hidden |
+
+### A21.5 — a tab goes away
+
+| | |
+| :---- | :---- |
+| **Where** | Both |
+| **What to look at** | Settings → Profile → Tabs. Switch off Live |
+| **Passes if** | The tab leaves the bar at once and the rest keep their order. Walking the bar skips it rather than passing through an empty position |
+| **Fails if** | The bar keeps a gap, or moving along it selects a tab that is not drawn |
+
+### A21.6 — hiding the tab you are standing on
+
+| | |
+| :---- | :---- |
+| **Where** | Both |
+| **What to look at** | Open Movies, then switch Movies off. Then switch off everything but one and try to switch off the last |
+| **Passes if** | The app moves to a visible tab, and the last one refuses to turn off |
+| **Fails if** | It shows a screen with no tab, or the bar empties. Relaunch afterwards: opening onto a hidden tab is the same fault one launch later |
+
+### A21.7 — a hidden shelf is actually hidden
+
+| | |
+| :---- | :---- |
+| **Where** | Both |
+| **What to look at** | Hide a category with recognisable titles in it, then browse Movies, scroll the whole grid, and open Recently Added |
+| **Passes if** | None of its titles appears anywhere in the catalogue |
+| **Fails if** | They are gone from the category list and still in the grid — which is precisely the fault this fixes, so look at the grid rather than at the list |
+
+### A21.8 — except in Favourites
+
+| | |
+| :---- | :---- |
+| **Where** | Both |
+| **What to look at** | Favourite a title, then hide the category it is in |
+| **Passes if** | It is still in Favourites |
+| **Fails if** | It disappears. Hiding a shelf is a filter on the catalogue, never on a list somebody built by hand |
+
+### A21.9 — two people, two apps
+
+| | |
+| :---- | :---- |
+| **Where** | Both, with two profiles |
+| **What to look at** | On profile A set a light theme, hide Arabic, hide the Series tab and hide a category. Switch to profile B |
+| **Passes if** | B has none of it, and the app redraws on the switch without anything being reopened. Switching back restores A's |
+| **Fails if** | Any one of them carries over, or a setting only changes after the screen is left and re-entered |
+
+### A21.10 — the upgrade nobody should notice
+
+| | |
+| :---- | :---- |
+| **Where** | Both, **upgrading over an existing install** with settings already configured |
+| **What to look at** | Before upgrading, note the theme, the seek interval and any hidden writing systems. Upgrade. Open every profile in turn |
+| **Passes if** | Every profile shows the settings the device already had |
+| **Fails if** | Any profile is back to defaults. This is `AC-PROF-08` and it is the one row here that cannot be re-run once it has been run |
+
+### A21.11 — off means no request
+
+| | |
+| :---- | :---- |
+| **Where** | Both, with a packet capture |
+| **What to look at** | Settings → App → switch *Check on launch* off. Force-stop, relaunch, browse, play something |
+| **Passes if** | Nothing whatsoever goes to `api.github.com` |
+| **Fails if** | Anything does. Off means no request, not a hidden answer — `AC-UPD-02` |
+
+### A21.12 — and on means one
+
+| | |
+| :---- | :---- |
+| **Where** | Both, with a packet capture, on a build **older than the latest release** |
+| **What to look at** | Relaunch with the switch on. Then switch profile, rotate the phone, and back out to the shell |
+| **Passes if** | Exactly one request per launch, and the offer appears once with *Update now* and *Later* |
+| **Fails if** | A second request goes out without the process having restarted — `AC-UPD-04` |
+
+### A21.13 — silence when there is nothing to say
+
+| | |
+| :---- | :---- |
+| **Where** | Both, on the **latest** build, and again with the network pulled |
+| **What to look at** | Launch and wait |
+| **Passes if** | Nothing appears at all — no "up to date", no "could not reach" |
+| **Fails if** | Anything is shown. Those answers belong to the row in Settings, where somebody asked for them |
+
+### A21.14 — *Update now*, on each app
+
+| | |
+| :---- | :---- |
+| **Where** | Both, on an older build |
+| **What to look at** | Press *Update now* |
+| **Passes if** | The television downloads, verifies the checksum and opens the system installer; the phone opens the releases page in a browser |
+| **Fails if** | The phone tries to install anything — it holds no `REQUEST_INSTALL_PACKAGES` and must not |
+
+### A21.15 — the consent screen tells the truth
+
+| | |
+| :---- | :---- |
+| **Where** | Television, **fresh install** |
+| **What to look at** | Read the terms screen |
+| **Passes if** | It names the update check and says it can be switched off |
+| **Fails if** | It still says nothing leaves the device except to servers you named — `AC-UPD-07` |
 
 ---
 

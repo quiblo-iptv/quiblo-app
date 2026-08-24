@@ -98,13 +98,14 @@ immediate ban — see [`CONTRIBUTING.md`](CONTRIBUTING.md).
 | **Playback Tuning** | Skip interval, buffering profile and a maximum-bitrate cap, all in Settings |
 | **Movies & Series** | Detail screens with artwork and overview, and Resume or Start from beginning |
 | **Continue watching** | A row of what you started and have not finished, with how far in you were. A series appears once, at the episode you were last on |
-| **Layout & Search** | Poster grids for movies and series, category filter, list/grid toggle, expandable search. On the television, one search across live channels, films and series at once, filterable by genre |
+| **Layout & Search** | Poster grids for movies and series, category filter, list/grid toggle, expandable search. On the television, one search across live channels, films and series at once, filterable by genre and year. Hide the tabs you never use, and optionally collapse a provider's categories into one grid |
 | **Theme & Design** | Material 3 Expressive, dark and light |
 | **Resume** | Playback position remembered per item, and per episode within a series |
 | **Favourites** | Survive playlist refresh |
-| **Profiles** | Choose who is watching at launch. Favourites and continue watching are kept per person; playlists and settings are shared. Guest keeps nothing |
+| **Profiles** | Choose who is watching at launch. Favourites, continue watching, settings, hidden categories and which tabs you see are all kept per person. Playlists, credentials and the Movie Database key are shared by the device. Guest keeps nothing |
 | **Film information** | Optional descriptions, genres, certificates, ratings, director and cast from The Movie Database, using your own API key. Off by default. A one-off scan in Settings can describe the whole catalogue at once, so genres and scores are there before you browse |
 | **Backup** | Versioned export and import of sources and favourites, to a file you choose |
+| **Updates** | No store, so the app asks its own releases page once per launch and offers the newer version if there is one. Silent otherwise, and switchable off. On the television it downloads and verifies the published checksum before installing |
 | **Storage & Privacy** | Entirely on-device with zero telemetry |
 
 Not yet implemented, in rough priority order: an EPG time-grid, a quick-zap overlay,
@@ -126,7 +127,7 @@ Read [`docs/PLAN.md`](docs/PLAN.md) §2 for the module structure, then
 [`docs/PLAN-TV.md`](docs/PLAN-TV.md) to watch that claim get tested.
 
 **If you are interested in agentic coding**, this app was built with Claude Code, and the
-honest account is in [`agile/`](agile). It is not a demo of prompting. It is eleven dated
+honest account is in [`agile/`](agile). It is not a demo of prompting. It is twenty-nine dated
 rounds including the failures, because those are the part worth reading:
 
 - A cache that stored **failures as answers** — every metadata error became "this title
@@ -149,7 +150,7 @@ actually been verified as opposed to assumed:
 
 | Read this | For |
 |---|---|
-| [`docs/FREEZE.md`](docs/FREEZE.md) | The frozen scope, with six dated amendments arguing every change to it |
+| [`docs/FREEZE.md`](docs/FREEZE.md) | The frozen scope, with thirteen dated amendments arguing every change to it |
 | [`docs/ACCEPTANCE.md`](docs/ACCEPTANCE.md) | Definition of done, as numbered binary criteria |
 | [`docs/ACCEPTANCE-SWEEP.md`](docs/ACCEPTANCE-SWEEP.md) | What is genuinely verified on hardware — and what is not |
 | [`docs/RELEASE-MANAGEMENT.md`](docs/RELEASE-MANAGEMENT.md) | What a version number means here, and what alpha, beta and RC each promise |
@@ -160,15 +161,25 @@ it, with a searchable code reference.
 
 ## Privacy
 
-Quiblo has no telemetry, no analytics, no crash-reporting SDK, and no update check
-against any project-controlled server. The only outbound connections are to the hosts you
-configure yourself — your playlist or Xtream provider, and The Movie Database only if you
-have entered your own API key for it. Quiblo ships no key of its own, so with the setting
-untouched nothing ever contacts that service. This is verifiable by packet capture on a
-clean install, and is a release criterion (AC-NFR-03).
+Quiblo has no telemetry, no analytics, no crash-reporting SDK, no account and no server of
+ours. The only outbound connections are to the hosts you configure yourself — your playlist
+or Xtream provider, and The Movie Database only if you have entered your own API key for it.
+Quiblo ships no key of its own, so with the setting untouched nothing ever contacts that
+service.
 
-Permissions requested: `INTERNET` and `ACCESS_NETWORK_STATE`. Nothing else — file access
-goes through the system document picker, so no storage permission is needed.
+**There is one exception, and it is named rather than buried.** Unless you switch it off in
+Settings, the app asks this project's own GitHub releases page once each time it opens
+whether a newer version exists. It is a plain request for a public file: no identifier, no
+device information, nothing about you, and nothing is sent if the setting is off. The reasoning
+is in [`docs/FREEZE.md`](docs/FREEZE.md) Amendment 13.
+
+Both of those are verifiable by packet capture on a clean install, and are release criteria
+(AC-NFR-03, AC-UPD-02, AC-UPD-05).
+
+Permissions requested: `INTERNET` and `ACCESS_NETWORK_STATE` on both apps, plus
+`REQUEST_INSTALL_PACKAGES` on the television only — it has no store to update itself from, and
+the phone deliberately does not have it. Nothing else: file access goes through the system
+document picker, so no storage permission is needed.
 
 Xtream credentials are stored encrypted on-device and are never written to logs, export
 files, or crash traces.

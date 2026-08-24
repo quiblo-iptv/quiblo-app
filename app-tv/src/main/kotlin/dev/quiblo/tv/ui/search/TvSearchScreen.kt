@@ -23,6 +23,7 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
@@ -75,6 +76,7 @@ import dev.quiblo.tv.R
 import dev.quiblo.tv.ui.browse.TvCategoryList
 import dev.quiblo.tv.ui.browse.TvCategoryRow
 import dev.quiblo.tv.ui.browse.TvRowItem
+import dev.quiblo.tv.ui.browse.posterWidthFor
 import dev.quiblo.tv.ui.common.AmbientRequest
 import dev.quiblo.tv.ui.common.FIELD_CORNER
 import dev.quiblo.tv.ui.common.LocalAmbientSink
@@ -264,15 +266,34 @@ internal fun TvSearchPanel(
 
                 !state.hasResults -> Message(stringResource(R.string.tv_search_empty))
 
-                else -> TvCategoryList(
-                    rows = found.rows,
-                    ratings = state.ratings,
-                    posters = state.posters,
-                    onVisible = onResultVisible,
-                    // Indexed against the flat list, so a live result opened from here still
-                    // has every other result to zap through.
-                    onItemClick = { item -> onOpen(found.flat, item.flatIndex) },
-                )
+                /*
+                 * Sized from the room actually left, rather than from the panel this was written
+                 * against (`029` #4).
+                 *
+                 * **The heading is what a fixed size costs, and losing it is the report.** This
+                 * screen keeps a field, an Advanced chip and a strip of genre chips above its
+                 * results, so the row gets the remainder — which is 420dp on the geometry the
+                 * tests use and less on a television that reports a shorter panel. When the row is
+                 * taller than what it is given, the list scrolls the focused tile into view and
+                 * takes the heading above it off the top: on a phone and on the emulator the
+                 * headings are there, on the television they are not, which is exactly how it was
+                 * reported.
+                 *
+                 * `BoxWithConstraints` because the answer is a measurement and there is no other
+                 * honest way to get one. See `posterWidthFor` for the arithmetic.
+                 */
+                else -> BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+                    TvCategoryList(
+                        rows = found.rows,
+                        ratings = state.ratings,
+                        posters = state.posters,
+                        onVisible = onResultVisible,
+                        // Indexed against the flat list, so a live result opened from here still
+                        // has every other result to zap through.
+                        onItemClick = { item -> onOpen(found.flat, item.flatIndex) },
+                        posterWidth = posterWidthFor(maxHeight),
+                    )
+                }
             }
         }
     }

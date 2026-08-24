@@ -164,6 +164,7 @@ class MergedTitlesQueryTest {
         groupTitle = null,
         query = "",
         favoritesOnly = 0,
+        includeHiddenCategories = 0,
         mergeDuplicates = mergeDuplicates,
         hiddenMask = 0,
         unknownMask = SCRIPT_MASK_UNKNOWN,

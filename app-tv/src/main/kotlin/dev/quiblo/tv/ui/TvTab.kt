@@ -19,6 +19,7 @@
 package dev.quiblo.tv.ui
 
 import androidx.annotation.StringRes
+import dev.quiblo.core.model.AppTab
 import dev.quiblo.tv.R
 
 /**
@@ -33,7 +34,19 @@ import dev.quiblo.tv.R
  * life of the television app, which put "add a playlist" — something a viewer does once —
  * one press away from what they do every day, and it lives in Settings now.
  */
-internal enum class TvTab(@param:StringRes val labelRes: Int, val isIconOnly: Boolean = false) {
+internal enum class TvTab(
+    @param:StringRes val labelRes: Int,
+    val isIconOnly: Boolean = false,
+    /**
+     * Which switchable tab this is, or null for one that cannot be switched off (`029` #5).
+     *
+     * Search and Home are the nulls, and `AppTab` has no entry for either — which is what makes
+     * hiding them unrepresentable rather than merely avoided. Search is the only way to reach a
+     * title that is not on a shelf, and Home is where this shell opens: a bar that could lose it
+     * would open on a tab it has been told not to draw.
+     */
+    val tab: AppTab? = null,
+) {
     SEARCH(R.string.tv_tab_search, isIconOnly = true),
 
     /**
@@ -48,8 +61,14 @@ internal enum class TvTab(@param:StringRes val labelRes: Int, val isIconOnly: Bo
      * It was Recently Added, which is now the first of its three rows.
      */
     FOR_YOU(R.string.tv_tab_for_you),
-    LIVE(R.string.tv_tab_live),
-    MOVIES(R.string.tv_tab_movies),
-    SERIES(R.string.tv_tab_series),
-    FAVOURITES(R.string.tv_tab_favourites),
+    LIVE(R.string.tv_tab_live, tab = AppTab.LIVE),
+    MOVIES(R.string.tv_tab_movies, tab = AppTab.MOVIES),
+    SERIES(R.string.tv_tab_series, tab = AppTab.SERIES),
+    FAVOURITES(R.string.tv_tab_favourites, tab = AppTab.FAVOURITES),
+    ;
+
+    companion object {
+        /** The bar as this viewer has arranged it, in the order the enum declares. */
+        fun visible(hidden: Set<AppTab>): List<TvTab> = entries.filter { it.tab == null || it.tab !in hidden }
+    }
 }

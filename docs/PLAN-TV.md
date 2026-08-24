@@ -335,7 +335,14 @@ Who is watching, asked before the catalogue is drawn. Favourites and continue wa
 to a profile; everything else on the television stays shared. Guest keeps nothing, and keeps
 that promise through a power cut rather than only through a polite exit.
 
-- **Exit:** AC-PROF-01…06 pass on the television, AC-PROF-05 — the upgrade — first.
+**Widened 2026-08-24 by FREEZE Amendment 12.** A profile now owns every setting a person
+chooses — theme, playback tuning, hidden writing systems, hidden categories, the merge
+switches and which tabs the bar draws. What stays shared is the device: playlists,
+credentials, the metadata key, the backup file and the launch update check. Settings is in
+two halves so the screen says which is which.
+
+- **Exit:** AC-PROF-01…09 and AC-TABS-01…04 pass on the television, AC-PROF-05 and
+  AC-PROF-08 — the two upgrades — first.
 
 ### T5 — Release (week 6)
 - Second release track, TV banner and store assets, size budget.

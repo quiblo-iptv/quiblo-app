@@ -20,6 +20,7 @@ package dev.quiblo.tv.update
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import dev.quiblo.core.data.PlayerSettingsRepository
 import dev.quiblo.core.network.update.DownloadResult
 import dev.quiblo.core.network.update.ReleaseChecker
 import dev.quiblo.core.network.update.ReleaseDownloader
@@ -27,6 +28,7 @@ import dev.quiblo.core.network.update.UpdateCheck
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import java.io.File
 
@@ -75,12 +77,74 @@ sealed interface TvUpdateState {
 class TvUpdateViewModel(
     private val checker: ReleaseChecker,
     private val downloader: ReleaseDownloader,
+    private val settings: PlayerSettingsRepository,
     private val currentVersion: String,
     private val updatesDirectory: File,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow<TvUpdateState>(TvUpdateState.Idle)
     val state: StateFlow<TvUpdateState> = _state.asStateFlow()
+
+    private val _launchPrompt = MutableStateFlow(false)
+
+    /** Whether the shell should be showing "new version available" over whatever is on screen. */
+    val launchPrompt: StateFlow<Boolean> = _launchPrompt.asStateFlow()
+
+    /** What this build is, so the prompt can say what is being replaced. */
+    val installedVersion: String = currentVersion
+
+    private var askedOnLaunch = false
+
+    /**
+     * Asks once when the app opens, and says nothing unless there is something to say (`029` #7).
+     *
+     * **This is the one thing in the app that calls out without being asked**, and the four rules
+     * that keep it from being the thing the consent copy promises against are:
+     *
+     * - **It is a setting.** Off means no request is made at all, not that the answer is hidden.
+     *   See `PlayerSettingsRepository.checkUpdatesOnLaunch`.
+     * - **It asks this project's own releases page and nothing else.** No analytics, no identifier,
+     *   no payload — the same public JSON document [check] fetches.
+     * - **Once per process**, so a profile switch or backing out to the shell does not ask again.
+     * - **Silence is silence.** Every outcome but "there is a newer one" leaves the state exactly
+     *   as it was. A viewer who opened the app to watch something is not told that a check they
+     *   did not ask for failed, or that they are up to date — the row in Settings is where those
+     *   answers belong, because there somebody asked.
+     *
+     * The state it sets is the row's own [TvUpdateState.Available], deliberately: the prompt and
+     * the settings row then drive one state machine rather than two, so *Update now* downloads
+     * through exactly the path the button does.
+     */
+    fun checkOnLaunch() {
+        if (askedOnLaunch) return
+        askedOnLaunch = true
+
+        viewModelScope.launch {
+            if (!settings.checkUpdatesOnLaunch.first()) return@launch
+            if (_state.value !is TvUpdateState.Idle) return@launch
+
+            val outcome = checker.check(currentVersion, ReleaseChecker.TV_ASSET_PREFIX)
+            if (outcome is UpdateCheck.Available) {
+                _state.value = TvUpdateState.Available(outcome.version, outcome)
+                _launchPrompt.value = true
+            }
+        }
+    }
+
+    /**
+     * "Later".
+     *
+     * Puts the offer away for this session and nothing more. There is deliberately no "skip this
+     * version": a viewer who dismisses an update is saying not now, and a switch recording which
+     * release they said no to is a second setting nobody can find again to undo.
+     *
+     * The state goes back to idle only if it is still the offer. A download started from the
+     * prompt is left running — closing a dialog is not cancelling what it began.
+     */
+    fun dismissLaunchPrompt() {
+        _launchPrompt.value = false
+        if (_state.value is TvUpdateState.Available) _state.value = TvUpdateState.Idle
+    }
 
     fun check() {
         if (_state.value is TvUpdateState.Checking || _state.value is TvUpdateState.Downloading) return

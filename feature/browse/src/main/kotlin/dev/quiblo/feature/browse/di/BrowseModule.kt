@@ -48,6 +48,7 @@ val browseModule: Module = module {
             popularTitles = get(),
             recommendations = get(),
             feedRowCache = get(),
+            playerSettings = get(),
         )
     }
 

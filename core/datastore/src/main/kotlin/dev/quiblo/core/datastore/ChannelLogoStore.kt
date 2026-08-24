@@ -21,7 +21,6 @@ package dev.quiblo.core.datastore
 import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
-import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
@@ -49,7 +48,15 @@ class ChannelLogoStore(context: Context) {
 
     private val dataStore = context.applicationContext.channelLogoDataStore
 
-    val isEnabled: Flow<Boolean> = dataStore.data.map { it[ENABLED] ?: false }
+    /**
+     * Whether this viewer wants the reference list consulted.
+     *
+     * Per profile since `029` #6, like everything else a person chooses. The consent it stands
+     * for is unchanged: a clean install asks nobody for anything, and no profile inherits an
+     * opt-in it did not make — see [Scoped] for what a profile that has never answered reads.
+     */
+    fun isEnabled(profileId: Long): Flow<Boolean> =
+        dataStore.data.map { it.scopedBoolean(ENABLED, profileId) ?: false }
 
     /**
      * The same answer, read once.
@@ -57,14 +64,14 @@ class ChannelLogoStore(context: Context) {
      * For the lookup path, which runs per channel and must not hold a subscription open for
      * the life of a browse screen just to read one boolean.
      */
-    suspend fun isEnabledNow(): Boolean = isEnabled.first()
+    suspend fun isEnabledNow(profileId: Long): Boolean = isEnabled(profileId).first()
 
     /** Epoch millis of the last successful download, or 0 if it has never happened. */
     suspend fun lastRefreshedAt(): Long = dataStore.data.first()[LAST_REFRESHED] ?: 0L
 
-    suspend fun setEnabled(enabled: Boolean) {
+    suspend fun setEnabled(profileId: Long, enabled: Boolean) {
         dataStore.edit { preferences ->
-            preferences[ENABLED] = enabled
+            preferences.putScoped(ENABLED, profileId, enabled)
             // Turning it off forgets when the index was fetched, so turning it back on
             // later gets a fresh one rather than trusting a timestamp from a period the
             // feature was not running.
@@ -77,7 +84,15 @@ class ChannelLogoStore(context: Context) {
     }
 
     private companion object {
-        val ENABLED = booleanPreferencesKey("channel_logos_enabled")
+        const val ENABLED = "channel_logos_enabled"
+
+        /**
+         * App-wide, unlike [ENABLED] beside it.
+         *
+         * The index is one download shared by everybody on the television. When it was last
+         * fetched is a fact about that file, not about a person, and filing it per profile would
+         * re-download several megabytes for each of them.
+         */
         val LAST_REFRESHED = longPreferencesKey("channel_logos_refreshed_at")
     }
 }

@@ -82,7 +82,7 @@ IDs are stable — reference them in commits and issues (`fix: AC-PL-04 crash on
 |---|---|
 | AC-NFR-01 | Cold start to interactive: under 2s on a mid-range Android 11 device. |
 | AC-NFR-02 | Release APK under 25 MB. |
-| AC-NFR-03 | Zero network requests to any host the user did not configure. Verifiable by packet capture on a clean install. A metadata service the user has enabled by entering their own key counts as configured; with no key entered, a packet capture must show no contact with it at all. |
+| AC-NFR-03 | Zero network requests to any host the user did not configure, with one named exception. Verifiable by packet capture on a clean install. A metadata service the user has enabled by entering their own key counts as configured; with no key entered, a packet capture must show no contact with it at all. **The exception is the launch update check** (`FREEZE.md` Amendment 13): one `GET` for this project's public release manifest per launch, carrying nothing about the device or the viewer, and making no request at all when the setting is off — see AC-UPD-02 and AC-UPD-05. Any other unconfigured host fails this criterion. |
 | AC-NFR-04 | This project declares `INTERNET` and `ACCESS_NETWORK_STATE` on both applications, and `REQUEST_INSTALL_PACKAGES` on the television only. Each merged manifest additionally contains `WAKE_LOCK` (Media3), `<applicationId>.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION` (androidx.core), and `FOREGROUND_SERVICE` and `RECEIVE_BOOT_COMPLETED` (WorkManager) — those four and no others. No storage permission (SAF instead), no location, no contacts, no camera, no microphone. `REQUEST_INSTALL_PACKAGES` in the phone's merged manifest fails this criterion. A permission from any source that is not on this list fails it until it is examined and named in `FREEZE.md` — see Amendment 11 for the current list and why each is there. |
 | AC-NFR-05 | Passes `./gradlew lint detekt test` with zero errors in CI. |
 | AC-NFR-06 | `:core:*` modules have no dependency on Compose or any `:feature:*` module — enforced by a build-level dependency check, not convention. |
@@ -141,10 +141,49 @@ Added 2026-08-09 by `FREEZE.md` Amendment 6.
 |---|---|
 | AC-PROF-01 | On a device where nobody has been chosen, no catalogue, favourite or resume point is shown until a profile or Guest is chosen. |
 | AC-PROF-02 | Favourites and continue-watching differ between two profiles on the same source, and neither can see the other's. |
-| AC-PROF-03 | Playlists, player settings, hidden categories and the metadata key are unchanged by switching profile. |
+| AC-PROF-03 | Playlists, credentials, the metadata key, the backup file and the launch update check are unchanged by switching profile. *(Restated 2026-08-24 by Amendment 12; it previously named player settings and hidden categories, both of which now follow the profile — see AC-PROF-07.)* |
 | AC-PROF-04 | A guest session's favourites and resume points are gone after leaving it, **and** after force-stopping the app mid-session and reopening it. |
 | AC-PROF-05 | Upgrading from a build without profiles keeps every favourite and resume point, reachable under a profile named Default. |
 | AC-PROF-06 | Deleting a profile deletes its favourites and resume points and leaves every other profile's intact. |
+| AC-PROF-07 | Theme, seek interval, buffering, bitrate cap, auto-next, subtitle style, ambient player light, hidden writing systems, channel logos, the merge settings, the visible tabs and the category edits all differ between two profiles, and switching profile redraws the app to the new profile's answers without anything being reopened. |
+| AC-PROF-08 | Upgrading from a build with app-wide settings shows every profile the settings the device already had. A profile that then changes one changes it for itself alone. |
+| AC-PROF-09 | The settings screen separates what belongs to the profile from what belongs to the device, and every control is under the heading that owns it. |
+
+## AC-TABS — Which tabs a viewer sees
+
+Added 2026-08-24 by `FREEZE.md` Amendment 12.
+
+| ID | Criterion |
+|---|---|
+| AC-TABS-01 | Switching a tab off removes it from the bar on both applications and leaves every other tab where it was. |
+| AC-TABS-02 | The last visible tab cannot be switched off. The control refuses rather than greying out. |
+| AC-TABS-03 | Switching off the tab currently on screen moves the app to a visible one rather than leaving a screen with no way back to it. Relaunching does the same when the graph's own start destination is hidden. |
+| AC-TABS-04 | Search, Sources and the television's Home cannot be switched off from any screen. |
+
+## AC-HIDE — Hidden categories
+
+Added 2026-08-24 by `FREEZE.md` Amendment 12. This is behaviour the app has claimed since
+categories became editable; these criteria exist because it was not true of the catalogue.
+
+| ID | Criterion |
+|---|---|
+| AC-HIDE-01 | A category switched off is absent from the phone's grid, from the television's rows, from the paged catalogue and from Recently Added — not merely from the category list. |
+| AC-HIDE-02 | A favourite in a hidden category is still shown in Favourites. Hiding a shelf never removes something the viewer picked by hand. |
+| AC-HIDE-03 | Search omits hidden categories unless *Include hidden* is on, and two profiles hiding different categories see different catalogues from the same source. |
+
+## AC-UPD — Update check
+
+Added 2026-08-24 by `FREEZE.md` Amendment 13.
+
+| ID | Criterion |
+|---|---|
+| AC-UPD-01 | With the launch check on and a newer release published, opening the app offers it once, with *Update now* and *Later* and no third option. |
+| AC-UPD-02 | With the launch check off, a packet capture over a whole launch shows **no** contact with the releases host. |
+| AC-UPD-03 | Every outcome but "a newer release exists" is silent: up to date, offline, unreachable and malformed change nothing on screen. |
+| AC-UPD-04 | The check runs at most once per process. A profile switch, a rotation, or backing out to the shell does not repeat it. |
+| AC-UPD-05 | The request carries no identifier, no device information and no body. The installed version is compared on the device. |
+| AC-UPD-06 | *Update now* on the television downloads and verifies the published SHA-256 before the installer is offered, exactly as the Settings button does. On the phone it opens the releases page, and the phone's merged manifest still declares no `REQUEST_INSTALL_PACKAGES` (AC-NFR-04). |
+| AC-UPD-07 | The consent screen names the launch check and says it can be switched off. |
 
 ## AC-LEGAL — Licensing and Compliance
 
@@ -177,3 +216,9 @@ to learn the hard way.
 AC-TV-14 and 15 arrived with the search screen on 2026-08-09, which is `PLAN-TV.md` §3.1
 being delivered rather than new scope: the bar in that document has always had a magnifier on
 the far left and has never had Sources in it. Same third row, still not a separate gate.
+
+AC-PROF-07…09, AC-TABS-\*, AC-HIDE-\* and AC-UPD-\* arrived on 2026-08-24 with `029`, under
+`FREEZE.md` Amendments 12 and 13. They apply to both applications and so sit in every row above
+rather than being a gate of their own. AC-HIDE-\* is the odd one: it describes behaviour the app
+has claimed since categories became editable, and is written down because the catalogue queries
+never implemented it.

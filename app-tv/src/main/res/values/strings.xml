@@ -22,7 +22,7 @@
     <string name="tv_consent_what_body">A player for playlists you already have.\n\nIt ships with no channels, no films and no way to find any. If you do not already have a playlist or an IPTV subscription, there is nothing here to watch yet — and this project will not help you find one.</string>
     <string name="tv_consent_next">Next</string>
     <string name="tv_consent_terms_title">Before you start</string>
-    <string name="tv_consent_terms_body">You add your own sources, and you are responsible for them — including whether watching them is legal where you live.\n\nNothing you enter leaves this device except to the servers you name yourself. There is no account, no tracking, and no server of ours.\n\nQuiblo is free software under the GPLv3 and comes with no warranty of any kind.</string>
+    <string name="tv_consent_terms_body">You add your own sources, and you are responsible for them — including whether watching them is legal where you live.\n\nNothing you enter leaves this device except to the servers you name yourself. There is no account, no tracking, and no server of ours.\n\nThe one exception is the update check: unless you turn it off in Settings, Quiblo asks its own releases page once each time it opens whether a newer version exists. It sends nothing about you.\n\nQuiblo is free software under the GPLv3 and comes with no warranty of any kind.</string>
     <string name="tv_consent_terms_link">The full terms are at quiblo-iptv.github.io/quiblo-wiki/wiki/terms</string>
     <string name="tv_consent_start">Start watching</string>
     <!-- The third page. A viewer who has just agreed to the terms has nothing to watch until
@@ -180,6 +180,24 @@ Make one on the page below — it is quicker on a phone than on a remote — the
     <string name="tv_settings_search_live_detail">Off. A live channel carries no genre, so a genre filter can only match it on its name.</string>
     <string name="tv_settings_merge_titles">Merge duplicate titles</string>
     <string name="tv_settings_merge_titles_detail">Show a film once when your provider lists it in several qualities. The other copies are offered on the film\'s own screen.</string>
+    <string name="tv_settings_merge_categories">One grid instead of shelves</string>
+    <string name="tv_settings_merge_categories_detail">Providers file the same film under several categories — FILMS HD, FILMS 4K, FILMS AR. Turn this on to drop the shelves and browse everything in one grid.</string>
+
+    <string name="tv_settings_section_profile">Profile</string>
+    <string name="tv_settings_section_app">App</string>
+
+    <string name="tv_settings_tabs">Tabs</string>
+    <string name="tv_settings_tabs_detail">Which sections appear in the bar at the top. Yours alone — everyone else on this television keeps their own. At least one has to stay on.</string>
+
+    <string name="tv_settings_metadata">Film information</string>
+
+    <string name="tv_settings_updates">Updates</string>
+    <string name="tv_settings_update_on_launch">Check on launch</string>
+    <string name="tv_settings_update_on_launch_detail">Quiblo is installed from an APK, so nothing tells you when a newer one exists. On, the app asks its own releases page once each time it opens. Off makes no request at all.</string>
+    <string name="tv_update_available_title">New version available</string>
+    <string name="tv_update_available_body">Quiblo %1$s has been released. You are on %2$s.</string>
+    <string name="tv_update_now">Update now</string>
+    <string name="tv_update_later">Later</string>
     <string name="tv_settings_categories">Categories</string>
     <string name="tv_settings_category_kind">Editing categories for</string>
     <string name="tv_settings_category_whose">Hiding, renaming and reordering are yours alone. Everyone else on this television keeps their own list.</string>

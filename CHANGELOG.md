@@ -15,6 +15,8 @@ Formatted after [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and ve
 
 ## Unreleased
 
+## 0.25.1
+
 ### Fixed
 
 - **Merging duplicate titles no longer stops the Live, Movies and Series tabs from loading.** The merge asked one question per row — *is this the provider's first listing of its identity?* — with no index to order it by, so the database sorted each group of same-named rows once for every row in that group. Four copies of a film cost nothing; the thousand separator rows a panel pads its live list with cost seconds each time anything changed. The index that fixes it takes a query that ran for 6.7 seconds down to 21 milliseconds over the same catalogue.

@@ -38,6 +38,8 @@ fun TvSplashScreen(
     versionName: String,
     modifier: Modifier = Modifier,
     durationMillis: Long = TV_SPLASH_DURATION_MILLIS,
+    /** See [QuibloSplashScreen]: whether the catalogue behind this is warm enough to draw. */
+    isReady: Boolean = true,
     playSound: Boolean = true,
     onSplashComplete: () -> Unit = {},
 ) {
@@ -48,14 +50,30 @@ fun TvSplashScreen(
         titleSize = TV_TITLE_FONT_SIZE,
         logoTitleSpacing = TV_LOGO_TITLE_SPACING,
         durationMillis = durationMillis,
+        isReady = isReady,
+        minDurationMillis = TV_SPLASH_MIN_DURATION_MILLIS,
         insetForSystemBars = false,
         playSound = playSound,
         onSplashComplete = onSplashComplete,
     )
 }
 
-/** The whole sting, reverb and all: a television is not waiting to be unlocked and used. */
+/**
+ * The longest the mark stays up: the whole sting, reverb and all.
+ *
+ * A ceiling since `030` rather than a fixed length. It is the time a cold catalogue is allowed to
+ * take before the app is shown regardless — not a delay the viewer pays on every launch.
+ */
 private const val TV_SPLASH_DURATION_MILLIS = 5000L
+
+/**
+ * The shortest: long enough for the mark to be seen and read, and no longer (`030` #5).
+ *
+ * A warm start now leaves here rather than at five seconds. The sting is cut short when it does,
+ * which is the trade the length was chosen against: a viewer opening the app wants their catalogue
+ * more than they want the rest of a jingle they have heard every evening this year.
+ */
+private const val TV_SPLASH_MIN_DURATION_MILLIS = 1500L
 
 // Read from across a room rather than at arm's length.
 private val TV_LOGO_SIZE = 240.dp

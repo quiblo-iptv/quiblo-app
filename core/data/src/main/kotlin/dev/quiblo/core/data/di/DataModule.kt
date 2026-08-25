@@ -22,6 +22,7 @@ import android.content.Context
 import dev.quiblo.core.data.AndroidPickedSubtitleFiles
 import dev.quiblo.core.data.ApplicationScope
 import dev.quiblo.core.data.CatalogueIdentityBackfill
+import dev.quiblo.core.data.CatalogueWarmup
 import dev.quiblo.core.data.CategoryRepository
 import dev.quiblo.core.data.ChannelLogoRepository
 import dev.quiblo.core.data.ChannelRepository
@@ -185,6 +186,17 @@ val dataModule: Module = module {
         FeedRowCacheRepository(
             dao = get(),
             profiles = get(),
+        )
+    }
+    // Named, like every definition here whose trailing parameters carry defaults: the fifth and
+    // sixth are a clock and a scope, and a positional list would hand Koin's answer for something
+    // else to one of them.
+    single {
+        CatalogueWarmup(
+            sourceRepository = get(),
+            channelRepository = get(),
+            categoryRepository = get(),
+            watchHistoryRepository = get(),
         )
     }
 }

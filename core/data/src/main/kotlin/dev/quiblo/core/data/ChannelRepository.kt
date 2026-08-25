@@ -440,6 +440,19 @@ class ChannelRepository(
             favoriteDao.observeIsFavorite(profile?.id ?: Profile.NONE_ID, channel.sourceId, channel.stableKey)
         }
 
+    /**
+     * Every favourited identity for one source, as a stream.
+     *
+     * For a screen holding channels by value rather than re-reading them: the hero slider keeps
+     * the five it chose, so the `isFavorite` on those copies is as old as the choice and its
+     * heart never moved when pressed. A set for the whole source is one small read and one
+     * subscription, where a flow per item would be five.
+     */
+    fun observeFavoriteKeys(sourceId: Long): Flow<Set<String>> =
+        profiles.activeProfile.flatMapLatest { profile ->
+            favoriteDao.observeKeysFor(profile?.id ?: Profile.NONE_ID, sourceId)
+        }.map { it.toSet() }
+
     suspend fun favoriteCount(sourceId: Long): Int =
         favoriteDao.countFor(profiles.activeProfileId, sourceId)
 

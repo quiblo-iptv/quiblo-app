@@ -46,6 +46,8 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -63,7 +65,9 @@ import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.sin
@@ -79,6 +83,13 @@ import kotlin.math.sin
  *
  * The zoom lands on the last [ZOOM_DURATION_MILLIS] of [durationMillis], so a caller sets one
  * number and the timing follows it.
+ *
+ * [isReady] and [minDurationMillis] turn that one number into a window (`030` #5). A splash whose
+ * length is a constant is a constant delay in front of an app that then makes the viewer wait
+ * again while it reads its catalogue; gated on readiness, the same seconds are the loading, and
+ * the screen behind is drawn the moment there is something to draw. Both bounds are kept: never
+ * shorter than [minDurationMillis], so a warm start does not flash the mark and vanish, and never
+ * longer than [durationMillis], so a database that will not answer is not a locked television.
  */
 @Composable
 fun QuibloSplashScreen(
@@ -88,6 +99,15 @@ fun QuibloSplashScreen(
     titleSize: TextUnit = TITLE_SIZE,
     logoTitleSpacing: Dp = LOGO_TITLE_SPACING,
     durationMillis: Long = DEFAULT_SPLASH_DURATION_MILLIS,
+    /**
+     * Whether what is behind the splash is worth showing yet.
+     *
+     * Defaults to true, which is the old behaviour exactly: the splash runs for [durationMillis]
+     * and nothing waits on anything.
+     */
+    isReady: Boolean = true,
+    /** The floor of the window. Defaults to [durationMillis], which is a fixed-length splash. */
+    minDurationMillis: Long = durationMillis,
     insetForSystemBars: Boolean = true,
     playSound: Boolean = true,
     onSplashComplete: () -> Unit = {},
@@ -99,7 +119,12 @@ fun QuibloSplashScreen(
     val zoomScale = remember { Animatable(1f) }
     val exitAlpha = remember { Animatable(1f) }
 
-    LaunchedEffect(durationMillis) {
+    // Held in state rather than read from the parameter. The effect below is not restarted when
+    // readiness changes, so a captured `isReady` would be the value from the frame the splash
+    // started on — false, always, and the cap would be the only thing that ever ended the wait.
+    val ready by rememberUpdatedState(isReady)
+
+    LaunchedEffect(durationMillis, minDurationMillis) {
         launch {
             introAlpha.animateTo(1f, tween(INTRO_DURATION_MILLIS, easing = FastOutSlowInEasing))
         }
@@ -108,8 +133,16 @@ fun QuibloSplashScreen(
         }
 
         // Everything before the zoom is rest. The zoom is what the sting's crescendo is under,
-        // so it is timed from the end rather than from the start.
-        delay((durationMillis - ZOOM_DURATION_MILLIS).coerceAtLeast(0L))
+        // so it is timed from the end rather than from the start — which is why both bounds are
+        // measured against the rest and not against the whole.
+        val longestRest = (durationMillis - ZOOM_DURATION_MILLIS).coerceAtLeast(0L)
+        val shortestRest = (minDurationMillis - ZOOM_DURATION_MILLIS).coerceIn(0L, longestRest)
+
+        delay(shortestRest)
+        // Waits for the app behind to be worth showing, and gives up at the cap.
+        withTimeoutOrNull(longestRest - shortestRest) {
+            snapshotFlow { ready }.first { it }
+        }
 
         launch {
             zoomScale.animateTo(

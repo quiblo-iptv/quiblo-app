@@ -31,6 +31,7 @@ import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -81,6 +82,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.paging.LoadState
 import androidx.paging.compose.collectAsLazyPagingItems
 import coil3.compose.SubcomposeAsyncImage
 import dev.quiblo.core.common.cleanedForDisplay
@@ -175,10 +177,31 @@ private fun TvMergedGrid(
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val items = viewModel.pagedItems.collectAsLazyPagingItems()
 
+    /*
+     * The grid's own loading state, read from Paging rather than from the screen state (`030` #1).
+     *
+     * **`state.isLoading` is not this screen's answer, and that is the whole defect.** The state
+     * flow carries the categories, the ratings and the history; for this scope it carries no items
+     * at all, because the items are paged. So it went false the moment those arrived — a fraction
+     * of a second — while the first page was still being read, and the branch below found an empty
+     * list and said the catalogue was empty. Nothing was spinning and nothing was wrong; the
+     * screen was simply lying about a query still in flight. Leaving the tab and coming back read
+     * the pages Paging had cached by then, which is why moving between tabs "fixed" it.
+     *
+     * `loadState.refresh` is the fact being asked for: whether the first page has come back.
+     */
+    val refresh = items.loadState.refresh
+
     when {
-        state.isLoading -> Box(modifier = modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            CircularProgressIndicator(color = Color.White)
-        }
+        state.isLoading || refresh is LoadState.Loading ->
+            Box(modifier = modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                CircularProgressIndicator(color = Color.White)
+            }
+
+        // A read that failed is not an empty catalogue. It says so, and the D-pad can ask again —
+        // the alternative is a viewer looking at "nothing here" over a catalogue of thirty
+        // thousand films with no way to find out otherwise.
+        refresh is LoadState.Error -> TvGridRetry(onRetry = items::retry, modifier = modifier)
 
         items.itemCount == 0 -> Box(modifier = modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             Text(
@@ -191,11 +214,18 @@ private fun TvMergedGrid(
         else -> LazyVerticalGrid(
             // Adaptive rather than a fixed count. A television panel is 960dp wide and a monitor
             // running this build is not, and a column count chosen for one crops the other.
-            columns = GridCells.Adaptive(minSize = POSTER_WIDTH + FOCUS_GROWTH_HORIZONTAL * 2),
+            //
+            // The tile is narrower here than on the shelves (`030` #3). A shelf is walked
+            // sideways, so a big poster costs nothing but presses; a grid is the whole catalogue
+            // at once and the question it answers is "what is in here" — which is a question about
+            // how many titles fit on the screen. At 120dp a 960dp panel holds seven across where
+            // the shelf width held five.
+            columns = GridCells.Adaptive(minSize = GRID_POSTER_WIDTH + FOCUS_GROWTH_HORIZONTAL * 2),
             modifier = modifier.fillMaxSize(),
             // Room for a focused poster to grow into at the edges of the grid, on the same
             // reasoning as the rows: a `LazyVerticalGrid` clips to its own bounds.
             contentPadding = PaddingValues(vertical = FOCUS_GROWTH, horizontal = FOCUS_GROWTH_HORIZONTAL),
+            horizontalArrangement = Arrangement.Center,
         ) {
             items(count = items.itemCount) { index ->
                 val channel = items[index] ?: return@items
@@ -205,9 +235,53 @@ private fun TvMergedGrid(
                     rating = state.ratings[channel.stableKey],
                     fallbackArtworkUrl = state.posters[channel.stableKey],
                     onClick = { onPlay(items.itemSnapshotList.items, index) },
+                    // Matches the cell the grid measured. A tile wider than its column is a tile
+                    // clipped down one side, and a focused one is clipped further.
+                    posterWidth = GRID_POSTER_WIDTH,
                 )
             }
         }
+    }
+}
+
+/**
+ * What the merged grid draws when the catalogue could not be read.
+ *
+ * A message and one focusable control, because a television has no pull-to-refresh and no error
+ * bar: the remote is the only way to say "try again", so there has to be something for it to land
+ * on.
+ */
+@Composable
+private fun TvGridRetry(onRetry: () -> Unit, modifier: Modifier = Modifier) {
+    val focusRequester = remember { FocusRequester() }
+    val interactionSource = remember { MutableInteractionSource() }
+    val isFocused by interactionSource.collectIsFocusedAsState()
+
+    // Insisted on rather than requested once: the node does not exist on the frame this runs in.
+    LaunchedEffect(Unit) { focusRequester.insistOnFocus() }
+
+    Column(
+        modifier = modifier.fillMaxSize(),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Text(
+            text = stringResource(R.string.tv_catalogue_unreadable),
+            color = Color.White.copy(alpha = 0.6f),
+            style = MaterialTheme.typography.headlineSmall,
+        )
+        Spacer(modifier = Modifier.height(16.dp))
+        Text(
+            text = stringResource(R.string.tv_retry),
+            color = if (isFocused) Color.Black else Color.White,
+            style = MaterialTheme.typography.labelLarge,
+            modifier = Modifier
+                .focusRequester(focusRequester)
+                .clip(RoundedCornerShape(8.dp))
+                .background(if (isFocused) Color.White else Color.White.copy(alpha = 0.15f))
+                .clickable(interactionSource = interactionSource, indication = null, onClick = onRetry)
+                .padding(horizontal = 20.dp, vertical = 10.dp),
+        )
     }
 }
 
@@ -1196,6 +1270,15 @@ private val LIST_TOP_PADDING = 16.dp
 private val MIN_POSTER_WIDTH = 100.dp
 
 private val POSTER_WIDTH = 150.dp
+
+/**
+ * The tile width of the merged grid, which is narrower than a shelf's (`030` #3).
+ *
+ * 120dp rather than 150dp, which is seven columns on a 960dp panel where the shelf width gave
+ * five. It stays above [MIN_POSTER_WIDTH], the figure the search screen already established as
+ * the smallest a poster stays readable at from a sofa.
+ */
+private val GRID_POSTER_WIDTH = 120.dp
 private const val POSTER_ASPECT_RATIO = 2f / 3f
 
 /** The poster's own height, so the figure sits beside the artwork rather than beside the title. */

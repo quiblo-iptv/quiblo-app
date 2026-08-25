@@ -1563,6 +1563,67 @@ that nobody notices.
 
 ---
 
+## A22 — Round `030`: what the sofa reported about loading and the slider
+
+Six reports from a television, all of them about what the app says while it is working. Every row
+here is written against the symptom that was described, not against the mechanism that was found.
+
+### A22.1 — the merged grid, on a cold tab
+
+| | |
+| :---- | :---- |
+| **Where** | Television, merge settings on, a catalogue of thousands |
+| **What to look at** | Open Movies, then Series, without leaving and returning |
+| **Passes if** | A spinner while the first page is read, then the grid |
+| **Fails if** | *Nothing here yet* appears at any point before the grid, or the titles arrive only after a trip to another tab |
+
+### A22.2 — the grid when the read fails
+
+| | |
+| :---- | :---- |
+| **Where** | Television, merge settings on |
+| **What to look at** | A grid whose first page could not be read |
+| **Passes if** | It says the catalogue could not be read and the remote can reach *Try again*, which reloads |
+| **Fails if** | It says the catalogue is empty, or there is nothing for the D-pad to land on |
+
+### A22.3 — the poster that has a cover on its detail screen
+
+| | |
+| :---- | :---- |
+| **Where** | Television, a Movie Database key configured |
+| **What to look at** | A tile drawn with no artwork. Open it, see the cover, go back, and scroll it off screen and back |
+| **Passes if** | The tile shows the cover on a later pass |
+| **Fails if** | It is still blank for the rest of the session while the detail screen has the picture |
+
+### A22.4 — the heart on the hero slider
+
+| | |
+| :---- | :---- |
+| **Where** | Television, Home |
+| **What to look at** | Press the heart beside *Play* on the featured title |
+| **Passes if** | It fills at once, and empties when pressed again. It is a heart with no box or border around it, brighter and larger when the remote is on it |
+| **Fails if** | Nothing changes on screen, or the control is drawn as a bordered button |
+
+### A22.5 — the grid's density
+
+| | |
+| :---- | :---- |
+| **Where** | Television, merge settings on |
+| **What to look at** | Count the posters across one row of the grid |
+| **Passes if** | More fit than a shelf shows, and none is clipped at either edge or when focused |
+| **Fails if** | A focused poster is cut off, or the count is unchanged |
+
+### A22.6 — the launch, and the profile switch
+
+| | |
+| :---- | :---- |
+| **Where** | Television, a real catalogue, cold start |
+| **What to look at** | Time from the mark appearing to the first poster. Then switch profile and time the first poster again |
+| **Passes if** | The mark leaves early on a warm start and the catalogue is there behind it; a cold one holds the mark up to five seconds and no longer |
+| **Fails if** | The mark is followed by a spinner over an empty screen, or a launch is stuck on the logo past five seconds |
+
+---
+
 ## C — Deferred measurements, in writing
 
 Things nobody can check yet, recorded so they stop being re-asked.

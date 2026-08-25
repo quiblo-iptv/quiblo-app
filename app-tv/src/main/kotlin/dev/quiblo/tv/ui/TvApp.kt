@@ -77,6 +77,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import dev.quiblo.core.data.CatalogueWarmup
 import dev.quiblo.core.data.PlayerSettingsRepository
 import dev.quiblo.core.data.ProfileRepository
 import dev.quiblo.core.datastore.ConsentStore
@@ -147,10 +148,26 @@ fun TvApp(
     // replays on one is five seconds in front of an app the viewer is already inside.
     var showSplash by rememberSaveable { mutableStateOf(initialShowSplash) }
 
+    /*
+     * The splash spends its seconds reading the catalogue (`030` #5).
+     *
+     * Nothing here draws the result. What it buys is that the indexes the first browse screen
+     * walks are in SQLite's page cache by the time that screen asks, on a television whose storage
+     * is the slowest part of it — see `CatalogueWarmup`. The splash then leaves as soon as that is
+     * done rather than at a fixed five seconds, bounded on both sides by the screen itself.
+     */
+    val warmup: CatalogueWarmup = koinInject()
+    var warm by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        warmup.warm()
+        warm = true
+    }
+
     Crossfade(targetState = showSplash, label = "tvSplashCrossfade") { inSplash ->
         if (inSplash) {
             TvSplashScreen(
                 versionName = BuildConfig.VERSION_NAME,
+                isReady = warm,
                 onSplashComplete = { showSplash = false },
             )
         } else {
@@ -199,6 +216,20 @@ private fun TvAppBehindConsent(onExit: () -> Unit) {
         TvProfileScreen()
         return
     }
+
+    /*
+     * The same warm-up again, for whoever has just been chosen (`030` #6).
+     *
+     * Every catalogue query is filtered by the profile — the favourites join, the hidden
+     * categories, the per-viewer merge switch — so switching profile is four tabs' worth of new
+     * answers, which is what made switching feel like a cold start. The pages underneath those
+     * answers are the same pages, so this run is the cheap one; it happens while the chooser is
+     * fading out rather than while the viewer is looking at a spinner.
+     *
+     * Keyed on the id, so it runs once per profile rather than once per recomposition.
+     */
+    val warmup: CatalogueWarmup = koinInject()
+    LaunchedEffect(activeProfile?.id) { warmup.warm() }
 
     // Leaving a profile is a suspending write, and the screen it is triggered from is about
     // to stop existing — so it runs on a scope that outlives the composition.

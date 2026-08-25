@@ -67,6 +67,9 @@ class BackupRepositoryTest {
         override suspend fun keysFor(profileId: Long, sourceId: Long): List<String> =
             rows.filter { it.sourceId == sourceId }.map { it.stableKey }
 
+        override fun observeKeysFor(profileId: Long, sourceId: Long): Flow<List<String>> =
+            flowOf(rows.filter { it.sourceId == sourceId }.map { it.stableKey })
+
         override suspend fun add(favorite: FavoriteEntity) {
             rows += favorite
         }

@@ -974,6 +974,18 @@ interface FavoriteDao {
     @Query("SELECT stableKey FROM favorites WHERE profileId = :profileId AND sourceId = :sourceId")
     suspend fun keysFor(profileId: Long, sourceId: Long): List<String>
 
+    /**
+     * The same set as a stream, for a screen that draws hearts on items it holds by value.
+     *
+     * The hero slider is the caller. It carries a snapshot of a channel taken when the slider was
+     * built, so the `isFavorite` on that snapshot is the state from whenever that was — pressing
+     * the heart wrote a row and changed nothing on screen. One query for the whole source is a
+     * single small read, and it is the shape a list of items needs: asking per item would be a
+     * flow per tile.
+     */
+    @Query("SELECT stableKey FROM favorites WHERE profileId = :profileId AND sourceId = :sourceId")
+    fun observeKeysFor(profileId: Long, sourceId: Long): Flow<List<String>>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun add(favorite: FavoriteEntity)
 

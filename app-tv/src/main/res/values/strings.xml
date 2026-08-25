@@ -92,6 +92,8 @@ Make one on the page below — it is quicker on a phone than on a remote — the
     <string name="tv_sources_form_hint">Leave the username and password empty for an M3U playlist.</string>
 
     <string name="tv_no_content">Nothing here yet.</string>
+    <string name="tv_catalogue_unreadable">Could not read the catalogue.</string>
+    <string name="tv_retry">Try again</string>
 
     <!-- Recently Added. The empty message says which of the two reasons it is, because only one
          of them is anything the viewer can act on: an Xtream panel supplies a date per title and

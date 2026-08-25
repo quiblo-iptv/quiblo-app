@@ -38,6 +38,7 @@ import dev.quiblo.core.model.FeedRowId
 import dev.quiblo.core.model.MediaKind
 import dev.quiblo.core.model.Source
 import dev.quiblo.core.model.SourceKind
+import dev.quiblo.core.model.TitleMetadata
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -56,6 +57,7 @@ import kotlinx.coroutines.test.setMain
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.BeforeEach
+import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
 
 /**
@@ -107,6 +109,9 @@ class BrowseViewModelTest {
         every { channelRepository.observeBrowse(any(), any(), any(), any(), any()) } returns
             flowOf(emptyList())
         every { channelRepository.observeFavorites(any(), any()) } returns flowOf(emptyList())
+        // The slider's hearts are read from here rather than from the copies it holds, so the
+        // Home feed's combine waits on it like any other source.
+        every { channelRepository.observeFavoriteKeys(any()) } returns flowOf(emptySet())
         every { channelRepository.observeRecentlyAdded(any(), any(), any()) } returns
             flowOf(RecentlyAddedFeed())
         every { historyRepository.observeHistory(any(), any<MediaKind>()) } returns flowOf(emptyList())
@@ -369,6 +374,38 @@ class BrowseViewModelTest {
         viewModel.uiState.drain()
 
         verify { categoryRepository.observeCategories(SOURCE.id, MediaKind.VOD) }
+    }
+
+    /**
+     * The slider's heart, pressed (`030` #4).
+     *
+     * The five titles are chosen once and held by value, so `isFavorite` on those copies was the
+     * state from whenever the slider was built: the tap wrote a row and the picture did not move.
+     * Here the favourited keys change under a slider that is already built, which is the shape of
+     * the report — the heart is pressed on a slider nobody has rebuilt since.
+     */
+    @Test
+    @DisplayName("favouriting a title on the hero slider fills its heart")
+    fun `the hero slider follows the favourites it is drawn from`() = runTest {
+        val favourites = MutableStateFlow<Set<String>>(emptySet())
+        every { channelRepository.observeFavoriteKeys(SOURCE.id) } returns favourites
+        every { channelRepository.observeRecentlyAdded(any(), any(), any()) } returns
+            flowOf(RecentlyAddedFeed(items = listOf(POPULAR_CHANNEL)))
+        coEvery { metadataRepository.cachedPreviewFor(any(), any()) } returns TitleMetadata(rating = 7.0)
+
+        val viewModel = viewModelFor(BrowseFeed(MediaKind.VOD, BrowseScope.FOR_YOU))
+
+        viewModel.uiState.test {
+            awaitItem()
+            testDispatcher.scheduler.advanceUntilIdle()
+            assertEquals(listOf(false), viewModel.uiState.value.heroItems.map { it.channel.isFavorite })
+
+            favourites.value = setOf(POPULAR_CHANNEL.stableKey)
+            testDispatcher.scheduler.advanceUntilIdle()
+            assertEquals(listOf(true), viewModel.uiState.value.heroItems.map { it.channel.isFavorite })
+
+            cancelAndIgnoreRemainingEvents()
+        }
     }
 
     /**

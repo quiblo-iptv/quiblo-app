@@ -31,6 +31,7 @@ import dev.quiblo.core.data.GuideRepository
 import dev.quiblo.core.data.PlayerSettingsRepository
 import dev.quiblo.core.data.PopularEntry
 import dev.quiblo.core.data.PopularTitlesRepository
+import dev.quiblo.core.data.PreviewOutcome
 import dev.quiblo.core.data.RecommendationRepository
 import dev.quiblo.core.data.SourceRepository
 import dev.quiblo.core.data.Suggestion
@@ -504,7 +505,7 @@ class BrowseViewModel(
             guideFor(sourceId),
             combine(ratings, posters) { r, p -> r to p },
             combine(historyFor(sourceId), extraRowsFor(sourceId)) { entries, extras -> entries to extras },
-            heroItems,
+            heroFor(sourceId),
         ) { list, guide, (scores, art), (history, extras), hero ->
             val hasContent = list.items.isNotEmpty() || extras.isNotEmpty()
             if (feed.scope == BrowseScope.FOR_YOU && hero.isEmpty() && hasContent) {
@@ -528,6 +529,34 @@ class BrowseViewModel(
             )
         }
     }
+
+    /**
+     * The slider's five titles, with their hearts kept current (`030` #4).
+     *
+     * [heroItems] holds channels *by value*, chosen once and then left alone, so the `isFavorite`
+     * on each of them is as old as the choice. That is what made the heart on the slider do
+     * nothing: the tap wrote a favourite and the picture on screen still held the copy taken
+     * before it. Reading the favourited keys for the source and re-stamping the five is one small
+     * query and the answer arrives as the write lands, which is the feedback that was missing.
+     *
+     * Only the Home feed has a slider. Everything else hands its own list straight through rather
+     * than paying for a subscription nothing draws.
+     */
+    private fun heroFor(sourceId: Long): Flow<List<HeroItem>> =
+        if (feed.scope != BrowseScope.FOR_YOU) {
+            heroItems
+        } else {
+            combine(heroItems, channelRepository.observeFavoriteKeys(sourceId)) { hero, favourites ->
+                hero.map { item ->
+                    val isFavourite = item.channel.stableKey in favourites
+                    if (isFavourite == item.channel.isFavorite) {
+                        item
+                    } else {
+                        item.copy(channel = item.channel.copy(isFavorite = isFavourite))
+                    }
+                }
+            }
+        }
 
     /**
      * The two rows that are not a query.
@@ -978,7 +1007,30 @@ class BrowseViewModel(
                     ratingRequested.remove(key)
                     return@withPermit
                 }
-                val preview = metadataRepository.previewFor(title, kind) ?: return@withPermit
+                val preview = when (val outcome = metadataRepository.previewOutcomeFor(title, kind)) {
+                    is PreviewOutcome.Found -> outcome.metadata
+
+                    // The service answered and holds nothing. Remembered, so the tile costs
+                    // nothing the next twenty times it scrolls past.
+                    PreviewOutcome.NoMatch -> return@withPermit
+
+                    /*
+                     * Nothing usable came back — a rate limit, a dropped connection, a panel of
+                     * tiles all asking at once on a television that has just woken its Wi-Fi.
+                     *
+                     * **Forgotten rather than remembered, and that is `030` #2.** A refusal is not
+                     * an answer about this title, but the guard above could not tell the two
+                     * apart: one failed request left a poster blank for the rest of the session
+                     * while the very same title opened with its cover on a detail screen, which
+                     * fetches for itself. Forgetting the key lets the next pass over this tile ask
+                     * again; a genuine miss is cached in the database, so the cost of being wrong
+                     * about which kind of null this was is a local read.
+                     */
+                    PreviewOutcome.Unanswered -> {
+                        ratingRequested.remove(key)
+                        return@withPermit
+                    }
+                }
                 // update {} rather than `value = value + x`, which is a read-modify-write with
                 // four of these in flight. It is safe today only because viewModelScope resumes
                 // on Main.immediate — not a property this code should be depending on.
@@ -1083,7 +1135,19 @@ class BrowseViewModel(
          */
         val CATALOGUE_SCOPES = setOf(BrowseScope.CATALOGUE, BrowseScope.CATEGORY_ROWS)
 
-        const val STOP_TIMEOUT_MILLIS = 5_000L
+        /**
+         * How long a feed keeps reading after its screen stops looking (`030` #6).
+         *
+         * Five seconds, which is the usual figure for surviving a rotation, and a television does
+         * not rotate. What it does is move between four tabs, and only the tab on screen is
+         * composed — so a viewer who spent ten seconds in Movies and pressed back to Home paid for
+         * the whole Movies query again, and a household switching profile paid for every tab.
+         *
+         * Five minutes is chosen against what is actually held: the rows a shelf screen keeps are
+         * capped per category in SQL, so this is tens of tiles per tab rather than a catalogue.
+         * The subscription still ends, so an app left in the background is not reading anything.
+         */
+        const val STOP_TIMEOUT_MILLIS = 5L * 60 * 1000
         const val SEARCH_DEBOUNCE_MILLIS = 120L
 
         /**

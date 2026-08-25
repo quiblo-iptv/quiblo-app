@@ -31,7 +31,7 @@ coroutines = "1.11.0"
 coil = "3.5.0"
 # Pinned rather than left to Ktor's transitive choice: :core:media now names OkHttp
 # directly, and the player and the API client must share one connection pool.
-okhttp = "5.4.0"
+okhttp = "5.5.0"
 
 # Quality
 detekt = "1.23.8"

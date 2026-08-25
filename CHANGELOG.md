@@ -15,6 +15,8 @@ Formatted after [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and ve
 
 ## Unreleased
 
+## 0.26.1
+
 ### Changed
 
 - **The television's launch screen is the loading, rather than something in front of it.** It ran for a fixed five seconds and the catalogue was opened afterwards, so a viewer paid twice: the mark, and then a spinner over a database being read for the first time since the box was switched on. The same seconds now warm what the first screen reads, and the mark leaves as soon as that is done — never before a second and a half, never after five. Switching profile warms it again, because every catalogue query is filtered by who is watching.

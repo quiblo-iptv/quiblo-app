@@ -28,7 +28,7 @@ koin = "4.2.2"
 ktor = "3.5.2"
 kotlinxSerialization = "1.11.0"
 coroutines = "1.11.0"
-coil = "3.5.0"
+coil = "3.6.0"
 # Pinned rather than left to Ktor's transitive choice: :core:media now names OkHttp
 # directly, and the player and the API client must share one connection pool.
 okhttp = "5.5.0"

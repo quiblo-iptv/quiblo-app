@@ -43,6 +43,10 @@ turbine = "1.2.1"
 mockk = "1.14.11"
 robolectric = "4.16.1"
 androidxTestJunit = "1.3.0"
+# Pinned at 1.2.0: Coil 3.6 + androidx.test.ext:junit:1.3.0 want this on androidTest, while
+# Work still resolves 1.1.0 on the app runtime. AGP locks the two classpaths together, so without
+# the pin Lint fails with ConflictingConstraintsException (Dependabot PR #75).
+concurrentFutures = "1.2.0"
 
 [libraries]
 # --- Compose (BOM-managed) ---
@@ -67,6 +71,8 @@ androidx-lifecycle-runtime-compose = { module = "androidx.lifecycle:lifecycle-ru
 androidx-lifecycle-viewmodel-ktx = { module = "androidx.lifecycle:lifecycle-viewmodel-ktx", version.ref = "lifecycle" }
 androidx-datastore-preferences = { module = "androidx.datastore:datastore-preferences", version.ref = "datastore" }
 androidx-security-crypto = { module = "androidx.security:security-crypto", version.ref = "securityCrypto" }
+androidx-concurrent-futures = { module = "androidx.concurrent:concurrent-futures", version.ref = "concurrentFutures" }
+androidx-concurrent-futures-ktx = { module = "androidx.concurrent:concurrent-futures-ktx", version.ref = "concurrentFutures" }
 
 # --- Room ---
 room-runtime = { module = "androidx.room:room-runtime", version.ref = "room" }

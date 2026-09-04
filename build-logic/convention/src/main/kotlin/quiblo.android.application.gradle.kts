@@ -70,6 +70,10 @@ dependencies {
     add("testImplementation", libs.findLibrary("mockk").get())
     add("testRuntimeOnly", libs.findLibrary("junit-platform-launcher").get())
     add("androidTestImplementation", libs.findLibrary("androidx-test-junit").get())
+
+    // Align app runtime with androidTest: see concurrentFutures in libs.versions.toml.
+    add("implementation", libs.findLibrary("androidx-concurrent-futures").get())
+    add("implementation", libs.findLibrary("androidx-concurrent-futures-ktx").get())
 }
 
 configureTests()

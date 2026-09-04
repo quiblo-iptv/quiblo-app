@@ -15,6 +15,14 @@ Formatted after [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and ve
 
 ## Unreleased
 
+### Fixed
+
+- **Back hides the television player controls again when they are focused (`BUG-032`).**
+  First Back closes what is on top (track menu, then controls, then the next-episode
+  offer); second Back leaves playback. Some remotes only deliver Back as a key to the
+  focused button, so hide now runs from that path as well as from `BackHandler`, and
+  focus repair stands down before the controls tear down so it cannot fight the hide.
+
 ## 0.26.1
 
 ### Changed

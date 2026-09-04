@@ -147,6 +147,15 @@ fun TvPlayerScreen(
     var controlsVisible by remember { mutableStateOf(false) }
 
     /**
+     * Whether the controls' focus repair may claim the remote (`BUG-032`).
+     *
+     * Stand this down *before* `controlsVisible` goes false on Back. Otherwise the host sees
+     * focus leave during teardown and re-insists on play/pause in the same frame — the race
+     * that left Back looking like it did nothing on a real panel.
+     */
+    var controlsClaimFocus by remember { mutableStateOf(true) }
+
+    /**
      * Which section of the track panel is open, or null when it is shut.
      *
      * One value rather than a boolean beside a kind, because "open at nothing" and "shut at
@@ -197,6 +206,35 @@ fun TvPlayerScreen(
         isDismissed = nextEpisodeDismissed,
     )
 
+    fun showControls() {
+        controlsClaimFocus = true
+        controlsVisible = true
+    }
+
+    fun hideControls() {
+        // Claim first: repair must not re-light play/pause while the host is leaving.
+        controlsClaimFocus = false
+        controlsVisible = false
+    }
+
+    fun playerBackState() = TvPlayerBackState(
+        trackMenuOpen = trackMenuAt != null,
+        controlsVisible = controlsVisible,
+        isOfferingNextEpisode = isOfferingNextEpisode,
+    )
+
+    fun applyPlayerBack(action: TvPlayerBackAction) {
+        when (action) {
+            TvPlayerBackAction.CloseTrackMenu -> trackMenuAt = null
+            TvPlayerBackAction.HideControls -> hideControls()
+            TvPlayerBackAction.DismissNextEpisode -> nextEpisodeDismissed = true
+            TvPlayerBackAction.Exit -> {
+                nextEpisodeDismissed = true
+                onBack()
+            }
+        }
+    }
+
     /*
      * Where the remote is, in every state this screen has.
      *
@@ -223,7 +261,7 @@ fun TvPlayerScreen(
     // arriving at once is how a viewer ends up pressing OK on something they were not looking
     // at, and the episode has finished — there is nothing left for the transport to do.
     LaunchedEffect(isOfferingNextEpisode) {
-        if (isOfferingNextEpisode) controlsVisible = false
+        if (isOfferingNextEpisode) hideControls()
     }
 
     /*
@@ -240,7 +278,7 @@ fun TvPlayerScreen(
     LaunchedEffect(controlsVisible, trackMenuAt, interactionTick, state.status) {
         if (controlsVisible && trackMenuAt == null && state.status == PlaybackStatus.PLAYING) {
             delay(CONTROLS_TIMEOUT_MILLIS)
-            controlsVisible = false
+            hideControls()
         }
     }
 
@@ -280,23 +318,16 @@ fun TvPlayerScreen(
     KeepScreenAwake(enabled = !hasFailed)
 
     /*
-     * Back button handling (Hierarchical).
+     * Back button handling (Hierarchical) — `BUG-032`.
      *
-     * The definitive source of truth for the Back key. It is handled in one place rather than
-     * split between a BackHandler and a key listener, which is what made the previous version
-     * unreliable: on some remotes the key press reached the listener but not the handler,
-     * so backing out did nothing.
-     *
-     * The order is the hierarchy: it closes the track menu, then the controls, then the offer,
-     * and only then exits playback.
+     * First Back hides what is on top; second Back leaves playback (AC-TV-06). The rule lives
+     * in [tvPlayerBackAction] so a test can hold it. Delivery is deliberately dual: some remotes
+     * only send `Key.Back` to the focused control and never reach `BackHandler`, which is why
+     * hide used to look like a focus race that did nothing. Exit stays on the dispatcher so one
+     * press cannot hide and leave when both paths see the same event.
      */
     BackHandler {
-        when {
-            trackMenuAt != null -> trackMenuAt = null
-            controlsVisible -> controlsVisible = false
-            isOfferingNextEpisode -> nextEpisodeDismissed = true
-            else -> onBack()
-        }
+        applyPlayerBack(tvPlayerBackAction(playerBackState()))
     }
 
     /*
@@ -333,17 +364,24 @@ fun TvPlayerScreen(
             .focusRequester(rootFocus)
             .focusable()
             /*
-             * Intercepts every press before it reaches a focused control.
+             * Intercepts presses before a focused control can swallow them.
              *
-             * **This is the definitive key handler for the whole screen.** It catches the Back
-             * key to ensure it is handled here even if a focused control (like a button) tries to
-             * consume it, and it restarts the controls' timeout on every press. The latter only
-             * works here: once the controls take focus, a button consumes OK and the arrows are
-             * eaten by focus traversal, so a handler reading them on the way back up would
-             * restart the timeout on almost nothing.
+             * Back is applied here when it closes something on screen (`BUG-032`): on some
+             * remotes the key never becomes an `OnBackPressed` callback while a button holds
+             * focus. Exit is not applied here — returning false lets [BackHandler] leave once.
+             * Other keys only restart the controls' timeout while they are up.
              */
             .onPreviewKeyEvent { event ->
                 if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+
+                if (event.key == Key.Back) {
+                    val action = tvPlayerBackAction(playerBackState())
+                    if (tvPlayerBackConsumesKey(action)) {
+                        applyPlayerBack(action)
+                        return@onPreviewKeyEvent true
+                    }
+                    return@onPreviewKeyEvent false
+                }
 
                 if (controlsVisible) interactionTick++
                 false
@@ -368,17 +406,17 @@ fun TvPlayerScreen(
                         canStepEpisode = episode != null,
                     ),
                     actions = KeyActions(
-                        showControls = { controlsVisible = true },
+                        showControls = { showControls() },
                         playPause = {
                             viewModel.togglePlayPause()
-                            controlsVisible = true
+                            showControls()
                         },
                         skip = { viewModel.skipBy(it) },
                         zap = onZap,
                         stepEpisode = onStepEpisode,
                         cycleAspect = {
                             viewModel.cycleAspectRatio()
-                            controlsVisible = true
+                            showControls()
                         },
                         // Only when there is a choice. Opening an empty panel would be the
                         // hollow-feature shape this project has deleted nine of.
@@ -409,6 +447,7 @@ fun TvPlayerScreen(
             aspectRatioMode = aspectRatioMode,
             hasFailed = hasFailed,
             controlsVisible = controlsVisible,
+            controlsMayClaimFocus = controlsClaimFocus,
             trackMenuAt = trackMenuAt,
             zapNotice = zapNotice,
             trackMenu = trackMenu,
@@ -417,14 +456,14 @@ fun TvPlayerScreen(
             controlActions = TvControlActions(
                 playPause = {
                     viewModel.togglePlayPause()
-                    controlsVisible = true
+                    showControls()
                 },
                 skip = viewModel::skipBy,
                 // Keeps the controls up: a viewer who has just scrubbed is still aiming, and a
                 // panel that hides the bar on the seek hides the thing they were using.
                 seekTo = {
                     viewModel.seekTo(it)
-                    controlsVisible = true
+                    showControls()
                 },
                 nextEpisode = { onStepEpisode(1) },
                 previousEpisode = { onStepEpisode(-1) },
@@ -481,6 +520,7 @@ private fun PlayerOverlays(
     aspectRatioMode: AspectRatioMode,
     hasFailed: Boolean,
     controlsVisible: Boolean,
+    controlsMayClaimFocus: Boolean,
     trackMenuAt: TrackMenuKind?,
     zapNotice: String?,
     trackMenu: TrackMenu,
@@ -511,9 +551,10 @@ private fun PlayerOverlays(
             state = controlsState(state, settings, request, aspectRatioMode, trackMenu),
             actions = controlActions,
             playPauseFocus = playPauseFocus,
-            // Not while something is drawn over them. The panel and the offer each take the
-            // remote deliberately, and the controls' own repair must not fight them for it.
-            ownsFocus = trackMenuAt == null && !isOfferingNextEpisode,
+            // Not while something is drawn over them, and not while Back is tearing them down
+            // (`BUG-032`). The panel and the offer each take the remote deliberately; repair
+            // must not fight them, and must not re-light play/pause during hide.
+            ownsFocus = controlsMayClaimFocus && trackMenuAt == null && !isOfferingNextEpisode,
         )
     }
 

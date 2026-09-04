@@ -166,7 +166,7 @@ The engine and every setting carry over unchanged. The control layer does not:
 
 | Phone | TV |
 |---|---|
-| Tap to toggle controls | **D-pad down** shows controls, **back** hides |
+| Tap to toggle controls | **D-pad down** shows controls, **back** hides (second back exits playback) |
 | Skip buttons | On-screen buttons, **and** left/right seek directly with nothing on screen |
 | Drag left half for brightness | **Dropped.** Not app-controllable on a TV |
 | Drag right half for volume | **Dropped.** The remote and the TV own volume |
@@ -200,7 +200,10 @@ there is a key Compose's focus traversal never sees, so the alternative is every
 correct and unreachable — the hollow-feature shape arrived at from the opposite direction, and
 one this project has already met for real in the licence list. The keys that are *not* arrows —
 play, rewind, the channel keys — answer in both states, because a remote's play key means one
-thing wherever the viewer is looking.
+thing wherever the viewer is looking. **Back is not in that map:** it is decided by
+`tvPlayerBackAction` and delivered both through `BackHandler` and through an
+`onPreviewKeyEvent` path, because some remotes never turn a focused-control Back into an
+`OnBackPressed` callback (`BUG-032`).
 
 **Which way each arrow goes is stated, not inferred.** Compose's focus search picks the nearest
 rectangle, and with a centred transport row above an options row against the left margin, the

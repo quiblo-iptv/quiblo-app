@@ -43,7 +43,7 @@ jobs:
       # The same JDK the gate uses. A different one resolves a different graph, and a snapshot
       # that does not match what CI builds is a snapshot describing a build nobody runs.
       - name: Set up JDK 17
-        uses: actions/setup-java@v5
+        uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: '17'

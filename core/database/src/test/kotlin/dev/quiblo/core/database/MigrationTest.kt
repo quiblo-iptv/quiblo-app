@@ -509,6 +509,33 @@ class MigrationTest {
         }
     }
 
+    /**
+     * `FEAT-031`: the column the scheduled sync uses to ask "has anything changed?".
+     *
+     * Null with no default, deliberately. "Never loaded" and "loaded and looked like this" are
+     * different states, and a default would have merged them — every source already installed
+     * would claim a fingerprint it never produced, and the first sync after upgrading would
+     * decide there was nothing to do.
+     */
+    @Test
+    fun `24 to 25 adds a fingerprint that starts empty`() {
+        helper.createDatabase(DB_NAME, 24).use { old ->
+            old.execSQL(
+                "INSERT INTO `sources` (`id`, `name`, `kind`, `url`, `createdAtEpochMillis`) " +
+                    "VALUES (1, 'Panel', 'XTREAM', 'https://e.invalid', 0)",
+            )
+        }
+
+        val db = helper.runMigrationsAndValidate(DB_NAME, 25, true, MIGRATION_24_25)
+
+        db.query("SELECT `name`, `catalogueFingerprint` FROM `sources`").use { cursor ->
+            assertTrue("the upgrade lost the source", cursor.moveToFirst())
+            assertEquals("Panel", cursor.getString(0))
+            assertTrue("an existing source was given a fingerprint it never produced", cursor.isNull(1))
+            assertFalse("the upgrade invented a row", cursor.moveToNext())
+        }
+    }
+
     @Test
     fun `10 to 11 adopts existing favourites rather than dropping them`() {
         // The opposite promise to the one above, and the one that matters more: this is the

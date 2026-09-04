@@ -720,8 +720,12 @@ class XtreamSourceTest {
         val result = assertInstanceOf(SourceResult.Failure::class.java, source.load(request))
         assertEquals(SourceError.ProviderBlocked, result.error)
 
-        // auth, live streams, live categories, then the one refusal that stopped it.
-        assertEquals(4, requestCount, "the refresh kept asking after being refused")
+        // auth, live streams, then the one refusal that stopped it.
+        //
+        // Three rather than four since `FEAT-031`: the grouping is no longer fetched between the
+        // stream lists, because the stream lists are what answer "has anything changed" and a run
+        // with nothing new must not spend the category calls at all.
+        assertEquals(3, requestCount, "the refresh kept asking after being refused")
     }
 
     @Test

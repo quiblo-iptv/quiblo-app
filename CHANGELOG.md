@@ -15,6 +15,24 @@ Formatted after [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and ve
 
 ## Unreleased
 
+### Changed
+
+- **The catalogue is re-read every four hours instead of every four days, and you choose the
+  number (`FEAT-031`).** Four days was recorded as a guess when it was written, and it meant a
+  provider could add a film that a household could not see for most of a week. Settings now
+  offers four, eight or twelve hours, or once a day. Going six times more often does not cost six
+  times the traffic: a run now asks what the account holds first, and only asks how it is grouped
+  when something has actually changed — four requests instead of seven when there is nothing new.
+  A sync also writes only the rows that differ rather than rewriting the whole catalogue, which on
+  a sixty-thousand-title account is the difference between two rows and all of them. Installs
+  already out there move onto the new schedule on their next launch.
+
+- **A paused player lets the screen dim (`FEAT-032`).** The screen was held on for the whole life
+  of the player, so a film paused at bedtime was a television at full brightness on a still frame
+  until morning. Playing still holds it on — that is why the flag exists — but a pause no longer
+  does. Switchable in Settings, for anyone who pauses to read something and wants the picture kept
+  up.
+
 ### Fixed
 
 - **The scheduled sync no longer collapses a whole catalogue into one category (`BUG-033`).** A

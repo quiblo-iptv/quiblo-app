@@ -180,6 +180,57 @@ class CatalogueMergeTest {
         assertEquals(3, db.channelDao().countForSource(SOURCE_ID))
     }
 
+    /**
+     * `FEAT-031`: an unchanged row is not rewritten.
+     *
+     * `insertAll` replaces on conflict, so writing a row back identical is a real write — the page
+     * is dirtied and every index on `channels` is updated, and there are five. On a large account
+     * almost every row is identical almost every time, so a sync that added two films used to cost
+     * a rewrite of the whole table.
+     *
+     * Asserted through SQLite's own `total_changes()`, which counts rows actually inserted,
+     * updated or deleted on this connection. Comparing the stored row before and after would
+     * prove nothing: a row written back identically *is* identical afterwards, which is exactly
+     * the case this is meant to catch.
+     */
+    @Test
+    fun `a row that has not changed is not written`() = runTest {
+        seed()
+        val before = totalChanges()
+
+        db.channelDao().mergeForSource(SOURCE_ID, listOf(stored(id = 1, stableKey = "key-1")), NOW)
+
+        // One delete, for key-2, which this sync no longer carries. Nothing for key-1.
+        assertEquals(1L, totalChanges() - before)
+    }
+
+    @Test
+    fun `a row that has changed is still written`() = runTest {
+        seed()
+        val before = totalChanges()
+
+        db.channelDao().mergeForSource(
+            SOURCE_ID,
+            listOf(stored(id = 1, stableKey = "key-1").copy(name = "A new name"), stored(id = 2, stableKey = "key-2")),
+            NOW,
+        )
+
+        assertEquals("A new name", db.channelDao().findByStableKey(SOURCE_ID, "key-1")?.name)
+        assertEquals(1L, totalChanges() - before)
+    }
+
+    /**
+     * Rows inserted, updated or deleted on this connection since it was opened.
+     *
+     * Read straight off the support database rather than through `RoomDatabase.query`, which
+     * refuses to run on the test's own thread.
+     */
+    private fun totalChanges(): Long =
+        db.openHelper.writableDatabase.query("SELECT total_changes()").use { cursor ->
+            cursor.moveToFirst()
+            cursor.getLong(0)
+        }
+
     private suspend fun seed() {
         db.sourceDao().insert(
             SourceEntity(

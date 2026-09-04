@@ -191,13 +191,18 @@ fun PlayerScreen(
             hide(WindowInsetsCompat.Type.systemBars())
             systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
         }
-        window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
 
-        onDispose {
-            insets?.show(WindowInsetsCompat.Type.systemBars())
-            window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-        }
+        onDispose { insets?.show(WindowInsetsCompat.Type.systemBars()) }
     }
+
+    // The screen is held on only while there is something to watch (`FEAT-032`). Split out of the
+    // immersive effect above, which runs once for the life of the screen; this one has to run
+    // again every time playback starts or stops. A paused player is not a watched one, and the
+    // reason the flag is held — that watching involves no touch input — stops being true the
+    // moment playback does. Switchable, because pausing to read something is not asking the
+    // screen to go dark.
+    val keepScreenAwake by viewModel.keepScreenAwake.collectAsStateWithLifecycle()
+    KeepScreenAwake(enabled = keepScreenAwake)
 
     LaunchedEffect(channelId, streamUrl, title, startPositionMillis) {
         viewModel.load(
@@ -871,5 +876,31 @@ private fun Long.asClock(): String {
         "%d:%02d:%02d".format(hours, minutes, seconds)
     } else {
         "%d:%02d".format(minutes, seconds)
+    }
+}
+
+/**
+ * Declares this window as being watched, for as long as it is.
+ *
+ * The flag exists because watching a film involves no touch input, so the display timeout treats
+ * a viewer as an idle user and dims the screen mid-scene. It is scoped to the player window, so
+ * it lapses on its own when playback is left — a wake lock this app never has to remember to
+ * release.
+ *
+ * Its own composable rather than part of the immersive effect beside it (`FEAT-032`): that one
+ * runs once for the life of the screen, and this has to run again every time playback starts or
+ * stops. The television has had the same helper since it was written.
+ */
+@Composable
+private fun KeepScreenAwake(enabled: Boolean) {
+    val view = LocalView.current
+    DisposableEffect(view, enabled) {
+        val window = view.context.findActivity()?.window
+        if (enabled) {
+            window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        } else {
+            window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        }
+        onDispose { window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) }
     }
 }

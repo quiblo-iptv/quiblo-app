@@ -93,6 +93,8 @@ fun SettingsScreen(
     val mergeCategories by viewModel.mergeCategories.collectAsStateWithLifecycle()
     val hiddenTabs by viewModel.hiddenTabs.collectAsStateWithLifecycle()
     val checkUpdatesOnLaunch by viewModel.checkUpdatesOnLaunch.collectAsStateWithLifecycle()
+    val catalogueSyncInterval by viewModel.catalogueSyncInterval.collectAsStateWithLifecycle()
+    val dimWhilePaused by viewModel.dimWhilePaused.collectAsStateWithLifecycle()
     val context = LocalContext.current
 
     // SAF, so the file lands wherever the user chooses and the app needs no storage
@@ -183,6 +185,8 @@ fun SettingsScreen(
                         onSeekInterval = viewModel::setSeekInterval,
                         onBufferMode = viewModel::setBufferMode,
                         onMaxBitrate = viewModel::setMaxBitrate,
+                        dimWhilePaused = dimWhilePaused,
+                        onDimWhilePaused = viewModel::setDimWhilePaused,
                     )
                 }
 
@@ -246,6 +250,13 @@ fun SettingsScreen(
                         onStartScan = viewModel::startMetadataScan,
                         onCancelScan = viewModel::cancelMetadataScan,
                         onDismissScan = viewModel::dismissMetadataScan,
+                    )
+                }
+
+                cardItem {
+                    SyncSettingsCard(
+                        interval = catalogueSyncInterval,
+                        onInterval = viewModel::setCatalogueSyncInterval,
                     )
                 }
 

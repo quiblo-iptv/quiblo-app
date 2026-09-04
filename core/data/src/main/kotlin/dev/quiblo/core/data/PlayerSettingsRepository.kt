@@ -23,6 +23,7 @@ import dev.quiblo.core.model.AppTab
 import dev.quiblo.core.model.Appearance
 import dev.quiblo.core.model.AutoNextDelay
 import dev.quiblo.core.model.BufferMode
+import dev.quiblo.core.model.CatalogueSyncInterval
 import dev.quiblo.core.model.MaxBitrateCap
 import dev.quiblo.core.model.PlayerSettings
 import dev.quiblo.core.model.Profile
@@ -50,6 +51,11 @@ import kotlinx.coroutines.flow.map
  * Every write goes to whoever is watching now.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
+// A getter and a setter per preference, and the count is the number of settings this app has
+// rather than any tangle between them: every member here forwards one value to or from the store.
+// Splitting the class to satisfy a threshold would file the same settings behind two names and
+// leave every caller fetching both — the same reasoning `PlayerSettingsStore` carries.
+@Suppress("TooManyFunctions")
 class PlayerSettingsRepository(
     private val store: PlayerSettingsStore,
     private val profiles: ProfileRepository,
@@ -149,6 +155,27 @@ class PlayerSettingsRepository(
     val checkUpdatesOnLaunch: Flow<Boolean> = store.checkUpdatesOnLaunch
 
     suspend fun setCheckUpdatesOnLaunch(enabled: Boolean) = store.setCheckUpdatesOnLaunch(enabled)
+
+    /**
+     * How often the catalogue is re-read on its own (`FEAT-031`).
+     *
+     * App-wide, like the one above and for the same reason: it says how often this device talks
+     * to a provider. `SyncScheduler` watches this and re-registers the job when it changes.
+     */
+    val catalogueSyncInterval: Flow<CatalogueSyncInterval> = store.catalogueSyncInterval
+
+    suspend fun setCatalogueSyncInterval(value: CatalogueSyncInterval) =
+        store.setCatalogueSyncInterval(value)
+
+    /**
+     * Whether a paused player lets the screen dim (`FEAT-032`).
+     *
+     * App-wide, like the two above: it is about this device's screen, not about the viewer. On
+     * by default — see `PlayerSettingsStore.dimWhilePaused`.
+     */
+    val dimWhilePaused: Flow<Boolean> = store.dimWhilePaused
+
+    suspend fun setDimWhilePaused(enabled: Boolean) = store.setDimWhilePaused(enabled)
 
     /**
      * How subtitles are drawn (INC-F11).

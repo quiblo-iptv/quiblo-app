@@ -144,6 +144,14 @@ Make one on the page below — it is quicker on a phone than on a remote — the
     <string name="tv_settings_sources">Playlists</string>
     <string name="tv_settings_sources_label">Playlists and accounts</string>
     <string name="tv_settings_sources_detail">Add, refresh or remove the sources this app plays from.</string>
+    <string name="tv_settings_dim_paused">Dim the screen when paused</string>
+    <string name="tv_settings_dim_paused_detail">A paused player lets the television sleep as it normally would. Off keeps the picture up until you press play again.</string>
+    <string name="tv_settings_sync_interval">Check for new content</string>
+    <string name="tv_settings_sync_interval_detail">How often Quiblo re-reads your provider on its own. More often means new titles appear sooner; less often means fewer requests to a panel that may limit them.</string>
+    <string name="tv_settings_sync_four_hours">Every 4 hours</string>
+    <string name="tv_settings_sync_eight_hours">Every 8 hours</string>
+    <string name="tv_settings_sync_twelve_hours">Every 12 hours</string>
+    <string name="tv_settings_sync_daily">Once a day</string>
     <string name="tv_settings_sources_manage">Manage</string>
     <string name="tv_settings_playback">Playback</string>
     <string name="tv_settings_artwork">Artwork</string>

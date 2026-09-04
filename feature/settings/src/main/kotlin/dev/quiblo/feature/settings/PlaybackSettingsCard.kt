@@ -23,14 +23,17 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -55,6 +58,14 @@ internal fun PlaybackSettingsCard(
     onSeekInterval: (SeekInterval) -> Unit,
     onBufferMode: (BufferMode) -> Unit,
     onMaxBitrate: (MaxBitrateCap) -> Unit,
+    /**
+     * Whether a paused player lets the screen dim (`FEAT-032`).
+     *
+     * Passed separately from [settings] because it is app-wide rather than per profile: it is
+     * about this device's screen, not about what one viewer likes.
+     */
+    dimWhilePaused: Boolean,
+    onDimWhilePaused: (Boolean) -> Unit,
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -95,13 +106,39 @@ internal fun PlaybackSettingsCard(
                 labelFor = { stringResource(it.labelRes()) },
                 onSelect = onMaxBitrate,
             )
+
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(top = 16.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = stringResource(R.string.settings_dim_paused_title),
+                        style = MaterialTheme.typography.bodyLarge,
+                    )
+                    Text(
+                        text = stringResource(R.string.settings_dim_paused_summary),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = 4.dp),
+                    )
+                }
+                Switch(checked = dimWhilePaused, onCheckedChange = onDimWhilePaused)
+            }
         }
     }
 }
 
+/**
+ * A labelled row of choice chips.
+ *
+ * `internal` rather than private to this file since `FEAT-031`: the catalogue sync interval is
+ * the same shape of choice and drawing it a second way would make two settings that behave
+ * identically look like two different kinds of control.
+ */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun <T> ChipGroup(
+internal fun <T> ChipGroup(
     @StringRes labelRes: Int,
     @StringRes descriptionRes: Int,
     options: List<T>,

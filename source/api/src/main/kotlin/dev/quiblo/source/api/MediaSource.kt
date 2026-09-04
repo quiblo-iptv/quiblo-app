@@ -58,6 +58,15 @@ interface MediaSource {
 data class SourceRequest(
     val sourceId: Long,
     val location: String,
+    /**
+     * What the last successful load of this source looked like, or null to load unconditionally.
+     *
+     * A source that answers with the same fingerprint has nothing new, and saying so is cheaper
+     * than proving it: the grouping requests are not spent and nothing is written. Null on any
+     * refresh somebody asked for and is watching happen — that one is also the way out of a
+     * catalogue that is wrong, and a load that decides there is nothing to do could not fix it.
+     */
+    val knownFingerprint: String? = null,
 )
 
 /** The outcome of a [MediaSource.load] call. */
@@ -70,7 +79,23 @@ sealed interface SourceResult {
     data class Success(
         val channels: List<Channel>,
         val report: SourceReport,
+        /**
+         * What this answer looked like, to be handed back as [SourceRequest.knownFingerprint].
+         *
+         * Null from a source that cannot cheaply tell whether it has changed — an M3U playlist is
+         * one file and reading it is the whole cost, so there is nothing to save by asking first.
+         */
+        val fingerprint: String? = null,
     ) : SourceResult
+
+    /**
+     * The source is exactly as it was at [SourceRequest.knownFingerprint].
+     *
+     * Not a [Success] carrying an empty list, which would read as "this account is empty" and
+     * would be stored as one. Nothing is written for this outcome; only the refreshed-at stamp
+     * moves, because the catalogue *was* checked.
+     */
+    data class Unchanged(val fingerprint: String) : SourceResult
 
     /** Nothing usable could be obtained. */
     data class Failure(val error: SourceError) : SourceResult

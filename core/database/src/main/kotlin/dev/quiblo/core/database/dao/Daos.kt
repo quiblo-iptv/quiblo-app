@@ -72,6 +72,20 @@ interface SourceDao {
 
     @Query("UPDATE sources SET lastRefreshedEpochMillis = :timestamp WHERE id = :id")
     suspend fun markRefreshed(id: Long, timestamp: Long)
+
+    /** What the last successful load of this source looked like — see `SourceEntity`. */
+    @Query("SELECT catalogueFingerprint FROM sources WHERE id = :id")
+    suspend fun fingerprintFor(id: Long): String?
+
+    /**
+     * Records what this load saw, so the next one can ask whether anything has changed.
+     *
+     * Written even when nothing was stored: an `Unchanged` answer is still an answer about what
+     * the account holds now, and not writing it would make every run after a skipped one spend
+     * the requests the skip existed to save.
+     */
+    @Query("UPDATE sources SET catalogueFingerprint = :fingerprint WHERE id = :id")
+    suspend fun markFingerprint(id: Long, fingerprint: String?)
 }
 
 /**
@@ -808,6 +822,16 @@ interface ChannelDao {
     suspend fun deleteByStableKeys(sourceId: Long, stableKeys: List<String>)
 
     /**
+     * The stored rows behind [stableKeys], whole, for comparing against what has just arrived.
+     *
+     * A projection would not do: the question is whether *anything* about the row has changed,
+     * and a column left out of the projection is a change nobody notices. Read in chunks by the
+     * caller so a sixty-thousand-title account is never held in memory at once.
+     */
+    @Query("SELECT * FROM channels WHERE sourceId = :sourceId AND stableKey IN (:stableKeys)")
+    suspend fun rowsForStableKeys(sourceId: Long, stableKeys: List<String>): List<ChannelEntity>
+
+    /**
      * Folds a freshly parsed playlist into the one already stored, rather than swapping it.
      *
      * **[replaceForSource] deletes every row and reinserts, which gives each channel a new
@@ -829,26 +853,39 @@ interface ChannelDao {
     @Transaction
     @Suppress("SpreadOperator")
     suspend fun mergeForSource(sourceId: Long, channels: List<ChannelEntity>, now: Long) {
-        val held = identitiesForSource(sourceId).associateBy { it.stableKey }
-        val arriving = channels.map { it.stableKey }.toSet()
+        val heldKeys = identitiesForSource(sourceId).mapTo(mutableSetOf()) { it.stableKey }
+        val arriving = channels.mapTo(mutableSetOf()) { it.stableKey }
 
-        held.keys.filterNot { it in arriving }
+        heldKeys.filterNot { it in arriving }
             .chunked(INSERT_CHUNK_SIZE)
             .forEach { deleteByStableKeys(sourceId, it) }
 
-        channels.map { channel ->
-            val existing = held[channel.stableKey]
-            channel.copy(
-                // Keeping the id is what lets anything already pointing at this row keep pointing
-                // at it. A new row takes whatever the database gives it.
-                id = existing?.id ?: 0L,
-                // The provider's date wins when it supplies one. Otherwise: the date we first saw
-                // it, kept if we have one and stamped now if this is the first time.
-                addedAtEpochMillis = channel.addedAtEpochMillis
-                    ?: existing?.addedAtEpochMillis
-                    ?: now,
-            )
-        }.chunked(INSERT_CHUNK_SIZE).forEach { insertAll(it) }
+        channels.chunked(INSERT_CHUNK_SIZE).forEach { chunk ->
+            val stored = rowsForStableKeys(sourceId, chunk.map { it.stableKey })
+                .associateBy { it.stableKey }
+
+            val changed = chunk.mapNotNull { channel ->
+                val existing = stored[channel.stableKey]
+                val merged = channel.copy(
+                    // Keeping the id is what lets anything already pointing at this row keep
+                    // pointing at it. A new row takes whatever the database gives it.
+                    id = existing?.id ?: 0L,
+                    // The provider's date wins when it supplies one. Otherwise: the date we first
+                    // saw it, kept if we have one and stamped now if this is the first time.
+                    addedAtEpochMillis = channel.addedAtEpochMillis
+                        ?: existing?.addedAtEpochMillis
+                        ?: now,
+                )
+                // Only rows that are actually different. `insertAll` replaces on conflict, so
+                // writing an identical row is a real write: the page is dirtied and every index
+                // on `channels` is updated, and there are five of them. On a large account almost
+                // every row is identical almost every time, which made a sync that added two
+                // films cost a rewrite of the whole table (`FEAT-031`).
+                merged.takeIf { it != existing }
+            }
+
+            if (changed.isNotEmpty()) insertAll(changed)
+        }
     }
 
     companion object {

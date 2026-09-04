@@ -29,6 +29,7 @@ import dev.quiblo.core.data.WatchEventRepository
 import dev.quiblo.core.data.WatchHistoryRepository
 import dev.quiblo.core.media.PlayableItem
 import dev.quiblo.core.media.PlaybackState
+import dev.quiblo.core.media.PlaybackStatus
 import dev.quiblo.core.media.PlayerController
 import dev.quiblo.core.model.AspectRatioMode
 import dev.quiblo.core.model.HistoryEntry
@@ -43,6 +44,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
@@ -343,6 +345,28 @@ class PlayerViewModel(
     val subtitleStyle: StateFlow<SubtitleStyle> = settingsRepository.subtitleStyle
         .onEach(controller::applySubtitleStyle)
         .stateIn(viewModelScope, SharingStarted.Eagerly, SubtitleStyle())
+
+    /**
+     * Whether a paused player lets the screen dim (`FEAT-032`).
+     *
+     * On unless switched off, and the initial value says so rather than starting `false`: a
+     * player that holds the screen on for the first frame after a pause and releases it a moment
+     * later is a panel that flickers back to full brightness for no reason.
+     */
+    val dimWhilePaused: StateFlow<Boolean> = settingsRepository.dimWhilePaused
+        .stateIn(viewModelScope, SharingStarted.Eagerly, true)
+
+    /**
+     * Whether this window should still be declared as being watched (`FEAT-032`).
+     *
+     * Combined here rather than in either player, so the two apps cannot drift on what counts as
+     * watching. Buffering does: a stream that is loading is one somebody is waiting for. Only a
+     * deliberate pause releases the screen, and only when the viewer has left the setting on.
+     */
+    val keepScreenAwake: StateFlow<Boolean> =
+        combine(state, settingsRepository.dimWhilePaused) { playback, dim ->
+            !(dim && playback.status == PlaybackStatus.PAUSED)
+        }.stateIn(viewModelScope, SharingStarted.Eagerly, true)
 
     /**
      * Whether the player lights its black bars with the colours of the picture.

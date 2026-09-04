@@ -23,11 +23,13 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import dev.quiblo.core.common.TitleScript
 import dev.quiblo.core.model.Appearance
 import dev.quiblo.core.model.AutoNextDelay
 import dev.quiblo.core.model.BufferMode
+import dev.quiblo.core.model.CatalogueSyncInterval
 import dev.quiblo.core.model.MaxBitrateCap
 import dev.quiblo.core.model.PlayerSettings
 import dev.quiblo.core.model.SeekInterval
@@ -258,6 +260,46 @@ class PlayerSettingsStore(context: Context) {
     }
 
     /**
+     * How often the catalogue is re-read on its own (`FEAT-031`).
+     *
+     * **The second preference here that is not per profile**, for the same reason as the one
+     * above: it decides how often this device talks to a provider, and that is a fact about the
+     * box rather than about whoever last chose a profile. See [CatalogueSyncInterval].
+     *
+     * Read unscoped, so a stored value written before profiles existed — there is none, this is
+     * new — could not be misfiled under a profile either.
+     */
+    val catalogueSyncInterval: Flow<CatalogueSyncInterval> = dataStore.data.map { preferences ->
+        val stored = preferences[stringPreferencesKey(CATALOGUE_SYNC_INTERVAL)]
+        CatalogueSyncInterval.entries.firstOrNull { it.name == stored } ?: CatalogueSyncInterval.FOUR_HOURS
+    }
+
+    suspend fun setCatalogueSyncInterval(value: CatalogueSyncInterval) {
+        dataStore.edit { it[stringPreferencesKey(CATALOGUE_SYNC_INTERVAL)] = value.name }
+    }
+
+    /**
+     * Whether a paused player lets the screen dim (`FEAT-032`).
+     *
+     * **App-wide, and the third here that is.** It decides what this device's panel does when
+     * nobody is watching it, which is a fact about the box and its screen rather than about the
+     * viewer — and a household where it depended on who last chose a profile would be a household
+     * where pausing a film burns the panel in for one person and not another.
+     *
+     * On by default. A paused player is not a watched one: the whole reason
+     * `FLAG_KEEP_SCREEN_ON` is held is that watching involves no input, and that reason stops
+     * being true the moment playback stops. Left on, a pause at bedtime is a television at full
+     * brightness on a still frame until morning, which on an OLED is not only wasted power.
+     */
+    val dimWhilePaused: Flow<Boolean> = dataStore.data.map { preferences ->
+        preferences[booleanPreferencesKey(DIM_WHILE_PAUSED)] ?: true
+    }
+
+    suspend fun setDimWhilePaused(enabled: Boolean) {
+        dataStore.edit { it[booleanPreferencesKey(DIM_WHILE_PAUSED)] = enabled }
+    }
+
+    /**
      * How subtitles are drawn (INC-F11).
      *
      * Separate from [settings] rather than folded into it. `PlayerSettings` is engine tuning that
@@ -346,5 +388,7 @@ class PlayerSettingsStore(context: Context) {
 
         /** App-wide, deliberately. See [checkUpdatesOnLaunch]. */
         const val CHECK_UPDATES_ON_LAUNCH = "check_updates_on_launch"
+        const val CATALOGUE_SYNC_INTERVAL = "catalogue_sync_interval"
+        const val DIM_WHILE_PAUSED = "dim_while_paused"
     }
 }

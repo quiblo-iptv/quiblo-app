@@ -148,16 +148,32 @@ class XtreamSource internal constructor(
     /** One content type's contribution: what was usable, and how much was not. */
     private data class Batch(val channels: List<Channel>, val skipped: Int)
 
+    /**
+     * One content type's contribution, or the reason there is not one.
+     *
+     * The reason is carried rather than reduced to a boolean because it becomes the load's own
+     * failure, and "the panel timed out on the categories" and "the panel is refusing us" are
+     * two different things to tell a viewer.
+     */
+    private sealed interface BatchOutcome {
+        data class Loaded(val batch: Batch) : BatchOutcome
+        data class Refused(val error: SourceError) : BatchOutcome
+    }
+
     private suspend fun collect(base: String, credentials: Credentials, sourceId: Long): SourceResult {
         val ctx = Context(base, credentials, sourceId)
 
         return when (val result = client.liveStreams(base, credentials)) {
             // Live is the point of the account. If it fails, the load failed.
             is ApiResult.Err -> noteBlocked(result.error, SourceResult::Failure)
-            is ApiResult.Ok -> withOptionalCatalogues(
-                ctx = ctx,
-                live = mapLive(result.value, ctx, categories(client.liveCategories(base, credentials))),
-            )
+            is ApiResult.Ok ->
+                when (val grouping = grouping(result.value, client.liveCategories(base, credentials))) {
+                    is ApiResult.Err -> SourceResult.Failure(grouping.error)
+                    is ApiResult.Ok -> withOptionalCatalogues(
+                        ctx = ctx,
+                        live = mapLive(result.value, ctx, grouping.value),
+                    )
+                }
         }
     }
 
@@ -171,46 +187,68 @@ class XtreamSource internal constructor(
      * another strike against an account that was being refused precisely for asking too
      * often. Each step now stops the moment the panel says no.
      */
-    private suspend fun withOptionalCatalogues(ctx: Context, live: Batch): SourceResult {
-        val vod = if (isBlocked()) {
-            null
+    private suspend fun withOptionalCatalogues(ctx: Context, live: Batch): SourceResult =
+        // Nested rather than flattened with early returns: series is only asked for when films
+        // answered, which is the "stop the moment the panel says no" rule this function is for.
+        when (val vod = vodBatch(ctx)) {
+            is BatchOutcome.Refused -> SourceResult.Failure(vod.error)
+            is BatchOutcome.Loaded -> when (val series = seriesBatch(ctx)) {
+                is BatchOutcome.Refused -> SourceResult.Failure(series.error)
+                is BatchOutcome.Loaded -> assemble(live, vod.batch, series.batch)
+            }
+        }
+
+    private suspend fun vodBatch(ctx: Context): BatchOutcome =
+        if (isBlocked()) {
+            BatchOutcome.Refused(SourceError.ProviderBlocked)
         } else {
             optionalBatch(client.vodStreams(ctx.base, ctx.credentials)) { streams ->
-                mapVod(streams, ctx, categories(client.vodCategories(ctx.base, ctx.credentials)))
+                categorised(streams, client.vodCategories(ctx.base, ctx.credentials)) { grouping ->
+                    mapVod(streams, ctx, grouping)
+                }
             }
         }
 
-        val series = if (vod == null || isBlocked()) {
-            null
+    private suspend fun seriesBatch(ctx: Context): BatchOutcome =
+        if (isBlocked()) {
+            BatchOutcome.Refused(SourceError.ProviderBlocked)
         } else {
             optionalBatch(client.series(ctx.base, ctx.credentials)) { entries ->
-                mapSeries(entries, ctx, categories(client.seriesCategories(ctx.base, ctx.credentials)))
+                categorised(entries, client.seriesCategories(ctx.base, ctx.credentials)) { grouping ->
+                    mapSeries(entries, ctx, grouping)
+                }
             }
         }
 
-        return when {
-            vod == null || series == null -> SourceResult.Failure(SourceError.ProviderBlocked)
-            else -> assemble(live, vod, series)
-        }
-    }
-
     /**
-     * A mapped batch, an empty one, or null.
+     * A mapped batch, an empty one, or a refusal.
      *
-     * Null means only one thing — the panel is refusing us — which is what lets the caller
-     * tell "this account has no films" apart from "stop asking".
+     * A refusal means the panel would not answer — either it is blocking us, or it would not
+     * hand over the grouping for a list it had just handed over. Anything else about films and
+     * series is optional: plenty of accounts carry neither, and a panel that 404s on them is
+     * perfectly usable for live TV.
      */
     private suspend fun <T> optionalBatch(
         result: ApiResult<List<T>>,
-        map: suspend (List<T>) -> Batch,
-    ): Batch? = when (result) {
+        map: suspend (List<T>) -> BatchOutcome,
+    ): BatchOutcome = when (result) {
         is ApiResult.Ok -> map(result.value)
         is ApiResult.Err -> if (result.error == SourceError.ProviderBlocked) {
             beginBackoff()
-            null
+            BatchOutcome.Refused(SourceError.ProviderBlocked)
         } else {
-            Batch(emptyList(), 0)
+            BatchOutcome.Loaded(Batch(emptyList(), 0))
         }
+    }
+
+    /** [map] applied to the grouping [streams] belong in, or the refusal that denied it. */
+    private suspend fun <T> categorised(
+        streams: List<T>,
+        result: ApiResult<List<CategoryDto>>,
+        map: (List<CategoryDto>) -> Batch,
+    ): BatchOutcome = when (val grouping = grouping(streams, result)) {
+        is ApiResult.Err -> BatchOutcome.Refused(grouping.error)
+        is ApiResult.Ok -> BatchOutcome.Loaded(map(grouping.value))
     }
 
     private fun assemble(live: Batch, vod: Batch, series: Batch): SourceResult {
@@ -530,18 +568,36 @@ class XtreamSource internal constructor(
     }
 
     /**
-     * A category list, or none.
+     * The grouping [streams] belong in, or the reason the panel would not give it.
      *
-     * A category list that fails to load costs the user their grouping and nothing more, so
-     * this one failure genuinely is optional. A block is still recorded, because the caller
-     * checks [isBlocked] immediately afterwards and stops.
+     * **A category list that fails is not an optional failure, and treating it as one is
+     * `BUG-033`.** This used to answer an empty list and let the load continue: [titleFor] then
+     * returned [Category.UNGROUPED_TITLE] for every stream, `assemble` still reported success,
+     * and the scheduled sync wrote a whole catalogue with its grouping erased over the top of a
+     * correct one. Categories are not a table — they are `channels.groupTitle` — so there was
+     * nothing left to recover from, and a household saw every channel it owned in one heap
+     * called `__ungrouped__` until somebody refreshed by hand.
+     *
+     * It surfaced under the scheduled sync rather than under a refresh somebody asked for
+     * because that one walks every source unattended and panels rate-limit; the category calls
+     * are the ones that lose.
+     *
+     * **Empty streams need no grouping.** An account with no films answers `get_vod_streams`
+     * and `get_vod_categories` the same unhelpful way, and it is a perfectly healthy account
+     * for live TV. Only a list that arrived and cannot be grouped is a broken load.
+     *
+     * A block is still recorded on the way past, as it was before.
      */
-    private suspend fun categories(result: ApiResult<List<CategoryDto>>): List<CategoryDto> = when (result) {
-        is ApiResult.Ok -> result.value
-        is ApiResult.Err -> {
+    private suspend fun grouping(
+        streams: List<*>,
+        result: ApiResult<List<CategoryDto>>,
+    ): ApiResult<List<CategoryDto>> = when {
+        streams.isEmpty() -> ApiResult.Ok(emptyList())
+        result is ApiResult.Err -> {
             if (result.error == SourceError.ProviderBlocked) beginBackoff()
-            emptyList()
+            result
         }
+        else -> result
     }
 
     /**

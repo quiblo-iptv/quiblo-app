@@ -15,6 +15,8 @@ Formatted after [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and ve
 
 ## Unreleased
 
+## 0.26.2
+
 ### Fixed
 
 - **Back hides the television player controls again when they are focused (`BUG-032`).**

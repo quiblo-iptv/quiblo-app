@@ -50,7 +50,10 @@ import dev.quiblo.source.api.VodSource
 import dev.quiblo.source.xtream.dto.AuthResponse
 import dev.quiblo.source.xtream.dto.CategoryDto
 import dev.quiblo.source.xtream.dto.EpgListingDto
+import dev.quiblo.source.xtream.dto.LiveStreamDto
+import dev.quiblo.source.xtream.dto.SeriesDto
 import dev.quiblo.source.xtream.dto.SeriesInfoResponse
+import dev.quiblo.source.xtream.dto.VodStreamDto
 import dev.quiblo.source.xtream.dto.XtreamSubtitle
 import io.ktor.client.HttpClient
 import java.util.Base64
@@ -130,7 +133,7 @@ class XtreamSource internal constructor(
         return when (val auth = client.authenticate(base, credentials)) {
             is ApiResult.Err -> noteBlocked(auth.error, SourceResult::Failure)
             is ApiResult.Ok -> authorised(auth.value)?.let { SourceResult.Failure(it) }
-                ?: collect(base, credentials, request.sourceId)
+                ?: collect(request, base, credentials)
         }
     }
 
@@ -149,109 +152,179 @@ class XtreamSource internal constructor(
     private data class Batch(val channels: List<Channel>, val skipped: Int)
 
     /**
-     * One content type's contribution, or the reason there is not one.
+     * The four requests that say what this account holds, then the three that say how it is
+     * grouped — and the three are only spent when the four have changed (`FEAT-031`).
      *
-     * The reason is carried rather than reduced to a boolean because it becomes the load's own
-     * failure, and "the panel timed out on the categories" and "the panel is refusing us" are
-     * two different things to tell a viewer.
+     * **The order is the saving.** The stream lists carry everything a fingerprint needs: how
+     * many items there are, and — on films and series — when the panel last added to them. So the
+     * question "is there anything new?" is answered after four requests, and a run with nothing
+     * new stops there. It used to interleave the category calls with the stream calls, which made
+     * every run cost seven whether or not the account had moved, and at four-hourly that is the
+     * difference between forty-two requests a day and twenty-four.
+     *
+     * Written as a chain of small functions rather than one procedure with early returns: each
+     * step names the request it is about to spend, and every one of them stops the moment the
+     * panel refuses.
      */
-    private sealed interface BatchOutcome {
-        data class Loaded(val batch: Batch) : BatchOutcome
-        data class Refused(val error: SourceError) : BatchOutcome
+    private suspend fun collect(request: SourceRequest, base: String, credentials: Credentials): SourceResult =
+        when (val live = client.liveStreams(base, credentials)) {
+            // Live is the point of the account. If it fails, the load failed.
+            is ApiResult.Err -> noteBlocked(live.error, SourceResult::Failure)
+            is ApiResult.Ok -> withFilms(
+                request = request,
+                ctx = Context(base, credentials, request.sourceId),
+                live = live.value,
+            )
+        }
+
+    private suspend fun withFilms(
+        request: SourceRequest,
+        ctx: Context,
+        live: List<LiveStreamDto>,
+    ): SourceResult = when (val vod = optionalList { client.vodStreams(ctx.base, ctx.credentials) }) {
+        is ApiResult.Err -> SourceResult.Failure(vod.error)
+        is ApiResult.Ok -> withSeries(request, ctx, live, vod.value)
     }
 
-    private suspend fun collect(base: String, credentials: Credentials, sourceId: Long): SourceResult {
-        val ctx = Context(base, credentials, sourceId)
+    private suspend fun withSeries(
+        request: SourceRequest,
+        ctx: Context,
+        live: List<LiveStreamDto>,
+        vod: List<VodStreamDto>,
+    ): SourceResult = when (val series = optionalList { client.series(ctx.base, ctx.credentials) }) {
+        is ApiResult.Err -> SourceResult.Failure(series.error)
+        is ApiResult.Ok -> groupOrStop(request, ctx, live, vod, series.value)
+    }
 
-        return when (val result = client.liveStreams(base, credentials)) {
-            // Live is the point of the account. If it fails, the load failed.
-            is ApiResult.Err -> noteBlocked(result.error, SourceResult::Failure)
+    /**
+     * A list this account may simply not have, or the refusal that ends the walk.
+     *
+     * VOD and series are optional: plenty of accounts carry neither, and a panel that 404s on
+     * them is perfectly usable for live TV. A *block* is not an optional-content failure, and
+     * used to be swallowed as one — a refresh against an already-blocked panel carried on and
+     * spent four more requests on it, each another strike against an account being refused
+     * precisely for asking too often.
+     *
+     * The fetch is a lambda so that a panel already known to be blocking us is never asked.
+     */
+    private suspend fun <T> optionalList(fetch: suspend () -> ApiResult<List<T>>): ApiResult<List<T>> {
+        if (isBlocked()) return ApiResult.Err(SourceError.ProviderBlocked)
+
+        return when (val result = fetch()) {
+            is ApiResult.Ok -> result
+            is ApiResult.Err -> if (result.error == SourceError.ProviderBlocked) {
+                beginBackoff()
+                result
+            } else {
+                ApiResult.Ok(emptyList())
+            }
+        }
+    }
+
+    /**
+     * Stops here when the account has not moved since [SourceRequest.knownFingerprint].
+     *
+     * Three requests and a whole pass over the database, not spent. A refresh somebody asked for
+     * passes no fingerprint, so it always goes the long way round — that one is also how a viewer
+     * fixes a catalogue that is wrong, and a load that decided there was nothing to do could not.
+     */
+    private suspend fun groupOrStop(
+        request: SourceRequest,
+        ctx: Context,
+        live: List<LiveStreamDto>,
+        vod: List<VodStreamDto>,
+        series: List<SeriesDto>,
+    ): SourceResult {
+        val fingerprint = fingerprintOf(live, vod, series)
+
+        return if (fingerprint == request.knownFingerprint) {
+            SourceResult.Unchanged(fingerprint)
+        } else {
+            grouped(ctx, live, vod, series, fingerprint)
+        }
+    }
+
+    /**
+     * What the account holds, in one short string.
+     *
+     * **There is no endpoint that answers "what is new".** `player_api.php` has a fixed set of
+     * actions and none of them takes a date, so the cheapest honest change-check is the one the
+     * lists already carry: how many items, and the newest date among them. A film added and a
+     * film removed on the same day would leave the count equal — the dates are what separate
+     * that from nothing having happened.
+     *
+     * Live streams carry no date at all, so their contribution is a hash of the ids. That catches
+     * a channel added, removed or renumbered, which is every way a live list changes.
+     *
+     * A collision here costs one skipped sync, not a wrong catalogue: the next run's fingerprint
+     * differs and the full load happens then.
+     */
+    private fun fingerprintOf(
+        live: List<LiveStreamDto>,
+        vod: List<VodStreamDto>,
+        series: List<SeriesDto>,
+    ): String {
+        val liveIds = live.mapNotNull { it.streamId }.sorted().joinToString(",").hashCode()
+        val newestFilm = vod.mapNotNull { it.addedEpochSeconds }.maxOrNull() ?: 0L
+        val newestSeries = series
+            .mapNotNull { it.lastModifiedEpochSeconds ?: it.addedEpochSeconds }
+            .maxOrNull()
+            ?: 0L
+
+        return "${live.size}:$liveIds:${vod.size}:$newestFilm:${series.size}:$newestSeries"
+    }
+
+    /**
+     * The grouping, one content type at a time, stopping at the first refusal.
+     *
+     * Nested rather than fetched together: a panel that has just refused one of these is a panel
+     * that must not be asked the other two.
+     */
+    private suspend fun grouped(
+        ctx: Context,
+        live: List<LiveStreamDto>,
+        vod: List<VodStreamDto>,
+        series: List<SeriesDto>,
+        fingerprint: String,
+    ): SourceResult =
+        when (val liveGroups = grouping(live, client.liveCategories(ctx.base, ctx.credentials))) {
+            is ApiResult.Err -> SourceResult.Failure(liveGroups.error)
             is ApiResult.Ok ->
-                when (val grouping = grouping(result.value, client.liveCategories(base, credentials))) {
-                    is ApiResult.Err -> SourceResult.Failure(grouping.error)
-                    is ApiResult.Ok -> withOptionalCatalogues(
+                when (val vodGroups = grouping(vod, client.vodCategories(ctx.base, ctx.credentials))) {
+                    is ApiResult.Err -> SourceResult.Failure(vodGroups.error)
+                    is ApiResult.Ok -> assembleSeries(
                         ctx = ctx,
-                        live = mapLive(result.value, ctx, grouping.value),
+                        live = live,
+                        vod = vod,
+                        series = series,
+                        fingerprint = fingerprint,
+                        liveGroups = liveGroups.value,
+                        vodGroups = vodGroups.value,
                     )
                 }
         }
-    }
 
-    /**
-     * Adds films and series to the live catalogue, if the panel is still talking to us.
-     *
-     * VOD and series are optional: plenty of accounts carry neither, and a panel that 404s
-     * on them is perfectly usable for live TV. A *block* is not an optional-content
-     * failure, though, and used to be swallowed as one — so a refresh against an
-     * already-blocked panel carried on and spent four more requests on it, each one
-     * another strike against an account that was being refused precisely for asking too
-     * often. Each step now stops the moment the panel says no.
-     */
-    private suspend fun withOptionalCatalogues(ctx: Context, live: Batch): SourceResult =
-        // Nested rather than flattened with early returns: series is only asked for when films
-        // answered, which is the "stop the moment the panel says no" rule this function is for.
-        when (val vod = vodBatch(ctx)) {
-            is BatchOutcome.Refused -> SourceResult.Failure(vod.error)
-            is BatchOutcome.Loaded -> when (val series = seriesBatch(ctx)) {
-                is BatchOutcome.Refused -> SourceResult.Failure(series.error)
-                is BatchOutcome.Loaded -> assemble(live, vod.batch, series.batch)
-            }
+    @Suppress("LongParameterList")
+    private suspend fun assembleSeries(
+        ctx: Context,
+        live: List<LiveStreamDto>,
+        vod: List<VodStreamDto>,
+        series: List<SeriesDto>,
+        fingerprint: String,
+        liveGroups: List<CategoryDto>,
+        vodGroups: List<CategoryDto>,
+    ): SourceResult =
+        when (val seriesGroups = grouping(series, client.seriesCategories(ctx.base, ctx.credentials))) {
+            is ApiResult.Err -> SourceResult.Failure(seriesGroups.error)
+            is ApiResult.Ok -> assemble(
+                live = mapLive(live, ctx, liveGroups),
+                vod = mapVod(vod, ctx, vodGroups),
+                series = mapSeries(series, ctx, seriesGroups.value),
+                fingerprint = fingerprint,
+            )
         }
 
-    private suspend fun vodBatch(ctx: Context): BatchOutcome =
-        if (isBlocked()) {
-            BatchOutcome.Refused(SourceError.ProviderBlocked)
-        } else {
-            optionalBatch(client.vodStreams(ctx.base, ctx.credentials)) { streams ->
-                categorised(streams, client.vodCategories(ctx.base, ctx.credentials)) { grouping ->
-                    mapVod(streams, ctx, grouping)
-                }
-            }
-        }
-
-    private suspend fun seriesBatch(ctx: Context): BatchOutcome =
-        if (isBlocked()) {
-            BatchOutcome.Refused(SourceError.ProviderBlocked)
-        } else {
-            optionalBatch(client.series(ctx.base, ctx.credentials)) { entries ->
-                categorised(entries, client.seriesCategories(ctx.base, ctx.credentials)) { grouping ->
-                    mapSeries(entries, ctx, grouping)
-                }
-            }
-        }
-
-    /**
-     * A mapped batch, an empty one, or a refusal.
-     *
-     * A refusal means the panel would not answer — either it is blocking us, or it would not
-     * hand over the grouping for a list it had just handed over. Anything else about films and
-     * series is optional: plenty of accounts carry neither, and a panel that 404s on them is
-     * perfectly usable for live TV.
-     */
-    private suspend fun <T> optionalBatch(
-        result: ApiResult<List<T>>,
-        map: suspend (List<T>) -> BatchOutcome,
-    ): BatchOutcome = when (result) {
-        is ApiResult.Ok -> map(result.value)
-        is ApiResult.Err -> if (result.error == SourceError.ProviderBlocked) {
-            beginBackoff()
-            BatchOutcome.Refused(SourceError.ProviderBlocked)
-        } else {
-            BatchOutcome.Loaded(Batch(emptyList(), 0))
-        }
-    }
-
-    /** [map] applied to the grouping [streams] belong in, or the refusal that denied it. */
-    private suspend fun <T> categorised(
-        streams: List<T>,
-        result: ApiResult<List<CategoryDto>>,
-        map: (List<CategoryDto>) -> Batch,
-    ): BatchOutcome = when (val grouping = grouping(streams, result)) {
-        is ApiResult.Err -> BatchOutcome.Refused(grouping.error)
-        is ApiResult.Ok -> BatchOutcome.Loaded(map(grouping.value))
-    }
-
-    private fun assemble(live: Batch, vod: Batch, series: Batch): SourceResult {
+    private fun assemble(live: Batch, vod: Batch, series: Batch, fingerprint: String): SourceResult {
         val channels = live.channels + vod.channels + series.channels
         val skipped = live.skipped + vod.skipped + series.skipped
 
@@ -261,6 +334,7 @@ class XtreamSource internal constructor(
             SourceResult.Success(
                 channels = channels,
                 report = SourceReport(parsedEntries = channels.size, skippedEntries = skipped),
+                fingerprint = fingerprint,
             )
         }
     }
@@ -268,7 +342,7 @@ class XtreamSource internal constructor(
     private data class Context(val base: String, val credentials: Credentials, val sourceId: Long)
 
     private fun mapLive(
-        streams: List<dev.quiblo.source.xtream.dto.LiveStreamDto>,
+        streams: List<LiveStreamDto>,
         ctx: Context,
         categories: List<CategoryDto>,
     ): Batch {
@@ -300,7 +374,7 @@ class XtreamSource internal constructor(
     }
 
     private fun mapVod(
-        streams: List<dev.quiblo.source.xtream.dto.VodStreamDto>,
+        streams: List<VodStreamDto>,
         ctx: Context,
         categories: List<CategoryDto>,
     ): Batch {
@@ -333,7 +407,7 @@ class XtreamSource internal constructor(
     }
 
     private fun mapSeries(
-        entries: List<dev.quiblo.source.xtream.dto.SeriesDto>,
+        entries: List<SeriesDto>,
         ctx: Context,
         categories: List<CategoryDto>,
     ): Batch {

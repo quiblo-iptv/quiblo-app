@@ -151,6 +151,11 @@ A17.8 need a device left alone for days, which is the one thing a build cannot c
 
 - **Whether four days is right.** It is a guess about how often a provider adds things, made
   without a working account to measure. `docs/STOPPERS.md` S2.
+
+  **Answered on 2026-09-05, and it was not right (`FEAT-031`).** Four days meant a title a
+  provider had added could not be seen for most of a week. It is four hours now, and settable —
+  the right number depends on one provider's habits and one panel's tolerance, neither of which
+  is knowable from here.
 - **What a sync should do when a provider has replaced every stable key at once.** Some panels
   rotate stream URLs, and a source whose keys all changed looks to the merge like a catalogue where
   everything was dropped and everything else arrived. The result is correct — the same titles, new

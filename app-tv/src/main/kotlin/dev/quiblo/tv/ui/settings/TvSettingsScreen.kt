@@ -86,6 +86,7 @@ import dev.quiblo.core.data.progressFraction
 import dev.quiblo.core.model.AppTab
 import dev.quiblo.core.model.AutoNextDelay
 import dev.quiblo.core.model.BufferMode
+import dev.quiblo.core.model.CatalogueSyncInterval
 import dev.quiblo.core.model.Category
 import dev.quiblo.core.model.MaxBitrateCap
 import dev.quiblo.core.model.MediaKind
@@ -152,6 +153,8 @@ fun TvSettingsScreen(
     val mergeCategories by viewModel.mergeCategories.collectAsStateWithLifecycle()
     val hiddenTabs by viewModel.hiddenTabs.collectAsStateWithLifecycle()
     val checkUpdatesOnLaunch by viewModel.checkUpdatesOnLaunch.collectAsStateWithLifecycle()
+    val catalogueSyncInterval by viewModel.catalogueSyncInterval.collectAsStateWithLifecycle()
+    val dimWhilePaused by viewModel.dimWhilePaused.collectAsStateWithLifecycle()
     val ambientPlayer by viewModel.ambientPlayer.collectAsStateWithLifecycle()
 
     /*
@@ -322,6 +325,19 @@ fun TvSettingsScreen(
                 )
             }
 
+            item {
+                OptionRow(
+                    label = stringResource(R.string.tv_settings_dim_paused),
+                    description = stringResource(R.string.tv_settings_dim_paused_detail),
+                    options = listOf(false, true),
+                    selected = dimWhilePaused,
+                    labelFor = {
+                        stringResource(if (it) R.string.tv_settings_on else R.string.tv_settings_off)
+                    },
+                    onSelect = viewModel::setDimWhilePaused,
+                )
+            }
+
             item { SectionHeading(stringResource(R.string.tv_settings_artwork)) }
 
             item {
@@ -414,6 +430,19 @@ fun TvSettingsScreen(
                     description = stringResource(R.string.tv_settings_sources_detail),
                     action = stringResource(R.string.tv_settings_sources_manage),
                     onClick = onOpenSources,
+                )
+            }
+
+            // Filed under Sources rather than under Updates: this is how often the app talks to
+            // the viewer's provider, not how often it checks itself for a new release.
+            item {
+                OptionRow(
+                    label = stringResource(R.string.tv_settings_sync_interval),
+                    description = stringResource(R.string.tv_settings_sync_interval_detail),
+                    options = CatalogueSyncInterval.entries,
+                    selected = catalogueSyncInterval,
+                    labelFor = { stringResource(it.labelRes) },
+                    onSelect = viewModel::setCatalogueSyncInterval,
                 )
             }
 
@@ -1661,3 +1690,12 @@ private const val MBPS = 1_000_000
 private const val BACKUP_MIME_TYPE = "application/json"
 private const val BACKUP_FILE_NAME = "quiblo-backup.json"
 private const val ANY_MIME_TYPE = "*/*"
+
+/** What each interval is called on screen. Kept beside the row that draws it. */
+private val CatalogueSyncInterval.labelRes: Int
+    get() = when (this) {
+        CatalogueSyncInterval.FOUR_HOURS -> R.string.tv_settings_sync_four_hours
+        CatalogueSyncInterval.EIGHT_HOURS -> R.string.tv_settings_sync_eight_hours
+        CatalogueSyncInterval.TWELVE_HOURS -> R.string.tv_settings_sync_twelve_hours
+        CatalogueSyncInterval.DAILY -> R.string.tv_settings_sync_daily
+    }

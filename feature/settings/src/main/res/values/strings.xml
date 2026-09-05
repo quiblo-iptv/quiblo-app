@@ -98,6 +98,15 @@
     <string name="settings_tab_series">Series</string>
     <string name="settings_tab_favourites">Favourites</string>
 
+    <string name="settings_dim_paused_title">Dim the screen when paused</string>
+    <string name="settings_dim_paused_summary">A paused player lets the screen sleep as it normally would. Off keeps the picture up until you press play again.</string>
+    <string name="settings_sync_title">Content updates</string>
+    <string name="settings_sync_interval">Check for new content</string>
+    <string name="settings_sync_interval_summary">How often Quiblo re-reads your provider on its own. More often means new titles appear sooner; less often means fewer requests to a panel that may limit them.</string>
+    <string name="settings_sync_four_hours">4 hours</string>
+    <string name="settings_sync_eight_hours">8 hours</string>
+    <string name="settings_sync_twelve_hours">12 hours</string>
+    <string name="settings_sync_daily">Daily</string>
     <string name="settings_updates_title">Check for updates on launch</string>
     <string name="settings_updates_summary">Quiblo is installed from an APK, so nothing tells you when a newer one exists. On, the app asks its own releases page once each time it opens and offers the update if there is one. Off makes no request at all.</string>
     <string name="settings_update_available_title">New version available</string>

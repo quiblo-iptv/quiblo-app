@@ -53,6 +53,8 @@ class BackupRepositoryTest {
         override suspend fun delete(source: SourceEntity) = Unit
         override suspend fun deleteById(id: Long) = Unit
         override suspend fun markRefreshed(id: Long, timestamp: Long) = Unit
+        override suspend fun fingerprintFor(id: Long): String? = null
+        override suspend fun markFingerprint(id: Long, fingerprint: String?) = Unit
     }
 
     private class FakeFavoriteDao(initial: List<FavoriteEntity> = emptyList()) : FavoriteDao {

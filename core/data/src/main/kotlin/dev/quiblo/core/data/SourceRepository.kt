@@ -110,7 +110,18 @@ class SourceRepository(
             mediaSource == null ->
                 RefreshOutcome.Failure(SourceError.Unknown("No handler for ${source.kind}"))
 
-            else -> store(sourceId, mediaSource.load(SourceRequest(sourceId, source.url)), merge)
+            else -> {
+                val request = SourceRequest(
+                    sourceId = sourceId,
+                    location = source.url,
+                    // Only the scheduled walk may be told to skip. A refresh somebody asked for is
+                    // also the way out of a catalogue that is wrong, and one that decided there
+                    // was nothing to do could not fix it — see `BUG-033` for how a catalogue got
+                    // into that state in the first place.
+                    knownFingerprint = if (merge) sourceDao.fingerprintFor(sourceId) else null,
+                )
+                store(sourceId, mediaSource.load(request), merge)
+            }
         }
     }
 
@@ -127,6 +138,16 @@ class SourceRepository(
         when (result) {
             is SourceResult.Failure -> RefreshOutcome.Failure(result.error)
 
+            // Checked, and there was nothing to do (`FEAT-031`). The refreshed-at stamp still
+            // moves, because the catalogue *was* checked — and the fingerprint is written even
+            // though it has not changed, so that a source whose fingerprint was never stored
+            // starts skipping from here rather than on the run after next.
+            is SourceResult.Unchanged -> {
+                sourceDao.markFingerprint(sourceId, result.fingerprint)
+                sourceDao.markRefreshed(sourceId, now())
+                RefreshOutcome.Success(sourceId, SourceReport(parsedEntries = 0, skippedEntries = 0))
+            }
+
             is SourceResult.Success -> {
                 val entities = result.channels.mapIndexed { index, channel ->
                     channel.toEntity(sortIndex = index)
@@ -136,6 +157,7 @@ class SourceRepository(
                 } else {
                     channelDao.replaceForSource(sourceId, entities)
                 }
+                sourceDao.markFingerprint(sourceId, result.fingerprint)
                 sourceDao.markRefreshed(sourceId, now())
                 RefreshOutcome.Success(sourceId, result.report)
             }

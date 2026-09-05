@@ -21,6 +21,7 @@ package dev.quiblo.player
 import android.app.Application
 import androidx.work.Configuration
 import dev.quiblo.core.data.CatalogueIdentityBackfill
+import dev.quiblo.core.data.PlayerSettingsRepository
 import dev.quiblo.core.data.ProfileRepository
 import dev.quiblo.feature.sync.SyncScheduler
 import dev.quiblo.player.di.appModules
@@ -77,14 +78,19 @@ class QuibloApplication : Application(), Configuration.Provider {
     private fun beginSession() {
         val profiles: ProfileRepository = getKoin().get()
         val backfill: CatalogueIdentityBackfill = getKoin().get()
+        val settings: PlayerSettingsRepository = getKoin().get()
 
-        // Registered on every launch and kept on every launch. `ExistingPeriodicWorkPolicy.KEEP`
-        // is what makes that safe: `UPDATE` would restart the interval each time the app opened,
-        // so a household that opens Quiblo every evening would never reach four days and the sync
-        // would silently never run — for exactly the viewers who use the app most.
-        getKoin().get<SyncScheduler>().schedule()
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
-        CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
+        // Registered from the chosen interval, and re-registered whenever the viewer changes it.
+        // The first registration uses `ExistingPeriodicWorkPolicy.KEEP`, which is what makes doing
+        // this on every launch safe: `UPDATE` there would restart the interval each time the app
+        // opened, so a household that opens Quiblo every evening would never reach it and the sync
+        // would silently never run — for exactly the viewers who use the app most. This one never
+        // returns, so it gets its own launch rather than sharing the one below.
+        scope.launch { getKoin().get<SyncScheduler>().watch(settings.catalogueSyncInterval) }
+
+        scope.launch {
             profiles.beginSession()
             // Catalogues written before schema 19 carry no cleaned title and no script mask.
             // After the first pass this costs one indexed count, and a fresh install never has

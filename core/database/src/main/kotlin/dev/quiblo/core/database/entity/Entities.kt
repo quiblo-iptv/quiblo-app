@@ -39,6 +39,18 @@ data class SourceEntity(
     val url: String,
     val createdAtEpochMillis: Long,
     val lastRefreshedEpochMillis: Long? = null,
+    /**
+     * What this source looked like at the last successful load (`FEAT-031`).
+     *
+     * The scheduled sync hands it back to the source, which answers `Unchanged` when the account
+     * has not moved — three requests and a whole pass over the catalogue, not spent. Null on a
+     * source that has never loaded, and on the M3U kind, which has nothing cheap to compare.
+     *
+     * Deliberately opaque: what goes in it is the source's business, and nothing but the source
+     * that wrote it ever reads it. Storing it beside `lastRefreshedEpochMillis` rather than in its
+     * own table because it is one more fact about one row, with the same lifetime as the row.
+     */
+    val catalogueFingerprint: String? = null,
 )
 
 /**

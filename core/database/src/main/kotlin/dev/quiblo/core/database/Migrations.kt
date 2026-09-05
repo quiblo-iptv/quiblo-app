@@ -771,3 +771,17 @@ val MIGRATION_23_24 = object : Migration(23, 24) {
         )
     }
 }
+
+/**
+ * `FEAT-031`: what a source looked like at its last successful load.
+ *
+ * Nullable with no default, because "never loaded" and "loaded and looked like this" are
+ * different states and a default would have merged them — every existing source would have
+ * claimed a fingerprint it had never produced, and the first scheduled sync after upgrading
+ * would have decided there was nothing to do.
+ */
+val MIGRATION_24_25 = object : Migration(24, 25) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE `sources` ADD COLUMN `catalogueFingerprint` TEXT DEFAULT NULL")
+    }
+}

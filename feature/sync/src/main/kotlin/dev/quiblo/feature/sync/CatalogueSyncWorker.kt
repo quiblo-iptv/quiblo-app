@@ -66,7 +66,16 @@ class CatalogueSyncWorker(
     }
 
     companion object {
-        /** The name the scheduled copy is registered under. One per installation, not per source. */
-        const val WORK_NAME = "quiblo-catalogue-sync"
+        /**
+         * The name the scheduled copy is registered under. One per installation, not per source.
+         *
+         * **Versioned, and the version is not decoration.** `ExistingPeriodicWorkPolicy.KEEP`
+         * leaves an already-registered job exactly as it was registered, so a build that changes
+         * the interval cannot reach the job an older build enqueued — every existing install
+         * would keep the four days this app shipped with. A new name is a job that has never been
+         * registered, so the new interval takes. `SyncScheduler.LEGACY_CATALOGUE_WORK_NAME`
+         * cancels the old one.
+         */
+        const val WORK_NAME = "quiblo-catalogue-sync-v2"
     }
 }

@@ -143,6 +143,7 @@ fun TvPlayerScreen(
     val state by viewModel.state.collectAsStateWithLifecycle()
     val settings by viewModel.settings.collectAsStateWithLifecycle()
     val aspectRatioMode by viewModel.aspectRatioMode.collectAsStateWithLifecycle()
+    val keepScreenAwake by viewModel.keepScreenAwake.collectAsStateWithLifecycle()
 
     var controlsVisible by remember { mutableStateOf(false) }
 
@@ -315,7 +316,19 @@ fun TvPlayerScreen(
         }
     }
 
-    KeepScreenAwake(enabled = !hasFailed)
+    /*
+     * The panel stays on while there is something to watch, and only while there is (`FEAT-032`).
+     *
+     * A paused player is not a watched one. The reason `FLAG_KEEP_SCREEN_ON` is held at all is
+     * that watching involves no input, and that reason stops being true the moment playback
+     * stops — so a pause at bedtime used to be a television at full brightness on a still frame
+     * until morning, which on an OLED is not only wasted power.
+     *
+     * A viewer who wants the frame left up can switch it off in Settings, which is why this is a
+     * setting rather than a rule: someone pausing to read a subtitle or to look something up is
+     * not asking their screen to go dark.
+     */
+    KeepScreenAwake(enabled = !hasFailed && keepScreenAwake)
 
     /*
      * Back button handling (Hierarchical) — `BUG-032`.

@@ -35,6 +35,7 @@ import dev.quiblo.core.model.AppTab
 import dev.quiblo.core.model.Appearance
 import dev.quiblo.core.model.AutoNextDelay
 import dev.quiblo.core.model.BufferMode
+import dev.quiblo.core.model.CatalogueSyncInterval
 import dev.quiblo.core.model.Category
 import dev.quiblo.core.model.MaxBitrateCap
 import dev.quiblo.core.model.MediaKind
@@ -326,6 +327,37 @@ class SettingsViewModel(
 
     fun setCheckUpdatesOnLaunch(enabled: Boolean) = viewModelScope.launch {
         playerSettingsRepository.setCheckUpdatesOnLaunch(enabled)
+    }
+
+    /**
+     * How often the catalogue is re-read on its own (`FEAT-031`).
+     *
+     * App-wide, like the setting above. The initial value is the default rather than null for the
+     * same reason: a row that reads blank for an instant looks like a setting nobody has chosen.
+     *
+     * Nothing here reschedules the job. `SyncScheduler` watches this value for the life of the
+     * process and re-registers when it changes, so a settings screen that was closed before the
+     * write landed still takes effect.
+     */
+    val catalogueSyncInterval: StateFlow<CatalogueSyncInterval> =
+        playerSettingsRepository.catalogueSyncInterval.stateIn(
+            viewModelScope,
+            SharingStarted.WhileSubscribed(SUBSCRIPTION_TIMEOUT_MILLIS),
+            CatalogueSyncInterval.FOUR_HOURS,
+        )
+
+    fun setCatalogueSyncInterval(value: CatalogueSyncInterval) = viewModelScope.launch {
+        playerSettingsRepository.setCatalogueSyncInterval(value)
+    }
+
+    /**
+     * Whether a paused player lets the screen dim (`FEAT-032`). App-wide, and on by default.
+     */
+    val dimWhilePaused: StateFlow<Boolean> = playerSettingsRepository.dimWhilePaused
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(SUBSCRIPTION_TIMEOUT_MILLIS), true)
+
+    fun setDimWhilePaused(enabled: Boolean) = viewModelScope.launch {
+        playerSettingsRepository.setDimWhilePaused(enabled)
     }
 
     /**

@@ -15,6 +15,17 @@ Formatted after [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and ve
 
 ## Unreleased
 
+### Fixed
+
+- **The scheduled sync no longer collapses a whole catalogue into one category (`BUG-033`).** A
+  category list that failed to load was treated as an optional loss: every channel, film and
+  series was then stored as `__ungrouped__`, the sync reported success, and it wrote that over a
+  catalogue that had been grouped correctly — visible to a household as everything they own in one
+  heap, recoverable only by refreshing by hand. Categories are the `groupTitle` on each row and
+  nothing else, so there was nothing left to recover from. A category list that fails now fails the
+  whole refresh, which leaves the stored catalogue exactly as it was. An account that carries no
+  films is unaffected, because an empty list needs no grouping.
+
 ## 0.26.2
 
 ### Fixed

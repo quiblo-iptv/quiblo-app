@@ -15,6 +15,8 @@ Formatted after [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and ve
 
 ## Unreleased
 
+## 0.26.3
+
 ### Fixed
 
 - **The scheduled sync no longer collapses a whole catalogue into one category (`BUG-033`).** A

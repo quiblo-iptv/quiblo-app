@@ -40,7 +40,8 @@ class DiagnosisDetailsTest {
     fun `an m3u query loses its credentials`() {
         assertEquals(
             "cdn.example.invalid",
-            hostOf("https://cdn.example.invalid/get.php?username=someone&password=s3cret"),
+            // Not the panel's real script name: CI refuses that shape anywhere in the repo (AC-LEGAL-04).
+            hostOf("https://cdn.example.invalid/playlist?username=someone&password=s3cret"),
         )
     }
 

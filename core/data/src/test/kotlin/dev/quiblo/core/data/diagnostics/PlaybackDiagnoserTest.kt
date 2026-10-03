@@ -134,7 +134,7 @@ class PlaybackDiagnoserTest {
     fun `a playlist is judged on the stream alone`() = runTest {
         val diagnosis = diagnoser(FakePanel(null)).diagnose(
             M3U_ID,
-            "http://cdn.example.invalid/get.php?username=someone&password=s3cret",
+            "http://cdn.example.invalid/playlist?username=someone&password=s3cret",
             "News",
             StreamEvidence(StreamFault.BAD_STATUS, httpStatus = 401),
         )

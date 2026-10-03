@@ -1,7 +1,8 @@
 # BUG-043 Manual Sweep
 
 **Verify on real streams.** Use the audit's manual check first to learn what the account allows:
-`curl -s "http://HOST:PORT/player_api.php?username=USER&password=PASS" | jq '.user_info.allowed_output_formats'`.
+the account-info request from the owner's manual check, piped through
+`jq '.user_info.allowed_output_formats'`.
 
 ## 1. An HLS-only account
 

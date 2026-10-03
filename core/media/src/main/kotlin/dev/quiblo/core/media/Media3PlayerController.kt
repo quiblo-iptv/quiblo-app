@@ -150,6 +150,14 @@ class Media3PlayerController(
     private var lastEngineFailure: EngineFailure? = null
     private var lastEngineCode: String? = null
 
+    /**
+     * Rejoins of the live edge since this item last played (`BUG-036`).
+     *
+     * Not counted as retries — falling behind a live window is not the stream failing — but
+     * bounded, so a server whose window is broken cannot keep the player rejoining forever.
+     */
+    private var liveEdgeRejoins = 0
+
     private var settings = PlayerSettings()
 
     /**
@@ -275,6 +283,7 @@ class Media3PlayerController(
         retryJob?.cancel()
         hasEverBeenReady = false
         lastFailure = null
+        liveEdgeRejoins = 0
         lastEngineFailure = null
         lastEngineCode = null
         bytesReceived.set(0L)
@@ -310,6 +319,7 @@ class Media3PlayerController(
         retryJob?.cancel()
         hasEverBeenReady = false
         lastFailure = null
+        liveEdgeRejoins = 0
         lastEngineFailure = null
         lastEngineCode = null
         bytesReceived.set(0L)
@@ -321,7 +331,21 @@ class Media3PlayerController(
             status = PlaybackStatus.BUFFERING,
             error = null,
             retryAttempt = 0,
+            failure = null,
         )
+        restart()
+    }
+
+    /**
+     * Prepares the current item again, at the live edge when it is live (`BUG-036`).
+     *
+     * A live stream restarted where it stopped asks the server for a moment its playlist no longer
+     * holds: the engine fails with `BEHIND_LIVE_WINDOW`, and every retry repeated the same request
+     * and failed the same way, three times, before an error. A live channel has nowhere to resume
+     * *to* but now.
+     */
+    private fun restart() {
+        if (_state.value.item?.isLive == true) player.seekToDefaultPosition()
         player.prepare()
         player.playWhenReady = true
     }
@@ -515,13 +539,13 @@ class Media3PlayerController(
                     status = PlaybackStatus.BUFFERING,
                     retryAttempt = step.attempt,
                     error = null,
+                    failure = null,
                 )
 
                 retryJob?.cancel()
                 retryJob = scope.launch {
                     delay(step.delayMillis)
-                    player.prepare()
-                    player.playWhenReady = true
+                    restart()
                 }
             }
         }
@@ -583,6 +607,7 @@ class Media3PlayerController(
                 Player.STATE_READY -> {
                     val firstReady = !hasEverBeenReady
                     hasEverBeenReady = true
+                    liveEdgeRejoins = 0
                     watchdogJob?.cancel()
                     current.copy(
                         loadTimeMillis = if (firstReady) {
@@ -646,6 +671,12 @@ class Media3PlayerController(
 
         override fun onPlayerError(error: PlaybackException) {
             val failure = error.toEngineFailure()
+            if (rejoinsLiveEdge(failure, liveEdgeRejoins)) {
+                liveEdgeRejoins++
+                player.seekToDefaultPosition()
+                player.prepare()
+                return
+            }
             lastEngineFailure = failure
             lastEngineCode = error.errorCodeName
             scheduleRetry(classify(failure))

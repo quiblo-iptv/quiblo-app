@@ -35,6 +35,11 @@ Formatted after [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and ve
 
 ### Fixed
 
+- **A live channel that falls behind no longer fails after three reconnects (`BUG-036`).** After a
+  pause, a stall or a trip to the home screen, a live HLS channel asks for a moment its playlist has
+  already dropped. Quiblo kept asking for that same moment — three times, and then an error — and
+  pressing Try again asked once more. It now jumps to live, which is the only place a live channel
+  can resume from, and does not count that as a failure.
 - **A stream the provider refuses is asked again, and is no longer called "no longer available"
   (`BUG-034`).** Every refusal a server can give — a rejected password, a connection limit, an
   overloaded panel — was reported in the same words as a channel that had been taken down, and was

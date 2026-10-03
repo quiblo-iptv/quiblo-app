@@ -191,3 +191,21 @@ private val AUTH_STATUSES = setOf(401)
 private val REFUSED_STATUSES = setOf(403, 429, 458, 460, 461, 462, 463, 469, 509)
 
 private val SERVER_ERROR_STATUSES = 500..599
+
+/**
+ * Whether [failure] is a live stream fallen behind its window, to be rejoined at the live edge
+ * rather than retried (`BUG-036`).
+ *
+ * `BEHIND_LIVE_WINDOW` is what the engine reports after a stall, a pause or a return from the
+ * background on a live HLS channel: the position it was asked to resume from has scrolled out of
+ * the playlist. It used to be classified `UNKNOWN` and retried by preparing at that same position
+ * — which failed the same way, three times, and then showed an error on a channel that was fine.
+ * The remedy is to jump to the live edge, and it is not a failure, so it does not spend a retry.
+ *
+ * Bounded at [MAX_LIVE_EDGE_REJOINS] between plays, so a server whose window is broken still ends
+ * in an error rather than a loop.
+ */
+internal fun rejoinsLiveEdge(failure: EngineFailure, rejoinsSoFar: Int): Boolean =
+    failure.errorCode == PlaybackException.ERROR_CODE_BEHIND_LIVE_WINDOW && rejoinsSoFar < MAX_LIVE_EDGE_REJOINS
+
+internal const val MAX_LIVE_EDGE_REJOINS = 3

@@ -15,6 +15,8 @@ Formatted after [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and ve
 
 ## Unreleased
 
+## 0.27.0
+
 ### Added
 
 - **When a stream fails, Quiblo says whose side the problem is on (`FEAT-035`).** Every failure

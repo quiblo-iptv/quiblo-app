@@ -18,7 +18,9 @@
 
 package dev.quiblo.feature.settings
 
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Card
@@ -41,7 +43,13 @@ import androidx.compose.ui.unit.dp
  * thing is how they come to disagree.
  */
 @Composable
-internal fun ProfileCard(name: String?, isGuest: Boolean, onSwitch: () -> Unit) {
+internal fun ProfileCard(
+    name: String?,
+    isGuest: Boolean,
+    onSwitch: () -> Unit,
+    /** Opens rename, change face and delete (`FEAT-039`). Null when there is nobody to manage. */
+    onManage: (() -> Unit)? = null,
+) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
@@ -66,8 +74,15 @@ internal fun ProfileCard(name: String?, isGuest: Boolean, onSwitch: () -> Unit) 
                 modifier = Modifier.padding(top = 4.dp, bottom = 12.dp),
             )
 
-            OutlinedButton(onClick = onSwitch) {
-                Text(stringResource(R.string.settings_profile_switch))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedButton(onClick = onSwitch) {
+                    Text(stringResource(R.string.settings_profile_switch))
+                }
+                onManage?.let {
+                    OutlinedButton(onClick = it) {
+                        Text(stringResource(R.string.settings_profiles_manage))
+                    }
+                }
             }
         }
     }

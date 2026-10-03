@@ -93,6 +93,8 @@ fun SettingsScreen(
     val mergeCategories by viewModel.mergeCategories.collectAsStateWithLifecycle()
     val hiddenTabs by viewModel.hiddenTabs.collectAsStateWithLifecycle()
     val checkUpdatesOnLaunch by viewModel.checkUpdatesOnLaunch.collectAsStateWithLifecycle()
+    val playbackLogViewModel: PlaybackLogViewModel = koinViewModel()
+    val playbackLog by playbackLogViewModel.entries.collectAsStateWithLifecycle()
     val context = LocalContext.current
 
     // SAF, so the file lands wherever the user chooses and the app needs no storage
@@ -135,6 +137,9 @@ fun SettingsScreen(
      */
     var section by rememberSaveable { mutableStateOf(SettingsSection.PROFILE) }
 
+    // Rename, change face, delete (`FEAT-039`). Screen state: nobody's preferences include an open dialog.
+    var managingProfiles by remember { mutableStateOf(false) }
+
     Column(modifier = modifier.fillMaxSize()) {
         PrimaryTabRow(selectedTabIndex = section.ordinal) {
             SettingsSection.entries.forEach { entry ->
@@ -159,6 +164,7 @@ fun SettingsScreen(
                         name = profilesState.active?.name,
                         isGuest = profilesState.active?.isGuest == true,
                         onSwitch = profilesViewModel::switchProfile,
+                        onManage = { managingProfiles = true }.takeIf { profilesState.profiles.any { !it.isGuest } },
                     )
                 }
 
@@ -256,6 +262,14 @@ fun SettingsScreen(
                     )
                 }
 
+                // The device section, because it is about this device: what failed on it, and why.
+                cardItem {
+                    PlaybackLogCard(
+                        entries = playbackLog,
+                        reportText = playbackLogViewModel::reportText,
+                    )
+                }
+
                 cardItem {
                     LicensesCard()
                 }
@@ -264,6 +278,16 @@ fun SettingsScreen(
     }
 
     BackupResultDialog(state = backupState, onDismiss = viewModel::dismiss)
+
+    if (managingProfiles) {
+        ManageProfilesDialog(
+            profiles = profilesState.profiles,
+            onRename = profilesViewModel::rename,
+            onSetAvatar = profilesViewModel::setAvatar,
+            onDelete = profilesViewModel::delete,
+            onDismiss = { managingProfiles = false },
+        )
+    }
 }
 
 /**

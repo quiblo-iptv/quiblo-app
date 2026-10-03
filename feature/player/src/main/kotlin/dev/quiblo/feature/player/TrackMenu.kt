@@ -125,6 +125,11 @@ fun trackMenu(
      * resources and this module has no composition to read them from.
      */
     appearance: List<TrackMenuSection> = emptyList(),
+    /**
+     * The panel's subtitles that have not been fetched yet, already labelled (`BUG-045`). Listed
+     * after the engine's tracks; choosing one fetches it. See [OfferedSubtitle].
+     */
+    offered: List<TrackMenuEntry> = emptyList(),
 ): TrackMenu {
     val sections = buildList {
         if (state.audioTracks.size > 1) {
@@ -134,11 +139,11 @@ fun trackMenu(
         // Subtitles appear when the stream has any *or* when there is something to do about them.
         // A film with no subtitle track is exactly the case a viewer wants to attach a file to,
         // so a menu that hides the section until one exists hides it when it is needed most.
-        if (state.textTracks.isNotEmpty() || subtitleActions.isNotEmpty()) {
+        if (state.textTracks.isNotEmpty() || offered.isNotEmpty() || subtitleActions.isNotEmpty()) {
             val entries = if (state.textTracks.isEmpty()) {
                 // Nothing to turn off, so no "off" entry. One choice that is already made is
                 // furniture, and the same rule already keeps a lone audio track out of the menu.
-                emptyList()
+                offered
             } else {
                 buildList {
                     add(
@@ -151,6 +156,7 @@ fun trackMenu(
                         ),
                     )
                     addAll(state.textTracks.map { it.toEntry() })
+                    addAll(offered)
                 }
             }
             add(TrackMenuSection(TrackMenuKind.SUBTITLES, entries, subtitleActions))

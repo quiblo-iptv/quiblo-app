@@ -24,21 +24,24 @@ import dev.quiblo.core.data.ApplicationScope
 import dev.quiblo.core.data.AttachResult
 import dev.quiblo.core.data.ChannelRepository
 import dev.quiblo.core.data.PlayerSettingsRepository
+import dev.quiblo.core.data.ProviderSubtitleResult
 import dev.quiblo.core.data.SubtitleRepository
 import dev.quiblo.core.data.WatchEventRepository
 import dev.quiblo.core.data.WatchHistoryRepository
+import dev.quiblo.core.data.diagnostics.PlaybackDiagnoser
 import dev.quiblo.core.media.PlayableItem
 import dev.quiblo.core.media.PlaybackState
+import dev.quiblo.core.media.PlaybackStatus
 import dev.quiblo.core.media.PlayerController
 import dev.quiblo.core.model.AspectRatioMode
 import dev.quiblo.core.model.HistoryEntry
 import dev.quiblo.core.model.MediaKind
 import dev.quiblo.core.model.PlayerSettings
-import dev.quiblo.core.model.SubtitleFile
 import dev.quiblo.core.model.SubtitleOrigin
 import dev.quiblo.core.model.SubtitleStyle
 import dev.quiblo.core.model.WatchOrigin
 import dev.quiblo.source.api.VodDetailsResult
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -58,10 +61,14 @@ import kotlinx.coroutines.launch
  * Note what this class does not import: nothing from Media3 or ExoPlayer. It talks only
  * to [PlayerController] (docs/FREEZE.md §4.4).
  */
-// Seven collaborators, and the seventh is the watch log — a different question from the resume
+// Eight collaborators. The seventh is the watch log — a different question from the resume
 // point beside it: one is "where was I", the other is "what did I choose, and how often". Merging
 // them into one repository would put two tables with two lifetimes behind one name.
-@Suppress("LongParameterList")
+//
+// And one function per thing a screen does to a playback session — load, the transport, tracks, the
+// three lifecycle moments (`BUG-037`). Splitting them across classes would give the two apps two
+// objects to keep in step for one session.
+@Suppress("LongParameterList", "TooManyFunctions")
 class PlayerViewModel(
     private val controller: PlayerController,
     private val channelRepository: ChannelRepository,
@@ -77,6 +84,8 @@ class PlayerViewModel(
      */
     private val applicationScope: ApplicationScope,
     private val watchEvents: WatchEventRepository,
+    /** Explains a failure: whose side it is on (`FEAT-035`). */
+    private val diagnoser: PlaybackDiagnoser,
 ) : ViewModel() {
 
     /** Where the viewer was when they chose what is playing. Set by [load]. */
@@ -85,7 +94,22 @@ class PlayerViewModel(
     /** Whether this sitting has already been written down. See [recordOccasion]. */
     private var recorded = false
 
+    /** Whether [onStopped] let go of a live channel that [onStarted] should pick up again. */
+    private var stoppedLive = false
+
     val state: StateFlow<PlaybackState> = controller.state
+
+    private val _diagnosis = MutableStateFlow<DiagnosisState>(DiagnosisState.None)
+
+    /**
+     * Why the current failure happened, once that is known (`FEAT-035`).
+     *
+     * [DiagnosisState.None] while nothing has failed. The error screen does not wait for this: it
+     * appears when playback fails, says "checking why", and updates in place.
+     */
+    val diagnosis: StateFlow<DiagnosisState> = _diagnosis.asStateFlow()
+
+    private var diagnosisJob: Job? = null
 
     /**
      * The persisted tuning, pushed into the engine as it changes.
@@ -152,6 +176,10 @@ class PlayerViewModel(
     private val _subtitleNotice = MutableStateFlow<SubtitleNotice?>(null)
     val subtitleNotice: StateFlow<SubtitleNotice?> = _subtitleNotice.asStateFlow()
 
+    /** The panel's subtitles for what is playing, not yet fetched (`BUG-045`). */
+    private val _offeredSubtitles = MutableStateFlow<List<OfferedSubtitle>>(emptyList())
+    val offeredSubtitles: StateFlow<List<OfferedSubtitle>> = _offeredSubtitles.asStateFlow()
+
     /**
      * What is playing, in the terms history is recorded in.
      *
@@ -216,12 +244,16 @@ class PlayerViewModel(
         val request = LoadRequest(channelId, customUrl, startPositionMillis)
         if (loadedRequest == request) return
         loadedRequest = request
+        stoppedLive = false
         chosenFrom = origin
         recorded = false
+        _offeredSubtitles.value = emptyList()
 
         viewModelScope.launch {
             val channel = channelRepository.findById(channelId) ?: return@launch
-            val playUrl = customUrl ?: channel.streamUrl
+            // What is stored is a reference; the URL - with an Xtream account's credentials in it - is built
+            // now and kept only in memory (`BUG-041`).
+            val playUrl = channelRepository.playbackUrl(channel.sourceId, customUrl ?: channel.streamUrl)
             val playTitle = customTitle ?: channel.name
             val isEpisode = customUrl != null && channel.kind == MediaKind.SERIES
             playing = PlayingItem(
@@ -236,6 +268,7 @@ class PlayerViewModel(
                 episodeNumber = episodeNumber.takeIf { isEpisode },
             )
             val playbackKey = customUrl ?: channel.stableKey
+            _offeredSubtitles.value = offeredSubtitlesFor(channel.kind, channelId)
             prepare(
                 PlayableItem(
                     id = playbackKey,
@@ -250,34 +283,71 @@ class PlayerViewModel(
                         startPositionMillis != null -> startPositionMillis
                         else -> historyRepository.resumePosition(playbackKey)
                     },
-                    subtitles = subtitlesFor(channel.kind, channelId, playbackKey),
+                    // Only the viewer's own, which are local files. The panel's are offered in the
+                    // menu and fetched when chosen (`BUG-045`).
+                    subtitles = subtitleRepository.forTitle(playbackKey),
                 ),
             )
         }
     }
 
     /**
-     * Every sidecar subtitle this title has: the panel's, then the viewer's own (INC-F10).
+     * The subtitles the panel lists for this title, as offers for the menu (INC-F10, `BUG-045`).
      *
      * **The details call is made for a film and for nothing else.** It is one request, on an
      * explicit press of play rather than on a scroll, and it is usually already cached by the
      * screen the viewer pressed play from. Live has no details call at all, and an episode's
      * subtitles are not something `get_series_info` carries.
      */
-    private suspend fun subtitlesFor(
-        kind: MediaKind,
-        channelId: Long,
-        playbackKey: String,
-    ): List<SubtitleFile> {
-        val fromPanel = if (kind == MediaKind.VOD) {
-            (channelRepository.getVodDetails(channelId) as? VodDetailsResult.Success)
-                ?.details
-                ?.subtitles
-                .orEmpty()
-        } else {
-            emptyList()
+    private suspend fun offeredSubtitlesFor(kind: MediaKind, channelId: Long): List<OfferedSubtitle> {
+        if (kind != MediaKind.VOD) return emptyList()
+        return (channelRepository.getVodDetails(channelId) as? VodDetailsResult.Success)
+            ?.details
+            ?.subtitles
+            .orEmpty()
+            .mapIndexed { index, subtitle -> OfferedSubtitle("$OFFERED_SUBTITLE_PREFIX$index", subtitle) }
+    }
+
+    /**
+     * Fetches a subtitle the panel offers and restarts the film with it showing (`BUG-045`).
+     *
+     * The film keeps playing while it is fetched. A copy that arrives is added to the item, which
+     * is prepared again at the moment the viewer is at — the only way to add a track to a media
+     * item — with the new one selected, since that is what they chose. One that does not arrive
+     * is marked in the menu and said so, and the film is never touched.
+     */
+    private fun showOfferedSubtitle(id: String) {
+        val offer = _offeredSubtitles.value.firstOrNull { it.id == id } ?: return
+        if (offer.status == OfferedSubtitleStatus.FETCHING) return
+        val itemId = prepared?.id ?: return
+        setOfferStatus(id, OfferedSubtitleStatus.FETCHING)
+
+        viewModelScope.launch {
+            val result = subtitleRepository.fetchProviderSubtitle(offer.subtitle)
+            // Another title may have been opened while this one's subtitle was on its way.
+            val item = prepared?.takeIf { it.id == itemId } ?: return@launch
+            when (result) {
+                is ProviderSubtitleResult.Fetched -> {
+                    _offeredSubtitles.value = _offeredSubtitles.value.filterNot { it.id == id }
+                    prepare(
+                        item.copy(
+                            subtitles = item.subtitles.map { it.copy(selectOnStart = false) } +
+                                result.subtitle.copy(selectOnStart = true),
+                            startPositionMillis = state.value.positionMillis,
+                        ),
+                    )
+                }
+
+                ProviderSubtitleResult.Unavailable -> {
+                    setOfferStatus(id, OfferedSubtitleStatus.UNAVAILABLE)
+                    _subtitleNotice.value = SubtitleNotice.SUBTITLE_FAILED
+                }
+            }
         }
-        return fromPanel + subtitleRepository.forTitle(playbackKey)
+    }
+
+    private fun setOfferStatus(id: String, status: OfferedSubtitleStatus) {
+        _offeredSubtitles.value = _offeredSubtitles.value.map { if (it.id == id) it.copy(status = status) else it }
     }
 
     /**
@@ -381,7 +451,12 @@ class PlayerViewModel(
     fun selectTrack(kind: TrackMenuKind, trackId: String?) {
         when (kind) {
             TrackMenuKind.AUDIO -> controller.selectAudioTrack(trackId)
-            TrackMenuKind.SUBTITLES -> controller.selectTextTrack(trackId)
+            TrackMenuKind.SUBTITLES ->
+                if (trackId != null && isOfferedSubtitleId(trackId)) {
+                    showOfferedSubtitle(trackId)
+                } else {
+                    controller.selectTextTrack(trackId)
+                }
             TrackMenuKind.SUBTITLE_SIZE,
             TrackMenuKind.SUBTITLE_TEXT_COLOUR,
             TrackMenuKind.SUBTITLE_BACKGROUND,
@@ -402,12 +477,57 @@ class PlayerViewModel(
 
     fun controllerHandle(): PlayerController = controller
 
-    /** Stops playback when the screen leaves the foreground, so no audio leaks. */
+    /**
+     * Stops playback when the screen leaves the foreground, so no audio leaks.
+     *
+     * **A live channel is stopped, not paused (`BUG-037`).** A paused engine keeps reading to fill
+     * its buffer, so a paused channel went on holding one of the account's connections for as long
+     * as the app sat in the background or the television was on another input. On an account
+     * allowed one screen, that is the screen: the next device was refused, and so was this one
+     * after a channel change. And there is nothing to resume a live channel *to* — coming back to a
+     * stale buffer of a broadcast that has moved on only fails. [onStarted] starts it again, live.
+     *
+     * A film or an episode is paused as before: it has a position worth keeping, and a buffer worth
+     * keeping with it.
+     */
     fun onStopped() {
-        controller.pause()
+        if (isLive()) {
+            controller.stop()
+            stoppedLive = true
+        } else {
+            controller.pause()
+        }
         rememberPosition()
         recordOccasion()
     }
+
+    /** Back in the foreground: a live channel [onStopped] let go of is picked up again, at live. */
+    fun onStarted() {
+        if (!stoppedLive) return
+        stoppedLive = false
+        controller.retry()
+    }
+
+    /**
+     * The viewer has left the player screen, and the ViewModel outlives it (the television's).
+     *
+     * Like [onStopped], except that nothing is restarted on the way back in: a live channel is
+     * forgotten as well as stopped, so choosing the same channel again loads it afresh instead of
+     * finding it already "loaded" and stopped (`BUG-037`).
+     */
+    fun onLeft() {
+        if (isLive()) {
+            controller.stop()
+            stoppedLive = false
+            loadedRequest = null
+        } else {
+            controller.pause()
+        }
+        rememberPosition()
+        recordOccasion()
+    }
+
+    private fun isLive(): Boolean = state.value.item?.isLive == true
 
     override fun onCleared() {
         rememberPosition()
@@ -526,6 +646,50 @@ class PlayerViewModel(
                 .distinctUntilChanged()
                 .collect { rememberPosition() }
         }
+        // Diagnosed once per failure: when the status becomes ERROR, and forgotten when it stops
+        // being one — a retry, a new channel. Under the same ordering rule as the block above.
+        viewModelScope.launch {
+            controller.state.map { it.status == PlaybackStatus.ERROR }
+                .distinctUntilChanged()
+                .collect { failed -> if (failed) diagnose() else forgetDiagnosis() }
+        }
+        // A subtitle the engine could not load is switched off by the controller and the film carries
+        // on (`BUG-045`); this is where the viewer is told why their subtitle went away.
+        viewModelScope.launch {
+            controller.state.map { it.subtitleDropped }
+                .distinctUntilChanged()
+                .collect { dropped -> if (dropped) _subtitleNotice.value = SubtitleNotice.SUBTITLE_FAILED }
+        }
+    }
+
+    /**
+     * Gathers the evidence for the failure on screen and asks for a verdict (`FEAT-035`).
+     *
+     * Runs only after the controller has given up — after its own retries — so a stream that
+     * drops and recovers is never diagnosed at all.
+     */
+    private fun diagnose() {
+        val evidence = state.value.streamEvidence() ?: return
+        val item = prepared ?: return
+        val playing = playing ?: return
+
+        _diagnosis.value = DiagnosisState.Checking
+        diagnosisJob?.cancel()
+        diagnosisJob = viewModelScope.launch {
+            _diagnosis.value = DiagnosisState.Ready(
+                diagnoser.diagnose(
+                    sourceId = playing.sourceId,
+                    streamUrl = item.url,
+                    title = item.title,
+                    stream = evidence,
+                ),
+            )
+        }
+    }
+
+    private fun forgetDiagnosis() {
+        diagnosisJob?.cancel()
+        _diagnosis.value = DiagnosisState.None
     }
 
     private companion object {

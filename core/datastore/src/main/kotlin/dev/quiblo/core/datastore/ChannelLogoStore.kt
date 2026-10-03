@@ -44,9 +44,17 @@ private val Context.channelLogoDataStore: DataStore<Preferences> by preferencesD
  * Nothing here is sensitive, so this is plain `DataStore` rather than the encrypted store
  * credentials use (AC-XT-04).
  */
-class ChannelLogoStore(context: Context) {
+class ChannelLogoStore(context: Context) : ProfileScopedStore {
 
     private val dataStore = context.applicationContext.channelLogoDataStore
+
+    override suspend fun clearProfile(profileId: Long) {
+        dataStore.edit { preferences -> preferences.removeScoped { it == profileId } }
+    }
+
+    override suspend fun clearProfilesOtherThan(living: Set<Long>) {
+        dataStore.edit { preferences -> preferences.removeScoped { it !in living } }
+    }
 
     /**
      * Whether this viewer wants the reference list consulted.

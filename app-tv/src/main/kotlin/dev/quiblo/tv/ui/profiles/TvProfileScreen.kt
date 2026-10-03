@@ -23,6 +23,7 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -59,6 +60,11 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -96,12 +102,17 @@ fun TvProfileScreen(
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     var isAdding by remember { mutableStateOf(false) }
+    // The profile being renamed, re-faced or deleted (`FEAT-039`), or null.
+    var editing by remember { mutableStateOf<Profile?>(null) }
     val guestName = stringResource(R.string.tv_profile_guest)
 
     // Nothing is behind this screen until somebody is chosen, so back leaves the app rather
     // than dropping into a catalogue that has no idea whose it is. Only while adding does
     // back mean "not that, then".
-    BackHandler(enabled = isAdding) { isAdding = false }
+    BackHandler(enabled = isAdding || editing != null) {
+        isAdding = false
+        editing = null
+    }
 
     Column(
         modifier = modifier
@@ -127,6 +138,7 @@ fun TvProfileScreen(
             modifier = Modifier.padding(top = 8.dp, bottom = 28.dp),
         )
 
+        val beingEdited = editing
         if (isAdding) {
             AddProfile(
                 onAdd = { name, avatar ->
@@ -135,10 +147,25 @@ fun TvProfileScreen(
                 },
                 onCancel = { isAdding = false },
             )
+        } else if (beingEdited != null) {
+            TvEditProfile(
+                profile = beingEdited,
+                onSave = { name, avatar ->
+                    if (name.trim() != beingEdited.name) viewModel.rename(beingEdited, name)
+                    if (avatar != beingEdited.avatar) viewModel.setAvatar(beingEdited, avatar)
+                    editing = null
+                },
+                onDelete = {
+                    viewModel.delete(beingEdited)
+                    editing = null
+                },
+                onCancel = { editing = null },
+            )
         } else {
             Chooser(
                 profiles = state.profiles,
                 onSelect = viewModel::select,
+                onEdit = { editing = it },
                 onAdd = { isAdding = true },
                 onGuest = { viewModel.startGuest(guestName) },
             )
@@ -156,6 +183,7 @@ fun TvProfileScreen(
 private fun Chooser(
     profiles: List<Profile>,
     onSelect: (Profile) -> Unit,
+    onEdit: (Profile) -> Unit,
     onAdd: () -> Unit,
     onGuest: () -> Unit,
 ) {
@@ -183,6 +211,8 @@ private fun Chooser(
                 // A guest is a session rather than a person, so it keeps the plain figure.
                 hasAvatar = !profile.isGuest,
                 onClick = { onSelect(profile) },
+                // A guest is a session: it is not renamed or deleted, it ends by leaving.
+                onLongClick = if (profile.isGuest) null else { { onEdit(profile) } },
                 modifier = if (profile == profiles.firstOrNull()) {
                     Modifier.focusRequester(firstTile)
                 } else {
@@ -215,6 +245,16 @@ private fun Chooser(
     // Something must hold focus the moment this appears, or the remote looks broken on the
     // very first screen of the app.
     LaunchedFocus(firstTile, profiles.isNotEmpty())
+
+    // Said on screen, because a long press is not something anybody tries on a television unprompted.
+    if (profiles.any { !it.isGuest }) {
+        Text(
+            text = stringResource(R.string.tv_profile_manage_hint),
+            color = Color.White.copy(alpha = 0.4f),
+            fontSize = 13.sp,
+            modifier = Modifier.padding(top = 28.dp),
+        )
+    }
 }
 
 /**
@@ -402,6 +442,11 @@ private fun ProfileTile(
      */
     avatar: String? = null,
     hasAvatar: Boolean = false,
+    /**
+     * Rename, change face, delete (`FEAT-039`): a long press of Centre, or Menu on the remotes that
+     * have one. Null on Add, Guest, and anything else that is not somebody.
+     */
+    onLongClick: (() -> Unit)? = null,
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val isFocused by interactionSource.collectIsFocusedAsState()
@@ -411,7 +456,17 @@ private fun ProfileTile(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = modifier
             .width(TILE_WIDTH)
-            .clickable(interactionSource = interactionSource, indication = null, onClick = onClick)
+            .onPreviewKeyEvent { event ->
+                val isMenu = event.key == Key.Menu && event.type == KeyEventType.KeyUp
+                if (isMenu && onLongClick != null) onLongClick()
+                isMenu && onLongClick != null
+            }
+            .combinedClickable(
+                interactionSource = interactionSource,
+                indication = null,
+                onClick = onClick,
+                onLongClick = onLongClick,
+            )
             .focusable(interactionSource = interactionSource)
             .graphicsLayer {
                 scaleX = scale
@@ -499,3 +554,124 @@ private val CHOICE_SIZE = 56.dp
 
 /** Used when nothing has been typed yet, so an unnamed profile is still offered real faces. */
 private const val SEED_FALLBACK = "quiblo"
+
+/**
+ * One profile's name, face and the way out of existence, on a remote (`FEAT-039`).
+ *
+ * Shared by the chooser — Menu, or a long press of Centre, on a profile's tile — and by Settings →
+ * Manage profiles, so there is one editor and one set of words. The same order as [AddProfile]:
+ * the name, the faces, then what to do about it, each one press of Down from the last.
+ *
+ * **No face is chosen until one is pressed**, so Save on a renamed profile keeps the face it had.
+ * Delete asks first, in place, and says what goes with the profile; Back from the question keeps it.
+ */
+@Composable
+internal fun TvEditProfile(
+    profile: Profile,
+    onSave: (name: String, avatar: String?) -> Unit,
+    onDelete: () -> Unit,
+    onCancel: () -> Unit,
+) {
+    var name by remember(profile.id) { mutableStateOf(profile.name) }
+    var chosen by remember(profile.id) { mutableStateOf(NO_NEW_FACE) }
+    var confirmingDelete by remember(profile.id) { mutableStateOf(false) }
+    val field = remember { FocusRequester() }
+    val keep = remember { FocusRequester() }
+
+    BackHandler(enabled = confirmingDelete) { confirmingDelete = false }
+
+    if (confirmingDelete) {
+        androidx.compose.runtime.LaunchedEffect(Unit) { runCatching { keep.requestFocus() } }
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(
+                text = stringResource(R.string.tv_profile_delete_title, profile.name),
+                color = Color.White,
+                fontSize = 22.sp,
+                fontWeight = FontWeight.SemiBold,
+            )
+            Text(
+                text = stringResource(R.string.tv_profile_delete_detail),
+                color = Color.White.copy(alpha = 0.6f),
+                fontSize = 15.sp,
+                textAlign = TextAlign.Center,
+                modifier = Modifier
+                    .width(FIELD_WIDTH)
+                    .padding(top = 8.dp),
+            )
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                modifier = Modifier.padding(top = 16.dp),
+            ) {
+                // Keep first, and focused: the safe answer is the one a stray press of OK gives.
+                TvChip(
+                    label = stringResource(R.string.tv_profile_keep),
+                    isSelected = false,
+                    onClick = { confirmingDelete = false },
+                    modifier = Modifier.focusRequester(keep),
+                )
+                TvChip(
+                    label = stringResource(R.string.tv_profile_delete_confirm),
+                    isSelected = false,
+                    onClick = onDelete,
+                )
+            }
+        }
+        return
+    }
+
+    androidx.compose.runtime.LaunchedEffect(profile.id) { runCatching { field.requestFocus() } }
+
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        TvTextField(
+            value = name,
+            onValueChange = { name = it },
+            label = stringResource(R.string.tv_profile_name),
+            isLast = true,
+            modifier = Modifier
+                .width(FIELD_WIDTH)
+                .focusRequester(field),
+        )
+
+        Text(
+            text = stringResource(R.string.tv_profile_pick_avatar),
+            color = Color.White.copy(alpha = 0.55f),
+            fontSize = 13.sp,
+            modifier = Modifier.padding(top = 18.dp, bottom = 10.dp),
+        )
+
+        AvatarPicker(seedBase = name, chosen = chosen, onChoose = { chosen = it })
+
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            modifier = Modifier.padding(top = 16.dp),
+        ) {
+            TvChip(
+                label = stringResource(R.string.tv_profile_save),
+                isSelected = false,
+                onClick = {
+                    if (name.isNotBlank()) {
+                        val avatar = if (chosen == NO_NEW_FACE) {
+                            profile.avatar
+                        } else {
+                            generatedAvatarKey(avatarSeed(name, chosen))
+                        }
+                        onSave(name, avatar)
+                    }
+                },
+            )
+            TvChip(
+                label = stringResource(R.string.tv_profile_delete),
+                isSelected = false,
+                onClick = { confirmingDelete = true },
+            )
+            TvChip(
+                label = stringResource(R.string.tv_profile_cancel),
+                isSelected = false,
+                onClick = onCancel,
+            )
+        }
+    }
+}
+
+/** The face the profile already has, until one of the offered faces is pressed. */
+private const val NO_NEW_FACE = -1

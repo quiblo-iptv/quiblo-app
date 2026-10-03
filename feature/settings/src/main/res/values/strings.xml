@@ -153,4 +153,26 @@
     <string name="settings_profile_summary">Favourites and continue watching belong to this profile. Playlists and settings are shared.</string>
     <string name="settings_profile_guest">Guest — favourites and continue watching are deleted when this session ends.</string>
     <string name="settings_profile_switch">Switch profile</string>
+
+    <!-- FEAT-039: renaming, re-facing and deleting the profiles there are. Guest is never listed. -->
+    <string name="settings_profiles_manage">Manage profiles</string>
+    <string name="settings_profiles_manage_title">Profiles</string>
+    <string name="settings_profiles_manage_row">Rename, change face or delete</string>
+    <string name="settings_profiles_done">Done</string>
+    <string name="settings_profiles_edit_title">Edit profile</string>
+    <string name="settings_profiles_name">Name</string>
+    <string name="settings_profiles_face">Face</string>
+    <string name="settings_profiles_save">Save</string>
+    <string name="settings_profiles_cancel">Cancel</string>
+    <string name="settings_profiles_delete">Delete this profile</string>
+    <string name="settings_profiles_delete_title">Delete %1$s?</string>
+    <string name="settings_profiles_delete_detail">Their favourites, continue watching and settings are deleted with the profile. This cannot be undone. Playlists and other profiles are not touched.</string>
+    <string name="settings_profiles_delete_confirm">Delete</string>
+    <string name="settings_profiles_keep">Keep</string>
+
+    <!-- FEAT-035: the last playback failures, and what was found. Memory only. -->
+    <string name="settings_playback_log_title">Playback log</string>
+    <string name="settings_playback_log_summary">The last 20 times a stream failed on this device, and whose side the problem was on. Kept in memory only: it is gone when the app closes, and nothing is sent anywhere.</string>
+    <string name="settings_playback_log_empty">Nothing has failed since Quiblo was opened.</string>
+    <string name="settings_playback_log_copy">Copy all details</string>
 </resources>

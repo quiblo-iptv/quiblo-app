@@ -33,6 +33,7 @@ import dev.quiblo.core.model.SubtitleFile
 import dev.quiblo.core.model.SubtitleOrigin
 import dev.quiblo.core.model.VodDetails
 import dev.quiblo.core.model.releaseYearIn
+import dev.quiblo.source.api.AccountHealth
 import dev.quiblo.source.api.CredentialStore
 import dev.quiblo.source.api.Credentials
 import dev.quiblo.source.api.GuideResult
@@ -53,6 +54,7 @@ import dev.quiblo.source.xtream.dto.EpgListingDto
 import dev.quiblo.source.xtream.dto.SeriesInfoResponse
 import dev.quiblo.source.xtream.dto.XtreamSubtitle
 import io.ktor.client.HttpClient
+import kotlinx.coroutines.withTimeoutOrNull
 import java.util.Base64
 
 /**
@@ -81,6 +83,8 @@ class XtreamSource internal constructor(
 ) : MediaSource, GuideSource, SeriesSource, VodSource {
 
     override val kind: SourceKind = SourceKind.XTREAM
+
+    override val checksAccount: Boolean = true
 
     /**
      * When the panel last refused us, plus a cooling-off period.
@@ -130,7 +134,14 @@ class XtreamSource internal constructor(
         return when (val auth = client.authenticate(base, credentials)) {
             is ApiResult.Err -> noteBlocked(auth.error, SourceResult::Failure)
             is ApiResult.Ok -> authorised(auth.value)?.let { SourceResult.Failure(it) }
-                ?: collect(base, credentials, request.sourceId)
+                ?: collect(
+                    Context(
+                        base = base,
+                        credentials = credentials,
+                        sourceId = request.sourceId,
+                        allowedLiveFormats = auth.value.userInfo?.allowedOutputFormats?.toSet(),
+                    ),
+                )
         }
     }
 
@@ -140,8 +151,80 @@ class XtreamSource internal constructor(
         return when {
             user.auth == false -> SourceError.Unauthorized
             user.isBanned -> SourceError.AccountDisabled
-            user.isExpired -> SourceError.SubscriptionExpired
+            user.isExpiredAt(now()) -> SourceError.SubscriptionExpired
             else -> null
+        }
+    }
+
+    /**
+     * One `player_api.php` authentication call, read as evidence about the account (`FEAT-035`).
+     *
+     * It costs no stream slot — the panel counts streams, not API calls — and it goes through
+     * the same rate limiter and block gate as every other request, so a failing channel being
+     * retried by hand cannot turn into a flood. Bounded at [ACCOUNT_CHECK_TIMEOUT_MILLIS]: a
+     * diagnosis that arrives after the viewer has given up is not one.
+     *
+     * Null where there is nothing to go on — no stored credentials, an answer that is not an
+     * answer — because a null becomes "undetermined", and a wrong guess sends a viewer to argue
+     * with the wrong party.
+     */
+    /**
+     * The URL for a stored [locator], with this account's credentials in it (`BUG-041`).
+     *
+     * Built here, at the moment of playing, from the encrypted store — so the password is never in
+     * the database, and a password changed at the provider is the one used the next time anything
+     * plays. Makes no request. A locator that is not this module's is returned unchanged, which is
+     * what a stream URL that was never a locator needs.
+     */
+    override suspend fun playbackUrl(request: SourceRequest, locator: String): String {
+        val base = XtreamUrl.normalize(request.location) ?: return locator
+        val credentials = credentialStore.credentials(request.sourceId) ?: return locator
+        return XtreamUrl.resolve(
+            base = base,
+            username = credentials.username,
+            password = credentials.password,
+            locator = locator,
+            liveExtension = XtreamUrl.liveExtension(request.liveFormat, request.allowedLiveFormats),
+        ) ?: locator
+    }
+
+    override suspend fun accountHealth(request: SourceRequest): AccountHealth? {
+        if (isBlocked()) return AccountHealth.Blocked
+        val base = XtreamUrl.normalize(request.location) ?: return null
+        val credentials = credentialStore.credentials(request.sourceId) ?: return null
+
+        val auth = withTimeoutOrNull(ACCOUNT_CHECK_TIMEOUT_MILLIS) { client.authenticate(base, credentials) }
+            ?: return AccountHealth.Unreachable
+
+        return when (auth) {
+            is ApiResult.Err -> healthOf(auth.error)
+            is ApiResult.Ok -> healthOf(auth.value)
+        }
+    }
+
+    private suspend fun healthOf(error: SourceError): AccountHealth? = when (error) {
+        SourceError.ProviderBlocked -> {
+            beginBackoff()
+            AccountHealth.Blocked
+        }
+        SourceError.Unauthorized -> AccountHealth.CredentialsRejected
+        SourceError.Timeout, SourceError.UnreachableHost -> AccountHealth.Unreachable
+        SourceError.NotFound -> AccountHealth.ServerError(HTTP_NOT_FOUND)
+        is SourceError.HttpStatus -> AccountHealth.ServerError(error.code)
+        else -> null
+    }
+
+    private fun healthOf(auth: AuthResponse): AccountHealth {
+        val user = auth.userInfo ?: return AccountHealth.CredentialsRejected
+        return when {
+            user.auth == false -> AccountHealth.CredentialsRejected
+            user.isBanned -> AccountHealth.Disabled
+            user.isExpiredAt(now()) -> AccountHealth.Expired(user.expiresAtEpochMillis)
+            else -> AccountHealth.Ok(
+                expiresAtEpochMillis = user.expiresAtEpochMillis,
+                activeConnections = user.activeConnections,
+                maxConnections = user.maxConnections,
+            )
         }
     }
 
@@ -160,9 +243,9 @@ class XtreamSource internal constructor(
         data class Refused(val error: SourceError) : BatchOutcome
     }
 
-    private suspend fun collect(base: String, credentials: Credentials, sourceId: Long): SourceResult {
-        val ctx = Context(base, credentials, sourceId)
-
+    private suspend fun collect(ctx: Context): SourceResult {
+        val base = ctx.base
+        val credentials = ctx.credentials
         return when (val result = client.liveStreams(base, credentials)) {
             // Live is the point of the account. If it fails, the load failed.
             is ApiResult.Err -> noteBlocked(result.error, SourceResult::Failure)
@@ -194,7 +277,7 @@ class XtreamSource internal constructor(
             is BatchOutcome.Refused -> SourceResult.Failure(vod.error)
             is BatchOutcome.Loaded -> when (val series = seriesBatch(ctx)) {
                 is BatchOutcome.Refused -> SourceResult.Failure(series.error)
-                is BatchOutcome.Loaded -> assemble(live, vod.batch, series.batch)
+                is BatchOutcome.Loaded -> assemble(live, vod.batch, series.batch, ctx.allowedLiveFormats)
             }
         }
 
@@ -251,7 +334,7 @@ class XtreamSource internal constructor(
         is ApiResult.Ok -> BatchOutcome.Loaded(map(grouping.value))
     }
 
-    private fun assemble(live: Batch, vod: Batch, series: Batch): SourceResult {
+    private fun assemble(live: Batch, vod: Batch, series: Batch, allowedLiveFormats: Set<String>?): SourceResult {
         val channels = live.channels + vod.channels + series.channels
         val skipped = live.skipped + vod.skipped + series.skipped
 
@@ -261,11 +344,17 @@ class XtreamSource internal constructor(
             SourceResult.Success(
                 channels = channels,
                 report = SourceReport(parsedEntries = channels.size, skippedEntries = skipped),
+                allowedLiveFormats = allowedLiveFormats,
             )
         }
     }
 
-    private data class Context(val base: String, val credentials: Credentials, val sourceId: Long)
+    private data class Context(
+        val base: String,
+        val credentials: Credentials,
+        val sourceId: Long,
+        val allowedLiveFormats: Set<String>? = null,
+    )
 
     private fun mapLive(
         streams: List<dev.quiblo.source.xtream.dto.LiveStreamDto>,
@@ -284,7 +373,8 @@ class XtreamSource internal constructor(
                     id = 0L,
                     sourceId = ctx.sourceId,
                     name = name,
-                    streamUrl = XtreamUrl.liveStream(ctx.base, ctx.credentials.username, ctx.credentials.password, id),
+                    // A locator, not a URL: the credentials are added when it is played (`BUG-041`).
+                    streamUrl = XtreamUrl.liveLocator(id),
                     kind = MediaKind.LIVE,
                     // The EPG key, which ties a channel to its guide and lets a favourite
                     // survive a refresh (AC-FAV-03, AC-EPG-01).
@@ -316,10 +406,7 @@ class XtreamSource internal constructor(
                     id = 0L,
                     sourceId = ctx.sourceId,
                     name = name,
-                    streamUrl = XtreamUrl.vodStream(
-                        ctx.base, ctx.credentials.username, ctx.credentials.password, id,
-                        dto.containerExtension.orEmpty(),
-                    ),
+                    streamUrl = XtreamUrl.vodLocator(id, dto.containerExtension.orEmpty()),
                     kind = MediaKind.VOD,
                     tvgId = "xtream-vod-$id",
                     logoUrl = dto.streamIcon,
@@ -431,7 +518,7 @@ class XtreamSource internal constructor(
         return when (val result = client.seriesInfo(base, credentials, seriesId)) {
             is ApiResult.Err -> noteBlocked(result.error, SeriesDetailsResult::Failure)
             is ApiResult.Ok -> SeriesDetailsResult.Success(
-                result.value.toSeriesDetails(base, credentials, seriesId),
+                result.value.toSeriesDetails(seriesId),
             )
         }
     }
@@ -467,11 +554,7 @@ class XtreamSource internal constructor(
         }
     }
 
-    private fun SeriesInfoResponse.toSeriesDetails(
-        base: String,
-        credentials: Credentials,
-        seriesId: String,
-    ): SeriesDetails {
+    private fun SeriesInfoResponse.toSeriesDetails(seriesId: String): SeriesDetails {
         val seriesTitle = info?.name.orEmpty()
         val coverUrl = info?.cover
         val overview = info?.plot
@@ -486,7 +569,8 @@ class XtreamSource internal constructor(
                 val epNum = dto.episodeNum ?: (episodeList.size + 1)
                 val epTitle = dto.title?.takeIf { it.isNotBlank() } ?: "Episode $epNum"
                 val ext = dto.containerExtension.orEmpty()
-                val streamUrl = XtreamUrl.seriesStream(base, credentials.username, credentials.password, epId, ext)
+                // A locator, and so also the episode's identity in history: no credentials in either.
+                val streamUrl = XtreamUrl.seriesLocator(epId, ext)
                 val logo = dto.info?.movieImage
 
                 episodeList.add(
@@ -630,6 +714,11 @@ class XtreamSource internal constructor(
     private companion object {
         const val MILLIS_PER_SECOND = 1000L
 
+        /** How long a playback diagnosis waits for the panel before calling it unreachable. */
+        const val ACCOUNT_CHECK_TIMEOUT_MILLIS = 5_000L
+
+        const val HTTP_NOT_FOUND = 404
+
         /**
          * How long to stop asking after the panel refuses us.
          *
@@ -644,13 +733,13 @@ class XtreamSource internal constructor(
 }
 
 /**
- * One panel-supplied subtitle entry, as something the player can load (INC-F10).
+ * One panel-supplied subtitle entry, as something the player can offer (INC-F10).
  *
- * **The format is a guess when the URL does not carry an extension, and the guess is SubRip.**
- * Panels routinely serve a subtitle from a path like `/subtitle/12345` with no hint of what is
- * behind it, and refusing those would drop most of the few subtitles panels actually supply.
- * SubRip is what nearly all of them are. A wrong guess costs a text track that renders nothing,
- * which is visible and recoverable; refusing costs a subtitle that existed and was never offered.
+ * **The format here is only a placeholder.** Panels routinely serve a subtitle from a path like
+ * `/subtitle/12345` with no hint of what is behind it, so this says SubRip when the URL is silent.
+ * Nothing trusts it: the player fetches the file before using it and reads the format from the
+ * bytes (`BUG-045`), because a *wrong URL* handed to the engine — and panels list dead ones —
+ * stopped the whole film, not just the subtitle.
  *
  * A relative path is resolved against the panel, which is where it came from.
  */

@@ -19,6 +19,7 @@
 package dev.quiblo.source.api
 
 import dev.quiblo.core.model.Channel
+import dev.quiblo.core.model.LiveFormat
 import dev.quiblo.core.model.SourceKind
 
 /**
@@ -47,6 +48,36 @@ interface MediaSource {
      * @return the parsed content, or a typed failure.
      */
     suspend fun load(request: SourceRequest): SourceResult
+
+    /**
+     * The URL to hand the player for [locator] — what a stored channel or episode holds as its
+     * stream URL (`BUG-041`).
+     *
+     * A playlist stores real URLs and the default returns them unchanged. A source whose stream
+     * URLs carry credentials stores a locator without them and builds the URL here, at the moment
+     * of playing, so the credentials never reach the database. Must make no network request.
+     */
+    suspend fun playbackUrl(request: SourceRequest, locator: String): String = locator
+
+    /**
+     * Asks the provider about the account behind [request], for a playback diagnosis (`FEAT-035`).
+     *
+     * Null when this kind of source has no account to ask about — a plain M3U playlist — or when
+     * the question could not be put at all. A null is "no evidence", never "fine".
+     *
+     * Implementations must not consume a stream slot and must go through the same request budget
+     * as everything else that talks to the provider.
+     */
+    suspend fun accountHealth(request: SourceRequest): AccountHealth? = null
+
+    /**
+     * Whether this kind of source has an account [accountHealth] can ask about.
+     *
+     * Separates "there is no account to ask" — a playlist is just a file of URLs — from "there is
+     * one and the question went unanswered". The first still lets a stream's own answer stand as
+     * evidence; the second leaves nothing to go on.
+     */
+    val checksAccount: Boolean get() = false
 }
 
 /**
@@ -58,6 +89,10 @@ interface MediaSource {
 data class SourceRequest(
     val sourceId: Long,
     val location: String,
+    /** Which container live channels are played in, for [MediaSource.playbackUrl] (`BUG-043`). */
+    val liveFormat: LiveFormat = LiveFormat.AUTO,
+    /** What the provider last said this account may use; see [SourceResult.Success.allowedLiveFormats]. */
+    val allowedLiveFormats: Set<String>? = null,
 )
 
 /** The outcome of a [MediaSource.load] call. */
@@ -70,6 +105,11 @@ sealed interface SourceResult {
     data class Success(
         val channels: List<Channel>,
         val report: SourceReport,
+        /**
+         * The live containers the provider says this account may use (`m3u8`, `ts`), lower-case,
+         * or null when it did not say (`BUG-043`). Stored with the source and read back at play time.
+         */
+        val allowedLiveFormats: Set<String>? = null,
     ) : SourceResult
 
     /** Nothing usable could be obtained. */

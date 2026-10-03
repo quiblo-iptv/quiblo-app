@@ -18,6 +18,7 @@
 
 package dev.quiblo.core.database.entity
 
+import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.ForeignKey
 import androidx.room.Index
@@ -39,6 +40,11 @@ data class SourceEntity(
     val url: String,
     val createdAtEpochMillis: Long,
     val lastRefreshedEpochMillis: Long? = null,
+    /** `LiveFormat` by name: which container live channels are asked for (`BUG-043`). */
+    @ColumnInfo(defaultValue = "AUTO")
+    val liveFormat: String = "AUTO",
+    /** What the provider last said the account may use, comma-separated, or null if it never said. */
+    val allowedLiveFormats: String? = null,
 )
 
 /**

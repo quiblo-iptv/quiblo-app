@@ -18,6 +18,7 @@
 
 package dev.quiblo.tv.ui.sources
 
+import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -37,7 +38,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import dev.quiblo.core.model.LiveFormat
 import dev.quiblo.tv.R
+import dev.quiblo.tv.ui.common.TvChip
 import dev.quiblo.tv.ui.common.TvFocusRow
 import dev.quiblo.tv.ui.common.TvTextField
 
@@ -170,3 +173,112 @@ internal val BUTTON_WIDTH = 220.dp
 internal val FORM_WIDTH = 720.dp
 
 private val HINT_COLOUR = Color.White.copy(alpha = 0.6f)
+
+/**
+ * Edits a source in place (`BUG-042`): the add form's fields, filled in, for one source.
+ *
+ * The kind is the source's and is not offered: an account does not become a playlist by having its
+ * password cleared. The password starts empty and empty keeps the stored one, so it is never read
+ * back onto a screen in front of whoever is in the room (AC-XT-04).
+ */
+@Composable
+internal fun TvEditSourceForm(
+    focusRequester: FocusRequester,
+    initialName: String,
+    initialUrl: String,
+    initialUsername: String,
+    isAccount: Boolean,
+    initialLiveFormat: LiveFormat,
+    onSave: (name: String, url: String, username: String, password: String, liveFormat: LiveFormat) -> Boolean,
+    onCancel: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    var name by remember(initialName) { mutableStateOf(initialName) }
+    var url by remember(initialUrl) { mutableStateOf(initialUrl) }
+    var username by remember(initialUsername) { mutableStateOf(initialUsername) }
+    var liveFormat by remember(initialLiveFormat) { mutableStateOf(initialLiveFormat) }
+    var password by remember { mutableStateOf("") }
+    var wasRejected by remember { mutableStateOf(false) }
+
+    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Text(
+            text = stringResource(R.string.tv_sources_edit_hint),
+            color = HINT_COLOUR,
+            style = MaterialTheme.typography.bodyMedium,
+        )
+        if (wasRejected) {
+            Text(
+                text = stringResource(R.string.tv_sources_incomplete),
+                color = MaterialTheme.colorScheme.error,
+                style = MaterialTheme.typography.bodyMedium,
+            )
+        }
+        TvTextField(
+            value = name,
+            onValueChange = { name = it },
+            label = stringResource(R.string.tv_sources_name),
+            modifier = Modifier
+                .fillMaxWidth()
+                .focusRequester(focusRequester),
+        )
+        TvTextField(
+            value = url,
+            onValueChange = { url = it },
+            label = stringResource(R.string.tv_sources_url),
+            keyboardType = KeyboardType.Uri,
+            isLast = !isAccount,
+            modifier = Modifier.fillMaxWidth(),
+        )
+        if (isAccount) {
+            TvTextField(
+                value = username,
+                onValueChange = { username = it },
+                label = stringResource(R.string.tv_sources_username),
+                modifier = Modifier.fillMaxWidth(),
+            )
+            TvTextField(
+                value = password,
+                onValueChange = { password = it },
+                label = stringResource(R.string.tv_sources_password_keep),
+                isPassword = true,
+                isLast = true,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            // Which container live channels are asked for (`BUG-043`). Every choice on screen, like
+            // every other setting on this television: seeing the alternatives is how it is understood.
+            Text(
+                text = stringResource(R.string.tv_sources_live_format),
+                color = HINT_COLOUR,
+                style = MaterialTheme.typography.bodyMedium,
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.focusGroup()) {
+                LiveFormat.entries.forEach { format ->
+                    TvChip(
+                        label = stringResource(format.tvLabelRes()),
+                        isSelected = format == liveFormat,
+                        onClick = { liveFormat = format },
+                    )
+                }
+            }
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            TvFocusRow(
+                label = stringResource(R.string.tv_sources_edit_save),
+                onClick = { wasRejected = !onSave(name, url, username, password, liveFormat) },
+                modifier = Modifier.width(BUTTON_WIDTH),
+                hasGlow = true,
+            )
+            TvFocusRow(
+                label = stringResource(R.string.tv_sources_cancel),
+                onClick = onCancel,
+                modifier = Modifier.width(BUTTON_WIDTH),
+            )
+        }
+    }
+}
+
+private fun LiveFormat.tvLabelRes(): Int = when (this) {
+    LiveFormat.AUTO -> R.string.tv_sources_live_format_auto
+    LiveFormat.HLS -> R.string.tv_sources_live_format_hls
+    LiveFormat.TS -> R.string.tv_sources_live_format_ts
+}

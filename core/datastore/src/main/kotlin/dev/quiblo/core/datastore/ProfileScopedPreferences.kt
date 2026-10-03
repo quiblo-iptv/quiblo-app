@@ -85,3 +85,35 @@ internal fun MutablePreferences.putScoped(base: String, profileId: Long, value: 
 internal fun MutablePreferences.putScoped(base: String, profileId: Long, value: Set<String>) {
     this[Scoped.textSet(base, profileId)] = value
 }
+
+/**
+ * A store that files preferences under profiles, and can forget one (`BUG-040`).
+ *
+ * Deleting a profile, or ending a guest session, deleted its row and left every `name@id` key it
+ * had written in DataStore for good. A guest session gets a new id each time, so on a television
+ * used by visitors these only ever accumulated.
+ */
+interface ProfileScopedStore {
+
+    /** Removes every preference [profileId] wrote. Values the app had before profiles stay. */
+    suspend fun clearProfile(profileId: Long)
+
+    /** Removes every preference written by a profile not in [living] — those deleted before this existed. */
+    suspend fun clearProfilesOtherThan(living: Set<Long>)
+}
+
+/**
+ * The profile a scoped key was filed under, or null for a key that belongs to nobody.
+ *
+ * Only a key whose suffix after the last `@` is a number is a scoped key; see [Scoped].
+ */
+internal fun scopedOwner(keyName: String): Long? =
+    keyName.substringAfterLast('@', missingDelimiterValue = "").toLongOrNull()
+        ?.takeIf { keyName.contains('@') }
+
+/** Removes every key [owns] says belongs to a profile being forgotten. */
+internal fun MutablePreferences.removeScoped(owns: (Long) -> Boolean) {
+    asMap().keys
+        .filter { key -> scopedOwner(key.name)?.let(owns) == true }
+        .forEach { remove(it) }
+}

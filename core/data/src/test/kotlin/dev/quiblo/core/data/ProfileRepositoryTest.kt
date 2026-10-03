@@ -18,11 +18,16 @@
 
 package dev.quiblo.core.data
 
+import dev.quiblo.core.database.TransactionRunner
+import dev.quiblo.core.database.dao.FeedRowDao
 import dev.quiblo.core.database.dao.ProfileDao
+import dev.quiblo.core.database.dao.TitleOpinionDao
 import dev.quiblo.core.database.entity.ProfileEntity
+import dev.quiblo.core.datastore.ProfileScopedStore
 import dev.quiblo.core.datastore.ProfileStore
 import dev.quiblo.core.model.Profile
 import io.mockk.coEvery
+import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -32,6 +37,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.DisplayName
@@ -63,12 +69,18 @@ class ProfileRepositoryTest {
         coEvery { deleteGuests() } answers {
             rows.value = rows.value.filterNot { it.isGuest }
         }
+        coEvery { guestIds() } answers { rows.value.filter { it.isGuest }.map { it.id } }
+        coEvery { allIds() } answers { rows.value.map { it.id } }
         coEvery { delete(any()) } answers {
             val id = firstArg<Long>()
             rows.value = rows.value.filterNot { it.id == id }
         }
         coEvery { find(any()) } answers { rows.value.firstOrNull { it.id == firstArg<Long>() } }
         coEvery { countNamed() } answers { rows.value.count { !it.isGuest } }
+        coEvery { rename(any(), any()) } answers {
+            val id = firstArg<Long>()
+            rows.value = rows.value.map { if (it.id == id) it.copy(name = secondArg()) else it }
+        }
     }
 
     private val store: ProfileStore = mockk<ProfileStore>().apply {
@@ -195,6 +207,62 @@ class ProfileRepositoryTest {
     }
 
     @Test
+    @DisplayName("BUG-040 — deleting a profile clears what no foreign key reaches")
+    fun `deleting a profile clears its remembered rows, its opinions and its settings`() = runTest {
+        val repository = repository()
+        val sam = repository.addProfile("Sam")!!
+        val alex = repository.addProfile("Alex")!!
+
+        repository.delete(sam)
+
+        coVerify(exactly = 1) { feedRows.clearForProfile(sam.id) }
+        coVerify(exactly = 1) { opinions.clearForProfile(sam.id) }
+        assertEquals(listOf(sam.id), settingsStore.cleared)
+        // Nobody else's.
+        coVerify(exactly = 0) { feedRows.clearForProfile(alex.id) }
+        coVerify(exactly = 0) { opinions.clearForProfile(alex.id) }
+    }
+
+    @Test
+    @DisplayName("BUG-040 — a guest's opinions and settings end with the session")
+    fun `leaving a guest session clears what it said and chose`() = runTest {
+        val repository = repository()
+        val guest = repository.startGuestSession("Guest")
+        repository.awaitWatching()
+
+        repository.signOut()
+        repository.awaitChooser()
+
+        coVerify(exactly = 1) { opinions.clearForProfile(guest.id) }
+        coVerify(exactly = 1) { feedRows.clearForProfile(guest.id) }
+        assertEquals(listOf(guest.id), settingsStore.cleared)
+    }
+
+    @Test
+    fun `a guest nobody left is cleared at the next startup, settings and all`() = runTest {
+        val repository = repository()
+        val guest = repository.startGuestSession("Guest")
+        repository.awaitWatching()
+
+        repository.beginSession()
+
+        coVerify(exactly = 1) { opinions.clearForProfile(guest.id) }
+        assertEquals(listOf(guest.id), settingsStore.cleared)
+    }
+
+    @Test
+    fun `startup clears settings left by profiles that no longer exist, and keeps everyone else's`() = runTest {
+        val repository = repository()
+        val sam = repository.addProfile("Sam")!!
+
+        repository.beginSession()
+
+        // Everyone who exists, and NONE_ID — the moment before anybody is chosen is nobody, not
+        // somebody deleted.
+        assertEquals(setOf(sam.id, Profile.NONE_ID), settingsStore.keptOnly)
+    }
+
+    @Test
     fun `profiles reach the chooser as they are added`() = runTest {
         val repository = repository()
 
@@ -202,6 +270,60 @@ class ProfileRepositoryTest {
         repository.addProfile("Sara")
 
         assertEquals(listOf("Mahmoud", "Sara"), repository.profiles.first().map { it.name })
+    }
+
+    @Test
+    @DisplayName("FEAT-038 — a profile can be renamed, and keeps everything it had")
+    fun `renaming trims the new name and keeps the same profile`() = runTest {
+        val repository = repository()
+        val profile = repository.addProfile("Mahmod")!!
+
+        assertTrue(repository.rename(profile, "  Mahmoud  "))
+
+        assertEquals(listOf("Mahmoud"), rows.value.map { it.name })
+        // Same row, same id: the favourites and resume points keyed to it are untouched.
+        assertEquals(profile.id, rows.value.single().id)
+    }
+
+    @Test
+    fun `a blank new name is refused and changes nothing`() = runTest {
+        val repository = repository()
+        val profile = repository.addProfile("Mahmoud")!!
+
+        assertFalse(repository.rename(profile, "   "))
+
+        assertEquals(listOf("Mahmoud"), rows.value.map { it.name })
+    }
+
+    @Test
+    fun `a guest is never renamed`() = runTest {
+        val repository = repository()
+        val guest = repository.startGuestSession("Guest")
+
+        assertFalse(repository.rename(guest, "Somebody"))
+
+        assertEquals(listOf("Guest"), rows.value.map { it.name })
+    }
+
+    @Test
+    fun `a profile that has gone is not renamed`() = runTest {
+        val repository = repository()
+        val profile = repository.addProfile("Mahmoud")!!
+        repository.delete(profile)
+
+        assertFalse(repository.rename(profile, "Sara"))
+    }
+
+    @Test
+    fun `the person watching sees their new name everywhere at once`() = runTest {
+        val repository = repository()
+        val profile = repository.addProfile("Mahmod")!!
+        repository.select(profile)
+        repository.awaitWatching()
+
+        repository.rename(profile, "Mahmoud")
+
+        assertEquals("Mahmoud", repository.activeProfile.first { it?.name == "Mahmoud" }?.name)
     }
 
     /**
@@ -228,9 +350,28 @@ class ProfileRepositoryTest {
      * completes by design — handed the test's main scope, `runTest` would wait a minute for
      * it and then fail every test here for a reason that has nothing to do with profiles.
      */
+    private val feedRows: FeedRowDao = mockk(relaxed = true)
+    private val opinions: TitleOpinionDao = mockk(relaxed = true)
+
+    /** Records which profiles' preferences were cleared, in order. */
+    private class RecordingStore : ProfileScopedStore {
+        val cleared = mutableListOf<Long>()
+        var keptOnly: Set<Long>? = null
+        override suspend fun clearProfile(profileId: Long) {
+            cleared += profileId
+        }
+        override suspend fun clearProfilesOtherThan(living: Set<Long>) {
+            keptOnly = living
+        }
+    }
+
+    private val settingsStore = RecordingStore()
+
     private fun TestScope.repository() = ProfileRepository(
         profileDao = dao,
         profileStore = store,
+        leftovers = ProfileLeftovers(feedRows, opinions, listOf(settingsStore)),
+        transactions = TransactionRunner.Direct,
         now = { FIXED_NOW },
         scope = backgroundScope,
     )

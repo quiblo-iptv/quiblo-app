@@ -74,6 +74,7 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -82,6 +83,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.quiblo.core.common.TitleScript
 import dev.quiblo.core.data.MetadataScanState
 import dev.quiblo.core.data.ScanRefusal
+import dev.quiblo.core.data.diagnostics.Diagnosis
 import dev.quiblo.core.data.progressFraction
 import dev.quiblo.core.model.AppTab
 import dev.quiblo.core.model.AutoNextDelay
@@ -89,10 +91,16 @@ import dev.quiblo.core.model.BufferMode
 import dev.quiblo.core.model.Category
 import dev.quiblo.core.model.MaxBitrateCap
 import dev.quiblo.core.model.MediaKind
+import dev.quiblo.core.model.Profile
 import dev.quiblo.core.model.SeekInterval
 import dev.quiblo.designsystem.TMDB_API_KEY_URL
 import dev.quiblo.designsystem.openLink
+import dev.quiblo.feature.player.headline
+import dev.quiblo.feature.player.icon
+import dev.quiblo.feature.player.labelRes
 import dev.quiblo.feature.settings.BackupUiState
+import dev.quiblo.feature.settings.PlaybackLogViewModel
+import dev.quiblo.feature.settings.ProfilesViewModel
 import dev.quiblo.feature.settings.SettingsViewModel
 import dev.quiblo.feature.settings.THIRD_PARTY_LICENSES
 import dev.quiblo.feature.settings.ThirdPartyLicense
@@ -102,7 +110,10 @@ import dev.quiblo.tv.R
 import dev.quiblo.tv.ui.common.TvChip
 import dev.quiblo.tv.ui.common.TvTextField
 import dev.quiblo.tv.ui.common.tryRequestFocus
+import dev.quiblo.tv.ui.profiles.TvEditProfile
 import org.koin.androidx.compose.koinViewModel
+import java.text.DateFormat
+import java.util.Date
 
 /**
  * Settings, on a remote.
@@ -153,6 +164,7 @@ fun TvSettingsScreen(
     val hiddenTabs by viewModel.hiddenTabs.collectAsStateWithLifecycle()
     val checkUpdatesOnLaunch by viewModel.checkUpdatesOnLaunch.collectAsStateWithLifecycle()
     val ambientPlayer by viewModel.ambientPlayer.collectAsStateWithLifecycle()
+    val playbackLog by koinViewModel<PlaybackLogViewModel>().entries.collectAsStateWithLifecycle()
 
     /*
      * Which half of the screen is showing (`029` #6).
@@ -172,6 +184,12 @@ fun TvSettingsScreen(
     // Collapsed by default: twelve components are an obligation to make available, not
     // twelve rows to walk past on the way to anything else.
     var licensesShown by remember { mutableStateOf(false) }
+
+    // Settings → Manage profiles (`FEAT-039`): open or shut, and which profile is being edited.
+    val profilesViewModel: ProfilesViewModel = koinViewModel(key = "tv-profiles")
+    val profilesState by profilesViewModel.uiState.collectAsStateWithLifecycle()
+    var managingProfiles by remember { mutableStateOf(false) }
+    var editingProfileId by remember { mutableStateOf<Long?>(null) }
 
     BackHandler(onBack = onBack)
 
@@ -240,6 +258,15 @@ fun TvSettingsScreen(
                     onClick = onSwitchProfile,
                 )
             }
+
+            manageProfiles(
+                profiles = profilesState.profiles,
+                isOpen = managingProfiles,
+                onToggle = { managingProfiles = !managingProfiles },
+                editingId = editingProfileId,
+                onEdit = { editingProfileId = it?.id },
+                profilesViewModel = profilesViewModel,
+            )
 
             item { SectionHeading(stringResource(R.string.tv_settings_tabs)) }
 
@@ -469,6 +496,8 @@ fun TvSettingsScreen(
                     onSelect = viewModel::setCheckUpdatesOnLaunch,
                 )
             }
+
+            playbackLogSection(playbackLog)
 
             aboutSection(
                 licensesShown = licensesShown,
@@ -1661,3 +1690,145 @@ private const val MBPS = 1_000_000
 private const val BACKUP_MIME_TYPE = "application/json"
 private const val BACKUP_FILE_NAME = "quiblo-backup.json"
 private const val ANY_MIME_TYPE = "*/*"
+
+/**
+ * The last playback failures on this television, and whose side each was on (`FEAT-035`).
+ *
+ * The television's error screen has no **Copy details** — there is nowhere on it to paste — so
+ * this is where a viewer reads the evidence back, or photographs it for whoever they report it to.
+ * Memory only, like the phone's.
+ */
+private fun LazyListScope.playbackLogSection(entries: List<Diagnosis>) {
+    item { SectionHeading(stringResource(R.string.tv_settings_playback_log)) }
+    item { Attribution(stringResource(R.string.tv_settings_playback_log_detail)) }
+
+    if (entries.isEmpty()) {
+        item { PlaybackLogRow(entry = null) }
+    } else {
+        items(entries, key = { it.atEpochMillis }) { PlaybackLogRow(entry = it) }
+    }
+}
+
+/**
+ * One failure, or the sentence saying there are none.
+ *
+ * Focusable for the reason [LicenseRow] is: on a television, moving focus is how a list scrolls,
+ * and a row that never takes it is a row the remote cannot bring on screen.
+ */
+@Composable
+private fun PlaybackLogRow(entry: Diagnosis?) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isFocused by interactionSource.collectIsFocusedAsState()
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(
+                color = if (isFocused) Color.White.copy(alpha = 0.10f) else Color.Transparent,
+                shape = RoundedCornerShape(8.dp),
+            )
+            .focusable(interactionSource = interactionSource)
+            .padding(horizontal = 12.dp, vertical = 8.dp),
+    ) {
+        if (entry == null) {
+            Text(
+                text = stringResource(R.string.tv_settings_playback_log_empty),
+                color = Color.White.copy(alpha = 0.55f),
+                fontSize = 15.sp,
+            )
+            return@Column
+        }
+        Text(
+            text = formatLogTime(entry.atEpochMillis) + " · " + entry.title,
+            color = Color.White.copy(alpha = 0.55f),
+            fontSize = 13.sp,
+        )
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 4.dp)) {
+            Icon(
+                imageVector = entry.verdict.side.icon(),
+                contentDescription = null,
+                tint = Color.White,
+                modifier = Modifier.size(18.dp),
+            )
+            Text(
+                text = stringResource(entry.verdict.side.labelRes()) + " — " + entry.headline(),
+                color = Color.White,
+                fontSize = 16.sp,
+                lineHeight = 21.sp,
+                modifier = Modifier.padding(start = 8.dp),
+            )
+        }
+        Text(
+            text = entry.details,
+            color = Color.White.copy(alpha = 0.45f),
+            fontSize = 12.sp,
+            fontFamily = FontFamily.Monospace,
+            modifier = Modifier.padding(top = 4.dp),
+        )
+    }
+}
+
+private fun formatLogTime(epochMillis: Long): String =
+    DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT).format(Date(epochMillis))
+
+/**
+ * Settings → Manage profiles (`FEAT-039`): everybody with a profile, to rename, re-face or delete.
+ *
+ * Expanded into this list, like the licences, rather than pushed onto a screen of its own — a
+ * second scrolling surface is the shape that traps a remote. The profile being edited becomes the
+ * chooser's own editor in place, so there is one editor and one set of words on the television.
+ *
+ * Guest is not listed: it is a session rather than somebody, and it ends by leaving.
+ */
+@Suppress("LongParameterList")
+private fun LazyListScope.manageProfiles(
+    profiles: List<Profile>,
+    isOpen: Boolean,
+    onToggle: () -> Unit,
+    editingId: Long?,
+    onEdit: (Profile?) -> Unit,
+    profilesViewModel: ProfilesViewModel,
+) {
+    val named = profiles.filterNot { it.isGuest }
+    if (named.isEmpty()) return
+
+    item {
+        ActionRow(
+            label = stringResource(R.string.tv_settings_profiles_manage),
+            description = stringResource(R.string.tv_settings_profiles_manage_detail),
+            action = stringResource(
+                if (isOpen) R.string.tv_settings_profiles_hide else R.string.tv_settings_profiles_show,
+            ),
+            onClick = onToggle,
+        )
+    }
+
+    if (!isOpen) return
+
+    items(named, key = { "profile-${it.id}" }) { profile ->
+        if (profile.id == editingId) {
+            Box(modifier = Modifier.padding(vertical = 12.dp)) {
+                TvEditProfile(
+                    profile = profile,
+                    onSave = { name, avatar ->
+                        if (name.trim() != profile.name) profilesViewModel.rename(profile, name)
+                        if (avatar != profile.avatar) profilesViewModel.setAvatar(profile, avatar)
+                        onEdit(null)
+                    },
+                    onDelete = {
+                        profilesViewModel.delete(profile)
+                        onEdit(null)
+                    },
+                    onCancel = { onEdit(null) },
+                )
+            }
+        } else {
+            ActionRow(
+                label = profile.name,
+                description = stringResource(R.string.tv_profile_manage_hint),
+                action = stringResource(R.string.tv_settings_profiles_edit),
+                onClick = { onEdit(profile) },
+            )
+        }
+    }
+}

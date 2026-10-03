@@ -15,6 +15,100 @@ Formatted after [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and ve
 
 ## Unreleased
 
+### Added
+
+- **When a stream fails, Quiblo says whose side the problem is on (`FEAT-035`).** Every failure
+  used to be described in terms of "this stream", in the same words whether the subscription had
+  ended, the provider's server was down, or Quiblo had a bug — so a viewer could not tell whom to
+  call. The error screen now appears as before, says *Checking why…*, and then names the side —
+  **your connection**, **your subscription**, **your provider** or **Quiblo** — with one sentence and
+  one thing to do: *Your subscription ended on 2 October*, *Your account is already in use on 2 of
+  2 allowed screens*, *Your provider's server is not responding*. To find out, Quiblo asks the
+  provider about the account once, at most once a minute. **It never guesses:** when the evidence
+  does not settle it, it says *Not sure* and shows what it found. Underneath is one line of
+  technical detail for a report — the host and never the username, password or path — with **Copy
+  details** on the phone, and the last twenty are kept in memory under Settings → App → Playback
+  log on both apps.
+- **Profiles can be deleted, renamed and given a new face, on both apps (`FEAT-039`).** Deleting a
+  profile was built and never reachable — no screen on either app offered it. Settings → Profile now
+  has **Manage profiles**: every named profile, each with its name, its face and **Delete**, which
+  asks first and says what goes with it. The same is under a long press on a profile in the
+  chooser — on the television, hold OK or press Menu. A guest is not listed anywhere: it ends by
+  leaving.
+- **A profile can be renamed, and its face changed, without losing anything (`FEAT-038`).** The
+  name was fixed when the profile was made, so a typo typed on a remote — or a child's profile that
+  had grown up — could only be fixed by deleting the profile and making it again, which took its
+  favourites, its place in every film and its settings with it. Renaming keeps all of that, and the
+  new name shows everywhere at once. A guest is not renamed: it ends by leaving.
+- **An account whose subscription date has passed is recognised as expired** even when the panel
+  still calls it active, which many do. A refresh now says so instead of loading a catalogue that
+  will not play.
+
+### Changed
+
+- **A source can be edited — its name, address, username and password — without losing anything
+  (`BUG-042`).** Providers change their server addresses and passwords, and the only way to tell
+  Quiblo was to delete the source and add it again, which deleted every favourite and every place
+  in a film along with it. Sources now have **Edit**. The password field starts empty and leaving it
+  empty keeps the current one, which is never shown. If the provider does not accept the change,
+  nothing is changed.
+
+### Security
+
+- **Your Xtream password is no longer stored in plain text (`BUG-041`).** It was meant to live only
+  in the encrypted store, and it did — but it was also written into the database inside the address
+  of every channel, film and episode, and from there into your watch history and your backups. What
+  is stored now names the stream and nothing else; the address with your password in it is put
+  together at the moment something plays, and kept only in memory. Updating rewrites what older
+  versions stored, and your place in every series is kept.
+
+### Fixed
+
+- **A film no longer stops because its subtitle link is broken (`BUG-045`).** Providers often list
+  subtitles whose links no longer work, and turning one on — or having captions switched on in your
+  device's accessibility settings — stopped the whole film with *no longer available*, though the
+  film itself was fine. Quiblo now fetches a provider's subtitle when you choose it, and shows it
+  once it has arrived, a second later, from the same moment. One that cannot be fetched is marked
+  *unavailable* in Subtitles and the film plays on; if a subtitle still fails while it is showing,
+  Quiblo switches subtitles off and carries on instead of stopping.
+- **Playlist entries that are HLS without saying so in the address now play (`BUG-044`).** An M3U
+  entry such as `…/play.php?file=index.m3u8`, `…/stream?output=m3u8` or a path with no extension
+  at all failed with *a format Quiblo cannot play*, while the same address played in VLC or mpv.
+  Quiblo only recognised HLS by an address ending in `.m3u8`. It now also sees it anywhere in the
+  query, and when an address gives no hint and the stream is not a format it recognises, it tries
+  once more as HLS before giving up, within the same fifteen seconds.
+- **Live channels play on accounts that only allow HLS, and use HLS where they can (`BUG-043`).**
+  Every live channel was asked for as a raw `.ts` stream, so an account whose provider allows only
+  HLS could not play a single one. Quiblo now reads which formats your account may use and asks for
+  HLS when it is allowed — the steadier of the two on a phone — and TS otherwise. Each Xtream source
+  has a **Live channels** setting (Automatic, HLS or TS) for the provider that says one thing and
+  serves another.
+- **Deleting a profile, or ending a guest session, deletes everything it kept (`BUG-040`).** Its
+  favourites and its place in films went with it; its "not for me" marks, its remembered For You
+  rows and every setting it had chosen did not. For a guest that broke the one promise guest makes —
+  that nothing outlives the session. All of it now goes, and settings left behind by profiles
+  deleted before this version are cleared the next time the app opens. Nobody else's are touched.
+- **A live channel you are not watching no longer holds your account's connection (`BUG-037`).** A
+  paused channel kept downloading, so sending the app to the background, switching the television
+  to another input, or backing out of the player on the television left it holding a connection —
+  and on an account allowed one screen, every other device was refused for as long as it sat there.
+  A live channel is now let go of when you stop watching it and started again, at live, when you
+  come back. Changing channel closes the old connection before opening the new one. Films and
+  episodes still pause and keep their place.
+- **A live channel that falls behind no longer fails after three reconnects (`BUG-036`).** After a
+  pause, a stall or a trip to the home screen, a live HLS channel asks for a moment its playlist has
+  already dropped. Quiblo kept asking for that same moment — three times, and then an error — and
+  pressing Try again asked once more. It now jumps to live, which is the only place a live channel
+  can resume from, and does not count that as a failure.
+- **A stream the provider refuses is asked again, and is no longer called "no longer available"
+  (`BUG-034`).** Every refusal a server can give — a rejected password, a connection limit, an
+  overloaded panel — was reported in the same words as a channel that had been taken down, and was
+  never tried again. The commonest of them is a panel that has not yet released the account's one
+  connection after a channel change, and two seconds later it would have played. A refusal before
+  the first frame is now tried twice more, inside the same fifteen seconds a dead stream has always
+  been given, and only a 404 says the stream is gone. A rejected password says so. A host that does
+  not exist says it could not be reached, which it never did before.
+
 ## 0.26.3
 
 ### Fixed

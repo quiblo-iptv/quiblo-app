@@ -72,6 +72,10 @@ interface SourceDao {
 
     @Query("UPDATE sources SET lastRefreshedEpochMillis = :timestamp WHERE id = :id")
     suspend fun markRefreshed(id: Long, timestamp: Long)
+
+    /** What the provider said the account may stream in, at the last refresh that said (`BUG-043`). */
+    @Query("UPDATE sources SET allowedLiveFormats = :formats WHERE id = :id")
+    suspend fun setAllowedLiveFormats(id: Long, formats: String)
 }
 
 /**
@@ -1279,6 +1283,9 @@ interface ProfileDao {
     @Query("UPDATE profiles SET avatar = :avatar WHERE id = :id")
     suspend fun setAvatar(id: Long, avatar: String?)
 
+    @Query("UPDATE profiles SET name = :name WHERE id = :id")
+    suspend fun rename(id: Long, name: String)
+
     @Query("DELETE FROM profiles WHERE id = :id")
     suspend fun delete(id: Long)
 
@@ -1290,6 +1297,14 @@ interface ProfileDao {
      * startup as well as on leaving, because a process killed by the system never gets to
      * run a tidy-up and a promise kept only on the happy path is not kept.
      */
+    /** The guest sessions about to be ended, so what no foreign key reaches can go with them. */
+    @Query("SELECT id FROM profiles WHERE isGuest = 1")
+    suspend fun guestIds(): List<Long>
+
+    /** Everybody who still exists, for clearing settings left by those who do not. */
+    @Query("SELECT id FROM profiles")
+    suspend fun allIds(): List<Long>
+
     @Query("DELETE FROM profiles WHERE isGuest = 1")
     suspend fun deleteGuests()
 }
@@ -1403,6 +1418,15 @@ interface FeedRowDao {
     }
 
     /** Everything for one source, for when the catalogue underneath it has been replaced. */
+    /**
+     * Everything remembered for one profile, for when that profile is deleted (`BUG-040`).
+     *
+     * The table has no foreign key to `profiles` — a cache of arithmetic is not owned by the thing
+     * it was computed for — so the cascade that takes favourites and resume points cannot reach it.
+     */
+    @Query("DELETE FROM feed_rows WHERE profileId = :profileId")
+    suspend fun clearForProfile(profileId: Long)
+
     @Query("DELETE FROM feed_rows WHERE sourceId = :sourceId")
     suspend fun clearForSource(sourceId: Long)
 }
@@ -1487,4 +1511,13 @@ interface TitleOpinionDao {
     /** Clearing an opinion removes the row: absence is what "no opinion" is stored as. */
     @Query("DELETE FROM title_opinions WHERE profileId = :profileId AND titleKey = :titleKey")
     suspend fun clear(profileId: Long, titleKey: String)
+
+    /**
+     * Every opinion one profile gave, for when it is deleted or its guest session ends (`BUG-040`).
+     *
+     * No foreign key reaches this table, so without it a guest's "not for me" outlived the session
+     * it was said in — against the promise that a guest leaves nothing behind (AC-PROF-04).
+     */
+    @Query("DELETE FROM title_opinions WHERE profileId = :profileId")
+    suspend fun clearForProfile(profileId: Long)
 }

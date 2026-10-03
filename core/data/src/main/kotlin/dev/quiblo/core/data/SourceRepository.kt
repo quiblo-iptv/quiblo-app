@@ -21,6 +21,7 @@ package dev.quiblo.core.data
 import dev.quiblo.core.database.dao.ChannelDao
 import dev.quiblo.core.database.dao.FeedRowDao
 import dev.quiblo.core.database.dao.SourceDao
+import dev.quiblo.core.model.LiveFormat
 import dev.quiblo.core.model.Source
 import dev.quiblo.core.model.SourceKind
 import dev.quiblo.source.api.CredentialStore
@@ -114,6 +115,69 @@ class SourceRepository(
         }
     }
 
+    /**
+     * Changes a source's name, address or account, keeping it the same source (`BUG-042`).
+     *
+     * **The only way to apply a new password or a new server address used to be deleting the
+     * source and adding it again**, and deleting it cascades away every favourite and resume point
+     * it had. IPTV providers change both routinely, so a household paid for every provider-side
+     * change with its history. The id is kept, so everything keyed to it stays.
+     *
+     * Validated the way a new source is: the change is written, the source is refreshed against
+     * the panel, and if that fails the previous name, address and credentials are put back — a typo
+     * typed on a remote must not break a source that was working. With `BUG-041` no stored row
+     * holds the old host or password, so nothing else needs rewriting.
+     *
+     * @param username for an Xtream source; blank keeps the stored one.
+     * @param password for an Xtream source; empty keeps the stored one, so the form never has to
+     *   show or hold the current password.
+     */
+    // One parameter per field of the edit form, and that is the whole of the count.
+    @Suppress("LongParameterList")
+    suspend fun editSource(
+        sourceId: Long,
+        name: String,
+        url: String,
+        username: String? = null,
+        password: String? = null,
+        /** Which container live channels are asked for (`BUG-043`); null keeps the current choice. */
+        liveFormat: LiveFormat? = null,
+    ): RefreshOutcome {
+        val before = sourceDao.findById(sourceId)
+            ?: return RefreshOutcome.Failure(SourceError.Unknown("Source not found"))
+        val credentialsBefore = credentialStore.credentials(sourceId)
+        val credentialsAfter = if (before.kind == SourceKind.XTREAM.name) {
+            val user = username?.trim()?.takeIf { it.isNotEmpty() } ?: credentialsBefore?.username
+            val pass = password?.takeIf { it.isNotEmpty() } ?: credentialsBefore?.password
+            if (user == null || pass == null) return RefreshOutcome.Failure(SourceError.Unauthorized)
+            Credentials(user, pass)
+        } else {
+            null
+        }
+
+        sourceDao.update(
+            before.copy(
+                name = name.trim().ifEmpty { before.name },
+                url = url.trim(),
+                liveFormat = liveFormat?.name ?: before.liveFormat,
+            ),
+        )
+        credentialsAfter?.let { credentialStore.put(sourceId, it) }
+
+        return refresh(sourceId).also { outcome ->
+            if (outcome is RefreshOutcome.Failure) {
+                sourceDao.update(before)
+                credentialsBefore?.let { credentialStore.put(sourceId, it) }
+            }
+        }
+    }
+
+    /**
+     * The account name stored for a source, to fill an edit form with. Never the password: a form
+     * that showed it would put it on a screen in front of whoever is in the room.
+     */
+    suspend fun username(sourceId: Long): String? = credentialStore.credentials(sourceId)?.username
+
     /** Every source there is, for the scheduled sync, which is not driven by a screen. */
     suspend fun allSourceIds(): List<Long> = sourceDao.allOnce().map { it.id }
 
@@ -137,6 +201,8 @@ class SourceRepository(
                     channelDao.replaceForSource(sourceId, entities)
                 }
                 sourceDao.markRefreshed(sourceId, now())
+                // Kept from the last refresh that said, rather than cleared by one that did not (`BUG-043`).
+                result.allowedLiveFormats?.let { sourceDao.setAllowedLiveFormats(sourceId, it.joinToString(",")) }
                 RefreshOutcome.Success(sourceId, result.report)
             }
         }

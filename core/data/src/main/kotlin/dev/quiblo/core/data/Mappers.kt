@@ -27,6 +27,7 @@ import dev.quiblo.core.database.entity.SourceEntity
 import dev.quiblo.core.model.Category
 import dev.quiblo.core.model.Channel
 import dev.quiblo.core.model.HistoryEntry
+import dev.quiblo.core.model.LiveFormat
 import dev.quiblo.core.model.MediaKind
 import dev.quiblo.core.model.Programme
 import dev.quiblo.core.model.Source
@@ -40,6 +41,8 @@ internal fun SourceEntity.toDomain(): Source = Source(
     url = url,
     createdAtEpochMillis = createdAtEpochMillis,
     lastRefreshedEpochMillis = lastRefreshedEpochMillis,
+    liveFormat = runCatching { LiveFormat.valueOf(liveFormat) }.getOrDefault(LiveFormat.AUTO),
+    allowedLiveFormats = allowedLiveFormats?.split(',')?.filter(String::isNotBlank)?.toSet(),
 )
 
 internal fun Source.toEntity(): SourceEntity = SourceEntity(
@@ -49,6 +52,8 @@ internal fun Source.toEntity(): SourceEntity = SourceEntity(
     url = url,
     createdAtEpochMillis = createdAtEpochMillis,
     lastRefreshedEpochMillis = lastRefreshedEpochMillis,
+    liveFormat = liveFormat.name,
+    allowedLiveFormats = allowedLiveFormats?.joinToString(","),
 )
 
 internal fun ChannelEntity.toDomain(isFavorite: Boolean = false): Channel = Channel(

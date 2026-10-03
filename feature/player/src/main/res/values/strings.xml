@@ -25,6 +25,10 @@
     <string name="player_subtitles_unreadable">That file could not be opened.</string>
     <string name="player_subtitles_too_large">That file is too large to be subtitles.</string>
     <string name="player_subtitles_no_picker">This device has no app for picking files.</string>
+    <string name="player_subtitles_failed">That subtitle could not be loaded. The film carries on without it.</string>
+    <string name="player_subtitles_untitled">Subtitles</string>
+    <string name="player_subtitles_fetching">%1$s (loading…)</string>
+    <string name="player_subtitles_unavailable">%1$s (unavailable)</string>
 
     <!-- INC-F11: how subtitles look, set from inside the player where the effect is visible. -->
     <string name="player_subtitles_size">Subtitle size</string>
@@ -43,7 +47,8 @@
     <string name="player_subtitles_background_solid">Solid</string>
     <string name="player_close">Close</string>
     <string name="player_live">LIVE</string>
-    <string name="player_reconnecting">Reconnecting… (attempt %1$d of 3)</string>
+    <!-- No "of N": a stream that has played gets three attempts, one that has not yet gets two. -->
+    <string name="player_reconnecting">Reconnecting… (attempt %1$d)</string>
 
     <!--
       Spoken, not shown. A spinner says nothing to a screen reader, so buffering and
@@ -58,7 +63,50 @@
     <string name="player_error_format">This stream is in a format Quiblo cannot play.</string>
     <string name="player_error_drm">This stream is copy-protected. Quiblo does not support DRM.</string>
     <string name="player_error_gone">This stream is no longer available at that address.</string>
+    <string name="player_error_auth">Your provider did not accept this account\'s username or password.</string>
+    <string name="player_error_refused">Your provider refused this stream. It may be in use on another screen.</string>
     <string name="player_error_unknown">This stream could not be played.</string>
+
+    <!--
+      FEAT-035: whose side a failure is on. One heading per side, one sentence per verdict, one
+      piece of advice. Plain words, one sentence each: these are read from a sofa, by somebody
+      deciding whether to phone their provider.
+    -->
+    <string name="player_checking_why">Checking why…</string>
+    <string name="player_side_connection">Your connection</string>
+    <string name="player_side_subscription">Your subscription</string>
+    <string name="player_side_provider">Your provider</string>
+    <string name="player_side_quiblo">Quiblo</string>
+    <string name="player_side_unknown">Not sure</string>
+
+    <string name="player_verdict_offline">This device is not connected to the internet.</string>
+    <string name="player_verdict_expired_on">Your subscription ended on %1$s.</string>
+    <string name="player_verdict_expired">Your subscription has ended.</string>
+    <string name="player_verdict_disabled">Your provider has disabled this account.</string>
+    <string name="player_verdict_credentials">Your provider no longer accepts this username or password.</string>
+    <string name="player_verdict_limit_count">Your account is already in use on %1$d of %2$d allowed screens.</string>
+    <string name="player_verdict_limit">Your account is already in use on every screen it allows.</string>
+    <string name="player_verdict_provider_down">Your provider\'s server is not responding. This device and Quiblo are fine.</string>
+    <string name="player_verdict_blocking">Your provider is temporarily refusing requests from this device.</string>
+    <string name="player_verdict_channel_offline">Your subscription is active, but this channel is not broadcasting right now.</string>
+    <string name="player_verdict_channel_missing">Your provider has nothing at this channel\'s address right now.</string>
+    <string name="player_verdict_format">The stream is reachable, but Quiblo cannot play its format on this device.</string>
+    <string name="player_verdict_app">Quiblo hit an error playing a working stream. This is a bug in Quiblo.</string>
+    <string name="player_verdict_undetermined">Could not tell whether the problem is your account, the provider or Quiblo.</string>
+
+    <string name="player_advice_offline">Check the Wi-Fi or network connection, then try again.</string>
+    <string name="player_advice_expired">Renew with your provider, then try again.</string>
+    <string name="player_advice_disabled">Contact your provider.</string>
+    <string name="player_advice_credentials">Check the username and password for this source with your provider.</string>
+    <string name="player_advice_limit">Stop watching on another screen, then try again.</string>
+    <string name="player_advice_provider_down">Try again later.</string>
+    <string name="player_advice_blocking">Wait a few minutes, then try again.</string>
+    <string name="player_advice_channel_offline">Try another channel.</string>
+    <string name="player_advice_report">Please report it, with the details shown below.</string>
+    <string name="player_advice_undetermined">Try again. If it keeps failing, the details below say what was found.</string>
+
+    <string name="player_copy_details">Copy details</string>
+    <string name="player_details_copied">Details copied</string>
 
     <string name="player_start_over">Start over</string>
     <string name="player_swap_lock">Move lock button to the other side</string>

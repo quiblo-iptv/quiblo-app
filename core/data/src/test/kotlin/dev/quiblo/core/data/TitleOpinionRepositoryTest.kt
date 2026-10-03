@@ -170,6 +170,10 @@ class TitleOpinionRepositoryTest {
         override suspend fun clear(profileId: Long, titleKey: String) {
             rows.value = rows.value.filterNot { it.profileId == profileId && it.titleKey == titleKey }
         }
+
+        override suspend fun clearForProfile(profileId: Long) {
+            rows.value = rows.value.filterNot { it.profileId == profileId }
+        }
     }
 
     private companion object {

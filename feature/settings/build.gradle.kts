@@ -41,6 +41,9 @@ dependencies {
     implementation(projects.feature.designsystem)
     implementation(projects.core.model)
     implementation(projects.core.media)
+    // The words for a playback verdict (`FEAT-035`), so the playback log says them exactly as the
+    // player did rather than keeping a second copy to translate.
+    implementation(projects.feature.player)
 
     testImplementation(platform(libs.compose.bom))
     testImplementation(libs.compose.ui.test.junit4)

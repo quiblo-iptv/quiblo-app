@@ -25,15 +25,20 @@ package dev.quiblo.core.model
  * this is worth doing on the existing track seam: once it is loaded, the menu, the selection and
  * the "off" entry are the code that was already there.
  *
- * @property uri where the file is. An `http(s)` URL from a panel, or a `file://` in this app's
- *   cache for one the viewer picked — never the `content://` the picker returned, because that
- *   permission does not outlive the process that was granted it.
+ * @property uri where the file is. An `http(s)` URL as the panel lists it, or a `file://` in this
+ *   app's storage — never the `content://` the picker returned, because that permission does not
+ *   outlive the process that was granted it. **Only a `file://` ever reaches the engine
+ *   (`BUG-045`):** a sidecar that fails to load fails the whole item, so a panel's dead subtitle
+ *   link stopped the film; a provider subtitle is fetched first, and only once it is chosen.
  * @property label what the menu calls it, or null when nothing supplied a name. A panel often
  *   sends a subtitle with no label at all, and inventing one here would be an English literal in
  *   a module that has no resources to translate it from — the fault `agile/012` **#017** was. Null
  *   leaves the naming to the player, which does have them.
  * @property language an ISO 639 code where one is known, and null where it is not. Guessing one
  *   from a filename is only done when the platform agrees the guess is a language at all.
+ * @property selectOnStart whether this track is showing when the item starts (`BUG-045`). Set on a
+ *   provider subtitle the viewer just chose: it is fetched first and the item prepared again with
+ *   it, and the viewer who chose it should not have to choose it a second time.
  */
 data class SubtitleFile(
     val uri: String,
@@ -41,6 +46,7 @@ data class SubtitleFile(
     val mimeType: String,
     val language: String? = null,
     val origin: SubtitleOrigin = SubtitleOrigin.PROVIDER,
+    val selectOnStart: Boolean = false,
 )
 
 /**

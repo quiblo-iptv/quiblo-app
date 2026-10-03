@@ -38,6 +38,9 @@ import kotlinx.coroutines.flow.StateFlow
  * `:core:*` must not import Compose (AC-NFR-06). The player feature wraps it in an
  * `AndroidView` on its side of the boundary.
  */
+// One method per thing feature code may ask of an engine. That list is the seam (docs/FREEZE.md §4.4),
+// and splitting it would only give the screens two seams to hold instead of one.
+@Suppress("TooManyFunctions")
 interface PlayerController {
 
     val state: StateFlow<PlaybackState>
@@ -48,6 +51,16 @@ interface PlayerController {
     fun play()
 
     fun pause()
+
+    /**
+     * Drops the network connection and the buffer, and keeps the item (`BUG-037`).
+     *
+     * [pause] holds both: the engine keeps reading to fill its buffer, so a paused live stream
+     * goes on occupying one of the account's connections. On an account allowed one screen that
+     * is the screen — and the next device, or this one after a channel change, is refused.
+     * [retry] starts the item again, at the live edge for live.
+     */
+    fun stop()
 
     /** Ignored when the current item is not seekable, such as a raw TS stream. */
     fun seekTo(positionMillis: Long)
@@ -122,6 +135,11 @@ data class PlayableItem(
      * for the same reason a container that declares subtitles starts with them off.
      */
     val subtitles: List<SubtitleFile> = emptyList(),
+    /**
+     * What the stream is, when whoever built this item knows (`BUG-044`) — `application/x-mpegURL`
+     * for HLS. Null lets the engine work it out, which it does from the path's extension alone.
+     */
+    val mimeType: String? = null,
 )
 
 /** A selectable audio or subtitle track. */
@@ -149,13 +167,55 @@ enum class PlaybackStatus {
  */
 enum class PlaybackError {
     NETWORK,
+
+    /** The host could not be resolved, or refused the connection outright. */
     UNREACHABLE,
     TIMEOUT,
     UNSUPPORTED_FORMAT,
     DRM_UNSUPPORTED,
+
+    /** The server answered 404 or 410: there is nothing at that address. */
     SOURCE_GONE,
+
+    /** The server answered 401: the account's username or password was not accepted. */
+    AUTH_REJECTED,
+
+    /**
+     * The server is there and refused this request — 403, 429, 458, 509, the panel firewall's
+     * 46x family, or any 5xx. Usually a connection limit or an overloaded panel, and usually
+     * temporary, which is why it is retried and [SOURCE_GONE] is not (`BUG-034`).
+     */
+    PROVIDER_REFUSED,
     UNKNOWN,
 }
+
+/**
+ * What the engine knew about a failure, kept for the diagnosis and for a bug report (`FEAT-035`).
+ *
+ * [PlaybackError] is what the screen says. This is the evidence behind it, and it is what lets a
+ * diagnosis tell "the provider refused" from "the provider answered and Quiblo could not play
+ * what came back". It carries no URL, no host and nothing from a request: none of it can leak a
+ * credential (AC-XT-04).
+ *
+ * @property httpStatus the status the server answered with, when it answered with a bad one.
+ * @property engineCode the engine's own name for the failure, such as
+ *   `ERROR_CODE_IO_BAD_HTTP_STATUS`, or null when the load was ended by the watchdog without
+ *   the engine reporting anything at all.
+ * @property hostUnreachable whether the host could not be resolved or refused the connection.
+ * @property bytesReceived how much media arrived from the network for this item. Zero means the
+ *   server never sent a byte, which is a different failure from one that sent data Quiblo could
+ *   not play.
+ * @property hadPlayed whether this item ever reached a playable state before failing.
+ * @property retries how many automatic retries were made before giving up.
+ */
+data class FailureDetails(
+    val httpStatus: Int? = null,
+    val engineCode: String? = null,
+    val hostUnreachable: Boolean = false,
+    val bytesReceived: Long = 0L,
+    val hadPlayed: Boolean = false,
+    val retries: Int = 0,
+)
 
 /**
  * Everything the player UI renders from.
@@ -172,7 +232,15 @@ data class PlaybackState(
     val bufferedPositionMillis: Long = 0L,
     val isSeekable: Boolean = false,
     val error: PlaybackError? = null,
+    /** Set together with [error]: the evidence behind it. See [FailureDetails]. */
+    val failure: FailureDetails? = null,
     val retryAttempt: Int = 0,
+    /**
+     * Whether subtitles were switched off for this item because the engine failed while one was
+     * showing (`BUG-045`). The film is prepared again without them rather than failed: a subtitle
+     * that will not load used to cost the whole film. Once per item.
+     */
+    val subtitleDropped: Boolean = false,
     /**
      * Stalls after playback first started, for the current item.
      *

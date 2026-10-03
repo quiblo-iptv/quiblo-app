@@ -31,6 +31,7 @@ import dev.quiblo.core.data.GuideRepository
 import dev.quiblo.core.data.LocalFileContentFetcher
 import dev.quiblo.core.data.PlayerSettingsRepository
 import dev.quiblo.core.data.PopularTitlesRepository
+import dev.quiblo.core.data.ProfileLeftovers
 import dev.quiblo.core.data.ProfileRepository
 import dev.quiblo.core.data.RecommendationRepository
 import dev.quiblo.core.data.ScriptFilterRepository
@@ -45,6 +46,10 @@ import dev.quiblo.core.data.TitleVersionsRepository
 import dev.quiblo.core.data.WatchEventRepository
 import dev.quiblo.core.data.WatchHistoryRepository
 import dev.quiblo.core.data.backup.BackupRepository
+import dev.quiblo.core.data.diagnostics.PlaybackDiagnoser
+import dev.quiblo.core.data.diagnostics.PlaybackLog
+import dev.quiblo.core.datastore.ChannelLogoStore
+import dev.quiblo.core.datastore.PlayerSettingsStore
 import dev.quiblo.core.model.SourceKind
 import dev.quiblo.core.network.HttpContentFetcher
 import dev.quiblo.source.api.ContentFetcher
@@ -97,7 +102,32 @@ val dataModule: Module = module {
             credentialStore = get(),
         )
     }
-    single { ProfileRepository(profileDao = get(), profileStore = get()) }
+    // One log for the process, read by Settings and written by every player screen (`FEAT-035`).
+    single { PlaybackLog() }
+    single {
+        PlaybackDiagnoser(
+            sourceDao = get(),
+            mediaSources = get(),
+            connectivity = get(),
+            log = get(),
+        )
+    }
+    single {
+        ProfileLeftovers(
+            feedRowDao = get(),
+            titleOpinionDao = get(),
+            // Every store that files preferences under a profile. A new one belongs in this list.
+            scopedStores = listOf(get<PlayerSettingsStore>(), get<ChannelLogoStore>()),
+        )
+    }
+    single {
+        ProfileRepository(
+            profileDao = get(),
+            profileStore = get(),
+            leftovers = get(),
+            transactions = get(),
+        )
+    }
     single { SeriesPreferenceRepository(dao = get(), profiles = get()) }
     // Named, and deliberately so. This class takes three collaborators followed by four
     // parameters that carry defaults — a clock and a dispatcher among them — and a positional
@@ -153,7 +183,13 @@ val dataModule: Module = module {
     single { GuideRepository(get(), get(), get()) }
     single { BackupRepository(get(), get(), get(), transactions = get()) }
     single { PlayerSettingsRepository(store = get(), profiles = get()) }
-    single { SubtitleRepository(dao = get(), files = AndroidPickedSubtitleFiles(get<Context>())) }
+    single {
+        SubtitleRepository(
+            dao = get(),
+            files = AndroidPickedSubtitleFiles(get<Context>()),
+            fetcher = get<HttpContentFetcher>(),
+        )
+    }
     single { TmdbClient(get<HttpClient>()) }
     single { TitleMetadataRepository(get(), get(), get()) }
     single { IptvOrgClient(get<HttpClient>()) }

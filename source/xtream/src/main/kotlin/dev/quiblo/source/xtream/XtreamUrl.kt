@@ -18,6 +18,8 @@
 
 package dev.quiblo.source.xtream
 
+import dev.quiblo.core.model.LiveFormat
+
 /**
  * Normalises the many shapes a user might type an Xtream base URL in.
  *
@@ -105,14 +107,77 @@ object XtreamUrl {
     fun playerApi(base: String): String = "$base/player_api.php"
 
     /**
+     * What is stored for a live stream instead of its URL (`BUG-041`): `xtream:live/101`.
+     *
+     * **The stored form carries no host and no credentials.** The URL a panel serves a stream from
+     * has the username and password in its path, and it used to be written to the `channels` table
+     * for every channel, film and episode — the password in SQLite in plain text, next to an
+     * encrypted store that exists precisely to keep it out of there. A locator names the stream;
+     * [resolve] turns it into a URL at the moment of playing, from the credential store, and that
+     * URL lives only in memory.
+     *
+     * Live carries no extension: which container to ask the panel for is decided when it is played.
+     */
+    fun liveLocator(streamId: String): String = "$LOCATOR_SCHEME:$LIVE/$streamId"
+
+    fun vodLocator(streamId: String, extension: String): String =
+        "$LOCATOR_SCHEME:$MOVIE/$streamId.${extension.ifBlank { DEFAULT_EXTENSION }}"
+
+    fun seriesLocator(episodeId: String, extension: String): String =
+        "$LOCATOR_SCHEME:$SERIES/$episodeId.${extension.ifBlank { DEFAULT_EXTENSION }}"
+
+    /**
+     * The playable URL for [locator], or null when [locator] is not one of this module's.
+     *
+     * The one place credentials are put into a URL, and that URL is handed straight to the player —
+     * never logged, stored or exported (AC-XT-04).
+     */
+    fun resolve(
+        base: String,
+        username: String,
+        password: String,
+        locator: String,
+        /** For a live locator: `ts` or `m3u8`, from [liveExtension]. */
+        liveExtension: String = TS,
+    ): String? {
+        val path = locator.takeIf { it.startsWith("$LOCATOR_SCHEME:") }?.substringAfter(':') ?: return null
+        val type = path.substringBefore('/', missingDelimiterValue = "")
+        val file = path.substringAfter('/', missingDelimiterValue = "")
+        return when {
+            file.isBlank() || '/' in file -> null
+            type == LIVE -> liveStream(base, username, password, file, liveExtension)
+            type == MOVIE || type == SERIES -> "$base/$type/$username/$password/$file"
+            else -> null
+        }
+    }
+
+    /**
      * The playable URL for a live stream.
      *
-     * Credentials are part of the path because the Xtream protocol requires it. This is
-     * the one place they legitimately appear in a URL, and that URL is handed straight to
-     * the player — it is never logged, stored in the database, or exported (AC-XT-04).
+     * Credentials are part of the path because the Xtream protocol requires it. Built only by
+     * [resolve], at play time; see [liveLocator].
      */
-    fun liveStream(base: String, username: String, password: String, streamId: String): String =
-        "$base/live/$username/$password/$streamId.ts"
+    fun liveStream(
+        base: String,
+        username: String,
+        password: String,
+        streamId: String,
+        extension: String = TS,
+    ): String = "$base/live/$username/$password/$streamId.$extension"
+
+    /**
+     * Which container to ask for a live stream in (`BUG-043`).
+     *
+     * It was always `.ts`, so an account limited to HLS failed on every live channel, and TS is the
+     * less forgiving of the two on a phone's network. **Auto** asks for HLS when the panel says the
+     * account may use it, and TS otherwise — including when the panel has not said, which is what
+     * every account got before this. The viewer can fix either choice per source.
+     */
+    fun liveExtension(format: LiveFormat, allowed: Set<String>?): String = when (format) {
+        LiveFormat.HLS -> HLS
+        LiveFormat.TS -> TS
+        LiveFormat.AUTO -> if (allowed?.contains(HLS) == true) HLS else TS
+    }
 
     fun vodStream(base: String, username: String, password: String, streamId: String, extension: String): String =
         "$base/movie/$username/$password/$streamId.${extension.ifBlank { "mp4" }}"
@@ -121,4 +186,13 @@ object XtreamUrl {
         "$base/series/$username/$password/$streamId.${extension.ifBlank { "mp4" }}"
 
     private const val PROTOCOL_SEPARATOR_LENGTH = 3
+
+    /** The scheme of a stored stream reference. Never a real URL scheme, so never mistaken for one. */
+    const val LOCATOR_SCHEME = "xtream"
+    private const val LIVE = "live"
+    private const val MOVIE = "movie"
+    private const val SERIES = "series"
+    private const val DEFAULT_EXTENSION = "mp4"
+    private const val HLS = "m3u8"
+    private const val TS = "ts"
 }

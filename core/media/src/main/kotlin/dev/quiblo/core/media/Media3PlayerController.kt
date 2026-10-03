@@ -37,7 +37,10 @@ import androidx.media3.common.text.Cue
 import androidx.media3.common.text.CueGroup
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DataSource
+import androidx.media3.datasource.DataSpec
 import androidx.media3.datasource.DefaultDataSource
+import androidx.media3.datasource.HttpDataSource
+import androidx.media3.datasource.TransferListener
 import androidx.media3.datasource.okhttp.OkHttpDataSource
 import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.DefaultRenderersFactory
@@ -60,6 +63,10 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import okhttp3.OkHttpClient
+import java.net.ConnectException
+import java.net.NoRouteToHostException
+import java.net.UnknownHostException
+import java.util.concurrent.atomic.AtomicLong
 
 /**
  * The Media3 implementation of [PlayerController].
@@ -74,6 +81,7 @@ import okhttp3.OkHttpClient
  * @param scope drives position polling and the retry backoff; cancelled by [release].
  */
 @androidx.annotation.OptIn(UnstableApi::class)
+@Suppress("TooManyFunctions") // Each one is a [PlayerController] method it must implement.
 class Media3PlayerController(
     context: Context,
     private val scope: CoroutineScope,
@@ -93,7 +101,17 @@ class Media3PlayerController(
     private val dataSourceFactory: DataSource.Factory = DefaultDataSource.Factory(
         appContext,
         OkHttpDataSource.Factory(okHttpClient).setUserAgent(STREAM_USER_AGENT),
-    )
+    ).setTransferListener(NetworkByteCounter())
+
+    /**
+     * Media bytes received from the network for the current item (`FEAT-035`).
+     *
+     * Written on the engine's loader threads, read on the main thread when a failure is
+     * reported. Zero at the moment of failure is the difference between "the server never sent
+     * anything" and "it sent something Quiblo could not play" — the two point at different
+     * parties, and nothing else in the engine's report separates them.
+     */
+    private val bytesReceived = AtomicLong(0L)
 
     private val _state = MutableStateFlow(PlaybackState())
     override val state: StateFlow<PlaybackState> = _state.asStateFlow()
@@ -119,6 +137,30 @@ class Media3PlayerController(
      * negative or absurd duration.
      */
     private var prepareStartedAtMillis = 0L
+
+    /**
+     * The last failure the engine reported for this item, kept through a retry.
+     *
+     * A retry clears the visible error so the screen can say "reconnecting". If the watchdog
+     * then runs out of time mid-retry, what it reports should be what actually went wrong —
+     * a provider refusing us — and not a generic timeout that hides it.
+     */
+    private var lastFailure: PlaybackError? = null
+
+    /** The engine's report behind [lastFailure], for [FailureDetails]. */
+    private var lastEngineFailure: EngineFailure? = null
+    private var lastEngineCode: String? = null
+
+    /**
+     * Rejoins of the live edge since this item last played (`BUG-036`).
+     *
+     * Not counted as retries — falling behind a live window is not the stream failing — but
+     * bounded, so a server whose window is broken cannot keep the player rejoining forever.
+     */
+    private var liveEdgeRejoins = 0
+
+    /** Whether this item has already been tried again as HLS (`BUG-044`). Once is enough. */
+    private var triedAsHls = false
 
     private var settings = PlayerSettings()
 
@@ -244,11 +286,23 @@ class Media3PlayerController(
     override fun prepare(item: PlayableItem) {
         retryJob?.cancel()
         hasEverBeenReady = false
+        lastFailure = null
+        triedAsHls = false
+        liveEdgeRejoins = 0
+        lastEngineFailure = null
+        lastEngineCode = null
+        bytesReceived.set(0L)
         prepareStartedAtMillis = SystemClock.uptimeMillis()
         rebuildIfNeeded(EngineProfile(settings.bufferMode, item.isLive))
+        val previous = _state.value.item
         _state.value = PlaybackState(status = PlaybackStatus.BUFFERING, item = item)
         startWatchdog()
 
+        // Close the old live connection before opening the new one (`BUG-037`). Replacing the item
+        // alone lets the two overlap for a moment, and a panel that allows one connection sees the
+        // second arrive while the first is still open — and refuses it.
+        if (previous?.isLive == true) player.stop()
+        if (item.subtitles.any { it.selectOnStart }) showSubtitlesOnStart()
         player.setMediaItem(item.toMediaItem())
         if (!item.isLive && item.startPositionMillis > 0L) {
             player.seekTo(item.startPositionMillis)
@@ -266,6 +320,12 @@ class Media3PlayerController(
         player.pause()
     }
 
+    override fun stop() {
+        retryJob?.cancel()
+        watchdogJob?.cancel()
+        player.stop()
+    }
+
     override fun seekTo(positionMillis: Long) {
         if (_state.value.isSeekable) {
             player.seekTo(positionMillis)
@@ -275,12 +335,35 @@ class Media3PlayerController(
     override fun retry() {
         retryJob?.cancel()
         hasEverBeenReady = false
+        lastFailure = null
+        triedAsHls = false
+        liveEdgeRejoins = 0
+        lastEngineFailure = null
+        lastEngineCode = null
+        bytesReceived.set(0L)
+        // A manual retry is a fresh attempt with a fresh budget, so the automatic retries it
+        // may earn are measured from now rather than from when the item was first opened.
+        prepareStartedAtMillis = SystemClock.uptimeMillis()
         startWatchdog()
         _state.value = _state.value.copy(
             status = PlaybackStatus.BUFFERING,
             error = null,
             retryAttempt = 0,
+            failure = null,
         )
+        restart()
+    }
+
+    /**
+     * Prepares the current item again, at the live edge when it is live (`BUG-036`).
+     *
+     * A live stream restarted where it stopped asks the server for a moment its playlist no longer
+     * holds: the engine fails with `BEHIND_LIVE_WINDOW`, and every retry repeated the same request
+     * and failed the same way, three times, before an error. A live channel has nowhere to resume
+     * *to* but now.
+     */
+    private fun restart() {
+        if (_state.value.item?.isLive == true) player.seekToDefaultPosition()
         player.prepare()
         player.playWhenReady = true
     }
@@ -383,15 +466,32 @@ class Media3PlayerController(
     }
 
     /**
+     * Lets the engine pick the subtitle flagged to show (`BUG-045`).
+     *
+     * A choice of "off", or of another track, outlives a prepare in the selection parameters, and
+     * would keep the default flag from doing anything.
+     */
+    private fun showSubtitlesOnStart() {
+        player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
+            .clearOverridesOfType(C.TRACK_TYPE_TEXT)
+            .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
+            .build()
+    }
+
+    /**
      * The stream, plus any sidecar subtitles (INC-F10).
      *
      * `DefaultMediaSourceFactory` merges each configuration in as its own text track, so
      * everything downstream — [selectTextTrack], the track list, the menu — is the code that
-     * already existed. Nothing is flagged default or forced: a file the viewer attached is one
-     * they still have to switch on, which is the same rule the container's own tracks follow.
+     * already existed. Nothing is flagged default or forced — a file the viewer attached is one
+     * they still have to switch on, which is the same rule the container's own tracks follow —
+     * except a provider subtitle they have just chosen ([SubtitleFile.selectOnStart], `BUG-045`).
      */
-    private fun PlayableItem.toMediaItem(): MediaItem = MediaItem.Builder()
+    private fun PlayableItem.toMediaItem(mimeOverride: String? = null): MediaItem = MediaItem.Builder()
         .setUri(url)
+        // What the item says, or what its URL says anywhere in it (`BUG-044`); null lets the engine
+        // decide from the path, as it always did.
+        .setMimeType(mimeOverride ?: mimeType ?: hlsMimeTypeFor(url))
         .setSubtitleConfigurations(subtitles.map { it.toSubtitleConfiguration() })
         .build()
 
@@ -400,6 +500,7 @@ class Media3PlayerController(
             .setMimeType(mimeType)
             .setLanguage(language)
             .setLabel(label)
+            .setSelectionFlags(if (selectOnStart) C.SELECTION_FLAG_DEFAULT else 0)
             .build()
 
     private fun groupId(group: Tracks.Group): String =
@@ -420,7 +521,8 @@ class Media3PlayerController(
                 retryJob?.cancel()
                 _state.value = _state.value.copy(
                     status = PlaybackStatus.ERROR,
-                    error = _state.value.error ?: PlaybackError.TIMEOUT,
+                    error = _state.value.error ?: lastFailure ?: PlaybackError.TIMEOUT,
+                    failure = failureDetails(),
                 )
             }
         }
@@ -442,46 +544,116 @@ class Media3PlayerController(
     }
 
     /**
-     * Reconnects after a stream drops.
+     * Reconnects after a failure, or reports it.
      *
      * AC-PLAY-06 requires at least three automatic attempts with backoff before the user
      * is shown an error. Streams that die for a few seconds are the norm on live IPTV, and
-     * surfacing an error immediately would make the app feel broken when it is not.
+     * surfacing an error immediately would make the app feel broken when it is not. Which
+     * failures are tried again, and when, is [nextStep] — a plain function, tested as one.
      */
     private fun scheduleRetry(error: PlaybackError) {
-        // Retrying these is pointless and only delays telling the user something true.
-        // A 404 will still be a 404, and v1 will still not support DRM.
-        val isTerminal = error == PlaybackError.SOURCE_GONE ||
-            error == PlaybackError.UNSUPPORTED_FORMAT ||
-            error == PlaybackError.DRM_UNSUPPORTED
-
-        // AC-PLAY-06's three retries are for a stream that dropped mid-playback. A URL
-        // that never worked gets reported immediately instead.
-        if (isTerminal || !hasEverBeenReady) {
-            watchdogJob?.cancel()
-            _state.value = _state.value.copy(status = PlaybackStatus.ERROR, error = error)
-            return
-        }
-
-        val attempt = _state.value.retryAttempt + 1
-
-        if (attempt > MAX_RETRIES) {
-            _state.value = _state.value.copy(status = PlaybackStatus.ERROR, error = error)
-            return
-        }
-
-        _state.value = _state.value.copy(
-            status = PlaybackStatus.BUFFERING,
-            retryAttempt = attempt,
-            error = null,
+        lastFailure = error
+        val step = nextStep(
+            error = error,
+            hasEverBeenReady = hasEverBeenReady,
+            retriesSoFar = _state.value.retryAttempt,
+            elapsedMillis = SystemClock.uptimeMillis() - prepareStartedAtMillis,
         )
 
-        retryJob?.cancel()
-        retryJob = scope.launch {
-            delay(RETRY_BASE_DELAY_MILLIS * attempt)
-            player.prepare()
-            player.playWhenReady = true
+        when (step) {
+            NextStep.GiveUp -> {
+                watchdogJob?.cancel()
+                _state.value = _state.value.copy(
+                    status = PlaybackStatus.ERROR,
+                    error = error,
+                    failure = failureDetails(),
+                )
+            }
+
+            is NextStep.RetryAfter -> {
+                _state.value = _state.value.copy(
+                    status = PlaybackStatus.BUFFERING,
+                    retryAttempt = step.attempt,
+                    error = null,
+                    failure = null,
+                )
+
+                retryJob?.cancel()
+                retryJob = scope.launch {
+                    delay(step.delayMillis)
+                    restart()
+                }
+            }
         }
+    }
+
+    /**
+     * Prepares the current item again as HLS, when the failure suggests it was one (`BUG-044`).
+     *
+     * Inside the same watchdog budget as everything else on the initial load: the watchdog is not
+     * restarted, so a stream that is neither still fails within AC-PLAY-05's fifteen seconds.
+     */
+    private fun tryAsHls(failure: EngineFailure): Boolean {
+        val item = _state.value.item ?: return false
+        val declared = item.mimeType ?: hlsMimeTypeFor(item.url)
+        if (!retriesAsHls(failure.errorCode, declared, item.url, triedAsHls)) return false
+
+        triedAsHls = true
+        val start = if (item.isLive) C.TIME_UNSET else item.startPositionMillis
+        player.setMediaItem(item.toMediaItem(mimeOverride = HLS_MIME_TYPE), start)
+        player.prepare()
+        return true
+    }
+
+    /**
+     * Switches subtitles off and carries on, when the engine failed with one showing (`BUG-045`).
+     *
+     * A sidecar subtitle is loaded only once its track is selected, and its failure surfaces as a
+     * fatal error for the whole item — so a subtitle that would not load stopped the film, and a
+     * retry, with the same track still selected, stopped it again. Provider subtitles are fetched
+     * before they reach the engine now; this is the net under whatever still gets through. Once
+     * per item: a stream that fails again without subtitles is failing for its own reasons.
+     */
+    private fun dropSubtitles(): Boolean {
+        val current = _state.value
+        if (current.subtitleDropped || current.textTracks.none { it.isSelected }) return false
+
+        player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
+            .clearOverridesOfType(C.TRACK_TYPE_TEXT)
+            .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true)
+            .build()
+        _state.value = current.copy(subtitleDropped = true)
+        if (current.item?.isLive == true) player.seekToDefaultPosition()
+        player.prepare()
+        return true
+    }
+
+    /** The evidence behind the error being reported now. */
+    private fun failureDetails(): FailureDetails = FailureDetails(
+        httpStatus = lastEngineFailure?.httpStatus,
+        engineCode = lastEngineCode,
+        hostUnreachable = lastEngineFailure?.hostUnreachable == true,
+        bytesReceived = bytesReceived.get(),
+        hadPlayed = hasEverBeenReady,
+        retries = _state.value.retryAttempt,
+    )
+
+    /** Counts what arrives over the network, and nothing read from a local file. */
+    private inner class NetworkByteCounter : TransferListener {
+        override fun onTransferInitializing(source: DataSource, dataSpec: DataSpec, isNetwork: Boolean) = Unit
+
+        override fun onTransferStart(source: DataSource, dataSpec: DataSpec, isNetwork: Boolean) = Unit
+
+        override fun onBytesTransferred(
+            source: DataSource,
+            dataSpec: DataSpec,
+            isNetwork: Boolean,
+            bytesTransferred: Int,
+        ) {
+            if (isNetwork) bytesReceived.addAndGet(bytesTransferred.toLong())
+        }
+
+        override fun onTransferEnd(source: DataSource, dataSpec: DataSpec, isNetwork: Boolean) = Unit
     }
 
     inner class PlayerListener : Player.Listener {
@@ -512,6 +684,7 @@ class Media3PlayerController(
                 Player.STATE_READY -> {
                     val firstReady = !hasEverBeenReady
                     hasEverBeenReady = true
+                    liveEdgeRejoins = 0
                     watchdogJob?.cancel()
                     current.copy(
                         loadTimeMillis = if (firstReady) {
@@ -574,8 +747,27 @@ class Media3PlayerController(
         }
 
         override fun onPlayerError(error: PlaybackException) {
-            scheduleRetry(error.toPlaybackError())
+            val failure = error.toEngineFailure()
+            if (recoversInPlace(failure)) return
+            lastEngineFailure = failure
+            lastEngineCode = error.errorCodeName
+            scheduleRetry(classify(failure))
         }
+    }
+
+    /**
+     * Mends a failure without counting it as one, when its cause is known and fixable on the spot:
+     * a live channel fallen behind (`BUG-036`), a subtitle that would not load (`BUG-045`), an HLS
+     * playlist read as a file (`BUG-044`). Each is bounded, so none can loop.
+     */
+    private fun recoversInPlace(failure: EngineFailure): Boolean {
+        if (rejoinsLiveEdge(failure, liveEdgeRejoins)) {
+            liveEdgeRejoins++
+            player.seekToDefaultPosition()
+            player.prepare()
+            return true
+        }
+        return dropSubtitles() || tryAsHls(failure)
     }
 
     /**
@@ -624,12 +816,7 @@ class Media3PlayerController(
         /** AC-PLAY-08: the engine pauses and resumes us as focus moves. */
         const val HANDLE_AUDIO_FOCUS = true
 
-        const val MAX_RETRIES = 3
-        const val RETRY_BASE_DELAY_MILLIS = 1_500L
         const val PROGRESS_INTERVAL_MILLIS = 500L
-
-        /** AC-PLAY-05: a dead stream must surface an error inside this budget. */
-        const val INITIAL_LOAD_TIMEOUT_MILLIS = 12_000L
     }
 }
 
@@ -644,31 +831,25 @@ internal data class EngineProfile(
     val isLive: Boolean,
 )
 
-/** Maps an engine exception to a typed error. No engine detail reaches the UI. */
-internal fun PlaybackException.toPlaybackError(): PlaybackError = when (errorCode) {
-    PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED,
-    PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT,
-    -> PlaybackError.TIMEOUT
-
-    PlaybackException.ERROR_CODE_IO_INVALID_HTTP_CONTENT_TYPE,
-    PlaybackException.ERROR_CODE_PARSING_CONTAINER_MALFORMED,
-    PlaybackException.ERROR_CODE_PARSING_MANIFEST_MALFORMED,
-    PlaybackException.ERROR_CODE_DECODING_FORMAT_UNSUPPORTED,
-    -> PlaybackError.UNSUPPORTED_FORMAT
-
-    // v1 ships no DRM at all (docs/FREEZE.md §3), so an encrypted stream is a clear,
-    // expected failure rather than a bug to chase.
-    PlaybackException.ERROR_CODE_DRM_SCHEME_UNSUPPORTED,
-    PlaybackException.ERROR_CODE_DRM_CONTENT_ERROR,
-    -> PlaybackError.DRM_UNSUPPORTED
-
-    PlaybackException.ERROR_CODE_IO_BAD_HTTP_STATUS,
-    PlaybackException.ERROR_CODE_IO_FILE_NOT_FOUND,
-    -> PlaybackError.SOURCE_GONE
-
-    PlaybackException.ERROR_CODE_IO_NO_PERMISSION,
-    PlaybackException.ERROR_CODE_IO_UNSPECIFIED,
-    -> PlaybackError.NETWORK
-
-    else -> PlaybackError.UNKNOWN
+/**
+ * Reduces an engine exception to the facts [classify] reads. No engine detail reaches the UI.
+ *
+ * The status is dug out of the cause chain because the engine wraps it: the exception the
+ * listener receives says only "bad HTTP status", and which status is the whole question.
+ */
+@androidx.annotation.OptIn(UnstableApi::class)
+internal fun PlaybackException.toEngineFailure(): EngineFailure {
+    val causes = generateSequence<Throwable>(this) { it.cause }.take(MAX_CAUSE_DEPTH).toList()
+    return EngineFailure(
+        errorCode = errorCode,
+        httpStatus = causes.filterIsInstance<HttpDataSource.InvalidResponseCodeException>()
+            .firstOrNull()
+            ?.responseCode,
+        hostUnreachable = causes.any {
+            it is UnknownHostException || it is ConnectException || it is NoRouteToHostException
+        },
+    )
 }
+
+/** Far enough to reach any real cause, and a stop for a chain that loops back on itself. */
+private const val MAX_CAUSE_DEPTH = 16

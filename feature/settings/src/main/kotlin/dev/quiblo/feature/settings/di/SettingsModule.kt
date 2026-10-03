@@ -18,6 +18,7 @@
 
 package dev.quiblo.feature.settings.di
 
+import dev.quiblo.feature.settings.PlaybackLogViewModel
 import dev.quiblo.feature.settings.ProfilesViewModel
 import dev.quiblo.feature.settings.SettingsViewModel
 import org.koin.core.module.Module
@@ -28,4 +29,5 @@ import org.koin.dsl.module
 val settingsModule: Module = module {
     viewModelOf(::SettingsViewModel)
     viewModelOf(::ProfilesViewModel)
+    viewModelOf(::PlaybackLogViewModel)
 }

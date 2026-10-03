@@ -37,5 +37,7 @@ Quiblo is free software under the GPLv3 and comes with no warranty of any kind.<
     <string name="profile_name">Name</string>
     <string name="profile_guest">Guest</string>
     <string name="profile_guest_detail">Nothing is kept when the session ends</string>
+    <!-- FEAT-039: what a long press on a profile does, for TalkBack. -->
+    <string name="profile_edit">Rename, change face or delete</string>
     <string name="profile_continue_as_guest">Continue as guest</string>
 </resources>

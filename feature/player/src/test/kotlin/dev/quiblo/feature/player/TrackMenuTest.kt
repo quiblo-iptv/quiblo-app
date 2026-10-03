@@ -159,6 +159,26 @@ class TrackMenuTest {
         assertTrue(on.sections.any { it.kind == TrackMenuKind.SUBTITLE_SIZE })
     }
 
+    @Test
+    fun `a panel's subtitles are offered even before any is loaded, with nothing to turn off`() {
+        val offer = TrackMenuEntry(trackId = "offered:0", label = "English", isSelected = false)
+
+        val menu = trackMenu(state(), OFF, offered = listOf(offer))
+
+        val subtitles = menu.sections.single { it.kind == TrackMenuKind.SUBTITLES }
+        assertEquals(listOf(offer), subtitles.entries)
+    }
+
+    @Test
+    fun `offers come after the tracks the engine already has`() {
+        val offer = TrackMenuEntry(trackId = "offered:0", label = "Français", isSelected = false)
+
+        val menu = trackMenu(state(text = listOf(track("s1", "English"))), OFF, offered = listOf(offer))
+
+        val subtitles = menu.sections.single { it.kind == TrackMenuKind.SUBTITLES }
+        assertEquals(listOf(OFF, "English", "Français"), subtitles.entries.map { it.label })
+    }
+
     private fun state(
         audio: List<TrackOption> = emptyList(),
         text: List<TrackOption> = emptyList(),

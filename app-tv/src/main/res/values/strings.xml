@@ -54,6 +54,18 @@ Make one on the page below — it is quicker on a phone than on a remote — the
     <string name="tv_profile_switch">Switch profile</string>
     <string name="tv_profile_save">Save</string>
     <string name="tv_profile_cancel">Cancel</string>
+    <!-- FEAT-039: renaming, re-facing and deleting a profile. Guest is never offered. -->
+    <string name="tv_profile_delete">Delete</string>
+    <string name="tv_profile_delete_title">Delete %1$s?</string>
+    <string name="tv_profile_delete_detail">Their favourites, continue watching and settings are deleted with the profile. This cannot be undone. Playlists and other profiles are not touched.</string>
+    <string name="tv_profile_delete_confirm">Delete for good</string>
+    <string name="tv_profile_keep">Keep</string>
+    <string name="tv_profile_manage_hint">Hold OK, or press Menu, on a profile to rename it, change its face or delete it.</string>
+    <string name="tv_settings_profiles_manage">Manage profiles</string>
+    <string name="tv_settings_profiles_manage_detail">Rename a profile, change its face, or delete it and everything it keeps.</string>
+    <string name="tv_settings_profiles_show">Show</string>
+    <string name="tv_settings_profiles_hide">Hide</string>
+    <string name="tv_settings_profiles_edit">Edit</string>
     <string name="tv_settings_profile">Who is watching</string>
     <string name="tv_settings_profile_detail">Favourites and continue watching belong to this profile. Switching asks again.</string>
     <string name="tv_settings_profile_switch">Switch</string>
@@ -83,6 +95,16 @@ Make one on the page below — it is quicker on a phone than on a remote — the
     <string name="tv_sources_kind_xtream">Xtream account</string>
     <string name="tv_sources_refresh">Refresh</string>
     <string name="tv_sources_delete">Remove</string>
+    <!-- BUG-042: a source is edited in place, so its favourites and history stay. -->
+    <string name="tv_sources_edit">Edit</string>
+    <string name="tv_sources_edit_hint">Favourites and what you were watching are kept. If the provider does not accept the change, nothing is changed.</string>
+    <string name="tv_sources_password_keep">Password (leave empty to keep it)</string>
+    <string name="tv_sources_edit_save">Save and reload</string>
+    <!-- BUG-043: which container live channels are asked for. -->
+    <string name="tv_sources_live_format">Live channels: Automatic uses HLS when your provider allows it, and TS otherwise.</string>
+    <string name="tv_sources_live_format_auto">Automatic</string>
+    <string name="tv_sources_live_format_hls">HLS</string>
+    <string name="tv_sources_live_format_ts">TS</string>
     <string name="tv_sources_save">Save</string>
     <string name="tv_sources_cancel">Cancel</string>
     <string name="tv_sources_name">Name (optional)</string>
@@ -193,6 +215,10 @@ Make one on the page below — it is quicker on a phone than on a remote — the
 
     <string name="tv_settings_metadata">Film information</string>
 
+    <!-- FEAT-035: the last playback failures, and whose side each was on. Memory only. -->
+    <string name="tv_settings_playback_log">Playback log</string>
+    <string name="tv_settings_playback_log_detail">The last 20 times a stream failed on this television, and whose side the problem was on. Kept in memory only: it is gone when the app closes, and nothing is sent anywhere.</string>
+    <string name="tv_settings_playback_log_empty">Nothing has failed since Quiblo was opened.</string>
     <string name="tv_settings_updates">Updates</string>
     <string name="tv_settings_update_on_launch">Check on launch</string>
     <string name="tv_settings_update_on_launch_detail">Quiblo is installed from an APK, so nothing tells you when a newer one exists. On, the app asks its own releases page once each time it opens. Off makes no request at all.</string>

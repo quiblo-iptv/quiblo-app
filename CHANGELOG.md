@@ -46,6 +46,11 @@ Formatted after [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and ve
 
 ### Fixed
 
+- **Deleting a profile, or ending a guest session, deletes everything it kept (`BUG-040`).** Its
+  favourites and its place in films went with it; its "not for me" marks, its remembered For You
+  rows and every setting it had chosen did not. For a guest that broke the one promise guest makes —
+  that nothing outlives the session. All of it now goes, and settings left behind by profiles
+  deleted before this version are cleared the next time the app opens. Nobody else's are touched.
 - **A live channel you are not watching no longer holds your account's connection (`BUG-037`).** A
   paused channel kept downloading, so sending the app to the background, switching the television
   to another input, or backing out of the player on the television left it holding a connection —

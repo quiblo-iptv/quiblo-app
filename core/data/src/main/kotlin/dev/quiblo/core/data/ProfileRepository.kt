@@ -18,6 +18,7 @@
 
 package dev.quiblo.core.data
 
+import dev.quiblo.core.database.TransactionRunner
 import dev.quiblo.core.database.dao.ProfileDao
 import dev.quiblo.core.database.entity.ProfileEntity
 import dev.quiblo.core.datastore.ProfileStore
@@ -49,6 +50,9 @@ import kotlinx.coroutines.flow.stateIn
 class ProfileRepository(
     private val profileDao: ProfileDao,
     private val profileStore: ProfileStore,
+    /** What a deleted profile leaves that no foreign key reaches (`BUG-040`). */
+    private val leftovers: ProfileLeftovers,
+    private val transactions: TransactionRunner,
     private val now: () -> Long = System::currentTimeMillis,
     scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO),
 ) {
@@ -82,7 +86,13 @@ class ProfileRepository(
      * than by every screen remembering to help.
      */
     suspend fun endGuestSessions() {
-        profileDao.deleteGuests()
+        val ended = transactions.inTransaction {
+            profileDao.guestIds().also { guests ->
+                guests.forEach { leftovers.clearRows(it) }
+                profileDao.deleteGuests()
+            }
+        }
+        ended.forEach { leftovers.clearPreferences(it) }
     }
 
     /**
@@ -101,6 +111,9 @@ class ProfileRepository(
      */
     suspend fun beginSession() {
         endGuestSessions()
+        // Settings left by profiles deleted before `BUG-040`, and by any delete a crash interrupted
+        // between the row and the preferences. NONE_ID is kept: it is nobody, not somebody gone.
+        leftovers.clearPreferencesOtherThan(profileDao.allIds().toSet() + Profile.NONE_ID)
         profileStore.setActiveProfileId(null)
     }
 
@@ -155,7 +168,7 @@ class ProfileRepository(
      * favourites nobody could tell apart in the chooser.
      */
     suspend fun startGuestSession(guestName: String): Profile {
-        profileDao.deleteGuests()
+        endGuestSessions()
         val id = profileDao.insert(
             ProfileEntity(name = guestName, createdAtEpochMillis = now(), isGuest = true),
         )
@@ -176,13 +189,23 @@ class ProfileRepository(
      * for whoever picks it up.
      */
     suspend fun signOut() {
-        if (activeProfile.value?.isGuest == true) profileDao.deleteGuests()
+        if (activeProfile.value?.isGuest == true) endGuestSessions()
         profileStore.setActiveProfileId(null)
     }
 
-    /** Deleting a profile takes its favourites and resume points with it, by foreign key. */
+    /**
+     * Deleting a profile takes everything it kept with it.
+     *
+     * Favourites, resume points and the watch log go by foreign key. Its remembered rows, its
+     * opinions and its settings have none, and went nowhere until `BUG-040`: the rows now go in the
+     * same transaction as the profile, and the settings straight after.
+     */
     suspend fun delete(profile: Profile) {
-        profileDao.delete(profile.id)
+        transactions.inTransaction {
+            leftovers.clearRows(profile.id)
+            profileDao.delete(profile.id)
+        }
+        leftovers.clearPreferences(profile.id)
         if (activeProfile.value?.id == profile.id) profileStore.setActiveProfileId(null)
     }
 }

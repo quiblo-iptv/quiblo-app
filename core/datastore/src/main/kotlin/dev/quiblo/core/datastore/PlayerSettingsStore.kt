@@ -70,9 +70,17 @@ private val Context.playerSettingsDataStore: DataStore<Preferences> by preferenc
 // write one key. Splitting the class to satisfy a threshold would file the same eleven behind two
 // names and leave every caller fetching both.
 @Suppress("TooManyFunctions")
-class PlayerSettingsStore(context: Context) {
+class PlayerSettingsStore(context: Context) : ProfileScopedStore {
 
     private val dataStore = context.applicationContext.playerSettingsDataStore
+
+    override suspend fun clearProfile(profileId: Long) {
+        dataStore.edit { preferences -> preferences.removeScoped { it == profileId } }
+    }
+
+    override suspend fun clearProfilesOtherThan(living: Set<Long>) {
+        dataStore.edit { preferences -> preferences.removeScoped { it !in living } }
+    }
 
     fun settings(profileId: Long): Flow<PlayerSettings> = dataStore.data.map { preferences ->
         PlayerSettings(

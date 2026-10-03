@@ -210,6 +210,10 @@ class FeedRowCacheTest {
         override suspend fun clearForSource(sourceId: Long) {
             rows = rows.filterNot { it.sourceId == sourceId }
         }
+
+        override suspend fun clearForProfile(profileId: Long) {
+            rows = rows.filterNot { it.profileId == profileId }
+        }
     }
 
     private companion object {

@@ -18,11 +18,16 @@
 
 package dev.quiblo.core.data
 
+import dev.quiblo.core.database.TransactionRunner
+import dev.quiblo.core.database.dao.FeedRowDao
 import dev.quiblo.core.database.dao.ProfileDao
+import dev.quiblo.core.database.dao.TitleOpinionDao
 import dev.quiblo.core.database.entity.ProfileEntity
+import dev.quiblo.core.datastore.ProfileScopedStore
 import dev.quiblo.core.datastore.ProfileStore
 import dev.quiblo.core.model.Profile
 import io.mockk.coEvery
+import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -64,6 +69,8 @@ class ProfileRepositoryTest {
         coEvery { deleteGuests() } answers {
             rows.value = rows.value.filterNot { it.isGuest }
         }
+        coEvery { guestIds() } answers { rows.value.filter { it.isGuest }.map { it.id } }
+        coEvery { allIds() } answers { rows.value.map { it.id } }
         coEvery { delete(any()) } answers {
             val id = firstArg<Long>()
             rows.value = rows.value.filterNot { it.id == id }
@@ -200,6 +207,62 @@ class ProfileRepositoryTest {
     }
 
     @Test
+    @DisplayName("BUG-040 — deleting a profile clears what no foreign key reaches")
+    fun `deleting a profile clears its remembered rows, its opinions and its settings`() = runTest {
+        val repository = repository()
+        val sam = repository.addProfile("Sam")!!
+        val alex = repository.addProfile("Alex")!!
+
+        repository.delete(sam)
+
+        coVerify(exactly = 1) { feedRows.clearForProfile(sam.id) }
+        coVerify(exactly = 1) { opinions.clearForProfile(sam.id) }
+        assertEquals(listOf(sam.id), settingsStore.cleared)
+        // Nobody else's.
+        coVerify(exactly = 0) { feedRows.clearForProfile(alex.id) }
+        coVerify(exactly = 0) { opinions.clearForProfile(alex.id) }
+    }
+
+    @Test
+    @DisplayName("BUG-040 — a guest's opinions and settings end with the session")
+    fun `leaving a guest session clears what it said and chose`() = runTest {
+        val repository = repository()
+        val guest = repository.startGuestSession("Guest")
+        repository.awaitWatching()
+
+        repository.signOut()
+        repository.awaitChooser()
+
+        coVerify(exactly = 1) { opinions.clearForProfile(guest.id) }
+        coVerify(exactly = 1) { feedRows.clearForProfile(guest.id) }
+        assertEquals(listOf(guest.id), settingsStore.cleared)
+    }
+
+    @Test
+    fun `a guest nobody left is cleared at the next startup, settings and all`() = runTest {
+        val repository = repository()
+        val guest = repository.startGuestSession("Guest")
+        repository.awaitWatching()
+
+        repository.beginSession()
+
+        coVerify(exactly = 1) { opinions.clearForProfile(guest.id) }
+        assertEquals(listOf(guest.id), settingsStore.cleared)
+    }
+
+    @Test
+    fun `startup clears settings left by profiles that no longer exist, and keeps everyone else's`() = runTest {
+        val repository = repository()
+        val sam = repository.addProfile("Sam")!!
+
+        repository.beginSession()
+
+        // Everyone who exists, and NONE_ID — the moment before anybody is chosen is nobody, not
+        // somebody deleted.
+        assertEquals(setOf(sam.id, Profile.NONE_ID), settingsStore.keptOnly)
+    }
+
+    @Test
     fun `profiles reach the chooser as they are added`() = runTest {
         val repository = repository()
 
@@ -287,9 +350,28 @@ class ProfileRepositoryTest {
      * completes by design — handed the test's main scope, `runTest` would wait a minute for
      * it and then fail every test here for a reason that has nothing to do with profiles.
      */
+    private val feedRows: FeedRowDao = mockk(relaxed = true)
+    private val opinions: TitleOpinionDao = mockk(relaxed = true)
+
+    /** Records which profiles' preferences were cleared, in order. */
+    private class RecordingStore : ProfileScopedStore {
+        val cleared = mutableListOf<Long>()
+        var keptOnly: Set<Long>? = null
+        override suspend fun clearProfile(profileId: Long) {
+            cleared += profileId
+        }
+        override suspend fun clearProfilesOtherThan(living: Set<Long>) {
+            keptOnly = living
+        }
+    }
+
+    private val settingsStore = RecordingStore()
+
     private fun TestScope.repository() = ProfileRepository(
         profileDao = dao,
         profileStore = store,
+        leftovers = ProfileLeftovers(feedRows, opinions, listOf(settingsStore)),
+        transactions = TransactionRunner.Direct,
         now = { FIXED_NOW },
         scope = backgroundScope,
     )

@@ -193,6 +193,10 @@ Make one on the page below — it is quicker on a phone than on a remote — the
 
     <string name="tv_settings_metadata">Film information</string>
 
+    <!-- FEAT-035: the last playback failures, and whose side each was on. Memory only. -->
+    <string name="tv_settings_playback_log">Playback log</string>
+    <string name="tv_settings_playback_log_detail">The last 20 times a stream failed on this television, and whose side the problem was on. Kept in memory only: it is gone when the app closes, and nothing is sent anywhere.</string>
+    <string name="tv_settings_playback_log_empty">Nothing has failed since Quiblo was opened.</string>
     <string name="tv_settings_updates">Updates</string>
     <string name="tv_settings_update_on_launch">Check on launch</string>
     <string name="tv_settings_update_on_launch_detail">Quiblo is installed from an APK, so nothing tells you when a newer one exists. On, the app asks its own releases page once each time it opens. Off makes no request at all.</string>

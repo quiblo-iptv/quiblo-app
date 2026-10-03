@@ -60,10 +60,34 @@ internal data class UserInfo(
     @SerialName("max_connections")
     @Serializable(FlexibleIntSerializer::class)
     val maxConnections: Int? = null,
+    /** How many streams the account has open right now, across every device. */
+    @SerialName("active_cons")
+    @Serializable(FlexibleIntSerializer::class)
+    val activeConnections: Int? = null,
 ) {
-    /** True when the panel explicitly reports the account as no longer usable. */
-    val isExpired: Boolean
-        get() = status?.equals("Expired", ignoreCase = true) == true
+    /**
+     * The expiry as epoch millis, or null for an account that does not expire.
+     *
+     * Zero is "never" on the panels that send it rather than omitting the field, and is read as
+     * such rather than as 1970.
+     */
+    val expiresAtEpochMillis: Long?
+        get() = expiryEpochSeconds?.takeIf { it > 0L }?.times(MILLIS_PER_SECOND)
+
+    /**
+     * True when the subscription has ended, whatever [status] says (`FEAT-035`).
+     *
+     * Checking the status alone missed most expired accounts: many panels leave it at `Active`
+     * after `exp_date` has passed and simply stop serving streams, so a viewer whose subscription
+     * ended yesterday was told nothing about it — not at refresh, and not when playback failed.
+     */
+    fun isExpiredAt(nowEpochMillis: Long): Boolean =
+        status?.equals("Expired", ignoreCase = true) == true ||
+            expiresAtEpochMillis?.let { it < nowEpochMillis } == true
+
+    private companion object {
+        const val MILLIS_PER_SECOND = 1000L
+    }
 
     val isBanned: Boolean
         get() = status?.equals("Banned", ignoreCase = true) == true ||

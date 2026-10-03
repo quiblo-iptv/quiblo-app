@@ -15,6 +15,24 @@ Formatted after [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and ve
 
 ## Unreleased
 
+### Added
+
+- **When a stream fails, Quiblo says whose side the problem is on (`FEAT-035`).** Every failure
+  used to be described in terms of "this stream", in the same words whether the subscription had
+  ended, the provider's server was down, or Quiblo had a bug — so a viewer could not tell whom to
+  call. The error screen now appears as before, says *Checking why…*, and then names the side —
+  **your connection**, **your subscription**, **your provider** or **Quiblo** — with one sentence and
+  one thing to do: *Your subscription ended on 2 October*, *Your account is already in use on 2 of
+  2 allowed screens*, *Your provider's server is not responding*. To find out, Quiblo asks the
+  provider about the account once, at most once a minute. **It never guesses:** when the evidence
+  does not settle it, it says *Not sure* and shows what it found. Underneath is one line of
+  technical detail for a report — the host and never the username, password or path — with **Copy
+  details** on the phone, and the last twenty are kept in memory under Settings → App → Playback
+  log on both apps.
+- **An account whose subscription date has passed is recognised as expired** even when the panel
+  still calls it active, which many do. A refresh now says so instead of loading a catalogue that
+  will not play.
+
 ### Fixed
 
 - **A stream the provider refuses is asked again, and is no longer called "no longer available"

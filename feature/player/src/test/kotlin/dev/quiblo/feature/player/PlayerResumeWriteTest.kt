@@ -191,6 +191,7 @@ class PlayerResumeWriteTest {
             settingsRepository = settingsRepository,
             applicationScope = ApplicationScope(CoroutineScope(UnconfinedTestDispatcher())),
             watchEvents = watchEvents,
+            diagnoser = mockk(relaxed = true),
         )
 
         // Reaching this line is the assertion. The state is read as well, because a constructor
@@ -213,6 +214,7 @@ class PlayerResumeWriteTest {
             // unconfined, which is what makes it distinguishable from the screen's own scope.
             applicationScope = ApplicationScope(CoroutineScope(UnconfinedTestDispatcher())),
             watchEvents = watchEvents,
+            diagnoser = mockk(relaxed = true),
         )
         viewModel.load(channelId = channel.id)
         advanceUntilIdle()

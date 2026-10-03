@@ -172,6 +172,34 @@ enum class PlaybackError {
 }
 
 /**
+ * What the engine knew about a failure, kept for the diagnosis and for a bug report (`FEAT-035`).
+ *
+ * [PlaybackError] is what the screen says. This is the evidence behind it, and it is what lets a
+ * diagnosis tell "the provider refused" from "the provider answered and Quiblo could not play
+ * what came back". It carries no URL, no host and nothing from a request: none of it can leak a
+ * credential (AC-XT-04).
+ *
+ * @property httpStatus the status the server answered with, when it answered with a bad one.
+ * @property engineCode the engine's own name for the failure, such as
+ *   `ERROR_CODE_IO_BAD_HTTP_STATUS`, or null when the load was ended by the watchdog without
+ *   the engine reporting anything at all.
+ * @property hostUnreachable whether the host could not be resolved or refused the connection.
+ * @property bytesReceived how much media arrived from the network for this item. Zero means the
+ *   server never sent a byte, which is a different failure from one that sent data Quiblo could
+ *   not play.
+ * @property hadPlayed whether this item ever reached a playable state before failing.
+ * @property retries how many automatic retries were made before giving up.
+ */
+data class FailureDetails(
+    val httpStatus: Int? = null,
+    val engineCode: String? = null,
+    val hostUnreachable: Boolean = false,
+    val bytesReceived: Long = 0L,
+    val hadPlayed: Boolean = false,
+    val retries: Int = 0,
+)
+
+/**
  * Everything the player UI renders from.
  *
  * @property retryAttempt how many automatic retries have been made for the current item.
@@ -186,6 +214,8 @@ data class PlaybackState(
     val bufferedPositionMillis: Long = 0L,
     val isSeekable: Boolean = false,
     val error: PlaybackError? = null,
+    /** Set together with [error]: the evidence behind it. See [FailureDetails]. */
+    val failure: FailureDetails? = null,
     val retryAttempt: Int = 0,
     /**
      * Stalls after playback first started, for the current item.

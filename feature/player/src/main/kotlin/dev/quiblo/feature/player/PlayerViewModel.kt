@@ -27,8 +27,10 @@ import dev.quiblo.core.data.PlayerSettingsRepository
 import dev.quiblo.core.data.SubtitleRepository
 import dev.quiblo.core.data.WatchEventRepository
 import dev.quiblo.core.data.WatchHistoryRepository
+import dev.quiblo.core.data.diagnostics.PlaybackDiagnoser
 import dev.quiblo.core.media.PlayableItem
 import dev.quiblo.core.media.PlaybackState
+import dev.quiblo.core.media.PlaybackStatus
 import dev.quiblo.core.media.PlayerController
 import dev.quiblo.core.model.AspectRatioMode
 import dev.quiblo.core.model.HistoryEntry
@@ -39,6 +41,7 @@ import dev.quiblo.core.model.SubtitleOrigin
 import dev.quiblo.core.model.SubtitleStyle
 import dev.quiblo.core.model.WatchOrigin
 import dev.quiblo.source.api.VodDetailsResult
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -58,7 +61,7 @@ import kotlinx.coroutines.launch
  * Note what this class does not import: nothing from Media3 or ExoPlayer. It talks only
  * to [PlayerController] (docs/FREEZE.md §4.4).
  */
-// Seven collaborators, and the seventh is the watch log — a different question from the resume
+// Eight collaborators. The seventh is the watch log — a different question from the resume
 // point beside it: one is "where was I", the other is "what did I choose, and how often". Merging
 // them into one repository would put two tables with two lifetimes behind one name.
 @Suppress("LongParameterList")
@@ -77,6 +80,8 @@ class PlayerViewModel(
      */
     private val applicationScope: ApplicationScope,
     private val watchEvents: WatchEventRepository,
+    /** Explains a failure: whose side it is on (`FEAT-035`). */
+    private val diagnoser: PlaybackDiagnoser,
 ) : ViewModel() {
 
     /** Where the viewer was when they chose what is playing. Set by [load]. */
@@ -86,6 +91,18 @@ class PlayerViewModel(
     private var recorded = false
 
     val state: StateFlow<PlaybackState> = controller.state
+
+    private val _diagnosis = MutableStateFlow<DiagnosisState>(DiagnosisState.None)
+
+    /**
+     * Why the current failure happened, once that is known (`FEAT-035`).
+     *
+     * [DiagnosisState.None] while nothing has failed. The error screen does not wait for this: it
+     * appears when playback fails, says "checking why", and updates in place.
+     */
+    val diagnosis: StateFlow<DiagnosisState> = _diagnosis.asStateFlow()
+
+    private var diagnosisJob: Job? = null
 
     /**
      * The persisted tuning, pushed into the engine as it changes.
@@ -526,6 +543,43 @@ class PlayerViewModel(
                 .distinctUntilChanged()
                 .collect { rememberPosition() }
         }
+        // Diagnosed once per failure: when the status becomes ERROR, and forgotten when it stops
+        // being one — a retry, a new channel. Under the same ordering rule as the block above.
+        viewModelScope.launch {
+            controller.state.map { it.status == PlaybackStatus.ERROR }
+                .distinctUntilChanged()
+                .collect { failed -> if (failed) diagnose() else forgetDiagnosis() }
+        }
+    }
+
+    /**
+     * Gathers the evidence for the failure on screen and asks for a verdict (`FEAT-035`).
+     *
+     * Runs only after the controller has given up — after its own retries — so a stream that
+     * drops and recovers is never diagnosed at all.
+     */
+    private fun diagnose() {
+        val evidence = state.value.streamEvidence() ?: return
+        val item = prepared ?: return
+        val playing = playing ?: return
+
+        _diagnosis.value = DiagnosisState.Checking
+        diagnosisJob?.cancel()
+        diagnosisJob = viewModelScope.launch {
+            _diagnosis.value = DiagnosisState.Ready(
+                diagnoser.diagnose(
+                    sourceId = playing.sourceId,
+                    streamUrl = item.url,
+                    title = item.title,
+                    stream = evidence,
+                ),
+            )
+        }
+    }
+
+    private fun forgetDiagnosis() {
+        diagnosisJob?.cancel()
+        _diagnosis.value = DiagnosisState.None
     }
 
     private companion object {

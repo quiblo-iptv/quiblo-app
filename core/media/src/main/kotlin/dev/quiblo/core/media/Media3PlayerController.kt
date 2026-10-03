@@ -37,8 +37,10 @@ import androidx.media3.common.text.Cue
 import androidx.media3.common.text.CueGroup
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DataSource
+import androidx.media3.datasource.DataSpec
 import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.HttpDataSource
+import androidx.media3.datasource.TransferListener
 import androidx.media3.datasource.okhttp.OkHttpDataSource
 import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.DefaultRenderersFactory
@@ -64,6 +66,7 @@ import okhttp3.OkHttpClient
 import java.net.ConnectException
 import java.net.NoRouteToHostException
 import java.net.UnknownHostException
+import java.util.concurrent.atomic.AtomicLong
 
 /**
  * The Media3 implementation of [PlayerController].
@@ -97,7 +100,17 @@ class Media3PlayerController(
     private val dataSourceFactory: DataSource.Factory = DefaultDataSource.Factory(
         appContext,
         OkHttpDataSource.Factory(okHttpClient).setUserAgent(STREAM_USER_AGENT),
-    )
+    ).setTransferListener(NetworkByteCounter())
+
+    /**
+     * Media bytes received from the network for the current item (`FEAT-035`).
+     *
+     * Written on the engine's loader threads, read on the main thread when a failure is
+     * reported. Zero at the moment of failure is the difference between "the server never sent
+     * anything" and "it sent something Quiblo could not play" — the two point at different
+     * parties, and nothing else in the engine's report separates them.
+     */
+    private val bytesReceived = AtomicLong(0L)
 
     private val _state = MutableStateFlow(PlaybackState())
     override val state: StateFlow<PlaybackState> = _state.asStateFlow()
@@ -132,6 +145,10 @@ class Media3PlayerController(
      * a provider refusing us — and not a generic timeout that hides it.
      */
     private var lastFailure: PlaybackError? = null
+
+    /** The engine's report behind [lastFailure], for [FailureDetails]. */
+    private var lastEngineFailure: EngineFailure? = null
+    private var lastEngineCode: String? = null
 
     private var settings = PlayerSettings()
 
@@ -258,6 +275,9 @@ class Media3PlayerController(
         retryJob?.cancel()
         hasEverBeenReady = false
         lastFailure = null
+        lastEngineFailure = null
+        lastEngineCode = null
+        bytesReceived.set(0L)
         prepareStartedAtMillis = SystemClock.uptimeMillis()
         rebuildIfNeeded(EngineProfile(settings.bufferMode, item.isLive))
         _state.value = PlaybackState(status = PlaybackStatus.BUFFERING, item = item)
@@ -290,6 +310,9 @@ class Media3PlayerController(
         retryJob?.cancel()
         hasEverBeenReady = false
         lastFailure = null
+        lastEngineFailure = null
+        lastEngineCode = null
+        bytesReceived.set(0L)
         // A manual retry is a fresh attempt with a fresh budget, so the automatic retries it
         // may earn are measured from now rather than from when the item was first opened.
         prepareStartedAtMillis = SystemClock.uptimeMillis()
@@ -439,6 +462,7 @@ class Media3PlayerController(
                 _state.value = _state.value.copy(
                     status = PlaybackStatus.ERROR,
                     error = _state.value.error ?: lastFailure ?: PlaybackError.TIMEOUT,
+                    failure = failureDetails(),
                 )
             }
         }
@@ -479,7 +503,11 @@ class Media3PlayerController(
         when (step) {
             NextStep.GiveUp -> {
                 watchdogJob?.cancel()
-                _state.value = _state.value.copy(status = PlaybackStatus.ERROR, error = error)
+                _state.value = _state.value.copy(
+                    status = PlaybackStatus.ERROR,
+                    error = error,
+                    failure = failureDetails(),
+                )
             }
 
             is NextStep.RetryAfter -> {
@@ -497,6 +525,34 @@ class Media3PlayerController(
                 }
             }
         }
+    }
+
+    /** The evidence behind the error being reported now. */
+    private fun failureDetails(): FailureDetails = FailureDetails(
+        httpStatus = lastEngineFailure?.httpStatus,
+        engineCode = lastEngineCode,
+        hostUnreachable = lastEngineFailure?.hostUnreachable == true,
+        bytesReceived = bytesReceived.get(),
+        hadPlayed = hasEverBeenReady,
+        retries = _state.value.retryAttempt,
+    )
+
+    /** Counts what arrives over the network, and nothing read from a local file. */
+    private inner class NetworkByteCounter : TransferListener {
+        override fun onTransferInitializing(source: DataSource, dataSpec: DataSpec, isNetwork: Boolean) = Unit
+
+        override fun onTransferStart(source: DataSource, dataSpec: DataSpec, isNetwork: Boolean) = Unit
+
+        override fun onBytesTransferred(
+            source: DataSource,
+            dataSpec: DataSpec,
+            isNetwork: Boolean,
+            bytesTransferred: Int,
+        ) {
+            if (isNetwork) bytesReceived.addAndGet(bytesTransferred.toLong())
+        }
+
+        override fun onTransferEnd(source: DataSource, dataSpec: DataSpec, isNetwork: Boolean) = Unit
     }
 
     inner class PlayerListener : Player.Listener {
@@ -589,7 +645,10 @@ class Media3PlayerController(
         }
 
         override fun onPlayerError(error: PlaybackException) {
-            scheduleRetry(classify(error.toEngineFailure()))
+            val failure = error.toEngineFailure()
+            lastEngineFailure = failure
+            lastEngineCode = error.errorCodeName
+            scheduleRetry(classify(failure))
         }
     }
 

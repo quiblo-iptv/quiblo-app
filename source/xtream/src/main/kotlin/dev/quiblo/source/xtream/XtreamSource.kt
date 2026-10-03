@@ -33,6 +33,7 @@ import dev.quiblo.core.model.SubtitleFile
 import dev.quiblo.core.model.SubtitleOrigin
 import dev.quiblo.core.model.VodDetails
 import dev.quiblo.core.model.releaseYearIn
+import dev.quiblo.source.api.AccountHealth
 import dev.quiblo.source.api.CredentialStore
 import dev.quiblo.source.api.Credentials
 import dev.quiblo.source.api.GuideResult
@@ -53,6 +54,7 @@ import dev.quiblo.source.xtream.dto.EpgListingDto
 import dev.quiblo.source.xtream.dto.SeriesInfoResponse
 import dev.quiblo.source.xtream.dto.XtreamSubtitle
 import io.ktor.client.HttpClient
+import kotlinx.coroutines.withTimeoutOrNull
 import java.util.Base64
 
 /**
@@ -81,6 +83,8 @@ class XtreamSource internal constructor(
 ) : MediaSource, GuideSource, SeriesSource, VodSource {
 
     override val kind: SourceKind = SourceKind.XTREAM
+
+    override val checksAccount: Boolean = true
 
     /**
      * When the panel last refused us, plus a cooling-off period.
@@ -140,8 +144,60 @@ class XtreamSource internal constructor(
         return when {
             user.auth == false -> SourceError.Unauthorized
             user.isBanned -> SourceError.AccountDisabled
-            user.isExpired -> SourceError.SubscriptionExpired
+            user.isExpiredAt(now()) -> SourceError.SubscriptionExpired
             else -> null
+        }
+    }
+
+    /**
+     * One `player_api.php` authentication call, read as evidence about the account (`FEAT-035`).
+     *
+     * It costs no stream slot — the panel counts streams, not API calls — and it goes through
+     * the same rate limiter and block gate as every other request, so a failing channel being
+     * retried by hand cannot turn into a flood. Bounded at [ACCOUNT_CHECK_TIMEOUT_MILLIS]: a
+     * diagnosis that arrives after the viewer has given up is not one.
+     *
+     * Null where there is nothing to go on — no stored credentials, an answer that is not an
+     * answer — because a null becomes "undetermined", and a wrong guess sends a viewer to argue
+     * with the wrong party.
+     */
+    override suspend fun accountHealth(request: SourceRequest): AccountHealth? {
+        if (isBlocked()) return AccountHealth.Blocked
+        val base = XtreamUrl.normalize(request.location) ?: return null
+        val credentials = credentialStore.credentials(request.sourceId) ?: return null
+
+        val auth = withTimeoutOrNull(ACCOUNT_CHECK_TIMEOUT_MILLIS) { client.authenticate(base, credentials) }
+            ?: return AccountHealth.Unreachable
+
+        return when (auth) {
+            is ApiResult.Err -> healthOf(auth.error)
+            is ApiResult.Ok -> healthOf(auth.value)
+        }
+    }
+
+    private suspend fun healthOf(error: SourceError): AccountHealth? = when (error) {
+        SourceError.ProviderBlocked -> {
+            beginBackoff()
+            AccountHealth.Blocked
+        }
+        SourceError.Unauthorized -> AccountHealth.CredentialsRejected
+        SourceError.Timeout, SourceError.UnreachableHost -> AccountHealth.Unreachable
+        SourceError.NotFound -> AccountHealth.ServerError(HTTP_NOT_FOUND)
+        is SourceError.HttpStatus -> AccountHealth.ServerError(error.code)
+        else -> null
+    }
+
+    private fun healthOf(auth: AuthResponse): AccountHealth {
+        val user = auth.userInfo ?: return AccountHealth.CredentialsRejected
+        return when {
+            user.auth == false -> AccountHealth.CredentialsRejected
+            user.isBanned -> AccountHealth.Disabled
+            user.isExpiredAt(now()) -> AccountHealth.Expired(user.expiresAtEpochMillis)
+            else -> AccountHealth.Ok(
+                expiresAtEpochMillis = user.expiresAtEpochMillis,
+                activeConnections = user.activeConnections,
+                maxConnections = user.maxConnections,
+            )
         }
     }
 
@@ -629,6 +685,11 @@ class XtreamSource internal constructor(
 
     private companion object {
         const val MILLIS_PER_SECOND = 1000L
+
+        /** How long a playback diagnosis waits for the panel before calling it unreachable. */
+        const val ACCOUNT_CHECK_TIMEOUT_MILLIS = 5_000L
+
+        const val HTTP_NOT_FOUND = 404
 
         /**
          * How long to stop asking after the panel refuses us.

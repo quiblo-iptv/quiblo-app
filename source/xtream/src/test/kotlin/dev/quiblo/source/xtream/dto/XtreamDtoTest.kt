@@ -42,6 +42,11 @@ class XtreamDtoTest {
 
     private val json = XtreamClient.defaultJson
 
+    private companion object {
+        /** 2026-10-03, as epoch millis. A fixed clock, so no test depends on when it is run. */
+        const val NOW = 1_791_000_000_000L
+    }
+
     @Nested
     @DisplayName("auth response")
     inner class Auth {
@@ -102,9 +107,9 @@ class XtreamDtoTest {
 
         @Test
         fun `recognises expired regardless of case`() {
-            assertTrue(userWithStatus("Expired").isExpired)
-            assertTrue(userWithStatus("EXPIRED").isExpired)
-            assertFalse(userWithStatus("Active").isExpired)
+            assertTrue(userWithStatus("Expired").isExpiredAt(NOW))
+            assertTrue(userWithStatus("EXPIRED").isExpiredAt(NOW))
+            assertFalse(userWithStatus("Active").isExpiredAt(NOW))
         }
 
         @Test
@@ -118,8 +123,48 @@ class XtreamDtoTest {
         fun `an absent status is neither expired nor banned`() {
             val user = json.decodeFromString<UserInfo>("{}")
 
-            assertFalse(user.isExpired)
+            assertFalse(user.isExpiredAt(NOW))
             assertFalse(user.isBanned)
+        }
+
+        @Test
+        fun `an expiry date in the past is expired even while the status says active`() {
+            val user = json.decodeFromString<UserInfo>("""{"status":"Active","exp_date":"1000"}""")
+
+            assertTrue(user.isExpiredAt(NOW))
+            assertEquals(1_000_000L, user.expiresAtEpochMillis)
+        }
+
+        @Test
+        fun `an expiry date in the future is not expired`() {
+            val user = json.decodeFromString<UserInfo>("""{"status":"Active","exp_date":"4000000000"}""")
+
+            assertFalse(user.isExpiredAt(NOW))
+        }
+
+        @Test
+        fun `a zero or empty expiry date means the account never expires`() {
+            listOf("\"0\"", "0", "\"\"", "null").forEach { value ->
+                val user = json.decodeFromString<UserInfo>("""{"status":"Active","exp_date":$value}""")
+                assertNull(user.expiresAtEpochMillis, value)
+                assertFalse(user.isExpiredAt(NOW), value)
+            }
+        }
+
+        @Test
+        fun `active connections are read whatever type they arrive as`() {
+            val user = json.decodeFromString<UserInfo>("""{"active_cons":"2","max_connections":2}""")
+
+            assertEquals(2, user.activeConnections)
+            assertEquals(2, user.maxConnections)
+        }
+
+        @Test
+        fun `missing connection figures stay null rather than becoming zero`() {
+            val user = json.decodeFromString<UserInfo>("""{"active_cons":"","status":"Active"}""")
+
+            assertNull(user.maxConnections)
+            assertNull(user.activeConnections)
         }
 
         private fun userWithStatus(status: String) =

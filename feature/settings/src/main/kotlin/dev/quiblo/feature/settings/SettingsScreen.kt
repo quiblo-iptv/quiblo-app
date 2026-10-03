@@ -93,6 +93,8 @@ fun SettingsScreen(
     val mergeCategories by viewModel.mergeCategories.collectAsStateWithLifecycle()
     val hiddenTabs by viewModel.hiddenTabs.collectAsStateWithLifecycle()
     val checkUpdatesOnLaunch by viewModel.checkUpdatesOnLaunch.collectAsStateWithLifecycle()
+    val playbackLogViewModel: PlaybackLogViewModel = koinViewModel()
+    val playbackLog by playbackLogViewModel.entries.collectAsStateWithLifecycle()
     val context = LocalContext.current
 
     // SAF, so the file lands wherever the user chooses and the app needs no storage
@@ -253,6 +255,14 @@ fun SettingsScreen(
                     UpdateSettingsCard(
                         isEnabled = checkUpdatesOnLaunch,
                         onToggle = viewModel::setCheckUpdatesOnLaunch,
+                    )
+                }
+
+                // The device section, because it is about this device: what failed on it, and why.
+                cardItem {
+                    PlaybackLogCard(
+                        entries = playbackLog,
+                        reportText = playbackLogViewModel::reportText,
                     )
                 }
 

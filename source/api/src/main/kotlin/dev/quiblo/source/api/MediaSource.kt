@@ -47,6 +47,26 @@ interface MediaSource {
      * @return the parsed content, or a typed failure.
      */
     suspend fun load(request: SourceRequest): SourceResult
+
+    /**
+     * Asks the provider about the account behind [request], for a playback diagnosis (`FEAT-035`).
+     *
+     * Null when this kind of source has no account to ask about — a plain M3U playlist — or when
+     * the question could not be put at all. A null is "no evidence", never "fine".
+     *
+     * Implementations must not consume a stream slot and must go through the same request budget
+     * as everything else that talks to the provider.
+     */
+    suspend fun accountHealth(request: SourceRequest): AccountHealth? = null
+
+    /**
+     * Whether this kind of source has an account [accountHealth] can ask about.
+     *
+     * Separates "there is no account to ask" — a playlist is just a file of URLs — from "there is
+     * one and the question went unanswered". The first still lets a stream's own answer stand as
+     * evidence; the second leaves nothing to go on.
+     */
+    val checksAccount: Boolean get() = false
 }
 
 /**

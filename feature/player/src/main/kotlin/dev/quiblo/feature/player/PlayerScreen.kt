@@ -18,6 +18,7 @@
 
 package dev.quiblo.feature.player
 
+import android.content.ClipData
 import android.view.SurfaceView
 import android.view.WindowManager
 import androidx.activity.compose.BackHandler
@@ -64,12 +65,14 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -77,6 +80,8 @@ import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.ClipEntry
+import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
@@ -84,6 +89,7 @@ import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -95,6 +101,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import dev.quiblo.core.data.diagnostics.Diagnosis
 import dev.quiblo.core.media.PlaybackState
 import dev.quiblo.core.media.PlaybackStatus
 import dev.quiblo.core.model.AspectRatioMode
@@ -102,6 +109,7 @@ import dev.quiblo.core.model.SeekInterval
 import dev.quiblo.core.model.WatchOrigin
 import dev.quiblo.core.model.videoScale
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import org.koin.androidx.compose.koinViewModel
 
 private const val CONTROLS_TIMEOUT_MILLIS = 3_000L
@@ -151,6 +159,7 @@ fun PlayerScreen(
     // INC-F10. The picker is remembered here rather than inside the menu, which leaves
     // composition the moment a choice is made — taking the launcher with it.
     val subtitleNotice by viewModel.subtitleNotice.collectAsStateWithLifecycle()
+    val diagnosis by viewModel.diagnosis.collectAsStateWithLifecycle()
     val pickSubtitleFile = rememberSubtitleFilePicker(
         onPicked = viewModel::attachSubtitleFile,
         onNoPicker = { viewModel.showSubtitleNotice(SubtitleNotice.NO_PICKER) },
@@ -287,6 +296,7 @@ fun PlayerScreen(
         when {
             state.status == PlaybackStatus.ERROR -> PlaybackErrorMessage(
                 state = state,
+                diagnosis = diagnosis,
                 onRetry = viewModel::retry,
                 onBack = onBack,
             )
@@ -615,12 +625,22 @@ private fun BufferingIndicator(state: PlaybackState) {
     }
 }
 
+/**
+ * The failure, and — once the evidence is in — whose side it is on (`FEAT-035`).
+ *
+ * Appears the moment playback fails, with the engine-level message and "checking why", so
+ * AC-PLAY-05's budget is untouched by the account check. The verdict then replaces that message
+ * in place: a heading naming the side, one sentence, one piece of advice, and underneath the
+ * redacted evidence with **Copy details** for a report.
+ */
 @Composable
 private fun PlaybackErrorMessage(
     state: PlaybackState,
+    diagnosis: DiagnosisState,
     onRetry: () -> Unit,
     onBack: () -> Unit,
 ) {
+    val ready = (diagnosis as? DiagnosisState.Ready)?.diagnosis
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -628,21 +648,86 @@ private fun PlaybackErrorMessage(
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
+        if (ready != null) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = ready.verdict.side.icon(),
+                    contentDescription = null,
+                    tint = Color.White.copy(alpha = 0.8f),
+                    modifier = Modifier.size(20.dp),
+                )
+                Text(
+                    text = stringResource(ready.verdict.side.labelRes()),
+                    color = Color.White.copy(alpha = 0.8f),
+                    style = MaterialTheme.typography.labelLarge,
+                    modifier = Modifier.padding(start = 8.dp),
+                )
+            }
+        }
         Text(
-            text = stringResource(state.error.messageRes()),
+            text = ready?.headline() ?: stringResource(state.error.messageRes()),
             color = Color.White,
             style = MaterialTheme.typography.bodyLarge,
             textAlign = TextAlign.Center,
             // Assertive rather than polite: playback has stopped and will not resume on
             // its own, so this is worth interrupting for.
-            modifier = Modifier.semantics { liveRegion = LiveRegionMode.Assertive },
+            modifier = Modifier
+                .padding(top = 8.dp)
+                .semantics { liveRegion = LiveRegionMode.Assertive },
         )
+        when {
+            ready != null -> Text(
+                text = stringResource(ready.verdict.adviceRes()),
+                color = Color.White.copy(alpha = 0.75f),
+                style = MaterialTheme.typography.bodyMedium,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.padding(top = 6.dp),
+            )
+
+            diagnosis == DiagnosisState.Checking -> Text(
+                text = stringResource(R.string.player_checking_why),
+                color = Color.White.copy(alpha = 0.6f),
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.padding(top = 6.dp),
+            )
+        }
         Row(modifier = Modifier.padding(top = 20.dp)) {
             Button(onClick = onRetry) { Text(stringResource(R.string.player_retry)) }
         }
         Row(modifier = Modifier.padding(top = 8.dp)) {
             Button(onClick = onBack) { Text(stringResource(R.string.player_back)) }
         }
+        ready?.let { FailureDetailsLine(it) }
+    }
+}
+
+/** The redacted evidence, small, with the one control that does something with it. */
+@Composable
+private fun FailureDetailsLine(diagnosis: Diagnosis) {
+    val clipboard = LocalClipboard.current
+    val scope = rememberCoroutineScope()
+    var copied by remember(diagnosis) { mutableStateOf(false) }
+
+    Text(
+        text = diagnosis.details,
+        color = Color.White.copy(alpha = 0.5f),
+        style = MaterialTheme.typography.bodySmall,
+        fontFamily = FontFamily.Monospace,
+        textAlign = TextAlign.Center,
+        modifier = Modifier.padding(top = 24.dp),
+    )
+    TextButton(
+        onClick = {
+            scope.launch {
+                clipboard.setClipEntry(ClipEntry(ClipData.newPlainText("Quiblo", diagnosis.reportText())))
+                copied = true
+            }
+        },
+    ) {
+        Text(
+            text = stringResource(if (copied) R.string.player_details_copied else R.string.player_copy_details),
+            color = Color.White,
+        )
     }
 }
 

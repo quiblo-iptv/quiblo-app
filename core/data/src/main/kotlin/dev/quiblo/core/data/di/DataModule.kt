@@ -45,6 +45,8 @@ import dev.quiblo.core.data.TitleVersionsRepository
 import dev.quiblo.core.data.WatchEventRepository
 import dev.quiblo.core.data.WatchHistoryRepository
 import dev.quiblo.core.data.backup.BackupRepository
+import dev.quiblo.core.data.diagnostics.PlaybackDiagnoser
+import dev.quiblo.core.data.diagnostics.PlaybackLog
 import dev.quiblo.core.model.SourceKind
 import dev.quiblo.core.network.HttpContentFetcher
 import dev.quiblo.source.api.ContentFetcher
@@ -95,6 +97,16 @@ val dataModule: Module = module {
             feedRowDao = get(),
             mediaSources = get(),
             credentialStore = get(),
+        )
+    }
+    // One log for the process, read by Settings and written by every player screen (`FEAT-035`).
+    single { PlaybackLog() }
+    single {
+        PlaybackDiagnoser(
+            sourceDao = get(),
+            mediaSources = get(),
+            connectivity = get(),
+            log = get(),
         )
     }
     single { ProfileRepository(profileDao = get(), profileStore = get()) }

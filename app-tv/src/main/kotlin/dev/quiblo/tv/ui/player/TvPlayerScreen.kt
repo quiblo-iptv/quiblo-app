@@ -34,8 +34,10 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -64,6 +66,7 @@ import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -85,11 +88,16 @@ import dev.quiblo.core.model.videoScale
 import dev.quiblo.designsystem.AmbientColours
 import dev.quiblo.designsystem.ambientBackdrop
 import dev.quiblo.designsystem.ambientFrom
+import dev.quiblo.feature.player.DiagnosisState
 import dev.quiblo.feature.player.PlayerViewModel
 import dev.quiblo.feature.player.SubtitleNotice
 import dev.quiblo.feature.player.TrackMenu
 import dev.quiblo.feature.player.TrackMenuActionKind
 import dev.quiblo.feature.player.TrackMenuKind
+import dev.quiblo.feature.player.adviceRes
+import dev.quiblo.feature.player.headline
+import dev.quiblo.feature.player.icon
+import dev.quiblo.feature.player.labelRes
 import dev.quiblo.feature.player.messageRes
 import dev.quiblo.feature.player.rememberSubtitleActions
 import dev.quiblo.feature.player.rememberSubtitleAppearance
@@ -185,6 +193,7 @@ fun TvPlayerScreen(
     // INC-F10. Many televisions ship without a document picker at all, so launching is
     // wrapped and the viewer is told rather than dropped into a crash.
     val subtitleNotice by viewModel.subtitleNotice.collectAsStateWithLifecycle()
+    val diagnosis by viewModel.diagnosis.collectAsStateWithLifecycle()
     val pickSubtitleFile = rememberSubtitleFilePicker(
         onPicked = viewModel::attachSubtitleFile,
         onNoPicker = { viewModel.showSubtitleNotice(SubtitleNotice.NO_PICKER) },
@@ -491,6 +500,7 @@ fun TvPlayerScreen(
             onPlayNextEpisode = { onStepEpisode(1) },
             onStopNextEpisode = { nextEpisodeDismissed = true },
             subtitleNotice = subtitleNotice,
+            diagnosis = diagnosis,
         )
     }
 
@@ -535,13 +545,14 @@ private fun PlayerOverlays(
     onPlayNextEpisode: () -> Unit,
     onStopNextEpisode: () -> Unit,
     subtitleNotice: SubtitleNotice?,
+    diagnosis: DiagnosisState,
 ) {
     if (state.status == PlaybackStatus.BUFFERING) {
         Buffering(retryAttempt = state.retryAttempt)
     }
 
     if (hasFailed) {
-        PlaybackFailure(error = state.error, onRetry = onRetry, onBack = onBack)
+        PlaybackFailure(error = state.error, diagnosis = diagnosis, onRetry = onRetry, onBack = onBack)
     }
 
     zapNotice?.let { ZapNotice(name = it) }
@@ -1043,11 +1054,15 @@ private fun Buffering(retryAttempt: Int) {
 @Composable
 private fun PlaybackFailure(
     error: PlaybackError?,
+    diagnosis: DiagnosisState,
     onRetry: () -> Unit,
     onBack: () -> Unit,
 ) {
     val retryFocus = remember { FocusRequester() }
     LaunchedEffect(Unit) { runCatching { retryFocus.requestFocus() } }
+    // Whose side it is on, once the evidence is in (`FEAT-035`). Until then, the engine's own
+    // message and "checking why" — the screen never waits on the account check to appear.
+    val ready = (diagnosis as? DiagnosisState.Ready)?.diagnosis
 
     Column(
         modifier = Modifier
@@ -1059,16 +1074,50 @@ private fun PlaybackFailure(
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
+        if (ready != null) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = ready.verdict.side.icon(),
+                    contentDescription = null,
+                    tint = Color.White.copy(alpha = 0.8f),
+                    modifier = Modifier.size(28.dp),
+                )
+                Text(
+                    text = stringResource(ready.verdict.side.labelRes()).uppercase(),
+                    color = Color.White.copy(alpha = 0.8f),
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 1.6.sp,
+                    modifier = Modifier.padding(start = 12.dp),
+                )
+            }
+        }
         Text(
-            text = stringResource(error.messageRes()),
+            text = ready?.headline() ?: stringResource(error.messageRes()),
             color = Color.White,
             fontSize = 26.sp,
             fontWeight = FontWeight.SemiBold,
             textAlign = TextAlign.Center,
             // Assertive rather than polite: playback has stopped and will not resume on
             // its own, so this is worth interrupting for.
-            modifier = Modifier.semantics { liveRegion = LiveRegionMode.Assertive },
+            modifier = Modifier
+                .padding(top = 12.dp)
+                .semantics { liveRegion = LiveRegionMode.Assertive },
         )
+        val secondLine = when {
+            ready != null -> stringResource(ready.verdict.adviceRes())
+            diagnosis == DiagnosisState.Checking -> stringResource(PlayerR.string.player_checking_why)
+            else -> null
+        }
+        secondLine?.let {
+            Text(
+                text = it,
+                color = Color.White.copy(alpha = 0.7f),
+                fontSize = 18.sp,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.padding(top = 10.dp),
+            )
+        }
         Row(
             modifier = Modifier.padding(top = 28.dp),
             horizontalArrangement = Arrangement.spacedBy(16.dp),
@@ -1082,6 +1131,18 @@ private fun PlaybackFailure(
             DetailButton(
                 label = stringResource(PlayerR.string.player_back),
                 onClick = onBack,
+            )
+        }
+        // No copy button: there is nowhere on a television to paste it. The same line, and the
+        // last twenty like it, are kept under Settings → App → Playback log.
+        ready?.let {
+            Text(
+                text = it.details,
+                color = Color.White.copy(alpha = 0.5f),
+                fontSize = 14.sp,
+                fontFamily = FontFamily.Monospace,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.padding(top = 28.dp),
             )
         }
     }

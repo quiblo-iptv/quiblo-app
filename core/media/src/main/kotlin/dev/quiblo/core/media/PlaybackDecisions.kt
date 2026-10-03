@@ -209,3 +209,49 @@ internal fun rejoinsLiveEdge(failure: EngineFailure, rejoinsSoFar: Int): Boolean
     failure.errorCode == PlaybackException.ERROR_CODE_BEHIND_LIVE_WINDOW && rejoinsSoFar < MAX_LIVE_EDGE_REJOINS
 
 internal const val MAX_LIVE_EDGE_REJOINS = 3
+
+/** The HLS playlist type, as Media3 names it (`MimeTypes.APPLICATION_M3U8`). */
+internal const val HLS_MIME_TYPE = "application/x-mpegURL"
+
+/**
+ * HLS when the URL says so anywhere, not only at the end of its path (`BUG-044`).
+ *
+ * The engine decides how to read a stream from its path's extension alone. A playlist served from
+ * `…/index.m3u8` is recognised; one served from `play.php?file=index.m3u8`, `…/stream?output=m3u8`
+ * or `…/hls/` is not, and goes down the progressive path, where no extractor recognises a
+ * playlist and the load fails as an unsupported container. Null leaves the engine to decide.
+ */
+internal fun hlsMimeTypeFor(url: String): String? {
+    val lower = url.lowercase()
+    val path = lower.substringBefore('?').substringBefore('#')
+    val query = lower.substringAfter('?', missingDelimiterValue = "")
+    return HLS_MIME_TYPE.takeIf { path.endsWith(".m3u8") || HLS_IN_QUERY.containsMatchIn(query) }
+}
+
+/**
+ * Whether a failed load is worth one more try as HLS (`BUG-044`).
+ *
+ * Only when nobody said what the stream was, the path gives no recognisable extension, the engine
+ * read data and recognised no container in it — and only once. A probe request would answer the
+ * question up front, but costs a connection, and on an account allowed one that is the connection.
+ */
+internal fun retriesAsHls(errorCode: Int, declaredMimeType: String?, url: String, alreadyTried: Boolean): Boolean =
+    !alreadyTried &&
+        declaredMimeType == null &&
+        errorCode == PlaybackException.ERROR_CODE_PARSING_CONTAINER_UNSUPPORTED &&
+        hasNoKnownExtension(url)
+
+private fun hasNoKnownExtension(url: String): Boolean {
+    val name = url.lowercase().substringBefore('?').substringBefore('#').substringAfterLast('/')
+    val extension = name.substringAfterLast('.', missingDelimiterValue = "")
+    return extension !in KNOWN_EXTENSIONS
+}
+
+/** `m3u8` as the value of any query parameter, or as a file named in one. */
+private val HLS_IN_QUERY = Regex("""(^|[&=.])m3u8($|&)""")
+
+/** Containers the engine already recognises by name; a stream ending in one of these is what it says. */
+private val KNOWN_EXTENSIONS = setOf(
+    "m3u8", "mpd", "ism", "isml", "ts", "mp4", "m4v", "m4a", "mkv", "webm", "mov", "avi", "flv",
+    "mp3", "aac", "ac3", "ogg", "wav",
+)

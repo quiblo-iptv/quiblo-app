@@ -135,6 +135,11 @@ data class PlayableItem(
      * for the same reason a container that declares subtitles starts with them off.
      */
     val subtitles: List<SubtitleFile> = emptyList(),
+    /**
+     * What the stream is, when whoever built this item knows (`BUG-044`) — `application/x-mpegURL`
+     * for HLS. Null lets the engine work it out, which it does from the path's extension alone.
+     */
+    val mimeType: String? = null,
 )
 
 /** A selectable audio or subtitle track. */

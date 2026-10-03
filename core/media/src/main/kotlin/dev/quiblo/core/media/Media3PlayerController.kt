@@ -159,6 +159,9 @@ class Media3PlayerController(
      */
     private var liveEdgeRejoins = 0
 
+    /** Whether this item has already been tried again as HLS (`BUG-044`). Once is enough. */
+    private var triedAsHls = false
+
     private var settings = PlayerSettings()
 
     /**
@@ -284,6 +287,7 @@ class Media3PlayerController(
         retryJob?.cancel()
         hasEverBeenReady = false
         lastFailure = null
+        triedAsHls = false
         liveEdgeRejoins = 0
         lastEngineFailure = null
         lastEngineCode = null
@@ -331,6 +335,7 @@ class Media3PlayerController(
         retryJob?.cancel()
         hasEverBeenReady = false
         lastFailure = null
+        triedAsHls = false
         liveEdgeRejoins = 0
         lastEngineFailure = null
         lastEngineCode = null
@@ -467,8 +472,11 @@ class Media3PlayerController(
      * already existed. Nothing is flagged default or forced: a file the viewer attached is one
      * they still have to switch on, which is the same rule the container's own tracks follow.
      */
-    private fun PlayableItem.toMediaItem(): MediaItem = MediaItem.Builder()
+    private fun PlayableItem.toMediaItem(mimeOverride: String? = null): MediaItem = MediaItem.Builder()
         .setUri(url)
+        // What the item says, or what its URL says anywhere in it (`BUG-044`); null lets the engine
+        // decide from the path, as it always did.
+        .setMimeType(mimeOverride ?: mimeType ?: hlsMimeTypeFor(url))
         .setSubtitleConfigurations(subtitles.map { it.toSubtitleConfiguration() })
         .build()
 
@@ -561,6 +569,24 @@ class Media3PlayerController(
                 }
             }
         }
+    }
+
+    /**
+     * Prepares the current item again as HLS, when the failure suggests it was one (`BUG-044`).
+     *
+     * Inside the same watchdog budget as everything else on the initial load: the watchdog is not
+     * restarted, so a stream that is neither still fails within AC-PLAY-05's fifteen seconds.
+     */
+    private fun tryAsHls(failure: EngineFailure): Boolean {
+        val item = _state.value.item ?: return false
+        val declared = item.mimeType ?: hlsMimeTypeFor(item.url)
+        if (!retriesAsHls(failure.errorCode, declared, item.url, triedAsHls)) return false
+
+        triedAsHls = true
+        val start = if (item.isLive) C.TIME_UNSET else item.startPositionMillis
+        player.setMediaItem(item.toMediaItem(mimeOverride = HLS_MIME_TYPE), start)
+        player.prepare()
+        return true
     }
 
     /** The evidence behind the error being reported now. */
@@ -689,6 +715,7 @@ class Media3PlayerController(
                 player.prepare()
                 return
             }
+            if (tryAsHls(failure)) return
             lastEngineFailure = failure
             lastEngineCode = error.errorCodeName
             scheduleRetry(classify(failure))

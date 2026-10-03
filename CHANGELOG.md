@@ -64,6 +64,12 @@ Formatted after [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and ve
 
 ### Fixed
 
+- **Playlist entries that are HLS without saying so in the address now play (`BUG-044`).** An M3U
+  entry such as `…/play.php?file=index.m3u8`, `…/stream?output=m3u8` or a path with no extension
+  at all failed with *a format Quiblo cannot play*, while the same address played in VLC or mpv.
+  Quiblo only recognised HLS by an address ending in `.m3u8`. It now also sees it anywhere in the
+  query, and when an address gives no hint and the stream is not a format it recognises, it tries
+  once more as HLS before giving up, within the same fifteen seconds.
 - **Live channels play on accounts that only allow HLS, and use HLS where they can (`BUG-043`).**
   Every live channel was asked for as a raw `.ts` stream, so an account whose provider allows only
   HLS could not play a single one. Quiblo now reads which formats your account may use and asks for

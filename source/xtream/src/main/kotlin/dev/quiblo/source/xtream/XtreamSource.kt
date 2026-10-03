@@ -733,13 +733,13 @@ class XtreamSource internal constructor(
 }
 
 /**
- * One panel-supplied subtitle entry, as something the player can load (INC-F10).
+ * One panel-supplied subtitle entry, as something the player can offer (INC-F10).
  *
- * **The format is a guess when the URL does not carry an extension, and the guess is SubRip.**
- * Panels routinely serve a subtitle from a path like `/subtitle/12345` with no hint of what is
- * behind it, and refusing those would drop most of the few subtitles panels actually supply.
- * SubRip is what nearly all of them are. A wrong guess costs a text track that renders nothing,
- * which is visible and recoverable; refusing costs a subtitle that existed and was never offered.
+ * **The format here is only a placeholder.** Panels routinely serve a subtitle from a path like
+ * `/subtitle/12345` with no hint of what is behind it, so this says SubRip when the URL is silent.
+ * Nothing trusts it: the player fetches the file before using it and reads the format from the
+ * bytes (`BUG-045`), because a *wrong URL* handed to the engine — and panels list dead ones —
+ * stopped the whole film, not just the subtitle.
  *
  * A relative path is resolved against the panel, which is where it came from.
  */

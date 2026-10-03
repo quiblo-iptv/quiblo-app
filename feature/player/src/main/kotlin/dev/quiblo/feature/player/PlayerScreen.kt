@@ -152,8 +152,10 @@ fun PlayerScreen(
     val subtitleActions = rememberSubtitleActions(state)
     val subtitleStyle by viewModel.subtitleStyle.collectAsStateWithLifecycle()
     val appearance = rememberSubtitleAppearance(subtitleStyle)
-    val trackMenu = remember(state.audioTracks, state.textTracks, subtitlesOff, subtitleActions, appearance) {
-        trackMenu(state, subtitlesOff, subtitleActions, appearance)
+    val offeredSubtitles by viewModel.offeredSubtitles.collectAsStateWithLifecycle()
+    val offered = rememberOfferedSubtitleEntries(offeredSubtitles)
+    val trackMenu = remember(state.audioTracks, state.textTracks, subtitlesOff, subtitleActions, appearance, offered) {
+        trackMenu(state, subtitlesOff, subtitleActions, appearance, offered)
     }
 
     // INC-F10. The picker is remembered here rather than inside the menu, which leaves

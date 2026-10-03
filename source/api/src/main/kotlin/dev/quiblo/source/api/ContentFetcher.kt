@@ -19,6 +19,7 @@
 package dev.quiblo.source.api
 
 import java.io.BufferedReader
+import java.io.ByteArrayOutputStream
 import java.io.InputStream
 import java.io.InputStreamReader
 import java.nio.charset.Charset
@@ -81,6 +82,30 @@ class FetchedBody(
      * a network socket is its own kind of slow.
      */
     fun reader(): BufferedReader = BufferedReader(InputStreamReader(stream, charset))
+
+    /**
+     * Up to [limit] bytes of the body, undecoded (`BUG-045`).
+     *
+     * For a caller that has to work the encoding out for itself — a subtitle file says nothing
+     * reliable about its charset in its headers. Bounded for the reason every read of something a
+     * stranger serves is: a URL that turns out to be a film must not land on the heap. A result of
+     * exactly [limit] bytes means the body may be longer. `readNBytes` is a Java 9 API this
+     * project's minSdk cannot rely on.
+     */
+    fun bytes(limit: Int): ByteArray {
+        val buffer = ByteArrayOutputStream()
+        val chunk = ByteArray(READ_CHUNK_BYTES)
+        while (buffer.size() < limit) {
+            val read = stream.read(chunk, 0, minOf(chunk.size, limit - buffer.size()))
+            if (read <= 0) break
+            buffer.write(chunk, 0, read)
+        }
+        return buffer.toByteArray()
+    }
+
+    private companion object {
+        const val READ_CHUNK_BYTES = 16 * 1024
+    }
 }
 
 /** The outcome of a [ContentFetcher.fetch]. */

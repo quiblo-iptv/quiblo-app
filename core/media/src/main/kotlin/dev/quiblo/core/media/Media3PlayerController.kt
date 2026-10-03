@@ -302,6 +302,7 @@ class Media3PlayerController(
         // alone lets the two overlap for a moment, and a panel that allows one connection sees the
         // second arrive while the first is still open — and refuses it.
         if (previous?.isLive == true) player.stop()
+        if (item.subtitles.any { it.selectOnStart }) showSubtitlesOnStart()
         player.setMediaItem(item.toMediaItem())
         if (!item.isLive && item.startPositionMillis > 0L) {
             player.seekTo(item.startPositionMillis)
@@ -465,12 +466,26 @@ class Media3PlayerController(
     }
 
     /**
+     * Lets the engine pick the subtitle flagged to show (`BUG-045`).
+     *
+     * A choice of "off", or of another track, outlives a prepare in the selection parameters, and
+     * would keep the default flag from doing anything.
+     */
+    private fun showSubtitlesOnStart() {
+        player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
+            .clearOverridesOfType(C.TRACK_TYPE_TEXT)
+            .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
+            .build()
+    }
+
+    /**
      * The stream, plus any sidecar subtitles (INC-F10).
      *
      * `DefaultMediaSourceFactory` merges each configuration in as its own text track, so
      * everything downstream — [selectTextTrack], the track list, the menu — is the code that
-     * already existed. Nothing is flagged default or forced: a file the viewer attached is one
-     * they still have to switch on, which is the same rule the container's own tracks follow.
+     * already existed. Nothing is flagged default or forced — a file the viewer attached is one
+     * they still have to switch on, which is the same rule the container's own tracks follow —
+     * except a provider subtitle they have just chosen ([SubtitleFile.selectOnStart], `BUG-045`).
      */
     private fun PlayableItem.toMediaItem(mimeOverride: String? = null): MediaItem = MediaItem.Builder()
         .setUri(url)
@@ -485,6 +500,7 @@ class Media3PlayerController(
             .setMimeType(mimeType)
             .setLanguage(language)
             .setLabel(label)
+            .setSelectionFlags(if (selectOnStart) C.SELECTION_FLAG_DEFAULT else 0)
             .build()
 
     private fun groupId(group: Tracks.Group): String =
@@ -585,6 +601,29 @@ class Media3PlayerController(
         triedAsHls = true
         val start = if (item.isLive) C.TIME_UNSET else item.startPositionMillis
         player.setMediaItem(item.toMediaItem(mimeOverride = HLS_MIME_TYPE), start)
+        player.prepare()
+        return true
+    }
+
+    /**
+     * Switches subtitles off and carries on, when the engine failed with one showing (`BUG-045`).
+     *
+     * A sidecar subtitle is loaded only once its track is selected, and its failure surfaces as a
+     * fatal error for the whole item — so a subtitle that would not load stopped the film, and a
+     * retry, with the same track still selected, stopped it again. Provider subtitles are fetched
+     * before they reach the engine now; this is the net under whatever still gets through. Once
+     * per item: a stream that fails again without subtitles is failing for its own reasons.
+     */
+    private fun dropSubtitles(): Boolean {
+        val current = _state.value
+        if (current.subtitleDropped || current.textTracks.none { it.isSelected }) return false
+
+        player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
+            .clearOverridesOfType(C.TRACK_TYPE_TEXT)
+            .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true)
+            .build()
+        _state.value = current.copy(subtitleDropped = true)
+        if (current.item?.isLive == true) player.seekToDefaultPosition()
         player.prepare()
         return true
     }
@@ -709,17 +748,26 @@ class Media3PlayerController(
 
         override fun onPlayerError(error: PlaybackException) {
             val failure = error.toEngineFailure()
-            if (rejoinsLiveEdge(failure, liveEdgeRejoins)) {
-                liveEdgeRejoins++
-                player.seekToDefaultPosition()
-                player.prepare()
-                return
-            }
-            if (tryAsHls(failure)) return
+            if (recoversInPlace(failure)) return
             lastEngineFailure = failure
             lastEngineCode = error.errorCodeName
             scheduleRetry(classify(failure))
         }
+    }
+
+    /**
+     * Mends a failure without counting it as one, when its cause is known and fixable on the spot:
+     * a live channel fallen behind (`BUG-036`), a subtitle that would not load (`BUG-045`), an HLS
+     * playlist read as a file (`BUG-044`). Each is bounded, so none can loop.
+     */
+    private fun recoversInPlace(failure: EngineFailure): Boolean {
+        if (rejoinsLiveEdge(failure, liveEdgeRejoins)) {
+            liveEdgeRejoins++
+            player.seekToDefaultPosition()
+            player.prepare()
+            return true
+        }
+        return dropSubtitles() || tryAsHls(failure)
     }
 
     /**

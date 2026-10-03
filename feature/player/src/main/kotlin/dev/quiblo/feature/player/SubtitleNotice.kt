@@ -40,4 +40,10 @@ enum class SubtitleNotice {
 
     /** No app on this device can pick a file. Common on a television, and not the viewer's fault. */
     NO_PICKER,
+
+    /**
+     * A subtitle could not be loaded and the film carries on without it (`BUG-045`): one the panel
+     * lists did not arrive or was not subtitles, or the engine failed while one was showing.
+     */
+    SUBTITLE_FAILED,
 }

@@ -25,6 +25,10 @@
     <string name="player_subtitles_unreadable">That file could not be opened.</string>
     <string name="player_subtitles_too_large">That file is too large to be subtitles.</string>
     <string name="player_subtitles_no_picker">This device has no app for picking files.</string>
+    <string name="player_subtitles_failed">That subtitle could not be loaded. The film carries on without it.</string>
+    <string name="player_subtitles_untitled">Subtitles</string>
+    <string name="player_subtitles_fetching">%1$s (loading…)</string>
+    <string name="player_subtitles_unavailable">%1$s (unavailable)</string>
 
     <!-- INC-F11: how subtitles look, set from inside the player where the effect is visible. -->
     <string name="player_subtitles_size">Subtitle size</string>

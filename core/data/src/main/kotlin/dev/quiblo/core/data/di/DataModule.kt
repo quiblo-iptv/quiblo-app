@@ -183,7 +183,13 @@ val dataModule: Module = module {
     single { GuideRepository(get(), get(), get()) }
     single { BackupRepository(get(), get(), get(), transactions = get()) }
     single { PlayerSettingsRepository(store = get(), profiles = get()) }
-    single { SubtitleRepository(dao = get(), files = AndroidPickedSubtitleFiles(get<Context>())) }
+    single {
+        SubtitleRepository(
+            dao = get(),
+            files = AndroidPickedSubtitleFiles(get<Context>()),
+            fetcher = get<HttpContentFetcher>(),
+        )
+    }
     single { TmdbClient(get<HttpClient>()) }
     single { TitleMetadataRepository(get(), get(), get()) }
     single { IptvOrgClient(get<HttpClient>()) }

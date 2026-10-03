@@ -28,9 +28,12 @@ import dev.quiblo.core.database.dao.PickedSubtitleDao
 import dev.quiblo.core.database.entity.PickedSubtitleEntity
 import dev.quiblo.core.model.SubtitleFile
 import dev.quiblo.core.model.SubtitleOrigin
+import dev.quiblo.source.api.ContentFetcher
+import dev.quiblo.source.api.FetchResult
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import java.io.File
 import java.security.MessageDigest
 
@@ -52,6 +55,8 @@ class SubtitleRepository(
     private val files: PickedSubtitleFiles,
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
     private val now: () -> Long = System::currentTimeMillis,
+    /** Fetches a panel's subtitle before it goes anywhere near the engine (`BUG-045`). */
+    private val fetcher: ContentFetcher? = null,
 ) {
 
     /**
@@ -107,6 +112,52 @@ class SubtitleRepository(
 
             AttachResult.Attached(store(stableKey, name, text, format))
         }
+
+    /**
+     * Fetches a subtitle the panel lists and keeps a copy the engine can read (`BUG-045`).
+     *
+     * **The engine is never handed a panel's subtitle URL.** It loads a sidecar only once its
+     * track is selected, and a sidecar that fails to load fails the whole item — so a dead link,
+     * which panels list often, stopped a film that was playing fine. Fetched here instead, with a
+     * short timeout, the same size cap and the same content check as a picked file, a dead link
+     * costs one subtitle and the film plays on.
+     *
+     * The format is read from the bytes, never guessed from the URL, and something that is not
+     * subtitles — a panel's HTML error page served with a 200 — is refused rather than handed on.
+     * The copy is not remembered against the title: the panel offers it again next time.
+     */
+    suspend fun fetchProviderSubtitle(remote: SubtitleFile): ProviderSubtitleResult =
+        withContext(ioDispatcher) {
+            val fetcher = fetcher ?: return@withContext ProviderSubtitleResult.Unavailable
+            val fetched = withTimeoutOrNull(PROVIDER_FETCH_TIMEOUT_MILLIS) {
+                fetcher.fetch(remote.uri) { body -> body.bytes(MAX_SUBTITLE_BYTES + 1) }
+            }
+            val bytes = (fetched as? FetchResult.Success)?.value
+                ?: return@withContext ProviderSubtitleResult.Unavailable
+            if (bytes.size > MAX_SUBTITLE_BYTES) return@withContext ProviderSubtitleResult.Unavailable
+
+            val text = decodeSubtitle(bytes)
+            val head = text.take(SUBTITLE_SNIFF_BYTES)
+            if (head.contains("<html", ignoreCase = true)) return@withContext ProviderSubtitleResult.Unavailable
+            val format = sniffSubtitleFormat(head) ?: return@withContext ProviderSubtitleResult.Unavailable
+
+            val directory = File(files.storageDirectory(), PROVIDER_DIRECTORY).apply { mkdirs() }
+            val fingerprint = fingerprint(remote.uri)
+            val file = File(directory, "$fingerprint.${format.extension}")
+            file.writeText(text)
+            pruneProviderCopies(directory, keep = file)
+
+            ProviderSubtitleResult.Fetched(remote.copy(uri = file.toPlaybackUri(), mimeType = format.mimeType))
+        }
+
+    /** Keeps the newest few copies. Each is a few kilobytes, but nothing else ever deletes them. */
+    private fun pruneProviderCopies(directory: File, keep: File) {
+        directory.listFiles()
+            ?.filter { it != keep }
+            ?.sortedByDescending { it.lastModified() }
+            ?.drop(MAX_PROVIDER_COPIES - 1)
+            ?.forEach { it.delete() }
+    }
 
     /** Forgets the picked file and deletes the copy. Anything the panel supplies is untouched. */
     suspend fun detach(stableKey: String) = withContext(ioDispatcher) {
@@ -167,6 +218,12 @@ class SubtitleRepository(
         const val MAX_SUBTITLE_BYTES = 8 * 1024 * 1024
 
         const val FINGERPRINT_BYTES = 16
+
+        /** Short: the viewer is waiting, the film is playing, and a working server answers in one. */
+        const val PROVIDER_FETCH_TIMEOUT_MILLIS = 5_000L
+
+        const val PROVIDER_DIRECTORY = "provider"
+        const val MAX_PROVIDER_COPIES = 50
     }
 }
 
@@ -190,4 +247,17 @@ sealed interface AttachResult {
     data object Unreadable : AttachResult
 
     data object TooLarge : AttachResult
+}
+
+/** What came of fetching a subtitle the panel lists (`BUG-045`). */
+sealed interface ProviderSubtitleResult {
+
+    /** @property subtitle the same subtitle, now pointing at a local copy the engine can read. */
+    data class Fetched(val subtitle: SubtitleFile) : ProviderSubtitleResult
+
+    /**
+     * Not there, too slow, too large, or not subtitles. One answer for all of them: the viewer
+     * can do nothing different about any of them, and the menu says the same thing either way.
+     */
+    data object Unavailable : ProviderSubtitleResult
 }

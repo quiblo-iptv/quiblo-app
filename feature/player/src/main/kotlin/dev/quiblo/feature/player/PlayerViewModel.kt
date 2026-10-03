@@ -24,6 +24,7 @@ import dev.quiblo.core.data.ApplicationScope
 import dev.quiblo.core.data.AttachResult
 import dev.quiblo.core.data.ChannelRepository
 import dev.quiblo.core.data.PlayerSettingsRepository
+import dev.quiblo.core.data.ProviderSubtitleResult
 import dev.quiblo.core.data.SubtitleRepository
 import dev.quiblo.core.data.WatchEventRepository
 import dev.quiblo.core.data.WatchHistoryRepository
@@ -36,7 +37,6 @@ import dev.quiblo.core.model.AspectRatioMode
 import dev.quiblo.core.model.HistoryEntry
 import dev.quiblo.core.model.MediaKind
 import dev.quiblo.core.model.PlayerSettings
-import dev.quiblo.core.model.SubtitleFile
 import dev.quiblo.core.model.SubtitleOrigin
 import dev.quiblo.core.model.SubtitleStyle
 import dev.quiblo.core.model.WatchOrigin
@@ -176,6 +176,10 @@ class PlayerViewModel(
     private val _subtitleNotice = MutableStateFlow<SubtitleNotice?>(null)
     val subtitleNotice: StateFlow<SubtitleNotice?> = _subtitleNotice.asStateFlow()
 
+    /** The panel's subtitles for what is playing, not yet fetched (`BUG-045`). */
+    private val _offeredSubtitles = MutableStateFlow<List<OfferedSubtitle>>(emptyList())
+    val offeredSubtitles: StateFlow<List<OfferedSubtitle>> = _offeredSubtitles.asStateFlow()
+
     /**
      * What is playing, in the terms history is recorded in.
      *
@@ -243,6 +247,7 @@ class PlayerViewModel(
         stoppedLive = false
         chosenFrom = origin
         recorded = false
+        _offeredSubtitles.value = emptyList()
 
         viewModelScope.launch {
             val channel = channelRepository.findById(channelId) ?: return@launch
@@ -263,6 +268,7 @@ class PlayerViewModel(
                 episodeNumber = episodeNumber.takeIf { isEpisode },
             )
             val playbackKey = customUrl ?: channel.stableKey
+            _offeredSubtitles.value = offeredSubtitlesFor(channel.kind, channelId)
             prepare(
                 PlayableItem(
                     id = playbackKey,
@@ -277,34 +283,71 @@ class PlayerViewModel(
                         startPositionMillis != null -> startPositionMillis
                         else -> historyRepository.resumePosition(playbackKey)
                     },
-                    subtitles = subtitlesFor(channel.kind, channelId, playbackKey),
+                    // Only the viewer's own, which are local files. The panel's are offered in the
+                    // menu and fetched when chosen (`BUG-045`).
+                    subtitles = subtitleRepository.forTitle(playbackKey),
                 ),
             )
         }
     }
 
     /**
-     * Every sidecar subtitle this title has: the panel's, then the viewer's own (INC-F10).
+     * The subtitles the panel lists for this title, as offers for the menu (INC-F10, `BUG-045`).
      *
      * **The details call is made for a film and for nothing else.** It is one request, on an
      * explicit press of play rather than on a scroll, and it is usually already cached by the
      * screen the viewer pressed play from. Live has no details call at all, and an episode's
      * subtitles are not something `get_series_info` carries.
      */
-    private suspend fun subtitlesFor(
-        kind: MediaKind,
-        channelId: Long,
-        playbackKey: String,
-    ): List<SubtitleFile> {
-        val fromPanel = if (kind == MediaKind.VOD) {
-            (channelRepository.getVodDetails(channelId) as? VodDetailsResult.Success)
-                ?.details
-                ?.subtitles
-                .orEmpty()
-        } else {
-            emptyList()
+    private suspend fun offeredSubtitlesFor(kind: MediaKind, channelId: Long): List<OfferedSubtitle> {
+        if (kind != MediaKind.VOD) return emptyList()
+        return (channelRepository.getVodDetails(channelId) as? VodDetailsResult.Success)
+            ?.details
+            ?.subtitles
+            .orEmpty()
+            .mapIndexed { index, subtitle -> OfferedSubtitle("$OFFERED_SUBTITLE_PREFIX$index", subtitle) }
+    }
+
+    /**
+     * Fetches a subtitle the panel offers and restarts the film with it showing (`BUG-045`).
+     *
+     * The film keeps playing while it is fetched. A copy that arrives is added to the item, which
+     * is prepared again at the moment the viewer is at — the only way to add a track to a media
+     * item — with the new one selected, since that is what they chose. One that does not arrive
+     * is marked in the menu and said so, and the film is never touched.
+     */
+    private fun showOfferedSubtitle(id: String) {
+        val offer = _offeredSubtitles.value.firstOrNull { it.id == id } ?: return
+        if (offer.status == OfferedSubtitleStatus.FETCHING) return
+        val itemId = prepared?.id ?: return
+        setOfferStatus(id, OfferedSubtitleStatus.FETCHING)
+
+        viewModelScope.launch {
+            val result = subtitleRepository.fetchProviderSubtitle(offer.subtitle)
+            // Another title may have been opened while this one's subtitle was on its way.
+            val item = prepared?.takeIf { it.id == itemId } ?: return@launch
+            when (result) {
+                is ProviderSubtitleResult.Fetched -> {
+                    _offeredSubtitles.value = _offeredSubtitles.value.filterNot { it.id == id }
+                    prepare(
+                        item.copy(
+                            subtitles = item.subtitles.map { it.copy(selectOnStart = false) } +
+                                result.subtitle.copy(selectOnStart = true),
+                            startPositionMillis = state.value.positionMillis,
+                        ),
+                    )
+                }
+
+                ProviderSubtitleResult.Unavailable -> {
+                    setOfferStatus(id, OfferedSubtitleStatus.UNAVAILABLE)
+                    _subtitleNotice.value = SubtitleNotice.SUBTITLE_FAILED
+                }
+            }
         }
-        return fromPanel + subtitleRepository.forTitle(playbackKey)
+    }
+
+    private fun setOfferStatus(id: String, status: OfferedSubtitleStatus) {
+        _offeredSubtitles.value = _offeredSubtitles.value.map { if (it.id == id) it.copy(status = status) else it }
     }
 
     /**
@@ -408,7 +451,12 @@ class PlayerViewModel(
     fun selectTrack(kind: TrackMenuKind, trackId: String?) {
         when (kind) {
             TrackMenuKind.AUDIO -> controller.selectAudioTrack(trackId)
-            TrackMenuKind.SUBTITLES -> controller.selectTextTrack(trackId)
+            TrackMenuKind.SUBTITLES ->
+                if (trackId != null && isOfferedSubtitleId(trackId)) {
+                    showOfferedSubtitle(trackId)
+                } else {
+                    controller.selectTextTrack(trackId)
+                }
             TrackMenuKind.SUBTITLE_SIZE,
             TrackMenuKind.SUBTITLE_TEXT_COLOUR,
             TrackMenuKind.SUBTITLE_BACKGROUND,
@@ -604,6 +652,13 @@ class PlayerViewModel(
             controller.state.map { it.status == PlaybackStatus.ERROR }
                 .distinctUntilChanged()
                 .collect { failed -> if (failed) diagnose() else forgetDiagnosis() }
+        }
+        // A subtitle the engine could not load is switched off by the controller and the film carries
+        // on (`BUG-045`); this is where the viewer is told why their subtitle went away.
+        viewModelScope.launch {
+            controller.state.map { it.subtitleDropped }
+                .distinctUntilChanged()
+                .collect { dropped -> if (dropped) _subtitleNotice.value = SubtitleNotice.SUBTITLE_FAILED }
         }
     }
 

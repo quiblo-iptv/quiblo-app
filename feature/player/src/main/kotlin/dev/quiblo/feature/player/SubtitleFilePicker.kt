@@ -77,6 +77,34 @@ fun rememberSubtitleActions(state: PlaybackState): List<TrackMenuAction> {
     }
 }
 
+/**
+ * The panel's unfetched subtitles as menu entries, labelled in words the screen owns (`BUG-045`).
+ *
+ * Named as the engine would name the track once loaded — its label, else its language — so an entry
+ * does not change its name when it is chosen. One being fetched, or that could not be, says so.
+ */
+@Composable
+fun rememberOfferedSubtitleEntries(offered: List<OfferedSubtitle>): List<TrackMenuEntry> {
+    val untitled = stringResource(R.string.player_subtitles_untitled)
+    val fetching = stringResource(R.string.player_subtitles_fetching)
+    val unavailable = stringResource(R.string.player_subtitles_unavailable)
+
+    return remember(offered, untitled, fetching, unavailable) {
+        offered.map { offer ->
+            val name = offer.subtitle.label ?: offer.subtitle.language ?: untitled
+            TrackMenuEntry(
+                trackId = offer.id,
+                label = when (offer.status) {
+                    OfferedSubtitleStatus.OFFERED -> name
+                    OfferedSubtitleStatus.FETCHING -> fetching.format(name)
+                    OfferedSubtitleStatus.UNAVAILABLE -> unavailable.format(name)
+                },
+                isSelected = false,
+            )
+        }
+    }
+}
+
 /** What to say about the last attempt, in words the screen owns. */
 @Composable
 fun subtitleNoticeText(notice: SubtitleNotice): String = stringResource(
@@ -86,6 +114,7 @@ fun subtitleNoticeText(notice: SubtitleNotice): String = stringResource(
         SubtitleNotice.UNREADABLE -> R.string.player_subtitles_unreadable
         SubtitleNotice.TOO_LARGE -> R.string.player_subtitles_too_large
         SubtitleNotice.NO_PICKER -> R.string.player_subtitles_no_picker
+        SubtitleNotice.SUBTITLE_FAILED -> R.string.player_subtitles_failed
     },
 )
 

@@ -99,6 +99,7 @@ import dev.quiblo.feature.player.headline
 import dev.quiblo.feature.player.icon
 import dev.quiblo.feature.player.labelRes
 import dev.quiblo.feature.player.messageRes
+import dev.quiblo.feature.player.rememberOfferedSubtitleEntries
 import dev.quiblo.feature.player.rememberSubtitleActions
 import dev.quiblo.feature.player.rememberSubtitleAppearance
 import dev.quiblo.feature.player.rememberSubtitleFilePicker
@@ -186,8 +187,10 @@ fun TvPlayerScreen(
     val subtitleActions = rememberSubtitleActions(state)
     val subtitleStyle by viewModel.subtitleStyle.collectAsStateWithLifecycle()
     val appearance = rememberSubtitleAppearance(subtitleStyle)
-    val trackMenu = remember(state.audioTracks, state.textTracks, offLabel, subtitleActions, appearance) {
-        trackMenu(state, offLabel, subtitleActions, appearance)
+    val offeredSubtitles by viewModel.offeredSubtitles.collectAsStateWithLifecycle()
+    val offered = rememberOfferedSubtitleEntries(offeredSubtitles)
+    val trackMenu = remember(state.audioTracks, state.textTracks, offLabel, subtitleActions, appearance, offered) {
+        trackMenu(state, offLabel, subtitleActions, appearance, offered)
     }
 
     // INC-F10. Many televisions ship without a document picker at all, so launching is

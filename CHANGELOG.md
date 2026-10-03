@@ -64,6 +64,13 @@ Formatted after [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and ve
 
 ### Fixed
 
+- **A film no longer stops because its subtitle link is broken (`BUG-045`).** Providers often list
+  subtitles whose links no longer work, and turning one on — or having captions switched on in your
+  device's accessibility settings — stopped the whole film with *no longer available*, though the
+  film itself was fine. Quiblo now fetches a provider's subtitle when you choose it, and shows it
+  once it has arrived, a second later, from the same moment. One that cannot be fetched is marked
+  *unavailable* in Subtitles and the film plays on; if a subtitle still fails while it is showing,
+  Quiblo switches subtitles off and carries on instead of stopping.
 - **Playlist entries that are HLS without saying so in the address now play (`BUG-044`).** An M3U
   entry such as `…/play.php?file=index.m3u8`, `…/stream?output=m3u8` or a path with no extension
   at all failed with *a format Quiblo cannot play*, while the same address played in VLC or mpv.

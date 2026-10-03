@@ -236,6 +236,12 @@ data class PlaybackState(
     val failure: FailureDetails? = null,
     val retryAttempt: Int = 0,
     /**
+     * Whether subtitles were switched off for this item because the engine failed while one was
+     * showing (`BUG-045`). The film is prepared again without them rather than failed: a subtitle
+     * that will not load used to cost the whole film. Once per item.
+     */
+    val subtitleDropped: Boolean = false,
+    /**
      * Stalls after playback first started, for the current item.
      *
      * Not shown to the user. It exists so "it stutters" can be checked against a number

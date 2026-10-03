@@ -35,6 +35,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -52,6 +53,7 @@ import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -83,6 +85,8 @@ fun SourcesScreen(
     val sources by viewModel.sources.collectAsStateWithLifecycle()
     val addState by viewModel.addState.collectAsStateWithLifecycle()
     var showAddDialog by remember { mutableStateOf(false) }
+    // The source being edited (`BUG-042`), or null.
+    var editing by remember { mutableStateOf<Source?>(null) }
 
     Scaffold(
         modifier = modifier.fillMaxSize(),
@@ -107,6 +111,7 @@ fun SourcesScreen(
                         SourceRow(
                             source = source,
                             onRefresh = { viewModel.refresh(source.id) },
+                            onEdit = { editing = source },
                             onDelete = { viewModel.delete(source.id) },
                         )
                         HorizontalDivider()
@@ -130,6 +135,17 @@ fun SourcesScreen(
             onConfirmXtream = { name, base, user, password ->
                 showAddDialog = false
                 viewModel.addXtreamSource(name, base, user, password)
+            },
+        )
+    }
+
+    editing?.let { source ->
+        EditSourceDialog(
+            source = source,
+            loadUsername = { viewModel.usernameOf(source.id) },
+            onDismiss = { editing = null },
+            onConfirm = { name, url, user, password ->
+                if (viewModel.editSource(source, name, url, user, password)) editing = null
             },
         )
     }
@@ -164,6 +180,7 @@ private fun EmptySources() {
 private fun SourceRow(
     source: Source,
     onRefresh: () -> Unit,
+    onEdit: () -> Unit,
     onDelete: () -> Unit,
 ) {
     Row(
@@ -196,6 +213,9 @@ private fun SourceRow(
         }
         IconButton(onClick = onRefresh) {
             Icon(Icons.Filled.Refresh, contentDescription = stringResource(R.string.sources_refresh))
+        }
+        IconButton(onClick = onEdit) {
+            Icon(Icons.Filled.Edit, contentDescription = stringResource(R.string.sources_edit))
         }
         IconButton(onClick = onDelete) {
             Icon(Icons.Filled.Delete, contentDescription = stringResource(R.string.sources_delete))
@@ -409,4 +429,87 @@ private fun ResultDialog(state: AddSourceState, onDismiss: () -> Unit) {
             },
         )
     }
+}
+
+/**
+ * Edits a source in place (`BUG-042`): its label, its address, and for an account its username and
+ * password.
+ *
+ * The password field starts empty and empty means "keep the one stored". The current password is
+ * never read back into the form, so it cannot be shown, screenshotted or kept in screen state
+ * (AC-XT-04). The username is read in, because a viewer changing a password should not have to
+ * remember how their account is spelt.
+ */
+@Composable
+private fun EditSourceDialog(
+    source: Source,
+    loadUsername: suspend () -> String,
+    onDismiss: () -> Unit,
+    onConfirm: (name: String, url: String, user: String, password: String) -> Unit,
+) {
+    val isXtream = source.kind == SourceKind.XTREAM
+    var name by remember(source.id) { mutableStateOf(source.name) }
+    var url by remember(source.id) { mutableStateOf(source.url) }
+    var username by remember(source.id) { mutableStateOf("") }
+    var password by remember(source.id) { mutableStateOf("") }
+
+    if (isXtream) {
+        LaunchedEffect(source.id) { username = loadUsername() }
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.sources_edit_title)) },
+        text = {
+            Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                CommonFields(
+                    name = name,
+                    url = url,
+                    xtreamSelected = isXtream,
+                    onNameChange = { name = it },
+                    onUrlChange = { url = it },
+                )
+                if (isXtream) {
+                    OutlinedTextField(
+                        value = username,
+                        onValueChange = { username = it },
+                        label = { Text(stringResource(R.string.sources_xtream_user_label)) },
+                        singleLine = true,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 12.dp),
+                    )
+                    OutlinedTextField(
+                        value = password,
+                        onValueChange = { password = it },
+                        label = { Text(stringResource(R.string.sources_xtream_pass_label)) },
+                        placeholder = { Text(stringResource(R.string.sources_password_keep)) },
+                        singleLine = true,
+                        visualTransformation = PasswordVisualTransformation(),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 12.dp),
+                    )
+                }
+                Text(
+                    text = stringResource(R.string.sources_edit_keeps),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 8.dp),
+                )
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = { onConfirm(name, url, username, password) },
+                enabled = url.isNotBlank() && (!isXtream || username.isNotBlank()),
+            ) {
+                Text(stringResource(R.string.sources_edit_save))
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.sources_cancel)) }
+        },
+    )
 }

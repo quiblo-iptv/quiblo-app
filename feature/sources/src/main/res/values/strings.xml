@@ -22,6 +22,12 @@
     <string name="sources_confirm">Add</string>
     <string name="sources_cancel">Cancel</string>
     <string name="sources_delete">Delete</string>
+    <!-- BUG-042: a source is edited in place, so its favourites and history stay. -->
+    <string name="sources_edit">Edit</string>
+    <string name="sources_edit_title">Edit source</string>
+    <string name="sources_edit_save">Save and reload</string>
+    <string name="sources_password_keep">Leave empty to keep the current password</string>
+    <string name="sources_edit_keeps">Favourites and what you were watching are kept. If the provider does not accept the change, nothing is changed.</string>
     <string name="sources_refresh">Refresh</string>
     <string name="sources_never_loaded">Not loaded yet</string>
     <string name="sources_working">Loading…</string>

@@ -126,6 +126,49 @@ class SourcesViewModel(
         return true
     }
 
+    /**
+     * Changes a source's name, address or account and reloads it, keeping its favourites and
+     * history (`BUG-042`).
+     *
+     * For an Xtream source an empty [password] keeps the stored one, so the form never needs to
+     * hold or show it. If the panel refuses the change, the source is left exactly as it was and
+     * the refusal is reported like a failed add.
+     *
+     * @return false when the input was rejected without anything being attempted.
+     */
+    fun editSource(
+        source: Source,
+        name: String,
+        url: String,
+        username: String = "",
+        password: String = "",
+    ): Boolean {
+        if (url.isBlank()) return false
+        if (source.kind == SourceKind.XTREAM && username.isBlank()) return false
+
+        _addState.value = AddSourceState.Working
+        viewModelScope.launch {
+            val outcome = repository.editSource(
+                sourceId = source.id,
+                name = name,
+                url = url,
+                username = username.takeIf { source.kind == SourceKind.XTREAM },
+                password = password.takeIf { source.kind == SourceKind.XTREAM },
+            )
+            _addState.value = when (outcome) {
+                is RefreshOutcome.Failure -> AddSourceState.Failed(outcome.error)
+                is RefreshOutcome.Success -> AddSourceState.Added(
+                    channelCount = outcome.report.parsedEntries,
+                    skippedEntries = outcome.report.skippedEntries,
+                )
+            }
+        }
+        return true
+    }
+
+    /** The stored account name, to start an edit form with. Never the password. */
+    suspend fun usernameOf(sourceId: Long): String = repository.username(sourceId).orEmpty()
+
     fun refresh(sourceId: Long) {
         _addState.value = AddSourceState.Working
         viewModelScope.launch {

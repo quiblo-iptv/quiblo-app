@@ -84,6 +84,13 @@ fun TvSourcesScreen(
 
     var showForm by remember { mutableStateOf(false) }
 
+    // The source being edited in place (`BUG-042`), and its stored account name once read.
+    var editing by remember { mutableStateOf<Source?>(null) }
+    var editingUsername by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(editing?.id) {
+        editingUsername = editing?.let { viewModel.usernameOf(it.id) }
+    }
+
     // Swapping one branch for another destroys whatever the remote was pointing at, so each
     // new branch has to claim focus itself. Without this the viewer is left holding a remote
     // that does nothing until they find their way back to the tab bar.
@@ -96,7 +103,7 @@ fun TvSourcesScreen(
     // this screen's to claim.
     val focusRequester = remember { FocusRequester() }
     var hasComposed by remember { mutableStateOf(false) }
-    LaunchedEffect(showForm, addState is AddSourceState.Working) {
+    LaunchedEffect(showForm, editingUsername, addState is AddSourceState.Working) {
         if (hasComposed) focusRequester.tryRequestFocus() else hasComposed = true
     }
 
@@ -104,7 +111,7 @@ fun TvSourcesScreen(
     // composed last: the form's own back — the one that saves whatever has been typed from a
     // stray press — has to win, and "the innermost one wins" is a rule that survives exactly
     // until somebody moves a composable.
-    BackHandler(enabled = !showForm, onBack = onBack)
+    BackHandler(enabled = !showForm && editing == null, onBack = onBack)
 
     Column(modifier = modifier.fillMaxSize()) {
         when {
@@ -135,12 +142,31 @@ fun TvSourcesScreen(
                 }
             }
 
+            editing != null && editingUsername != null -> editing?.let { source ->
+                BackHandler { editing = null }
+                CentredColumn {
+                    TvEditSourceForm(
+                        focusRequester = focusRequester,
+                        initialName = source.name,
+                        initialUrl = source.url,
+                        initialUsername = editingUsername.orEmpty(),
+                        isAccount = source.kind == SourceKind.XTREAM,
+                        onSave = { name, url, user, pass ->
+                            viewModel.editSource(source, name, url, user, pass).also { if (it) editing = null }
+                        },
+                        onCancel = { editing = null },
+                        modifier = Modifier.width(FORM_WIDTH),
+                    )
+                }
+            }
+
             else -> SourceList(
                 focusRequester = focusRequester,
                 sources = sources,
                 addState = addState,
                 onAdd = { showForm = true },
                 onRefresh = viewModel::refresh,
+                onEdit = { editing = it },
                 onDelete = viewModel::delete,
                 onDismissResult = viewModel::dismissResult,
             )
@@ -187,6 +213,7 @@ private fun SourceList(
     addState: AddSourceState,
     onAdd: () -> Unit,
     onRefresh: (Long) -> Unit,
+    onEdit: (Source) -> Unit,
     onDelete: (Long) -> Unit,
     onDismissResult: () -> Unit,
 ) {
@@ -224,7 +251,12 @@ private fun SourceList(
         }
 
         items(items = sources, key = { it.id }) { source ->
-            SourceRow(source = source, onRefresh = { onRefresh(source.id) }, onDelete = { onDelete(source.id) })
+            SourceRow(
+                source = source,
+                onRefresh = { onRefresh(source.id) },
+                onEdit = { onEdit(source) },
+                onDelete = { onDelete(source.id) },
+            )
         }
 
         if (sources.isEmpty()) {
@@ -253,7 +285,7 @@ private fun ResultBanner(addState: AddSourceState, onDismiss: () -> Unit) {
 }
 
 @Composable
-private fun SourceRow(source: Source, onRefresh: () -> Unit, onDelete: () -> Unit) {
+private fun SourceRow(source: Source, onRefresh: () -> Unit, onEdit: () -> Unit, onDelete: () -> Unit) {
     Column(
         modifier = Modifier
             .width(FORM_WIDTH)
@@ -282,6 +314,11 @@ private fun SourceRow(source: Source, onRefresh: () -> Unit, onDelete: () -> Uni
             TvFocusRow(
                 label = stringResource(R.string.tv_sources_refresh),
                 onClick = onRefresh,
+                modifier = Modifier.width(BUTTON_WIDTH),
+            )
+            TvFocusRow(
+                label = stringResource(R.string.tv_sources_edit),
+                onClick = onEdit,
                 modifier = Modifier.width(BUTTON_WIDTH),
             )
             TvFocusRow(

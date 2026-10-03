@@ -44,6 +44,15 @@ Formatted after [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and ve
   still calls it active, which many do. A refresh now says so instead of loading a catalogue that
   will not play.
 
+### Changed
+
+- **A source can be edited — its name, address, username and password — without losing anything
+  (`BUG-042`).** Providers change their server addresses and passwords, and the only way to tell
+  Quiblo was to delete the source and add it again, which deleted every favourite and every place
+  in a film along with it. Sources now have **Edit**. The password field starts empty and leaving it
+  empty keeps the current one, which is never shown. If the provider does not accept the change,
+  nothing is changed.
+
 ### Security
 
 - **Your Xtream password is no longer stored in plain text (`BUG-041`).** It was meant to live only

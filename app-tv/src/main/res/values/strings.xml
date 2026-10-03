@@ -95,6 +95,11 @@ Make one on the page below — it is quicker on a phone than on a remote — the
     <string name="tv_sources_kind_xtream">Xtream account</string>
     <string name="tv_sources_refresh">Refresh</string>
     <string name="tv_sources_delete">Remove</string>
+    <!-- BUG-042: a source is edited in place, so its favourites and history stay. -->
+    <string name="tv_sources_edit">Edit</string>
+    <string name="tv_sources_edit_hint">Favourites and what you were watching are kept. If the provider does not accept the change, nothing is changed.</string>
+    <string name="tv_sources_password_keep">Password (leave empty to keep it)</string>
+    <string name="tv_sources_edit_save">Save and reload</string>
     <string name="tv_sources_save">Save</string>
     <string name="tv_sources_cancel">Cancel</string>
     <string name="tv_sources_name">Name (optional)</string>

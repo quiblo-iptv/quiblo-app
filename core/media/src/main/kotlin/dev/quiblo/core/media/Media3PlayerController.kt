@@ -81,6 +81,7 @@ import java.util.concurrent.atomic.AtomicLong
  * @param scope drives position polling and the retry backoff; cancelled by [release].
  */
 @androidx.annotation.OptIn(UnstableApi::class)
+@Suppress("TooManyFunctions") // Each one is a [PlayerController] method it must implement.
 class Media3PlayerController(
     context: Context,
     private val scope: CoroutineScope,
@@ -289,9 +290,14 @@ class Media3PlayerController(
         bytesReceived.set(0L)
         prepareStartedAtMillis = SystemClock.uptimeMillis()
         rebuildIfNeeded(EngineProfile(settings.bufferMode, item.isLive))
+        val previous = _state.value.item
         _state.value = PlaybackState(status = PlaybackStatus.BUFFERING, item = item)
         startWatchdog()
 
+        // Close the old live connection before opening the new one (`BUG-037`). Replacing the item
+        // alone lets the two overlap for a moment, and a panel that allows one connection sees the
+        // second arrive while the first is still open — and refuses it.
+        if (previous?.isLive == true) player.stop()
         player.setMediaItem(item.toMediaItem())
         if (!item.isLive && item.startPositionMillis > 0L) {
             player.seekTo(item.startPositionMillis)
@@ -307,6 +313,12 @@ class Media3PlayerController(
 
     override fun pause() {
         player.pause()
+    }
+
+    override fun stop() {
+        retryJob?.cancel()
+        watchdogJob?.cancel()
+        player.stop()
     }
 
     override fun seekTo(positionMillis: Long) {

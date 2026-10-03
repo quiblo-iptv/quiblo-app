@@ -64,7 +64,11 @@ import kotlinx.coroutines.launch
 // Eight collaborators. The seventh is the watch log — a different question from the resume
 // point beside it: one is "where was I", the other is "what did I choose, and how often". Merging
 // them into one repository would put two tables with two lifetimes behind one name.
-@Suppress("LongParameterList")
+//
+// And one function per thing a screen does to a playback session — load, the transport, tracks, the
+// three lifecycle moments (`BUG-037`). Splitting them across classes would give the two apps two
+// objects to keep in step for one session.
+@Suppress("LongParameterList", "TooManyFunctions")
 class PlayerViewModel(
     private val controller: PlayerController,
     private val channelRepository: ChannelRepository,
@@ -89,6 +93,9 @@ class PlayerViewModel(
 
     /** Whether this sitting has already been written down. See [recordOccasion]. */
     private var recorded = false
+
+    /** Whether [onStopped] let go of a live channel that [onStarted] should pick up again. */
+    private var stoppedLive = false
 
     val state: StateFlow<PlaybackState> = controller.state
 
@@ -233,6 +240,7 @@ class PlayerViewModel(
         val request = LoadRequest(channelId, customUrl, startPositionMillis)
         if (loadedRequest == request) return
         loadedRequest = request
+        stoppedLive = false
         chosenFrom = origin
         recorded = false
 
@@ -419,12 +427,57 @@ class PlayerViewModel(
 
     fun controllerHandle(): PlayerController = controller
 
-    /** Stops playback when the screen leaves the foreground, so no audio leaks. */
+    /**
+     * Stops playback when the screen leaves the foreground, so no audio leaks.
+     *
+     * **A live channel is stopped, not paused (`BUG-037`).** A paused engine keeps reading to fill
+     * its buffer, so a paused channel went on holding one of the account's connections for as long
+     * as the app sat in the background or the television was on another input. On an account
+     * allowed one screen, that is the screen: the next device was refused, and so was this one
+     * after a channel change. And there is nothing to resume a live channel *to* — coming back to a
+     * stale buffer of a broadcast that has moved on only fails. [onStarted] starts it again, live.
+     *
+     * A film or an episode is paused as before: it has a position worth keeping, and a buffer worth
+     * keeping with it.
+     */
     fun onStopped() {
-        controller.pause()
+        if (isLive()) {
+            controller.stop()
+            stoppedLive = true
+        } else {
+            controller.pause()
+        }
         rememberPosition()
         recordOccasion()
     }
+
+    /** Back in the foreground: a live channel [onStopped] let go of is picked up again, at live. */
+    fun onStarted() {
+        if (!stoppedLive) return
+        stoppedLive = false
+        controller.retry()
+    }
+
+    /**
+     * The viewer has left the player screen, and the ViewModel outlives it (the television's).
+     *
+     * Like [onStopped], except that nothing is restarted on the way back in: a live channel is
+     * forgotten as well as stopped, so choosing the same channel again loads it afresh instead of
+     * finding it already "loaded" and stopped (`BUG-037`).
+     */
+    fun onLeft() {
+        if (isLive()) {
+            controller.stop()
+            stoppedLive = false
+            loadedRequest = null
+        } else {
+            controller.pause()
+        }
+        rememberPosition()
+        recordOccasion()
+    }
+
+    private fun isLive(): Boolean = state.value.item?.isLive == true
 
     override fun onCleared() {
         rememberPosition()

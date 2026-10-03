@@ -230,16 +230,7 @@ fun PlayerScreen(
         }
     }
 
-    // AC-PLAY-09: leaving the foreground stops playback so no audio leaks. There is no
-    // background playback in v1 (docs/FREEZE.md §2).
-    val lifecycleOwner = LocalLifecycleOwner.current
-    DisposableEffect(lifecycleOwner) {
-        val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_STOP) viewModel.onStopped()
-        }
-        lifecycleOwner.lifecycle.addObserver(observer)
-        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
-    }
+    StopsWithTheScreen(viewModel)
 
     // Back closes the track sheet if open; otherwise system back leaves playback.
     BackHandler(enabled = tracksVisible) {
@@ -956,5 +947,28 @@ private fun Long.asClock(): String {
         "%d:%02d:%02d".format(hours, minutes, seconds)
     } else {
         "%d:%02d".format(minutes, seconds)
+    }
+}
+
+/**
+ * AC-PLAY-09: leaving the foreground stops playback so no audio leaks. There is no background
+ * playback in v1 (docs/FREEZE.md §2).
+ *
+ * Coming back picks a live channel up again, at live (`BUG-037`): in the background it was stopped
+ * rather than paused, so that it stopped holding the account's connection.
+ */
+@Composable
+private fun StopsWithTheScreen(viewModel: PlayerViewModel) {
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            when (event) {
+                Lifecycle.Event.ON_STOP -> viewModel.onStopped()
+                Lifecycle.Event.ON_START -> viewModel.onStarted()
+                else -> Unit
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 }

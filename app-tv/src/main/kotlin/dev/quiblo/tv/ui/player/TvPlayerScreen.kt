@@ -355,14 +355,22 @@ fun TvPlayerScreen(
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_STOP) viewModel.onStopped()
+            when (event) {
+                Lifecycle.Event.ON_STOP -> viewModel.onStopped()
+                // Back from another input or the home screen: a live channel is picked up again,
+                // at live (`BUG-037`). Also delivered once when this observer is added, which is a
+                // no-op unless the ViewModel actually let a channel go.
+                Lifecycle.Event.ON_START -> viewModel.onStarted()
+                else -> Unit
+            }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose {
             lifecycleOwner.lifecycle.removeObserver(observer)
             // Leaving the screen is leaving playback. Without this, backing out to the
-            // catalogue left the stream running and unreachable.
-            viewModel.onStopped()
+            // catalogue left the stream running and unreachable — and a paused live channel still
+            // held the account's connection (`BUG-037`).
+            viewModel.onLeft()
         }
     }
 

@@ -38,6 +38,9 @@ import kotlinx.coroutines.flow.StateFlow
  * `:core:*` must not import Compose (AC-NFR-06). The player feature wraps it in an
  * `AndroidView` on its side of the boundary.
  */
+// One method per thing feature code may ask of an engine. That list is the seam (docs/FREEZE.md §4.4),
+// and splitting it would only give the screens two seams to hold instead of one.
+@Suppress("TooManyFunctions")
 interface PlayerController {
 
     val state: StateFlow<PlaybackState>
@@ -48,6 +51,16 @@ interface PlayerController {
     fun play()
 
     fun pause()
+
+    /**
+     * Drops the network connection and the buffer, and keeps the item (`BUG-037`).
+     *
+     * [pause] holds both: the engine keeps reading to fill its buffer, so a paused live stream
+     * goes on occupying one of the account's connections. On an account allowed one screen that
+     * is the screen — and the next device, or this one after a channel change, is refused.
+     * [retry] starts the item again, at the live edge for live.
+     */
+    fun stop()
 
     /** Ignored when the current item is not seekable, such as a raw TS stream. */
     fun seekTo(positionMillis: Long)

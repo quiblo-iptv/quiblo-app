@@ -35,6 +35,13 @@ Formatted after [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and ve
 
 ### Fixed
 
+- **A live channel you are not watching no longer holds your account's connection (`BUG-037`).** A
+  paused channel kept downloading, so sending the app to the background, switching the television
+  to another input, or backing out of the player on the television left it holding a connection —
+  and on an account allowed one screen, every other device was refused for as long as it sat there.
+  A live channel is now let go of when you stop watching it and started again, at live, when you
+  come back. Changing channel closes the old connection before opening the new one. Films and
+  episodes still pause and keep their place.
 - **A live channel that falls behind no longer fails after three reconnects (`BUG-036`).** After a
   pause, a stall or a trip to the home screen, a live HLS channel asks for a moment its playlist has
   already dropped. Quiblo kept asking for that same moment — three times, and then an error — and

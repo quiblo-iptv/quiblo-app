@@ -91,6 +91,7 @@ import dev.quiblo.core.model.BufferMode
 import dev.quiblo.core.model.Category
 import dev.quiblo.core.model.MaxBitrateCap
 import dev.quiblo.core.model.MediaKind
+import dev.quiblo.core.model.Profile
 import dev.quiblo.core.model.SeekInterval
 import dev.quiblo.designsystem.TMDB_API_KEY_URL
 import dev.quiblo.designsystem.openLink
@@ -99,6 +100,7 @@ import dev.quiblo.feature.player.icon
 import dev.quiblo.feature.player.labelRes
 import dev.quiblo.feature.settings.BackupUiState
 import dev.quiblo.feature.settings.PlaybackLogViewModel
+import dev.quiblo.feature.settings.ProfilesViewModel
 import dev.quiblo.feature.settings.SettingsViewModel
 import dev.quiblo.feature.settings.THIRD_PARTY_LICENSES
 import dev.quiblo.feature.settings.ThirdPartyLicense
@@ -108,6 +110,7 @@ import dev.quiblo.tv.R
 import dev.quiblo.tv.ui.common.TvChip
 import dev.quiblo.tv.ui.common.TvTextField
 import dev.quiblo.tv.ui.common.tryRequestFocus
+import dev.quiblo.tv.ui.profiles.TvEditProfile
 import org.koin.androidx.compose.koinViewModel
 import java.text.DateFormat
 import java.util.Date
@@ -182,6 +185,12 @@ fun TvSettingsScreen(
     // twelve rows to walk past on the way to anything else.
     var licensesShown by remember { mutableStateOf(false) }
 
+    // Settings → Manage profiles (`FEAT-039`): open or shut, and which profile is being edited.
+    val profilesViewModel: ProfilesViewModel = koinViewModel(key = "tv-profiles")
+    val profilesState by profilesViewModel.uiState.collectAsStateWithLifecycle()
+    var managingProfiles by remember { mutableStateOf(false) }
+    var editingProfileId by remember { mutableStateOf<Long?>(null) }
+
     BackHandler(onBack = onBack)
 
     // SAF, so the file lands wherever the viewer chooses and the app needs no storage
@@ -249,6 +258,15 @@ fun TvSettingsScreen(
                     onClick = onSwitchProfile,
                 )
             }
+
+            manageProfiles(
+                profiles = profilesState.profiles,
+                isOpen = managingProfiles,
+                onToggle = { managingProfiles = !managingProfiles },
+                editingId = editingProfileId,
+                onEdit = { editingProfileId = it?.id },
+                profilesViewModel = profilesViewModel,
+            )
 
             item { SectionHeading(stringResource(R.string.tv_settings_tabs)) }
 
@@ -1752,3 +1770,65 @@ private fun PlaybackLogRow(entry: Diagnosis?) {
 
 private fun formatLogTime(epochMillis: Long): String =
     DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT).format(Date(epochMillis))
+
+/**
+ * Settings → Manage profiles (`FEAT-039`): everybody with a profile, to rename, re-face or delete.
+ *
+ * Expanded into this list, like the licences, rather than pushed onto a screen of its own — a
+ * second scrolling surface is the shape that traps a remote. The profile being edited becomes the
+ * chooser's own editor in place, so there is one editor and one set of words on the television.
+ *
+ * Guest is not listed: it is a session rather than somebody, and it ends by leaving.
+ */
+@Suppress("LongParameterList")
+private fun LazyListScope.manageProfiles(
+    profiles: List<Profile>,
+    isOpen: Boolean,
+    onToggle: () -> Unit,
+    editingId: Long?,
+    onEdit: (Profile?) -> Unit,
+    profilesViewModel: ProfilesViewModel,
+) {
+    val named = profiles.filterNot { it.isGuest }
+    if (named.isEmpty()) return
+
+    item {
+        ActionRow(
+            label = stringResource(R.string.tv_settings_profiles_manage),
+            description = stringResource(R.string.tv_settings_profiles_manage_detail),
+            action = stringResource(
+                if (isOpen) R.string.tv_settings_profiles_hide else R.string.tv_settings_profiles_show,
+            ),
+            onClick = onToggle,
+        )
+    }
+
+    if (!isOpen) return
+
+    items(named, key = { "profile-${it.id}" }) { profile ->
+        if (profile.id == editingId) {
+            Box(modifier = Modifier.padding(vertical = 12.dp)) {
+                TvEditProfile(
+                    profile = profile,
+                    onSave = { name, avatar ->
+                        if (name.trim() != profile.name) profilesViewModel.rename(profile, name)
+                        if (avatar != profile.avatar) profilesViewModel.setAvatar(profile, avatar)
+                        onEdit(null)
+                    },
+                    onDelete = {
+                        profilesViewModel.delete(profile)
+                        onEdit(null)
+                    },
+                    onCancel = { onEdit(null) },
+                )
+            }
+        } else {
+            ActionRow(
+                label = profile.name,
+                description = stringResource(R.string.tv_profile_manage_hint),
+                action = stringResource(R.string.tv_settings_profiles_edit),
+                onClick = { onEdit(profile) },
+            )
+        }
+    }
+}

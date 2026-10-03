@@ -29,6 +29,12 @@ Formatted after [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and ve
   technical detail for a report — the host and never the username, password or path — with **Copy
   details** on the phone, and the last twenty are kept in memory under Settings → App → Playback
   log on both apps.
+- **Profiles can be deleted, renamed and given a new face, on both apps (`FEAT-039`).** Deleting a
+  profile was built and never reachable — no screen on either app offered it. Settings → Profile now
+  has **Manage profiles**: every named profile, each with its name, its face and **Delete**, which
+  asks first and says what goes with it. The same is under a long press on a profile in the
+  chooser — on the television, hold OK or press Menu. A guest is not listed anywhere: it ends by
+  leaving.
 - **A profile can be renamed, and its face changed, without losing anything (`FEAT-038`).** The
   name was fixed when the profile was made, so a typo typed on a remote — or a child's profile that
   had grown up — could only be fixed by deleting the profile and making it again, which took its

@@ -54,6 +54,18 @@ Make one on the page below — it is quicker on a phone than on a remote — the
     <string name="tv_profile_switch">Switch profile</string>
     <string name="tv_profile_save">Save</string>
     <string name="tv_profile_cancel">Cancel</string>
+    <!-- FEAT-039: renaming, re-facing and deleting a profile. Guest is never offered. -->
+    <string name="tv_profile_delete">Delete</string>
+    <string name="tv_profile_delete_title">Delete %1$s?</string>
+    <string name="tv_profile_delete_detail">Their favourites, continue watching and settings are deleted with the profile. This cannot be undone. Playlists and other profiles are not touched.</string>
+    <string name="tv_profile_delete_confirm">Delete for good</string>
+    <string name="tv_profile_keep">Keep</string>
+    <string name="tv_profile_manage_hint">Hold OK, or press Menu, on a profile to rename it, change its face or delete it.</string>
+    <string name="tv_settings_profiles_manage">Manage profiles</string>
+    <string name="tv_settings_profiles_manage_detail">Rename a profile, change its face, or delete it and everything it keeps.</string>
+    <string name="tv_settings_profiles_show">Show</string>
+    <string name="tv_settings_profiles_hide">Hide</string>
+    <string name="tv_settings_profiles_edit">Edit</string>
     <string name="tv_settings_profile">Who is watching</string>
     <string name="tv_settings_profile_detail">Favourites and continue watching belong to this profile. Switching asks again.</string>
     <string name="tv_settings_profile_switch">Switch</string>

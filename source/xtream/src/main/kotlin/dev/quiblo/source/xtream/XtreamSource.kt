@@ -161,6 +161,20 @@ class XtreamSource internal constructor(
      * answer — because a null becomes "undetermined", and a wrong guess sends a viewer to argue
      * with the wrong party.
      */
+    /**
+     * The URL for a stored [locator], with this account's credentials in it (`BUG-041`).
+     *
+     * Built here, at the moment of playing, from the encrypted store — so the password is never in
+     * the database, and a password changed at the provider is the one used the next time anything
+     * plays. Makes no request. A locator that is not this module's is returned unchanged, which is
+     * what a stream URL that was never a locator needs.
+     */
+    override suspend fun playbackUrl(request: SourceRequest, locator: String): String {
+        val base = XtreamUrl.normalize(request.location) ?: return locator
+        val credentials = credentialStore.credentials(request.sourceId) ?: return locator
+        return XtreamUrl.resolve(base, credentials.username, credentials.password, locator) ?: locator
+    }
+
     override suspend fun accountHealth(request: SourceRequest): AccountHealth? {
         if (isBlocked()) return AccountHealth.Blocked
         val base = XtreamUrl.normalize(request.location) ?: return null
@@ -340,7 +354,8 @@ class XtreamSource internal constructor(
                     id = 0L,
                     sourceId = ctx.sourceId,
                     name = name,
-                    streamUrl = XtreamUrl.liveStream(ctx.base, ctx.credentials.username, ctx.credentials.password, id),
+                    // A locator, not a URL: the credentials are added when it is played (`BUG-041`).
+                    streamUrl = XtreamUrl.liveLocator(id),
                     kind = MediaKind.LIVE,
                     // The EPG key, which ties a channel to its guide and lets a favourite
                     // survive a refresh (AC-FAV-03, AC-EPG-01).
@@ -372,10 +387,7 @@ class XtreamSource internal constructor(
                     id = 0L,
                     sourceId = ctx.sourceId,
                     name = name,
-                    streamUrl = XtreamUrl.vodStream(
-                        ctx.base, ctx.credentials.username, ctx.credentials.password, id,
-                        dto.containerExtension.orEmpty(),
-                    ),
+                    streamUrl = XtreamUrl.vodLocator(id, dto.containerExtension.orEmpty()),
                     kind = MediaKind.VOD,
                     tvgId = "xtream-vod-$id",
                     logoUrl = dto.streamIcon,
@@ -487,7 +499,7 @@ class XtreamSource internal constructor(
         return when (val result = client.seriesInfo(base, credentials, seriesId)) {
             is ApiResult.Err -> noteBlocked(result.error, SeriesDetailsResult::Failure)
             is ApiResult.Ok -> SeriesDetailsResult.Success(
-                result.value.toSeriesDetails(base, credentials, seriesId),
+                result.value.toSeriesDetails(seriesId),
             )
         }
     }
@@ -523,11 +535,7 @@ class XtreamSource internal constructor(
         }
     }
 
-    private fun SeriesInfoResponse.toSeriesDetails(
-        base: String,
-        credentials: Credentials,
-        seriesId: String,
-    ): SeriesDetails {
+    private fun SeriesInfoResponse.toSeriesDetails(seriesId: String): SeriesDetails {
         val seriesTitle = info?.name.orEmpty()
         val coverUrl = info?.cover
         val overview = info?.plot
@@ -542,7 +550,8 @@ class XtreamSource internal constructor(
                 val epNum = dto.episodeNum ?: (episodeList.size + 1)
                 val epTitle = dto.title?.takeIf { it.isNotBlank() } ?: "Episode $epNum"
                 val ext = dto.containerExtension.orEmpty()
-                val streamUrl = XtreamUrl.seriesStream(base, credentials.username, credentials.password, epId, ext)
+                // A locator, and so also the episode's identity in history: no credentials in either.
+                val streamUrl = XtreamUrl.seriesLocator(epId, ext)
                 val logo = dto.info?.movieImage
 
                 episodeList.add(

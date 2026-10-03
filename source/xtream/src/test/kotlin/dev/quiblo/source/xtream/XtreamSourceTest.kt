@@ -130,7 +130,8 @@ class XtreamSourceTest {
         assertEquals("News", alpha.groupTitle)
         assertEquals("alpha.epg", alpha.tvgId)
         assertEquals(MediaKind.LIVE, alpha.kind)
-        assertEquals("http://panel.example.invalid:8080/live/user/pass/101.ts", alpha.streamUrl)
+        // BUG-041: a locator is stored, never the URL with the password in it.
+        assertEquals("xtream:live/101", alpha.streamUrl)
     }
 
     @Test
@@ -146,8 +147,8 @@ class XtreamSourceTest {
 
         val channels = assertInstanceOf(SourceResult.Success::class.java, result).channels
         // stream_id 101 arrived as a number, 102 as a string; both must resolve.
-        assertTrue(channels.any { it.streamUrl.endsWith("/101.ts") })
-        assertTrue(channels.any { it.streamUrl.endsWith("/102.ts") })
+        assertTrue(channels.any { it.streamUrl == "xtream:live/101" })
+        assertTrue(channels.any { it.streamUrl == "xtream:live/102" })
         // category_id "1" as string and 2 as number both resolve to their names.
         assertEquals(setOf("News", "Sports"), channels.map { it.groupTitle }.toSet())
     }
@@ -235,7 +236,7 @@ class XtreamSourceTest {
         assertEquals(1, channels.count { it.kind == MediaKind.LIVE })
         assertEquals(1, channels.count { it.kind == MediaKind.VOD })
         assertEquals(1, channels.count { it.kind == MediaKind.SERIES })
-        assertTrue(channels.first { it.kind == MediaKind.VOD }.streamUrl.endsWith("/movie/user/pass/7.mkv"))
+        assertEquals("xtream:movie/7.mkv", channels.first { it.kind == MediaKind.VOD }.streamUrl)
     }
 
     @Test
@@ -320,7 +321,7 @@ class XtreamSourceTest {
         assertEquals("501", episode.id)
         assertEquals("Pilot", episode.title)
         assertEquals(1, episode.episodeNumber)
-        assertTrue(episode.streamUrl.endsWith("/series/user/pass/501.mp4"))
+        assertEquals("xtream:series/501.mp4", episode.streamUrl)
     }
 
     @Test

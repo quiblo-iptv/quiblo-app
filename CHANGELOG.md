@@ -44,6 +44,15 @@ Formatted after [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and ve
   still calls it active, which many do. A refresh now says so instead of loading a catalogue that
   will not play.
 
+### Security
+
+- **Your Xtream password is no longer stored in plain text (`BUG-041`).** It was meant to live only
+  in the encrypted store, and it did — but it was also written into the database inside the address
+  of every channel, film and episode, and from there into your watch history and your backups. What
+  is stored now names the stream and nothing else; the address with your password in it is put
+  together at the moment something plays, and kept only in memory. Updating rewrites what older
+  versions stored, and your place in every series is kept.
+
 ### Fixed
 
 - **Deleting a profile, or ending a guest session, deletes everything it kept (`BUG-040`).** Its

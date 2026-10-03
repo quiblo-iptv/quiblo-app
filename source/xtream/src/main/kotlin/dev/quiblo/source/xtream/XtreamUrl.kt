@@ -105,11 +105,48 @@ object XtreamUrl {
     fun playerApi(base: String): String = "$base/player_api.php"
 
     /**
+     * What is stored for a live stream instead of its URL (`BUG-041`): `xtream:live/101`.
+     *
+     * **The stored form carries no host and no credentials.** The URL a panel serves a stream from
+     * has the username and password in its path, and it used to be written to the `channels` table
+     * for every channel, film and episode — the password in SQLite in plain text, next to an
+     * encrypted store that exists precisely to keep it out of there. A locator names the stream;
+     * [resolve] turns it into a URL at the moment of playing, from the credential store, and that
+     * URL lives only in memory.
+     *
+     * Live carries no extension: which container to ask the panel for is decided when it is played.
+     */
+    fun liveLocator(streamId: String): String = "$LOCATOR_SCHEME:$LIVE/$streamId"
+
+    fun vodLocator(streamId: String, extension: String): String =
+        "$LOCATOR_SCHEME:$MOVIE/$streamId.${extension.ifBlank { DEFAULT_EXTENSION }}"
+
+    fun seriesLocator(episodeId: String, extension: String): String =
+        "$LOCATOR_SCHEME:$SERIES/$episodeId.${extension.ifBlank { DEFAULT_EXTENSION }}"
+
+    /**
+     * The playable URL for [locator], or null when [locator] is not one of this module's.
+     *
+     * The one place credentials are put into a URL, and that URL is handed straight to the player —
+     * never logged, stored or exported (AC-XT-04).
+     */
+    fun resolve(base: String, username: String, password: String, locator: String): String? {
+        val path = locator.takeIf { it.startsWith("$LOCATOR_SCHEME:") }?.substringAfter(':') ?: return null
+        val type = path.substringBefore('/', missingDelimiterValue = "")
+        val file = path.substringAfter('/', missingDelimiterValue = "")
+        return when {
+            file.isBlank() || '/' in file -> null
+            type == LIVE -> liveStream(base, username, password, file)
+            type == MOVIE || type == SERIES -> "$base/$type/$username/$password/$file"
+            else -> null
+        }
+    }
+
+    /**
      * The playable URL for a live stream.
      *
-     * Credentials are part of the path because the Xtream protocol requires it. This is
-     * the one place they legitimately appear in a URL, and that URL is handed straight to
-     * the player — it is never logged, stored in the database, or exported (AC-XT-04).
+     * Credentials are part of the path because the Xtream protocol requires it. Built only by
+     * [resolve], at play time; see [liveLocator].
      */
     fun liveStream(base: String, username: String, password: String, streamId: String): String =
         "$base/live/$username/$password/$streamId.ts"
@@ -121,4 +158,11 @@ object XtreamUrl {
         "$base/series/$username/$password/$streamId.${extension.ifBlank { "mp4" }}"
 
     private const val PROTOCOL_SEPARATOR_LENGTH = 3
+
+    /** The scheme of a stored stream reference. Never a real URL scheme, so never mistaken for one. */
+    const val LOCATOR_SCHEME = "xtream"
+    private const val LIVE = "live"
+    private const val MOVIE = "movie"
+    private const val SERIES = "series"
+    private const val DEFAULT_EXTENSION = "mp4"
 }

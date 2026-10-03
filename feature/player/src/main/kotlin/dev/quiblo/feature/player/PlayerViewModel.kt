@@ -246,7 +246,9 @@ class PlayerViewModel(
 
         viewModelScope.launch {
             val channel = channelRepository.findById(channelId) ?: return@launch
-            val playUrl = customUrl ?: channel.streamUrl
+            // What is stored is a reference; the URL - with an Xtream account's credentials in it - is built
+            // now and kept only in memory (`BUG-041`).
+            val playUrl = channelRepository.playbackUrl(channel.sourceId, customUrl ?: channel.streamUrl)
             val playTitle = customTitle ?: channel.name
             val isEpisode = customUrl != null && channel.kind == MediaKind.SERIES
             playing = PlayingItem(

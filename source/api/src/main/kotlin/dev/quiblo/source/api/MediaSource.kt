@@ -49,6 +49,16 @@ interface MediaSource {
     suspend fun load(request: SourceRequest): SourceResult
 
     /**
+     * The URL to hand the player for [locator] — what a stored channel or episode holds as its
+     * stream URL (`BUG-041`).
+     *
+     * A playlist stores real URLs and the default returns them unchanged. A source whose stream
+     * URLs carry credentials stores a locator without them and builds the URL here, at the moment
+     * of playing, so the credentials never reach the database. Must make no network request.
+     */
+    suspend fun playbackUrl(request: SourceRequest, locator: String): String = locator
+
+    /**
      * Asks the provider about the account behind [request], for a playback diagnosis (`FEAT-035`).
      *
      * Null when this kind of source has no account to ask about — a plain M3U playlist — or when

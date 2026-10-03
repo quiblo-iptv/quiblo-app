@@ -771,3 +771,31 @@ val MIGRATION_23_24 = object : Migration(23, 24) {
         )
     }
 }
+
+/**
+ * Takes the Xtream password out of every stored stream URL (`BUG-041`).
+ *
+ * Every live channel, film and episode used to be stored with `http://host/live/user/pass/101.ts`
+ * as its stream URL, and an episode's URL is also its key in every history table — so the account's
+ * password sat in plain text in SQLite, in several tables, beside the encrypted store that exists to
+ * keep it out. From 25 a locator is stored (`xtream:live/101`) and the URL is built at play time.
+ *
+ * **No column changes**: this is a data migration, and the schema at 25 is the schema at 24. It
+ * rewrites rather than deletes, so a resume point keyed by an episode's old URL is still that
+ * episode's resume point afterwards. See [rewriteStoredXtreamUrls] for which rows it touches.
+ */
+val MIGRATION_24_25 = object : Migration(24, 25) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        val ids = mutableSetOf<Long>()
+        val hosts = mutableSetOf<String>()
+        db.query("SELECT `id`, `url` FROM `sources` WHERE `kind` = 'XTREAM'").use { cursor ->
+            while (cursor.moveToNext()) {
+                ids += cursor.getLong(0)
+                cursor.getString(1)?.let(::hostOfUrl)?.let(hosts::add)
+            }
+        }
+        if (ids.isEmpty()) return
+
+        STORED_URL_COLUMNS.forEach { db.rewriteStoredXtreamUrls(it, ids, hosts) }
+    }
+}

@@ -469,6 +469,19 @@ class ChannelRepository(
     suspend fun findByStableKey(sourceId: Long, stableKey: String): Channel? =
         channelDao.findByStableKey(sourceId, stableKey)?.toDomain()
 
+    /**
+     * The URL to play for a stored stream reference — a channel's `streamUrl`, or an episode's.
+     *
+     * A source whose stream URLs carry credentials stores a locator without them and builds the URL
+     * here, at the moment of playing (`BUG-041`). Everything else is played as stored. The answer
+     * is for the player alone: it is never stored, logged or shown.
+     */
+    suspend fun playbackUrl(sourceId: Long, locator: String): String {
+        val source = sourceDao?.findById(sourceId)?.toDomain() ?: return locator
+        val mediaSource = mediaSources[source.kind] ?: return locator
+        return mediaSource.playbackUrl(SourceRequest(sourceId, source.url), locator)
+    }
+
     suspend fun getSeriesDetails(channelId: Long): SeriesDetailsResult {
         val channel = findById(channelId) ?: return SeriesDetailsResult.Failure(SourceError.NotFound)
         return getSeriesDetails(channel)

@@ -32,6 +32,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.DisplayName
@@ -69,6 +70,10 @@ class ProfileRepositoryTest {
         }
         coEvery { find(any()) } answers { rows.value.firstOrNull { it.id == firstArg<Long>() } }
         coEvery { countNamed() } answers { rows.value.count { !it.isGuest } }
+        coEvery { rename(any(), any()) } answers {
+            val id = firstArg<Long>()
+            rows.value = rows.value.map { if (it.id == id) it.copy(name = secondArg()) else it }
+        }
     }
 
     private val store: ProfileStore = mockk<ProfileStore>().apply {
@@ -202,6 +207,60 @@ class ProfileRepositoryTest {
         repository.addProfile("Sara")
 
         assertEquals(listOf("Mahmoud", "Sara"), repository.profiles.first().map { it.name })
+    }
+
+    @Test
+    @DisplayName("FEAT-038 — a profile can be renamed, and keeps everything it had")
+    fun `renaming trims the new name and keeps the same profile`() = runTest {
+        val repository = repository()
+        val profile = repository.addProfile("Mahmod")!!
+
+        assertTrue(repository.rename(profile, "  Mahmoud  "))
+
+        assertEquals(listOf("Mahmoud"), rows.value.map { it.name })
+        // Same row, same id: the favourites and resume points keyed to it are untouched.
+        assertEquals(profile.id, rows.value.single().id)
+    }
+
+    @Test
+    fun `a blank new name is refused and changes nothing`() = runTest {
+        val repository = repository()
+        val profile = repository.addProfile("Mahmoud")!!
+
+        assertFalse(repository.rename(profile, "   "))
+
+        assertEquals(listOf("Mahmoud"), rows.value.map { it.name })
+    }
+
+    @Test
+    fun `a guest is never renamed`() = runTest {
+        val repository = repository()
+        val guest = repository.startGuestSession("Guest")
+
+        assertFalse(repository.rename(guest, "Somebody"))
+
+        assertEquals(listOf("Guest"), rows.value.map { it.name })
+    }
+
+    @Test
+    fun `a profile that has gone is not renamed`() = runTest {
+        val repository = repository()
+        val profile = repository.addProfile("Mahmoud")!!
+        repository.delete(profile)
+
+        assertFalse(repository.rename(profile, "Sara"))
+    }
+
+    @Test
+    fun `the person watching sees their new name everywhere at once`() = runTest {
+        val repository = repository()
+        val profile = repository.addProfile("Mahmod")!!
+        repository.select(profile)
+        repository.awaitWatching()
+
+        repository.rename(profile, "Mahmoud")
+
+        assertEquals("Mahmoud", repository.activeProfile.first { it?.name == "Mahmoud" }?.name)
     }
 
     /**

@@ -82,6 +82,16 @@ class ProfilesViewModel(private val profiles: ProfileRepository) : ViewModel() {
         profiles.delete(profile)
     }
 
+    /** A new name for the same profile; its favourites and resume points stay (`FEAT-038`). */
+    fun rename(profile: Profile, name: String) = viewModelScope.launch {
+        profiles.rename(profile, name)
+    }
+
+    /** [avatar] is a key into the shipped face set, or null for the initial-on-a-colour fallback. */
+    fun setAvatar(profile: Profile, avatar: String?) = viewModelScope.launch {
+        profiles.setAvatar(profile, avatar)
+    }
+
     private companion object {
         const val SUBSCRIPTION_TIMEOUT_MILLIS = 5_000L
     }

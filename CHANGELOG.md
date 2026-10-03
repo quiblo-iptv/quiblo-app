@@ -29,6 +29,11 @@ Formatted after [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and ve
   technical detail for a report — the host and never the username, password or path — with **Copy
   details** on the phone, and the last twenty are kept in memory under Settings → App → Playback
   log on both apps.
+- **A profile can be renamed, and its face changed, without losing anything (`FEAT-038`).** The
+  name was fixed when the profile was made, so a typo typed on a remote — or a child's profile that
+  had grown up — could only be fixed by deleting the profile and making it again, which took its
+  favourites, its place in every film and its settings with it. Renaming keeps all of that, and the
+  new name shows everywhere at once. A guest is not renamed: it ends by leaving.
 - **An account whose subscription date has passed is recognised as expired** even when the panel
   still calls it active, which many do. A refresh now says so instead of loading a catalogue that
   will not play.

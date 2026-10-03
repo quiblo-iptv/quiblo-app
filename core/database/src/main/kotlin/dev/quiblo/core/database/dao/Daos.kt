@@ -1279,6 +1279,9 @@ interface ProfileDao {
     @Query("UPDATE profiles SET avatar = :avatar WHERE id = :id")
     suspend fun setAvatar(id: Long, avatar: String?)
 
+    @Query("UPDATE profiles SET name = :name WHERE id = :id")
+    suspend fun rename(id: Long, name: String)
+
     @Query("DELETE FROM profiles WHERE id = :id")
     suspend fun delete(id: Long)
 

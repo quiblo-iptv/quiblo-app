@@ -117,12 +117,35 @@ class ProfileRepository(
     /**
      * Changes which face a profile shows.
      *
-     * Its own method rather than a general update, because the name is the identity a
-     * household recognises a profile by and changing it is a different decision from changing
-     * a picture. Nothing else about a profile is editable today and this does not open that.
+     * Its own method rather than a general update, because the name and the face are two
+     * different decisions and each screen that edits one should not be able to touch the other.
      */
     suspend fun setAvatar(profile: Profile, avatar: String?) {
         profileDao.setAvatar(profile.id, avatar)
+    }
+
+    /**
+     * Gives a profile a new name (`FEAT-038`).
+     *
+     * **The name used to be deliberately fixed**, on the argument that it is the identity a
+     * household recognises a profile by. The owner reversed that: a typo made on a remote, or a
+     * child's profile that has grown up, should not cost the favourites and resume points that a
+     * delete-and-recreate takes with it. The id is the identity; the name is a label on it.
+     *
+     * The same rule as [addProfile] — trimmed, and never blank — and a guest is never renamed:
+     * it is a session, not somebody, and it ends by leaving. Every screen showing the active
+     * profile's name follows [activeProfile], which re-reads the row, so the new name appears
+     * everywhere without anyone being told.
+     *
+     * @return false when nothing was changed: a blank name, a guest, or a profile that has gone.
+     */
+    suspend fun rename(profile: Profile, name: String): Boolean {
+        val cleaned = name.trim()
+        val row = profileDao.find(profile.id)
+        if (cleaned.isBlank() || row == null || row.isGuest) return false
+
+        profileDao.rename(profile.id, cleaned)
+        return true
     }
 
     /**

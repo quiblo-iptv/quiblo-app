@@ -15,6 +15,17 @@ Formatted after [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and ve
 
 ## Unreleased
 
+### Fixed
+
+- **A stream the provider refuses is asked again, and is no longer called "no longer available"
+  (`BUG-034`).** Every refusal a server can give — a rejected password, a connection limit, an
+  overloaded panel — was reported in the same words as a channel that had been taken down, and was
+  never tried again. The commonest of them is a panel that has not yet released the account's one
+  connection after a channel change, and two seconds later it would have played. A refusal before
+  the first frame is now tried twice more, inside the same fifteen seconds a dead stream has always
+  been given, and only a 404 says the stream is gone. A rejected password says so. A host that does
+  not exist says it could not be reached, which it never did before.
+
 ## 0.26.3
 
 ### Fixed

@@ -149,11 +149,25 @@ enum class PlaybackStatus {
  */
 enum class PlaybackError {
     NETWORK,
+
+    /** The host could not be resolved, or refused the connection outright. */
     UNREACHABLE,
     TIMEOUT,
     UNSUPPORTED_FORMAT,
     DRM_UNSUPPORTED,
+
+    /** The server answered 404 or 410: there is nothing at that address. */
     SOURCE_GONE,
+
+    /** The server answered 401: the account's username or password was not accepted. */
+    AUTH_REJECTED,
+
+    /**
+     * The server is there and refused this request — 403, 429, 458, 509, the panel firewall's
+     * 46x family, or any 5xx. Usually a connection limit or an overloaded panel, and usually
+     * temporary, which is why it is retried and [SOURCE_GONE] is not (`BUG-034`).
+     */
+    PROVIDER_REFUSED,
     UNKNOWN,
 }
 

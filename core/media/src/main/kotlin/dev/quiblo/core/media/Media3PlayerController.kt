@@ -38,6 +38,7 @@ import androidx.media3.common.text.CueGroup
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DataSource
 import androidx.media3.datasource.DefaultDataSource
+import androidx.media3.datasource.HttpDataSource
 import androidx.media3.datasource.okhttp.OkHttpDataSource
 import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.DefaultRenderersFactory
@@ -60,6 +61,9 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import okhttp3.OkHttpClient
+import java.net.ConnectException
+import java.net.NoRouteToHostException
+import java.net.UnknownHostException
 
 /**
  * The Media3 implementation of [PlayerController].
@@ -119,6 +123,15 @@ class Media3PlayerController(
      * negative or absurd duration.
      */
     private var prepareStartedAtMillis = 0L
+
+    /**
+     * The last failure the engine reported for this item, kept through a retry.
+     *
+     * A retry clears the visible error so the screen can say "reconnecting". If the watchdog
+     * then runs out of time mid-retry, what it reports should be what actually went wrong —
+     * a provider refusing us — and not a generic timeout that hides it.
+     */
+    private var lastFailure: PlaybackError? = null
 
     private var settings = PlayerSettings()
 
@@ -244,6 +257,7 @@ class Media3PlayerController(
     override fun prepare(item: PlayableItem) {
         retryJob?.cancel()
         hasEverBeenReady = false
+        lastFailure = null
         prepareStartedAtMillis = SystemClock.uptimeMillis()
         rebuildIfNeeded(EngineProfile(settings.bufferMode, item.isLive))
         _state.value = PlaybackState(status = PlaybackStatus.BUFFERING, item = item)
@@ -275,6 +289,10 @@ class Media3PlayerController(
     override fun retry() {
         retryJob?.cancel()
         hasEverBeenReady = false
+        lastFailure = null
+        // A manual retry is a fresh attempt with a fresh budget, so the automatic retries it
+        // may earn are measured from now rather than from when the item was first opened.
+        prepareStartedAtMillis = SystemClock.uptimeMillis()
         startWatchdog()
         _state.value = _state.value.copy(
             status = PlaybackStatus.BUFFERING,
@@ -420,7 +438,7 @@ class Media3PlayerController(
                 retryJob?.cancel()
                 _state.value = _state.value.copy(
                     status = PlaybackStatus.ERROR,
-                    error = _state.value.error ?: PlaybackError.TIMEOUT,
+                    error = _state.value.error ?: lastFailure ?: PlaybackError.TIMEOUT,
                 )
             }
         }
@@ -442,45 +460,42 @@ class Media3PlayerController(
     }
 
     /**
-     * Reconnects after a stream drops.
+     * Reconnects after a failure, or reports it.
      *
      * AC-PLAY-06 requires at least three automatic attempts with backoff before the user
      * is shown an error. Streams that die for a few seconds are the norm on live IPTV, and
-     * surfacing an error immediately would make the app feel broken when it is not.
+     * surfacing an error immediately would make the app feel broken when it is not. Which
+     * failures are tried again, and when, is [nextStep] — a plain function, tested as one.
      */
     private fun scheduleRetry(error: PlaybackError) {
-        // Retrying these is pointless and only delays telling the user something true.
-        // A 404 will still be a 404, and v1 will still not support DRM.
-        val isTerminal = error == PlaybackError.SOURCE_GONE ||
-            error == PlaybackError.UNSUPPORTED_FORMAT ||
-            error == PlaybackError.DRM_UNSUPPORTED
-
-        // AC-PLAY-06's three retries are for a stream that dropped mid-playback. A URL
-        // that never worked gets reported immediately instead.
-        if (isTerminal || !hasEverBeenReady) {
-            watchdogJob?.cancel()
-            _state.value = _state.value.copy(status = PlaybackStatus.ERROR, error = error)
-            return
-        }
-
-        val attempt = _state.value.retryAttempt + 1
-
-        if (attempt > MAX_RETRIES) {
-            _state.value = _state.value.copy(status = PlaybackStatus.ERROR, error = error)
-            return
-        }
-
-        _state.value = _state.value.copy(
-            status = PlaybackStatus.BUFFERING,
-            retryAttempt = attempt,
-            error = null,
+        lastFailure = error
+        val step = nextStep(
+            error = error,
+            hasEverBeenReady = hasEverBeenReady,
+            retriesSoFar = _state.value.retryAttempt,
+            elapsedMillis = SystemClock.uptimeMillis() - prepareStartedAtMillis,
         )
 
-        retryJob?.cancel()
-        retryJob = scope.launch {
-            delay(RETRY_BASE_DELAY_MILLIS * attempt)
-            player.prepare()
-            player.playWhenReady = true
+        when (step) {
+            NextStep.GiveUp -> {
+                watchdogJob?.cancel()
+                _state.value = _state.value.copy(status = PlaybackStatus.ERROR, error = error)
+            }
+
+            is NextStep.RetryAfter -> {
+                _state.value = _state.value.copy(
+                    status = PlaybackStatus.BUFFERING,
+                    retryAttempt = step.attempt,
+                    error = null,
+                )
+
+                retryJob?.cancel()
+                retryJob = scope.launch {
+                    delay(step.delayMillis)
+                    player.prepare()
+                    player.playWhenReady = true
+                }
+            }
         }
     }
 
@@ -574,7 +589,7 @@ class Media3PlayerController(
         }
 
         override fun onPlayerError(error: PlaybackException) {
-            scheduleRetry(error.toPlaybackError())
+            scheduleRetry(classify(error.toEngineFailure()))
         }
     }
 
@@ -624,12 +639,7 @@ class Media3PlayerController(
         /** AC-PLAY-08: the engine pauses and resumes us as focus moves. */
         const val HANDLE_AUDIO_FOCUS = true
 
-        const val MAX_RETRIES = 3
-        const val RETRY_BASE_DELAY_MILLIS = 1_500L
         const val PROGRESS_INTERVAL_MILLIS = 500L
-
-        /** AC-PLAY-05: a dead stream must surface an error inside this budget. */
-        const val INITIAL_LOAD_TIMEOUT_MILLIS = 12_000L
     }
 }
 
@@ -644,31 +654,25 @@ internal data class EngineProfile(
     val isLive: Boolean,
 )
 
-/** Maps an engine exception to a typed error. No engine detail reaches the UI. */
-internal fun PlaybackException.toPlaybackError(): PlaybackError = when (errorCode) {
-    PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED,
-    PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT,
-    -> PlaybackError.TIMEOUT
-
-    PlaybackException.ERROR_CODE_IO_INVALID_HTTP_CONTENT_TYPE,
-    PlaybackException.ERROR_CODE_PARSING_CONTAINER_MALFORMED,
-    PlaybackException.ERROR_CODE_PARSING_MANIFEST_MALFORMED,
-    PlaybackException.ERROR_CODE_DECODING_FORMAT_UNSUPPORTED,
-    -> PlaybackError.UNSUPPORTED_FORMAT
-
-    // v1 ships no DRM at all (docs/FREEZE.md §3), so an encrypted stream is a clear,
-    // expected failure rather than a bug to chase.
-    PlaybackException.ERROR_CODE_DRM_SCHEME_UNSUPPORTED,
-    PlaybackException.ERROR_CODE_DRM_CONTENT_ERROR,
-    -> PlaybackError.DRM_UNSUPPORTED
-
-    PlaybackException.ERROR_CODE_IO_BAD_HTTP_STATUS,
-    PlaybackException.ERROR_CODE_IO_FILE_NOT_FOUND,
-    -> PlaybackError.SOURCE_GONE
-
-    PlaybackException.ERROR_CODE_IO_NO_PERMISSION,
-    PlaybackException.ERROR_CODE_IO_UNSPECIFIED,
-    -> PlaybackError.NETWORK
-
-    else -> PlaybackError.UNKNOWN
+/**
+ * Reduces an engine exception to the facts [classify] reads. No engine detail reaches the UI.
+ *
+ * The status is dug out of the cause chain because the engine wraps it: the exception the
+ * listener receives says only "bad HTTP status", and which status is the whole question.
+ */
+@androidx.annotation.OptIn(UnstableApi::class)
+internal fun PlaybackException.toEngineFailure(): EngineFailure {
+    val causes = generateSequence<Throwable>(this) { it.cause }.take(MAX_CAUSE_DEPTH).toList()
+    return EngineFailure(
+        errorCode = errorCode,
+        httpStatus = causes.filterIsInstance<HttpDataSource.InvalidResponseCodeException>()
+            .firstOrNull()
+            ?.responseCode,
+        hostUnreachable = causes.any {
+            it is UnknownHostException || it is ConnectException || it is NoRouteToHostException
+        },
+    )
 }
+
+/** Far enough to reach any real cause, and a stop for a chain that loops back on itself. */
+private const val MAX_CAUSE_DEPTH = 16

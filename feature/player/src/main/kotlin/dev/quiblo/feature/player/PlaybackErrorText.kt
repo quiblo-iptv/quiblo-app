@@ -40,5 +40,7 @@ fun PlaybackError?.messageRes(): Int = when (this) {
     PlaybackError.UNSUPPORTED_FORMAT -> R.string.player_error_format
     PlaybackError.DRM_UNSUPPORTED -> R.string.player_error_drm
     PlaybackError.SOURCE_GONE -> R.string.player_error_gone
+    PlaybackError.AUTH_REJECTED -> R.string.player_error_auth
+    PlaybackError.PROVIDER_REFUSED -> R.string.player_error_refused
     PlaybackError.UNKNOWN, null -> R.string.player_error_unknown
 }

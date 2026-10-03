@@ -43,7 +43,8 @@
     <string name="player_subtitles_background_solid">Solid</string>
     <string name="player_close">Close</string>
     <string name="player_live">LIVE</string>
-    <string name="player_reconnecting">Reconnecting… (attempt %1$d of 3)</string>
+    <!-- No "of N": a stream that has played gets three attempts, one that has not yet gets two. -->
+    <string name="player_reconnecting">Reconnecting… (attempt %1$d)</string>
 
     <!--
       Spoken, not shown. A spinner says nothing to a screen reader, so buffering and
@@ -58,6 +59,8 @@
     <string name="player_error_format">This stream is in a format Quiblo cannot play.</string>
     <string name="player_error_drm">This stream is copy-protected. Quiblo does not support DRM.</string>
     <string name="player_error_gone">This stream is no longer available at that address.</string>
+    <string name="player_error_auth">Your provider did not accept this account\'s username or password.</string>
+    <string name="player_error_refused">Your provider refused this stream. It may be in use on another screen.</string>
     <string name="player_error_unknown">This stream could not be played.</string>
 
     <string name="player_start_over">Start over</string>

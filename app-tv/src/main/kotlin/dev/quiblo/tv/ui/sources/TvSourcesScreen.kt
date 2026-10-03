@@ -151,8 +151,9 @@ fun TvSourcesScreen(
                         initialUrl = source.url,
                         initialUsername = editingUsername.orEmpty(),
                         isAccount = source.kind == SourceKind.XTREAM,
-                        onSave = { name, url, user, pass ->
-                            viewModel.editSource(source, name, url, user, pass).also { if (it) editing = null }
+                        initialLiveFormat = source.liveFormat,
+                        onSave = { name, url, user, pass, format ->
+                            viewModel.editSource(source, name, url, user, pass, format).also { if (it) editing = null }
                         },
                         onCancel = { editing = null },
                         modifier = Modifier.width(FORM_WIDTH),

@@ -21,6 +21,7 @@ package dev.quiblo.core.data
 import dev.quiblo.core.database.dao.ChannelDao
 import dev.quiblo.core.database.dao.FeedRowDao
 import dev.quiblo.core.database.dao.SourceDao
+import dev.quiblo.core.model.LiveFormat
 import dev.quiblo.core.model.Source
 import dev.quiblo.core.model.SourceKind
 import dev.quiblo.source.api.CredentialStore
@@ -131,12 +132,16 @@ class SourceRepository(
      * @param password for an Xtream source; empty keeps the stored one, so the form never has to
      *   show or hold the current password.
      */
+    // One parameter per field of the edit form, and that is the whole of the count.
+    @Suppress("LongParameterList")
     suspend fun editSource(
         sourceId: Long,
         name: String,
         url: String,
         username: String? = null,
         password: String? = null,
+        /** Which container live channels are asked for (`BUG-043`); null keeps the current choice. */
+        liveFormat: LiveFormat? = null,
     ): RefreshOutcome {
         val before = sourceDao.findById(sourceId)
             ?: return RefreshOutcome.Failure(SourceError.Unknown("Source not found"))
@@ -150,7 +155,13 @@ class SourceRepository(
             null
         }
 
-        sourceDao.update(before.copy(name = name.trim().ifEmpty { before.name }, url = url.trim()))
+        sourceDao.update(
+            before.copy(
+                name = name.trim().ifEmpty { before.name },
+                url = url.trim(),
+                liveFormat = liveFormat?.name ?: before.liveFormat,
+            ),
+        )
         credentialsAfter?.let { credentialStore.put(sourceId, it) }
 
         return refresh(sourceId).also { outcome ->
@@ -190,6 +201,8 @@ class SourceRepository(
                     channelDao.replaceForSource(sourceId, entities)
                 }
                 sourceDao.markRefreshed(sourceId, now())
+                // Kept from the last refresh that said, rather than cleared by one that did not (`BUG-043`).
+                result.allowedLiveFormats?.let { sourceDao.setAllowedLiveFormats(sourceId, it.joinToString(",")) }
                 RefreshOutcome.Success(sourceId, result.report)
             }
         }

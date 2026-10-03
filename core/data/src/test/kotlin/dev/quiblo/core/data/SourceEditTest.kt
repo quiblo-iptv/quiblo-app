@@ -23,6 +23,7 @@ import dev.quiblo.core.database.dao.FeedRowDao
 import dev.quiblo.core.database.dao.SourceDao
 import dev.quiblo.core.database.entity.SourceEntity
 import dev.quiblo.core.model.Channel
+import dev.quiblo.core.model.LiveFormat
 import dev.quiblo.core.model.MediaKind
 import dev.quiblo.core.model.SourceKind
 import dev.quiblo.source.api.CredentialStore
@@ -139,6 +140,31 @@ class SourceEditTest {
         repository(panel).editSource(7L, "Panel", "http://new.example.invalid", "someone", "new-pass")
 
         coVerify(exactly = 0) { sourceDao.deleteById(any()) }
+    }
+
+    @Test
+    fun `the formats a refresh reports are kept with the source (BUG-043)`() = runTest {
+        val panel = object : MediaSource {
+            override val kind = SourceKind.XTREAM
+            override suspend fun load(request: SourceRequest): SourceResult = SourceResult.Success(
+                channels = listOf(CHANNEL),
+                report = SourceReport(parsedEntries = 1, skippedEntries = 0),
+                allowedLiveFormats = setOf("m3u8", "ts"),
+            )
+        }
+
+        repository(panel).refresh(7L)
+
+        coVerify(exactly = 1) { sourceDao.setAllowedLiveFormats(7L, "m3u8,ts") }
+    }
+
+    @Test
+    fun `a live format chosen while editing is saved with the source (BUG-043)`() = runTest {
+        val panel = Panel(acceptsHost = "old.example.invalid", acceptsPassword = "old-pass")
+
+        repository(panel).editSource(7L, "Panel", row.url, "someone", "", LiveFormat.HLS)
+
+        assertEquals("HLS", row.liveFormat)
     }
 
     private companion object {

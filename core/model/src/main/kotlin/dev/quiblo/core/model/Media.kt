@@ -61,6 +61,13 @@ data class Source(
     val url: String,
     val createdAtEpochMillis: Long,
     val lastRefreshedEpochMillis: Long? = null,
+    /** Which container live channels are asked for (`BUG-043`). Only an Xtream account has a choice. */
+    val liveFormat: LiveFormat = LiveFormat.AUTO,
+    /**
+     * The live containers the provider says this account may use, lower-case (`m3u8`, `ts`), or
+     * null when it has not said. Read at each refresh.
+     */
+    val allowedLiveFormats: Set<String>? = null,
 ) {
     companion object {
         /** The id used for a source that has not been persisted yet. */
@@ -165,4 +172,17 @@ data class Channel(
      * common in hand-written playlists.
      */
     val stableKey: String get() = tvgId?.takeIf { it.isNotBlank() } ?: streamUrl
+}
+
+/**
+ * Which container a live channel is requested in (`BUG-043`).
+ *
+ * Xtream panels serve live as raw MPEG-TS (`.ts`) or as HLS (`.m3u8`), and an account may be limited
+ * to one of them. Asking for the wrong one fails every live channel on that account.
+ */
+enum class LiveFormat {
+    /** HLS when the provider says the account may use it, otherwise TS. */
+    AUTO,
+    HLS,
+    TS,
 }

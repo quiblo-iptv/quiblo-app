@@ -168,3 +168,26 @@ internal data class XtreamSubtitle(
     val language: String? = null,
     val label: String? = null,
 )
+
+/**
+ * A list of short strings — `allowed_output_formats`, `["m3u8","ts","rtmp"]` — lower-cased.
+ *
+ * Null rather than empty when the panel sent something that is not an array, so "the panel did not
+ * say" stays distinguishable from "the panel said none" (`BUG-043`).
+ */
+internal object FlexibleStringListSerializer : KSerializer<List<String>?> {
+    override val descriptor: SerialDescriptor =
+        PrimitiveSerialDescriptor("FlexibleStringList", PrimitiveKind.STRING)
+
+    override fun deserialize(decoder: Decoder): List<String>? {
+        val jsonDecoder = decoder as? JsonDecoder ?: return null
+        val array = jsonDecoder.decodeJsonElement() as? JsonArray ?: return null
+        return array.mapNotNull { element ->
+            (element as? JsonPrimitive)?.contentOrNull?.trim()?.lowercase()?.takeIf(String::isNotEmpty)
+        }
+    }
+
+    override fun serialize(encoder: Encoder, value: List<String>?) {
+        encoder.encodeString(value.orEmpty().joinToString(","))
+    }
+}

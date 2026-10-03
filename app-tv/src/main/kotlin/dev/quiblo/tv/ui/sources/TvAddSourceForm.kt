@@ -18,6 +18,7 @@
 
 package dev.quiblo.tv.ui.sources
 
+import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -37,7 +38,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import dev.quiblo.core.model.LiveFormat
 import dev.quiblo.tv.R
+import dev.quiblo.tv.ui.common.TvChip
 import dev.quiblo.tv.ui.common.TvFocusRow
 import dev.quiblo.tv.ui.common.TvTextField
 
@@ -185,13 +188,15 @@ internal fun TvEditSourceForm(
     initialUrl: String,
     initialUsername: String,
     isAccount: Boolean,
-    onSave: (name: String, url: String, username: String, password: String) -> Boolean,
+    initialLiveFormat: LiveFormat,
+    onSave: (name: String, url: String, username: String, password: String, liveFormat: LiveFormat) -> Boolean,
     onCancel: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     var name by remember(initialName) { mutableStateOf(initialName) }
     var url by remember(initialUrl) { mutableStateOf(initialUrl) }
     var username by remember(initialUsername) { mutableStateOf(initialUsername) }
+    var liveFormat by remember(initialLiveFormat) { mutableStateOf(initialLiveFormat) }
     var password by remember { mutableStateOf("") }
     var wasRejected by remember { mutableStateOf(false) }
 
@@ -239,11 +244,27 @@ internal fun TvEditSourceForm(
                 isLast = true,
                 modifier = Modifier.fillMaxWidth(),
             )
+            // Which container live channels are asked for (`BUG-043`). Every choice on screen, like
+            // every other setting on this television: seeing the alternatives is how it is understood.
+            Text(
+                text = stringResource(R.string.tv_sources_live_format),
+                color = HINT_COLOUR,
+                style = MaterialTheme.typography.bodyMedium,
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.focusGroup()) {
+                LiveFormat.entries.forEach { format ->
+                    TvChip(
+                        label = stringResource(format.tvLabelRes()),
+                        isSelected = format == liveFormat,
+                        onClick = { liveFormat = format },
+                    )
+                }
+            }
         }
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             TvFocusRow(
                 label = stringResource(R.string.tv_sources_edit_save),
-                onClick = { wasRejected = !onSave(name, url, username, password) },
+                onClick = { wasRejected = !onSave(name, url, username, password, liveFormat) },
                 modifier = Modifier.width(BUTTON_WIDTH),
                 hasGlow = true,
             )
@@ -254,4 +275,10 @@ internal fun TvEditSourceForm(
             )
         }
     }
+}
+
+private fun LiveFormat.tvLabelRes(): Int = when (this) {
+    LiveFormat.AUTO -> R.string.tv_sources_live_format_auto
+    LiveFormat.HLS -> R.string.tv_sources_live_format_hls
+    LiveFormat.TS -> R.string.tv_sources_live_format_ts
 }

@@ -53,6 +53,7 @@ class BackupRepositoryTest {
         override suspend fun delete(source: SourceEntity) = Unit
         override suspend fun deleteById(id: Long) = Unit
         override suspend fun markRefreshed(id: Long, timestamp: Long) = Unit
+        override suspend fun setAllowedLiveFormats(id: Long, formats: String) = Unit
     }
 
     private class FakeFavoriteDao(initial: List<FavoriteEntity> = emptyList()) : FavoriteDao {

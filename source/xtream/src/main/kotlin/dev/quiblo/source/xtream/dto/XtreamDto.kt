@@ -64,6 +64,10 @@ internal data class UserInfo(
     @SerialName("active_cons")
     @Serializable(FlexibleIntSerializer::class)
     val activeConnections: Int? = null,
+    /** The containers this account may stream in, lower-case: `m3u8`, `ts`, sometimes `rtmp` (`BUG-043`). */
+    @SerialName("allowed_output_formats")
+    @Serializable(FlexibleStringListSerializer::class)
+    val allowedOutputFormats: List<String>? = null,
 ) {
     /**
      * The expiry as epoch millis, or null for an account that does not expire.

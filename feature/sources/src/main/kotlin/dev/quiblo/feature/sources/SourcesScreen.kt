@@ -67,6 +67,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import dev.quiblo.core.model.LiveFormat
 import dev.quiblo.core.model.Source
 import dev.quiblo.core.model.SourceKind
 import org.koin.androidx.compose.koinViewModel
@@ -144,8 +145,8 @@ fun SourcesScreen(
             source = source,
             loadUsername = { viewModel.usernameOf(source.id) },
             onDismiss = { editing = null },
-            onConfirm = { name, url, user, password ->
-                if (viewModel.editSource(source, name, url, user, password)) editing = null
+            onConfirm = { name, url, user, password, liveFormat ->
+                if (viewModel.editSource(source, name, url, user, password, liveFormat)) editing = null
             },
         )
     }
@@ -445,9 +446,10 @@ private fun EditSourceDialog(
     source: Source,
     loadUsername: suspend () -> String,
     onDismiss: () -> Unit,
-    onConfirm: (name: String, url: String, user: String, password: String) -> Unit,
+    onConfirm: (name: String, url: String, user: String, password: String, liveFormat: LiveFormat) -> Unit,
 ) {
     val isXtream = source.kind == SourceKind.XTREAM
+    var liveFormat by remember(source.id) { mutableStateOf(source.liveFormat) }
     var name by remember(source.id) { mutableStateOf(source.name) }
     var url by remember(source.id) { mutableStateOf(source.url) }
     var username by remember(source.id) { mutableStateOf("") }
@@ -491,6 +493,7 @@ private fun EditSourceDialog(
                             .fillMaxWidth()
                             .padding(top = 12.dp),
                     )
+                    LiveFormatSelector(selected = liveFormat, onSelect = { liveFormat = it })
                 }
                 Text(
                     text = stringResource(R.string.sources_edit_keeps),
@@ -502,7 +505,7 @@ private fun EditSourceDialog(
         },
         confirmButton = {
             Button(
-                onClick = { onConfirm(name, url, username, password) },
+                onClick = { onConfirm(name, url, username, password, liveFormat) },
                 enabled = url.isNotBlank() && (!isXtream || username.isNotBlank()),
             ) {
                 Text(stringResource(R.string.sources_edit_save))
@@ -512,4 +515,42 @@ private fun EditSourceDialog(
             TextButton(onClick = onDismiss) { Text(stringResource(R.string.sources_cancel)) }
         },
     )
+}
+
+/**
+ * Which container an account's live channels are asked for (`BUG-043`).
+ *
+ * Automatic is right for nearly everybody: HLS when the provider says the account may use it, TS
+ * otherwise. The other two are for the account whose provider says one thing and serves another.
+ */
+@Composable
+private fun LiveFormatSelector(selected: LiveFormat, onSelect: (LiveFormat) -> Unit) {
+    Text(
+        text = stringResource(R.string.sources_live_format),
+        style = MaterialTheme.typography.labelLarge,
+        modifier = Modifier.padding(top = 16.dp, bottom = 8.dp),
+    )
+    SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+        LiveFormat.entries.forEachIndexed { index, format ->
+            SegmentedButton(
+                selected = format == selected,
+                onClick = { onSelect(format) },
+                shape = SegmentedButtonDefaults.itemShape(index = index, count = LiveFormat.entries.size),
+            ) {
+                Text(stringResource(format.labelRes()))
+            }
+        }
+    }
+    Text(
+        text = stringResource(R.string.sources_live_format_detail),
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(top = 4.dp),
+    )
+}
+
+private fun LiveFormat.labelRes(): Int = when (this) {
+    LiveFormat.AUTO -> R.string.sources_live_format_auto
+    LiveFormat.HLS -> R.string.sources_live_format_hls
+    LiveFormat.TS -> R.string.sources_live_format_ts
 }

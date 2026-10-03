@@ -64,6 +64,12 @@ Formatted after [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and ve
 
 ### Fixed
 
+- **Live channels play on accounts that only allow HLS, and use HLS where they can (`BUG-043`).**
+  Every live channel was asked for as a raw `.ts` stream, so an account whose provider allows only
+  HLS could not play a single one. Quiblo now reads which formats your account may use and asks for
+  HLS when it is allowed — the steadier of the two on a phone — and TS otherwise. Each Xtream source
+  has a **Live channels** setting (Automatic, HLS or TS) for the provider that says one thing and
+  serves another.
 - **Deleting a profile, or ending a guest session, deletes everything it kept (`BUG-040`).** Its
   favourites and its place in films went with it; its "not for me" marks, its remembered For You
   rows and every setting it had chosen did not. For a guest that broke the one promise guest makes —

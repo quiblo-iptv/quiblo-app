@@ -22,6 +22,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dev.quiblo.core.data.RefreshOutcome
 import dev.quiblo.core.data.SourceRepository
+import dev.quiblo.core.model.LiveFormat
 import dev.quiblo.core.model.Source
 import dev.quiblo.core.model.SourceKind
 import dev.quiblo.source.api.Credentials
@@ -136,12 +137,16 @@ class SourcesViewModel(
      *
      * @return false when the input was rejected without anything being attempted.
      */
+    // One parameter per field of the edit form, and that is the whole of the count.
+    @Suppress("LongParameterList")
     fun editSource(
         source: Source,
         name: String,
         url: String,
         username: String = "",
         password: String = "",
+        /** Which container live channels are asked for (`BUG-043`); null keeps the current choice. */
+        liveFormat: LiveFormat? = null,
     ): Boolean {
         if (url.isBlank()) return false
         if (source.kind == SourceKind.XTREAM && username.isBlank()) return false
@@ -154,6 +159,7 @@ class SourcesViewModel(
                 url = url,
                 username = username.takeIf { source.kind == SourceKind.XTREAM },
                 password = password.takeIf { source.kind == SourceKind.XTREAM },
+                liveFormat = liveFormat.takeIf { source.kind == SourceKind.XTREAM },
             )
             _addState.value = when (outcome) {
                 is RefreshOutcome.Failure -> AddSourceState.Failed(outcome.error)

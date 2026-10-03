@@ -479,7 +479,13 @@ class ChannelRepository(
     suspend fun playbackUrl(sourceId: Long, locator: String): String {
         val source = sourceDao?.findById(sourceId)?.toDomain() ?: return locator
         val mediaSource = mediaSources[source.kind] ?: return locator
-        return mediaSource.playbackUrl(SourceRequest(sourceId, source.url), locator)
+        val request = SourceRequest(
+            sourceId = sourceId,
+            location = source.url,
+            liveFormat = source.liveFormat,
+            allowedLiveFormats = source.allowedLiveFormats,
+        )
+        return mediaSource.playbackUrl(request, locator)
     }
 
     suspend fun getSeriesDetails(channelId: Long): SeriesDetailsResult {

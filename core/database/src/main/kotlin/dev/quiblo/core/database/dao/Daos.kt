@@ -72,6 +72,10 @@ interface SourceDao {
 
     @Query("UPDATE sources SET lastRefreshedEpochMillis = :timestamp WHERE id = :id")
     suspend fun markRefreshed(id: Long, timestamp: Long)
+
+    /** What the provider said the account may stream in, at the last refresh that said (`BUG-043`). */
+    @Query("UPDATE sources SET allowedLiveFormats = :formats WHERE id = :id")
+    suspend fun setAllowedLiveFormats(id: Long, formats: String)
 }
 
 /**

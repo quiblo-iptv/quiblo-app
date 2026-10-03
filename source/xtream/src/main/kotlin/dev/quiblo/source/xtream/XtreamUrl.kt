@@ -18,6 +18,8 @@
 
 package dev.quiblo.source.xtream
 
+import dev.quiblo.core.model.LiveFormat
+
 /**
  * Normalises the many shapes a user might type an Xtream base URL in.
  *
@@ -130,13 +132,20 @@ object XtreamUrl {
      * The one place credentials are put into a URL, and that URL is handed straight to the player —
      * never logged, stored or exported (AC-XT-04).
      */
-    fun resolve(base: String, username: String, password: String, locator: String): String? {
+    fun resolve(
+        base: String,
+        username: String,
+        password: String,
+        locator: String,
+        /** For a live locator: `ts` or `m3u8`, from [liveExtension]. */
+        liveExtension: String = TS,
+    ): String? {
         val path = locator.takeIf { it.startsWith("$LOCATOR_SCHEME:") }?.substringAfter(':') ?: return null
         val type = path.substringBefore('/', missingDelimiterValue = "")
         val file = path.substringAfter('/', missingDelimiterValue = "")
         return when {
             file.isBlank() || '/' in file -> null
-            type == LIVE -> liveStream(base, username, password, file)
+            type == LIVE -> liveStream(base, username, password, file, liveExtension)
             type == MOVIE || type == SERIES -> "$base/$type/$username/$password/$file"
             else -> null
         }
@@ -148,8 +157,27 @@ object XtreamUrl {
      * Credentials are part of the path because the Xtream protocol requires it. Built only by
      * [resolve], at play time; see [liveLocator].
      */
-    fun liveStream(base: String, username: String, password: String, streamId: String): String =
-        "$base/live/$username/$password/$streamId.ts"
+    fun liveStream(
+        base: String,
+        username: String,
+        password: String,
+        streamId: String,
+        extension: String = TS,
+    ): String = "$base/live/$username/$password/$streamId.$extension"
+
+    /**
+     * Which container to ask for a live stream in (`BUG-043`).
+     *
+     * It was always `.ts`, so an account limited to HLS failed on every live channel, and TS is the
+     * less forgiving of the two on a phone's network. **Auto** asks for HLS when the panel says the
+     * account may use it, and TS otherwise — including when the panel has not said, which is what
+     * every account got before this. The viewer can fix either choice per source.
+     */
+    fun liveExtension(format: LiveFormat, allowed: Set<String>?): String = when (format) {
+        LiveFormat.HLS -> HLS
+        LiveFormat.TS -> TS
+        LiveFormat.AUTO -> if (allowed?.contains(HLS) == true) HLS else TS
+    }
 
     fun vodStream(base: String, username: String, password: String, streamId: String, extension: String): String =
         "$base/movie/$username/$password/$streamId.${extension.ifBlank { "mp4" }}"
@@ -165,4 +193,6 @@ object XtreamUrl {
     private const val MOVIE = "movie"
     private const val SERIES = "series"
     private const val DEFAULT_EXTENSION = "mp4"
+    private const val HLS = "m3u8"
+    private const val TS = "ts"
 }

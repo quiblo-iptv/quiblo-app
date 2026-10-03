@@ -134,7 +134,14 @@ class XtreamSource internal constructor(
         return when (val auth = client.authenticate(base, credentials)) {
             is ApiResult.Err -> noteBlocked(auth.error, SourceResult::Failure)
             is ApiResult.Ok -> authorised(auth.value)?.let { SourceResult.Failure(it) }
-                ?: collect(base, credentials, request.sourceId)
+                ?: collect(
+                    Context(
+                        base = base,
+                        credentials = credentials,
+                        sourceId = request.sourceId,
+                        allowedLiveFormats = auth.value.userInfo?.allowedOutputFormats?.toSet(),
+                    ),
+                )
         }
     }
 
@@ -172,7 +179,13 @@ class XtreamSource internal constructor(
     override suspend fun playbackUrl(request: SourceRequest, locator: String): String {
         val base = XtreamUrl.normalize(request.location) ?: return locator
         val credentials = credentialStore.credentials(request.sourceId) ?: return locator
-        return XtreamUrl.resolve(base, credentials.username, credentials.password, locator) ?: locator
+        return XtreamUrl.resolve(
+            base = base,
+            username = credentials.username,
+            password = credentials.password,
+            locator = locator,
+            liveExtension = XtreamUrl.liveExtension(request.liveFormat, request.allowedLiveFormats),
+        ) ?: locator
     }
 
     override suspend fun accountHealth(request: SourceRequest): AccountHealth? {
@@ -230,9 +243,9 @@ class XtreamSource internal constructor(
         data class Refused(val error: SourceError) : BatchOutcome
     }
 
-    private suspend fun collect(base: String, credentials: Credentials, sourceId: Long): SourceResult {
-        val ctx = Context(base, credentials, sourceId)
-
+    private suspend fun collect(ctx: Context): SourceResult {
+        val base = ctx.base
+        val credentials = ctx.credentials
         return when (val result = client.liveStreams(base, credentials)) {
             // Live is the point of the account. If it fails, the load failed.
             is ApiResult.Err -> noteBlocked(result.error, SourceResult::Failure)
@@ -264,7 +277,7 @@ class XtreamSource internal constructor(
             is BatchOutcome.Refused -> SourceResult.Failure(vod.error)
             is BatchOutcome.Loaded -> when (val series = seriesBatch(ctx)) {
                 is BatchOutcome.Refused -> SourceResult.Failure(series.error)
-                is BatchOutcome.Loaded -> assemble(live, vod.batch, series.batch)
+                is BatchOutcome.Loaded -> assemble(live, vod.batch, series.batch, ctx.allowedLiveFormats)
             }
         }
 
@@ -321,7 +334,7 @@ class XtreamSource internal constructor(
         is ApiResult.Ok -> BatchOutcome.Loaded(map(grouping.value))
     }
 
-    private fun assemble(live: Batch, vod: Batch, series: Batch): SourceResult {
+    private fun assemble(live: Batch, vod: Batch, series: Batch, allowedLiveFormats: Set<String>?): SourceResult {
         val channels = live.channels + vod.channels + series.channels
         val skipped = live.skipped + vod.skipped + series.skipped
 
@@ -331,11 +344,17 @@ class XtreamSource internal constructor(
             SourceResult.Success(
                 channels = channels,
                 report = SourceReport(parsedEntries = channels.size, skippedEntries = skipped),
+                allowedLiveFormats = allowedLiveFormats,
             )
         }
     }
 
-    private data class Context(val base: String, val credentials: Credentials, val sourceId: Long)
+    private data class Context(
+        val base: String,
+        val credentials: Credentials,
+        val sourceId: Long,
+        val allowedLiveFormats: Set<String>? = null,
+    )
 
     private fun mapLive(
         streams: List<dev.quiblo.source.xtream.dto.LiveStreamDto>,

@@ -19,6 +19,7 @@
 package dev.quiblo.source.api
 
 import dev.quiblo.core.model.Channel
+import dev.quiblo.core.model.LiveFormat
 import dev.quiblo.core.model.SourceKind
 
 /**
@@ -88,6 +89,10 @@ interface MediaSource {
 data class SourceRequest(
     val sourceId: Long,
     val location: String,
+    /** Which container live channels are played in, for [MediaSource.playbackUrl] (`BUG-043`). */
+    val liveFormat: LiveFormat = LiveFormat.AUTO,
+    /** What the provider last said this account may use; see [SourceResult.Success.allowedLiveFormats]. */
+    val allowedLiveFormats: Set<String>? = null,
 )
 
 /** The outcome of a [MediaSource.load] call. */
@@ -100,6 +105,11 @@ sealed interface SourceResult {
     data class Success(
         val channels: List<Channel>,
         val report: SourceReport,
+        /**
+         * The live containers the provider says this account may use (`m3u8`, `ts`), lower-case,
+         * or null when it did not say (`BUG-043`). Stored with the source and read back at play time.
+         */
+        val allowedLiveFormats: Set<String>? = null,
     ) : SourceResult
 
     /** Nothing usable could be obtained. */

@@ -799,3 +799,17 @@ val MIGRATION_24_25 = object : Migration(24, 25) {
         STORED_URL_COLUMNS.forEach { db.rewriteStoredXtreamUrls(it, ids, hosts) }
     }
 }
+
+/**
+ * 25 to 26: which container a source's live channels are asked for (`BUG-043`).
+ *
+ * Two columns on `sources`, and nothing read or rewritten. Every existing source becomes `AUTO`,
+ * which — until a refresh says the account may use HLS — asks for TS exactly as before, so nothing
+ * changes for anybody until the next refresh.
+ */
+val MIGRATION_25_26 = object : Migration(25, 26) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE `sources` ADD COLUMN `liveFormat` TEXT NOT NULL DEFAULT 'AUTO'")
+        db.execSQL("ALTER TABLE `sources` ADD COLUMN `allowedLiveFormats` TEXT DEFAULT NULL")
+    }
+}

@@ -93,7 +93,7 @@ internal val STORED_URL_COLUMNS = listOf(
  * `UPDATE OR REPLACE`, because a password that changed over time leaves two old URLs for one
  * episode; both become the same locator, and the later row wins rather than the upgrade failing.
  *
- * **Behind a temporary index on the rewritten column** (`BUG-061`). Nothing indexes `streamUrl`, so
+ * **Behind a temporary index on both columns of the update's `WHERE`** (`BUG-061`). Nothing indexes `streamUrl`, so
  * in 0.27.0 each update read every row of its source and a catalogue of n titles cost n² — hours on
  * a television, inside the transaction every query waits on, so the profile chooser sat empty. The
  * index is dropped before returning: Room checks the indices at 25 against the schema, and an extra

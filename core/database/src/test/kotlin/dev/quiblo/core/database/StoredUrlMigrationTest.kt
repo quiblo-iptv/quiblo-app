@@ -188,6 +188,25 @@ class StoredUrlMigrationTest {
         assertEquals(listOf(EPISODE_LOCATOR), strings("SELECT `stableKey` FROM `picked_subtitles`"))
     }
 
+    /**
+     * `BUG-061`: the rewrite's temporary index goes with it.
+     *
+     * Room compares the indices at 25 with the exported schema and refuses to open a database with
+     * one more, so an index left behind would turn a slow upgrade into a failed one for every
+     * Xtream install. `MigrationTest` cannot see this: its upgrade has no Xtream rows to rewrite,
+     * so the index is never made there.
+     */
+    @Test
+    fun `the upgrade leaves exactly the indices it found`() {
+        seed()
+        val indices = "SELECT `name` FROM `sqlite_master` WHERE `type` = 'index' ORDER BY `name`"
+        val before = strings(indices)
+
+        MIGRATION_24_25.migrate(db)
+
+        assertEquals(before, strings(indices))
+    }
+
     @Test
     fun `an install with no xtream source is not touched`() {
         addSources(xtream = false)

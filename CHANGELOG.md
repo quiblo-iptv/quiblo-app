@@ -15,6 +15,8 @@ Formatted after [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and ve
 
 ## Unreleased
 
+## 0.27.1
+
 ### Fixed
 
 - **0.27.0 no longer gets stuck on an empty "who is watching" screen (`BUG-061`).** Upgrading to

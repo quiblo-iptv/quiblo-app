@@ -69,6 +69,8 @@ fun ProfileGate(content: @Composable () -> Unit) {
     val active by profiles.activeProfile.collectAsStateWithLifecycle()
 
     if (active == null) ProfileChooser() else content()
+    // Outside the branch, so a release can be offered to somebody who cannot get past the chooser.
+    LaunchUpdatePrompt()
 }
 
 @Composable

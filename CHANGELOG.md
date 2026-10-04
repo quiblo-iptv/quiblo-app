@@ -15,6 +15,18 @@ Formatted after [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and ve
 
 ## Unreleased
 
+### Fixed
+
+- **0.27.0 no longer gets stuck on an empty "who is watching" screen (`BUG-061`).** Upgrading to
+  0.27.0 rewrites every stored Xtream address so the password is no longer kept inside it
+  (`BUG-041`), and it did that one row at a time with nothing to look each row up by. On a real
+  Xtream catalogue, with tens of thousands of channels and films, the upgrade took minutes to hours.
+  Until it finished, every screen waited: the chooser showed no profiles and could not be passed,
+  and closing the app started the upgrade again from the beginning. It now takes seconds, and
+  nothing about the result changes — every profile, favourite and resume point is where it was.
+  **The update offer now appears on the chooser too, on both apps.** It used to be shown only
+  after a profile was picked, so a viewer stuck on the chooser was never offered the fix.
+
 ## 0.27.0
 
 ### Added

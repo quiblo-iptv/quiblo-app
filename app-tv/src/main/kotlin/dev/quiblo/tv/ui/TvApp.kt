@@ -213,7 +213,12 @@ private fun TvAppBehindConsent(onExit: () -> Unit) {
     val activeProfile by profiles.activeProfile.collectAsStateWithLifecycle()
 
     if (activeProfile == null) {
-        TvProfileScreen()
+        // The update offer over the chooser too (`BUG-061`): 0.27.0 could not get past it while a
+        // large catalogue upgraded, and the release that fixed that was only ever offered behind it.
+        Box(modifier = Modifier.fillMaxSize()) {
+            TvProfileScreen()
+            TvUpdatePrompt()
+        }
         return
     }
 

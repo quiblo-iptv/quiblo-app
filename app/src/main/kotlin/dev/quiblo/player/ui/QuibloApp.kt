@@ -18,7 +18,6 @@
 
 package dev.quiblo.player.ui
 
-import android.content.Intent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -44,9 +43,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
-import androidx.core.net.toUri
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavDestination
 import androidx.navigation.NavDestination.Companion.hasRoute
@@ -58,8 +55,6 @@ import dev.quiblo.core.data.PlayerSettingsRepository
 import dev.quiblo.designsystem.LocalAmbientArtwork
 import dev.quiblo.designsystem.ambientBackdrop
 import dev.quiblo.designsystem.rememberAmbient
-import dev.quiblo.feature.settings.LaunchUpdateViewModel
-import dev.quiblo.feature.settings.UpdateAvailableDialog
 import dev.quiblo.player.R
 import dev.quiblo.player.navigation.MovieDetailRoute
 import dev.quiblo.player.navigation.PlayerRoute
@@ -67,7 +62,6 @@ import dev.quiblo.player.navigation.QuibloNavHost
 import dev.quiblo.player.navigation.SeriesDetailRoute
 import dev.quiblo.player.navigation.SettingsRoute
 import dev.quiblo.player.navigation.TopLevelDestination
-import org.koin.androidx.compose.koinViewModel
 import org.koin.compose.koinInject
 import kotlin.reflect.KClass
 
@@ -133,36 +127,6 @@ fun QuibloApp() {
      * bar, with plain surface colour either side. Same seam the television had, same answer:
      * one full-bleed layer at the root, fed from wherever. See [LocalAmbientArtwork].
      */
-    /*
-     * "New version available", once per launch (`029` #7).
-     *
-     * Asked from the shell rather than from `Application.onCreate` so that it happens after there
-     * is something on screen — a dialog over a blank window is a dialog a viewer meets before the
-     * app. The ViewModel itself decides whether to ask at all; this only says when.
-     */
-    val context = LocalContext.current
-    val updates: LaunchUpdateViewModel = koinViewModel()
-    val newRelease by updates.available.collectAsStateWithLifecycle()
-    LaunchedEffect(Unit) { updates.check() }
-
-    newRelease?.let { release ->
-        UpdateAvailableDialog(
-            availableVersion = release.version,
-            installedVersion = updates.installedVersion,
-            // The releases page rather than a download, and the difference is deliberate. This app
-            // holds no `REQUEST_INSTALL_PACKAGES` and should not: a handset has a browser, a
-            // downloads folder and a package installer the viewer already knows, and asking for
-            // the permission to reimplement all three would be asking for the one permission
-            // AC-NFR-04 exists to keep this app free of. The television, which has none of those,
-            // is the reason that code exists there and not here.
-            onUpdate = {
-                updates.dismiss()
-                context.startActivity(Intent(Intent.ACTION_VIEW, RELEASES_PAGE.toUri()))
-            },
-            onDismiss = updates::dismiss,
-        )
-    }
-
     var ambientArtwork: String? by remember { mutableStateOf(null) }
     val ambient = rememberAmbient(ambientArtwork)
 
@@ -268,12 +232,3 @@ private fun androidx.navigation.NavHostController.navigateSingleTop(route: Any) 
         restoreState = true
     }
 }
-
-/**
- * Where *Update now* sends a handset.
- *
- * The releases page rather than the APK's own URL: the viewer arrives at a page that says what
- * changed and offers both builds by name, which is a better place to be handed an installer than a
- * download that has already started.
- */
-private const val RELEASES_PAGE = "https://github.com/quiblo-iptv/quiblo-app/releases/latest"

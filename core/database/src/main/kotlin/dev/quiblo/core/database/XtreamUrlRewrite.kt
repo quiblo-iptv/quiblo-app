@@ -92,6 +92,12 @@ internal val STORED_URL_COLUMNS = listOf(
  *
  * `UPDATE OR REPLACE`, because a password that changed over time leaves two old URLs for one
  * episode; both become the same locator, and the later row wins rather than the upgrade failing.
+ *
+ * **Behind a temporary index on both columns of the update's `WHERE`** (`BUG-061`). Nothing indexes `streamUrl`, so
+ * in 0.27.0 each update read every row of its source and a catalogue of n titles cost n² — hours on
+ * a television, inside the transaction every query waits on, so the profile chooser sat empty. The
+ * index is dropped before returning: Room checks the indices at 25 against the schema, and an extra
+ * one is an upgrade that fails.
  */
 internal fun SupportSQLiteDatabase.rewriteStoredXtreamUrls(
     target: StoredUrlColumn,
@@ -111,18 +117,30 @@ internal fun SupportSQLiteDatabase.rewriteStoredXtreamUrls(
             (target.table != "channels" && hostOfUrl(url) in xtreamHosts)
         xtreamLocatorOf(url)?.takeIf { fromXtream }?.let { Triple(sourceId, url, it) }
     }
+    if (found.isEmpty()) return
+
+    // Both columns of the WHERE, not just the URL. Given a one-column index on the URL beside
+    // `index_channels_sourceId`, SQLite has no statistics to tell them apart and picks the source
+    // index — which matches the whole catalogue, and is the quadratic plan all over again.
+    val indexed = if (target.hasSourceId) "`${target.column}`, `sourceId`" else "`${target.column}`"
+    execSQL("CREATE INDEX IF NOT EXISTS `$REWRITE_INDEX` ON `${target.table}` ($indexed)")
+    val update = compileStatement(
+        "UPDATE OR REPLACE `${target.table}` SET `${target.column}` = ? WHERE `${target.column}` = ?" +
+            if (target.hasSourceId) " AND `sourceId` = ?" else "",
+    )
     found.forEach { (sourceId, url, locator) ->
-        if (target.hasSourceId) {
-            execSQL(
-                "UPDATE OR REPLACE `${target.table}` SET `${target.column}` = ? " +
-                    "WHERE `${target.column}` = ? AND `sourceId` = ?",
-                arrayOf<Any>(locator, url, sourceId),
-            )
-        } else {
-            execSQL(
-                "UPDATE OR REPLACE `${target.table}` SET `${target.column}` = ? WHERE `${target.column}` = ?",
-                arrayOf<Any>(locator, url),
-            )
-        }
+        update.bindString(1, locator)
+        update.bindString(2, url)
+        if (target.hasSourceId) update.bindLong(SOURCE_ID_ARGUMENT, sourceId)
+        update.executeUpdateDelete()
+        update.clearBindings()
     }
+    update.close()
+    execSQL("DROP INDEX IF EXISTS `$REWRITE_INDEX`")
 }
+
+/** Lives only for the length of one table's rewrite; see [rewriteStoredXtreamUrls]. */
+private const val REWRITE_INDEX = "index_bug061_xtream_rewrite"
+
+/** The third `?` of the update, after the locator and the URL it replaces. */
+private const val SOURCE_ID_ARGUMENT = 3

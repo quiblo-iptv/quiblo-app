@@ -188,6 +188,25 @@ class StoredUrlMigrationTest {
         assertEquals(listOf(EPISODE_LOCATOR), strings("SELECT `stableKey` FROM `picked_subtitles`"))
     }
 
+    /**
+     * `BUG-061`: the rewrite's temporary index goes with it.
+     *
+     * Room compares the indices at 25 with the exported schema and refuses to open a database with
+     * one more, so an index left behind would turn a slow upgrade into a failed one for every
+     * Xtream install. `MigrationTest` cannot see this: its upgrade has no Xtream rows to rewrite,
+     * so the index is never made there.
+     */
+    @Test
+    fun `the upgrade leaves exactly the indices it found`() {
+        seed()
+        val indices = "SELECT `name` FROM `sqlite_master` WHERE `type` = 'index' ORDER BY `name`"
+        val before = strings(indices)
+
+        MIGRATION_24_25.migrate(db)
+
+        assertEquals(before, strings(indices))
+    }
+
     @Test
     fun `an install with no xtream source is not touched`() {
         addSources(xtream = false)
@@ -198,7 +217,63 @@ class StoredUrlMigrationTest {
         assertEquals(listOf("$PANEL/live/someone/s3cret/101.ts"), strings("SELECT `streamUrl` FROM `channels`"))
     }
 
+    /**
+     * `BUG-061`: 0.27.0 hung on the profile chooser for anybody with a real Xtream catalogue.
+     *
+     * Every rewritten URL was its own `UPDATE … WHERE streamUrl = ?`, and nothing indexes
+     * `streamUrl`, so each one read every row of the source: a catalogue of n titles cost n² row
+     * reads, inside the one transaction every query waits behind. Tens of thousands of films took
+     * from minutes to hours on a television, and a viewer who gave up and closed the app rolled it
+     * back to start again. The catalogue here is a small panel's; the bound is generous for CI and
+     * still far below what the quadratic version takes on it.
+     */
+    @Test
+    fun `a full catalogue upgrades in seconds, not hours`() {
+        addSources()
+        db.beginTransaction()
+        try {
+            val insert = db.compileStatement(
+                "INSERT INTO `channels` (`id`, `sourceId`, `name`, `streamUrl`, `kind`, `groupTitle`, " +
+                    "`stableKey`, `sortIndex`, `searchTitle`, `identityYear`, `scriptMask`) " +
+                    "VALUES (?, 1, 'Title', ?, 'MOVIE', 'Group', ?, ?, 'title', 0, 0)",
+            )
+            for (id in 1L..LARGE_CATALOGUE) {
+                insert.bindLong(1, id)
+                insert.bindString(2, "$PANEL/movie/someone/s3cret/$id.mkv")
+                insert.bindString(3, "key-$id")
+                insert.bindLong(4, id)
+                insert.executeInsert()
+                insert.clearBindings()
+            }
+            db.setTransactionSuccessful()
+        } finally {
+            db.endTransaction()
+        }
+
+        val started = System.nanoTime()
+        db.beginTransaction()
+        try {
+            MIGRATION_24_25.migrate(db)
+            db.setTransactionSuccessful()
+        } finally {
+            db.endTransaction()
+        }
+        val seconds = (System.nanoTime() - started) / 1e9
+
+        assertTrue("upgrading $LARGE_CATALOGUE titles took ${seconds}s", seconds < LARGE_CATALOGUE_SECONDS)
+        assertEquals(
+            listOf("0"),
+            strings("SELECT COUNT(*) FROM `channels` WHERE `streamUrl` LIKE '%s3cret%'"),
+        )
+        assertEquals(
+            listOf("xtream:movie/$LARGE_CATALOGUE.mkv"),
+            strings("SELECT `streamUrl` FROM `channels` WHERE `id` = $LARGE_CATALOGUE"),
+        )
+    }
+
     private companion object {
+        const val LARGE_CATALOGUE = 50_000L
+        const val LARGE_CATALOGUE_SECONDS = 15.0
         const val TABLE_PLACEHOLDER = "\${TABLE_NAME}"
         const val PANEL = "http://panel.example.invalid:8080"
         const val EPISODE_URL = "$PANEL/series/someone/s3cret/501.mp4"

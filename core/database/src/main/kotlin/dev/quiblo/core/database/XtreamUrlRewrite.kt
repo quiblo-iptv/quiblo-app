@@ -119,7 +119,11 @@ internal fun SupportSQLiteDatabase.rewriteStoredXtreamUrls(
     }
     if (found.isEmpty()) return
 
-    execSQL("CREATE INDEX IF NOT EXISTS `$REWRITE_INDEX` ON `${target.table}` (`${target.column}`)")
+    // Both columns of the WHERE, not just the URL. Given a one-column index on the URL beside
+    // `index_channels_sourceId`, SQLite has no statistics to tell them apart and picks the source
+    // index — which matches the whole catalogue, and is the quadratic plan all over again.
+    val indexed = if (target.hasSourceId) "`${target.column}`, `sourceId`" else "`${target.column}`"
+    execSQL("CREATE INDEX IF NOT EXISTS `$REWRITE_INDEX` ON `${target.table}` ($indexed)")
     val update = compileStatement(
         "UPDATE OR REPLACE `${target.table}` SET `${target.column}` = ? WHERE `${target.column}` = ?" +
             if (target.hasSourceId) " AND `sourceId` = ?" else "",

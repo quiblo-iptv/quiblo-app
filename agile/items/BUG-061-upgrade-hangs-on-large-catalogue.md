@@ -34,10 +34,14 @@ to anybody stuck in front of it.
 
 ## Scope
 
-- Each table's rewrite runs behind a temporary index on the rewritten column, created before the
-  updates and dropped after them, with one compiled statement re-bound per row. The work becomes
-  linear. The index must not outlive the migration: Room checks the indices at 25 against the
-  exported schema.
+- Each table's rewrite runs behind a temporary index on **both columns of its `WHERE`** — the
+  rewritten column and `sourceId` — created before the updates and dropped after them, with one
+  compiled statement re-bound per row. The work becomes linear. The index must not outlive the
+  migration: Room checks the indices at 25 against the exported schema.
+- **A one-column index on the URL is not enough**, and the first attempt at this fix was exactly
+  that. With no `ANALYZE` statistics, SQLite cannot tell it from `index_channels_sourceId` and
+  `EXPLAIN QUERY PLAN` shows it still choosing the source index: CI measured 264 s with it against
+  247 s without it. With both columns indexed the plan is a covering index search on both.
 - The update offer is drawn over the profile chooser as well as the shell, on the phone
   (`LaunchUpdatePrompt`, from `ProfileGate`) and on the television (`TvUpdatePrompt` over
   `TvProfileScreen`).
@@ -62,6 +66,9 @@ to anybody stuck in front of it.
 ## Verification
 
 - The new `StoredUrlMigrationTest` case was run on CI against the 0.27.0 migration without the
-  fix, where it fails on its time bound, and with the fix, where it passes.
+  fix, where it fails on its time bound (50 000 titles: 247 s), and with the fix, where it passes.
+- Measured with the Android SDK's `sqlite3` on the version 24 schema with 50 000 titles: the
+  0.27.0 plan took 52 s for the first 10 000 updates, and the two-column index took 0.7 s for all
+  50 000. `EXPLAIN QUERY PLAN` was checked for every table in `STORED_URL_COLUMNS`.
 - Robolectric's SQLite and `aapt2` cannot load on the development machine (a Windows Application
   Control policy), so the database and app tests for this item were run on CI only.

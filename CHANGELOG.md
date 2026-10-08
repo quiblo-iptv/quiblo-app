@@ -18,12 +18,10 @@ Formatted after [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and ve
 ### Fixed
 
 - **An episode the provider answers with nothing is asked again, and no longer called a format
-  Quiblo cannot play (`BUG-063`).** A provider still counting the account's one screen — right after
-  another film, for a few seconds — answers with an empty reply. Quiblo read that as an unknown
+  Quiblo cannot play (`BUG-063`).** A provider sometimes answers a film or an episode with an empty reply — when
+  the account's one screen is still counted, or when the file is not really there. Quiblo read that as an unknown
   format and never asked again. It is now retried twice, and if it still fails the screen says the
-  provider refused. **When every screen on the account is in use and the stream sent nothing, the
-  verdict now says so:** *Your account is already in use on 1 of 1 allowed screens*, instead of
-  *this channel is not broadcasting*, which was said about films and episodes too.
+  provider refused.
 
 ## 0.27.2
 

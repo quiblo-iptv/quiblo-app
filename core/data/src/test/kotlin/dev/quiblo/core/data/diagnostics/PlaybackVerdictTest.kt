@@ -84,18 +84,6 @@ class PlaybackVerdictTest {
         }
 
         @Test
-        fun `every screen in use and nothing at all from the stream is the connection limit`() {
-            assertEquals(Verdict.CONNECTION_LIMIT, verdict(true, full, timedOutEmpty))
-            // An empty answer: the engine calls it a container, the player a refusal.
-            assertEquals(Verdict.CONNECTION_LIMIT, verdict(true, full, StreamEvidence(StreamFault.OTHER)))
-        }
-
-        @Test
-        fun `every screen in use and a stream that sent data is not called a connection limit`() {
-            assertEquals(Verdict.UNDETERMINED, verdict(true, full, StreamEvidence(StreamFault.TIMEOUT, bytesReceived = 10)))
-        }
-
-        @Test
         fun `a refusal with screens to spare is not called a connection limit`() {
             assertEquals(Verdict.UNDETERMINED, verdict(true, healthy, status(403)))
         }

@@ -5,14 +5,11 @@
 1. `EngineFailure.receivedData` (default true); `onPlayerError` sets it from `bytesReceived`.
 2. `classify`: `PARSING_CONTAINER_UNSUPPORTED` and `PARSING_CONTAINER_MALFORMED` with no data →
    `PROVIDER_REFUSED`; with data → `UNSUPPORTED_FORMAT` as before.
-3. `healthyAccountVerdict`: at the connection limit, no status, no data, fault `TIMEOUT` or
-   `OTHER` → `CONNECTION_LIMIT`.
 
 ## Files Touched
 
 - `core/media/.../PlaybackDecisions.kt`, `core/media/.../Media3PlayerController.kt`
-- `core/data/.../diagnostics/PlaybackVerdict.kt`
-- Tests: `PlaybackDecisionsTest`, `PlaybackVerdictTest`
+- Tests: `PlaybackDecisionsTest`
 - `agile/items|plans|testing/BUG-063-*`, `CHANGELOG.md`
 
 ## Risks & Rollback

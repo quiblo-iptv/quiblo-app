@@ -147,14 +147,9 @@ private fun accountVerdict(health: AccountHealth, stream: StreamEvidence): Verdi
  * A refusal is a connection limit only when the panel *also* says every screen is in use; a
  * refusal from an account with screens to spare is not explained by anything known, and is left
  * undetermined rather than guessed at.
- *
- * So is a stream that sent nothing at all — no status, no byte — while every screen is in use
- * (`BUG-063`). That is how a panel holding its one screen answers: an empty body, or a request left
- * hanging. It used to be called a channel that is not broadcasting, on films as much as channels.
  */
 private fun healthyAccountVerdict(health: AccountHealth.Ok, stream: StreamEvidence): Verdict = when {
     health.isAtConnectionLimit && stream.httpStatus in CONNECTION_LIMIT_STATUSES -> Verdict.CONNECTION_LIMIT
-    health.isAtConnectionLimit && stream.sentNothing -> Verdict.CONNECTION_LIMIT
     stream.httpStatus in GONE_STATUSES -> Verdict.CHANNEL_OFFLINE
     stream.fault == StreamFault.TIMEOUT && !stream.receivedData -> Verdict.CHANNEL_OFFLINE
     stream.receivedData && stream.fault in FORMAT_FAULTS -> Verdict.FORMAT_UNSUPPORTED
@@ -177,9 +172,3 @@ private val GONE_STATUSES = setOf(404, 410)
 private val CONNECTION_LIMIT_STATUSES = setOf(403, 429, 458, 509)
 
 private val FORMAT_FAULTS = setOf(StreamFault.FORMAT, StreamFault.DRM)
-
-/** Connected, and the server answered with neither a status nor a byte. */
-private val StreamEvidence.sentNothing: Boolean
-    get() = httpStatus == null && !receivedData && fault in SILENT_FAULTS
-
-private val SILENT_FAULTS = setOf(StreamFault.TIMEOUT, StreamFault.OTHER)

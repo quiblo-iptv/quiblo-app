@@ -113,6 +113,14 @@ class Media3PlayerController(
      */
     private val bytesReceived = AtomicLong(0L)
 
+    /**
+     * When the last of [bytesReceived] arrived, in uptime (`BUG-062`).
+     *
+     * What tells a film the server is still sending from one it has stopped sending: the first is
+     * waited for past the initial budget, the second is loaded again.
+     */
+    private val lastByteAtMillis = AtomicLong(0L)
+
     private val _state = MutableStateFlow(PlaybackState())
     override val state: StateFlow<PlaybackState> = _state.asStateFlow()
 
@@ -161,6 +169,9 @@ class Media3PlayerController(
 
     /** Whether this item has already been tried again as HLS (`BUG-044`). Once is enough. */
     private var triedAsHls = false
+
+    /** Fresh loads the watchdog has made after a stall, for this item (`BUG-062`). */
+    private var stallReloads = 0
 
     private var settings = PlayerSettings()
 
@@ -288,10 +299,12 @@ class Media3PlayerController(
         hasEverBeenReady = false
         lastFailure = null
         triedAsHls = false
+        stallReloads = 0
         liveEdgeRejoins = 0
         lastEngineFailure = null
         lastEngineCode = null
         bytesReceived.set(0L)
+        lastByteAtMillis.set(0L)
         prepareStartedAtMillis = SystemClock.uptimeMillis()
         rebuildIfNeeded(EngineProfile(settings.bufferMode, item.isLive))
         val previous = _state.value.item
@@ -337,10 +350,12 @@ class Media3PlayerController(
         hasEverBeenReady = false
         lastFailure = null
         triedAsHls = false
+        stallReloads = 0
         liveEdgeRejoins = 0
         lastEngineFailure = null
         lastEngineCode = null
         bytesReceived.set(0L)
+        lastByteAtMillis.set(0L)
         // A manual retry is a fresh attempt with a fresh budget, so the automatic retries it
         // may earn are measured from now rather than from when the item was first opened.
         prepareStartedAtMillis = SystemClock.uptimeMillis()
@@ -512,20 +527,77 @@ class Media3PlayerController(
      * AC-PLAY-05 requires a clear error within 15 seconds and forbids hanging
      * indefinitely. Relying on the engine to report that is not enough: a server that
      * accepts the connection and then stalls produces no error at all.
+     *
+     * A film or an episode that has sent data is neither dead nor unreachable, and is given
+     * longer — see [afterLoadTimeout].
      */
     private fun startWatchdog() {
         watchdogJob?.cancel()
         watchdogJob = scope.launch {
-            delay(INITIAL_LOAD_TIMEOUT_MILLIS)
-            if (!hasEverBeenReady) {
-                retryJob?.cancel()
-                _state.value = _state.value.copy(
-                    status = PlaybackStatus.ERROR,
-                    error = _state.value.error ?: lastFailure ?: PlaybackError.TIMEOUT,
-                    failure = failureDetails(),
+            var wait = INITIAL_LOAD_TIMEOUT_MILLIS
+            while (true) {
+                delay(wait)
+                if (hasEverBeenReady) return@launch
+
+                val now = SystemClock.uptimeMillis()
+                val step = afterLoadTimeout(
+                    isLive = _state.value.item?.isLive == true,
+                    bytesReceived = bytesReceived.get(),
+                    millisSinceLastByte = now - lastByteAtMillis.get(),
+                    elapsedMillis = now - prepareStartedAtMillis,
+                    reloadsSoFar = stallReloads,
                 )
+                wait = when (step) {
+                    is LoadTimeoutStep.WaitMore -> step.delayMillis
+
+                    LoadTimeoutStep.Reload -> {
+                        reloadAfterStall()
+                        INITIAL_LOAD_TIMEOUT_MILLIS
+                    }
+
+                    LoadTimeoutStep.GiveUp -> {
+                        failOnTimeout()
+                        return@launch
+                    }
+                }
             }
         }
+    }
+
+    /**
+     * Closes a load the server stopped answering and starts it again, where it was (`BUG-062`).
+     *
+     * Stopped first, so the panel sees the hanging connection close before the new one arrives —
+     * on an account allowed one screen, the old one is the screen.
+     */
+    private fun reloadAfterStall() {
+        retryJob?.cancel()
+        stallReloads++
+        player.stop()
+        _state.value = _state.value.copy(
+            status = PlaybackStatus.BUFFERING,
+            retryAttempt = _state.value.retryAttempt + 1,
+            error = null,
+            failure = null,
+        )
+        restart()
+    }
+
+    /**
+     * Reports the timeout, and closes the load behind it (`BUG-062`).
+     *
+     * The engine used to be left loading under the error. Its connection held the account's screen
+     * while the diagnosis asked the panel about it, and *Try again* did nothing at all: `prepare()`
+     * is ignored by an engine that is not idle, so the hanging load simply carried on.
+     */
+    private fun failOnTimeout() {
+        retryJob?.cancel()
+        player.stop()
+        _state.value = _state.value.copy(
+            status = PlaybackStatus.ERROR,
+            error = _state.value.error ?: lastFailure ?: PlaybackError.TIMEOUT,
+            failure = failureDetails(),
+        )
     }
 
     private fun startProgressUpdates() {
@@ -650,7 +722,9 @@ class Media3PlayerController(
             isNetwork: Boolean,
             bytesTransferred: Int,
         ) {
-            if (isNetwork) bytesReceived.addAndGet(bytesTransferred.toLong())
+            if (!isNetwork) return
+            bytesReceived.addAndGet(bytesTransferred.toLong())
+            lastByteAtMillis.set(SystemClock.uptimeMillis())
         }
 
         override fun onTransferEnd(source: DataSource, dataSpec: DataSpec, isNetwork: Boolean) = Unit

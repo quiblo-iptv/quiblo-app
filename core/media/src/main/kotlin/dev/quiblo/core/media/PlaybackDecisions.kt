@@ -40,11 +40,13 @@ import androidx.media3.common.PlaybackException
  * @property httpStatus the status the server answered with, when the failure was a bad status.
  * @property hostUnreachable whether the cause chain says the host could not be resolved or
  *   refused the connection, rather than accepting it and going quiet.
+ * @property receivedData whether any media arrived from the network for this item.
  */
 internal data class EngineFailure(
     val errorCode: Int,
     val httpStatus: Int? = null,
     val hostUnreachable: Boolean = false,
+    val receivedData: Boolean = true,
 )
 
 /**
@@ -68,9 +70,14 @@ internal fun classify(failure: EngineFailure): PlaybackError = when (failure.err
 
     PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT -> PlaybackError.TIMEOUT
 
-    PlaybackException.ERROR_CODE_IO_INVALID_HTTP_CONTENT_TYPE,
+    // An empty answer is not a format (`BUG-063`). A panel whose one screen is still held answers
+    // 200 with no body; no extractor recognises nothing, so the engine calls it an unsupported
+    // container — terminal, never asked again. Nothing arrived, so nothing was read.
     PlaybackException.ERROR_CODE_PARSING_CONTAINER_MALFORMED,
     PlaybackException.ERROR_CODE_PARSING_CONTAINER_UNSUPPORTED,
+    -> if (failure.receivedData) PlaybackError.UNSUPPORTED_FORMAT else PlaybackError.PROVIDER_REFUSED
+
+    PlaybackException.ERROR_CODE_IO_INVALID_HTTP_CONTENT_TYPE,
     PlaybackException.ERROR_CODE_PARSING_MANIFEST_MALFORMED,
     PlaybackException.ERROR_CODE_DECODING_FORMAT_UNSUPPORTED,
     -> PlaybackError.UNSUPPORTED_FORMAT

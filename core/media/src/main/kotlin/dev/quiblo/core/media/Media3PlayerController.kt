@@ -821,7 +821,7 @@ class Media3PlayerController(
         }
 
         override fun onPlayerError(error: PlaybackException) {
-            val failure = error.toEngineFailure()
+            val failure = error.toEngineFailure().copy(receivedData = bytesReceived.get() > 0L)
             if (recoversInPlace(failure)) return
             lastEngineFailure = failure
             lastEngineCode = error.errorCodeName

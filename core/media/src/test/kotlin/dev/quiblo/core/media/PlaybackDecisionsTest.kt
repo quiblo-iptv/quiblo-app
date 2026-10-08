@@ -108,6 +108,31 @@ class PlaybackDecisionsTest {
         }
 
         @Test
+        fun `an empty answer is a refusal, not a format`() {
+            listOf(
+                PlaybackException.ERROR_CODE_PARSING_CONTAINER_UNSUPPORTED,
+                PlaybackException.ERROR_CODE_PARSING_CONTAINER_MALFORMED,
+            ).forEach { code ->
+                assertEquals(
+                    PlaybackError.PROVIDER_REFUSED,
+                    classify(EngineFailure(code, receivedData = false)),
+                    "code $code",
+                )
+            }
+        }
+
+        @Test
+        fun `an empty answer is asked again before the first frame`() {
+            val error = classify(
+                EngineFailure(PlaybackException.ERROR_CODE_PARSING_CONTAINER_UNSUPPORTED, receivedData = false),
+            )
+            assertEquals(
+                NextStep.RetryAfter(2_000L, 1),
+                nextStep(error, hasEverBeenReady = false, retriesSoFar = 0, elapsedMillis = 500L),
+            )
+        }
+
+        @Test
         fun `a missing local file is gone`() {
             assertEquals(
                 PlaybackError.SOURCE_GONE,

@@ -15,6 +15,17 @@ Formatted after [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and ve
 
 ## Unreleased
 
+### Fixed
+
+- **A film or an episode that is slow to start is no longer given up on after twelve seconds
+  (`BUG-062`).** On a panel slow to answer, most films ended on *Not sure* with `no engine error
+  (load timed out) · data received`: the server was sending, and Quiblo stopped waiting before the
+  film could begin. A film that is still receiving data is now waited for, up to forty seconds, and
+  one whose server sends the start and then goes quiet is loaded again once, from the same moment.
+  Live channels, and anything that sends nothing at all, still fail at twelve seconds. **After a
+  timeout, *Try again* works.** The load given up on used to keep running behind the error, holding
+  the account's screen, and *Try again* left it to carry on; it is now closed when the error is shown.
+
 ## 0.27.1
 
 ### Fixed

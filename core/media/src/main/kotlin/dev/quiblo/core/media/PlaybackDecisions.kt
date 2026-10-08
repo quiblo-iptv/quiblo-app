@@ -156,6 +156,70 @@ internal fun nextStep(
 /** AC-PLAY-05: a dead stream must surface an error inside this budget. */
 internal const val INITIAL_LOAD_TIMEOUT_MILLIS = 12_000L
 
+/** What to do when the initial load has run out of time without a playable frame. */
+internal sealed interface LoadTimeoutStep {
+
+    /** Data is still arriving: look again in [delayMillis]. */
+    data class WaitMore(val delayMillis: Long) : LoadTimeoutStep
+
+    /** The server sent data and then went quiet: close the connection and load the item again. */
+    data object Reload : LoadTimeoutStep
+
+    /** Report the timeout now. */
+    data object GiveUp : LoadTimeoutStep
+}
+
+/**
+ * Whether a film or an episode that has not started in time is dead, or only slow (`BUG-062`).
+ *
+ * The watchdog used to fail everything at [INITIAL_LOAD_TIMEOUT_MILLIS]. For a film that is the
+ * wrong answer more often than not: the panel answered and sent data, the engine was still reading
+ * — the header, then the index a Matroska or MP4 file keeps at its far end, each one more request
+ * to a panel that is slow to answer it — and the viewer was told *Not sure* about a film that would
+ * have played. The engine never got to report anything, because its own read timeout is longer than
+ * the budget, so there was no error to retry on either.
+ *
+ * AC-PLAY-05 is about a dead or unreachable stream, and one that has sent data is neither:
+ *
+ * - **Live, or nothing received** — the error at the budget, as before.
+ * - **Data still arriving** — wait, in steps, up to [VOD_LOAD_LIMIT_MILLIS].
+ * - **Data received, then nothing for [VOD_STALL_MILLIS]** — one fresh load, given a full budget of
+ *   its own. A request that a panel left hanging is usually answered the second time.
+ * - **Stalled again, or out of time** — the error.
+ *
+ * @param bytesReceived media bytes received for this item so far.
+ * @param millisSinceLastByte time since the last of them arrived.
+ * @param elapsedMillis time since the item was handed to the engine.
+ * @param reloadsSoFar reloads this decision has already asked for, for this item.
+ */
+internal fun afterLoadTimeout(
+    isLive: Boolean,
+    bytesReceived: Long,
+    millisSinceLastByte: Long,
+    elapsedMillis: Long,
+    reloadsSoFar: Int,
+): LoadTimeoutStep {
+    val timeLeft = VOD_LOAD_LIMIT_MILLIS - elapsedMillis
+    return when {
+        isLive || bytesReceived == 0L || timeLeft <= 0L -> LoadTimeoutStep.GiveUp
+        millisSinceLastByte < VOD_STALL_MILLIS -> LoadTimeoutStep.WaitMore(minOf(VOD_PROGRESS_CHECK_MILLIS, timeLeft))
+        reloadsSoFar < VOD_STALL_RELOADS && timeLeft >= INITIAL_LOAD_TIMEOUT_MILLIS -> LoadTimeoutStep.Reload
+        else -> LoadTimeoutStep.GiveUp
+    }
+}
+
+/** The longest a film or an episode that is receiving data is waited for before it starts. */
+internal const val VOD_LOAD_LIMIT_MILLIS = 40_000L
+
+/** No data for this long, after some arrived, is a stall rather than a slow server. */
+internal const val VOD_STALL_MILLIS = 4_000L
+
+/** How often a film still receiving data is looked at again. */
+internal const val VOD_PROGRESS_CHECK_MILLIS = 2_000L
+
+/** Fresh loads after a stall, per item. */
+internal const val VOD_STALL_RELOADS = 1
+
 /** AC-PLAY-06: attempts for a stream that dropped after it had played. */
 internal const val MAX_RETRIES = 3
 internal const val RETRY_BASE_DELAY_MILLIS = 1_500L

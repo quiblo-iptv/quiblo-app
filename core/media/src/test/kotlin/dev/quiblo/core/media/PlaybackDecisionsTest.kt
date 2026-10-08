@@ -211,4 +211,67 @@ class PlaybackDecisionsTest {
             assertEquals(NextStep.GiveUp, step(PlaybackError.AUTH_REJECTED))
         }
     }
+
+    /** `BUG-062`: a film that is slow to start is not a dead one. */
+    @Nested
+    inner class WhenTheInitialLoadRunsOutOfTime {
+
+        private fun step(
+            isLive: Boolean = false,
+            bytesReceived: Long = 500_000L,
+            millisSinceLastByte: Long = 500L,
+            elapsedMillis: Long = INITIAL_LOAD_TIMEOUT_MILLIS,
+            reloadsSoFar: Int = 0,
+        ) = afterLoadTimeout(isLive, bytesReceived, millisSinceLastByte, elapsedMillis, reloadsSoFar)
+
+        @Test
+        fun `a live channel fails at the budget, whatever arrived`() {
+            assertEquals(LoadTimeoutStep.GiveUp, step(isLive = true))
+            assertEquals(LoadTimeoutStep.GiveUp, step(isLive = true, millisSinceLastByte = 10_000L))
+        }
+
+        @Test
+        fun `a film that sent nothing fails at the budget, as AC-PLAY-05 asks`() {
+            assertEquals(LoadTimeoutStep.GiveUp, step(bytesReceived = 0L, millisSinceLastByte = Long.MAX_VALUE))
+        }
+
+        @Test
+        fun `a film still receiving data is waited for`() {
+            assertEquals(LoadTimeoutStep.WaitMore(VOD_PROGRESS_CHECK_MILLIS), step())
+            assertEquals(LoadTimeoutStep.WaitMore(VOD_PROGRESS_CHECK_MILLIS), step(elapsedMillis = 30_000L))
+        }
+
+        @Test
+        fun `the wait never runs past the limit`() {
+            assertEquals(LoadTimeoutStep.WaitMore(500L), step(elapsedMillis = VOD_LOAD_LIMIT_MILLIS - 500L))
+            assertEquals(LoadTimeoutStep.GiveUp, step(elapsedMillis = VOD_LOAD_LIMIT_MILLIS))
+        }
+
+        @Test
+        fun `a film that sent data and went quiet is loaded once more`() {
+            assertEquals(LoadTimeoutStep.Reload, step(millisSinceLastByte = VOD_STALL_MILLIS))
+        }
+
+        @Test
+        fun `a second stall is the error`() {
+            assertEquals(LoadTimeoutStep.GiveUp, step(millisSinceLastByte = 8_000L, reloadsSoFar = 1))
+        }
+
+        @Test
+        fun `no reload is started without a full budget left for it`() {
+            val tooLate = VOD_LOAD_LIMIT_MILLIS - INITIAL_LOAD_TIMEOUT_MILLIS + 1L
+            assertEquals(LoadTimeoutStep.GiveUp, step(millisSinceLastByte = 8_000L, elapsedMillis = tooLate))
+        }
+
+        @Test
+        fun `a film that keeps trickling is given up on at the limit`() {
+            var elapsed = INITIAL_LOAD_TIMEOUT_MILLIS
+            while (true) {
+                val next = step(elapsedMillis = elapsed)
+                if (next !is LoadTimeoutStep.WaitMore) break
+                elapsed += next.delayMillis
+            }
+            assertEquals(VOD_LOAD_LIMIT_MILLIS, elapsed)
+        }
+    }
 }

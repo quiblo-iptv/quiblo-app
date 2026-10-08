@@ -15,6 +15,8 @@ Formatted after [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and ve
 
 ## Unreleased
 
+## 0.27.2
+
 ### Fixed
 
 - **A film or an episode that is slow to start is no longer given up on after twelve seconds

@@ -17,6 +17,14 @@ Formatted after [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and ve
 
 ### Fixed
 
+- **A film that stutters after a skip forward or back recovers on its own (`BUG-063`).** On some
+  films, a seek left the picture playing at a fraction of its rate for as long as it was watched.
+  Quiblo now watches how many frames are being dropped, and a film or an episode that drops a
+  quarter of them for six seconds is loaded again from the same moment, with a fresh decoder and a
+  fresh connection — at most twice, so a film the device cannot play smoothly is left to play.
+  **HEVC, VP9, AV1 and Dolby Vision no longer slip onto the slow software decoder.** When the
+  television's hardware decoder was not free at that instant, the film was handed to the CPU
+  without a word. It is now tried again first, and software is only used if it fails twice.
 - **Search and the grid switch are visible in the dark theme again (#90).** On the phone, icons
   nothing else coloured were drawn black over the dark background — Search most noticeably —
   since the app's background was opened up for the ambient light behind detail screens. They now

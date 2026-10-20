@@ -42,9 +42,12 @@ import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.HttpDataSource
 import androidx.media3.datasource.TransferListener
 import androidx.media3.datasource.okhttp.OkHttpDataSource
+import androidx.media3.exoplayer.DecoderCounters
 import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.mediacodec.MediaCodecSelector
+import androidx.media3.exoplayer.mediacodec.MediaCodecUtil
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.exoplayer.upstream.DefaultLoadErrorHandlingPolicy
 import androidx.media3.exoplayer.upstream.LoadErrorHandlingPolicy
@@ -127,6 +130,7 @@ class Media3PlayerController(
     private var retryJob: Job? = null
     private var progressJob: Job? = null
     private var watchdogJob: Job? = null
+    private var frameWatchJob: Job? = null
 
     /**
      * Whether this item has ever reached a playable state.
@@ -173,6 +177,9 @@ class Media3PlayerController(
     /** Fresh loads the watchdog has made after a stall, for this item (`BUG-062`). */
     private var stallReloads = 0
 
+    /** Fresh loads the frame watch has made after sustained stutter, for this item (`BUG-063`). */
+    private var stutterReloads = 0
+
     private var settings = PlayerSettings()
 
     /**
@@ -203,6 +210,28 @@ class Media3PlayerController(
 
     private var subtitleStyle = SubtitleStyle()
 
+    /**
+     * Whether the software decoder may play the codecs a television box can only play in hardware
+     * (`BUG-063`).
+     *
+     * Read by [videoDecoderSelector] on the engine's playback thread, whenever it picks a decoder.
+     */
+    @Volatile
+    private var softwareVideoAllowed = false
+
+    /** Times the hardware decoder has been tried again after it would not start, for this item. */
+    private var hardwareDecoderRetries = 0
+
+    /** The engine's own decoder list, less what [decodersFor] leaves out. */
+    private val videoDecoderSelector = MediaCodecSelector { mimeType, requiresSecure, requiresTunneling ->
+        decodersFor(
+            mimeType = mimeType,
+            decoders = MediaCodecUtil.getDecoderInfos(mimeType, requiresSecure, requiresTunneling),
+            softwareAllowed = softwareVideoAllowed,
+            isSoftwareOnly = { it.softwareOnly },
+        )
+    }
+
     private var player: ExoPlayer = buildPlayer(builtWith)
 
     private fun buildPlayer(profile: EngineProfile): ExoPlayer = ExoPlayer.Builder(
@@ -211,8 +240,12 @@ class Media3PlayerController(
         // TV boxes: a corrupt header, a stream the vendor's codec mis-handles, and the
         // frame goes green or audio plays over a black screen. Fallback lets the engine
         // try the next decoder that claims the format — in practice the platform software
-        // one — instead of surfacing an error the user can do nothing about.
-        DefaultRenderersFactory(appContext).setEnableDecoderFallback(true),
+        // one — instead of surfacing an error the user can do nothing about. Except for the
+        // codecs only hardware can keep up with, where the software one is held back until the
+        // hardware one has been given a second chance (`BUG-063`, [decodersFor]).
+        DefaultRenderersFactory(appContext)
+            .setMediaCodecSelector(videoDecoderSelector)
+            .setEnableDecoderFallback(true),
     )
         .setMediaSourceFactory(
             DefaultMediaSourceFactory(appContext)
@@ -288,6 +321,7 @@ class Media3PlayerController(
         if (wanted == builtWith) return
 
         progressJob?.cancel()
+        frameWatchJob?.cancel()
         player.release()
         player = buildPlayer(wanted)
         builtWith = wanted
@@ -300,6 +334,9 @@ class Media3PlayerController(
         lastFailure = null
         triedAsHls = false
         stallReloads = 0
+        stutterReloads = 0
+        softwareVideoAllowed = false
+        hardwareDecoderRetries = 0
         liveEdgeRejoins = 0
         lastEngineFailure = null
         lastEngineCode = null
@@ -323,6 +360,7 @@ class Media3PlayerController(
         player.prepare()
         player.playWhenReady = true
         startProgressUpdates()
+        startFrameWatch()
     }
 
     override fun play() {
@@ -336,6 +374,7 @@ class Media3PlayerController(
     override fun stop() {
         retryJob?.cancel()
         watchdogJob?.cancel()
+        frameWatchJob?.cancel()
         player.stop()
     }
 
@@ -351,6 +390,9 @@ class Media3PlayerController(
         lastFailure = null
         triedAsHls = false
         stallReloads = 0
+        stutterReloads = 0
+        softwareVideoAllowed = false
+        hardwareDecoderRetries = 0
         liveEdgeRejoins = 0
         lastEngineFailure = null
         lastEngineCode = null
@@ -457,6 +499,7 @@ class Media3PlayerController(
         retryJob?.cancel()
         progressJob?.cancel()
         watchdogJob?.cancel()
+        frameWatchJob?.cancel()
         player.release()
         _state.value = PlaybackState()
     }
@@ -613,6 +656,71 @@ class Media3PlayerController(
                 delay(PROGRESS_INTERVAL_MILLIS)
             }
         }
+    }
+
+    /**
+     * Reloads a film or an episode that keeps dropping frames, where it is (`BUG-063`).
+     *
+     * Reported after skipping forward or back on some films: the picture carried on at a fraction
+     * of its rate until the viewer gave up. Nothing in the engine reports this — the film is
+     * playing, and no error is ever raised — so the decoder's own counts are compared every
+     * [STUTTER_WINDOW_MILLIS] and [reloadsForStutter] decides.
+     *
+     * Only while playing: a pause, a buffer or a seek starts the count again, so the frames thrown
+     * away around a seek are never held against it. Live channels are left alone; reloading one
+     * means a new connection to the panel, and that is a different trade.
+     */
+    private fun startFrameWatch() {
+        frameWatchJob?.cancel()
+        frameWatchJob = scope.launch {
+            var counters: DecoderCounters? = null
+            var rendered = 0L
+            var dropped = 0L
+            var stutteringWindows = 0
+            while (true) {
+                delay(STUTTER_WINDOW_MILLIS)
+                val current = player.videoDecoderCounters?.takeIf {
+                    player.isPlaying && _state.value.item?.isLive == false
+                }
+                current?.ensureUpdated()
+
+                // A new decoder brings new counts; its first window is only where they start.
+                val comparable = current != null && current === counters
+                val renderedNow = current?.renderedOutputBufferCount?.toLong() ?: 0L
+                val droppedNow = current?.droppedBufferCount?.toLong() ?: 0L
+                stutteringWindows = when {
+                    !comparable -> 0
+                    isStuttering(renderedNow - rendered, droppedNow - dropped) -> stutteringWindows + 1
+                    else -> 0
+                }
+                counters = current
+                rendered = renderedNow
+                dropped = droppedNow
+
+                if (reloadsForStutter(stutteringWindows, stutterReloads)) {
+                    stutteringWindows = 0
+                    counters = null
+                    reloadAfterStutter()
+                }
+            }
+        }
+    }
+
+    /**
+     * Closes the decoder and the connection and opens both again, at the same moment of the film.
+     *
+     * Not a retry: nothing failed, and the viewer is not told *Reconnecting*. It is the same
+     * stop-then-prepare as [reloadAfterStall], because a prepare on an engine that is not idle is
+     * ignored.
+     */
+    private fun reloadAfterStutter() {
+        stutterReloads++
+        // The stutter is most likely the software decoder; give the hardware one another chance.
+        softwareVideoAllowed = false
+        hardwareDecoderRetries = 0
+        player.stop()
+        _state.value = _state.value.copy(status = PlaybackStatus.BUFFERING)
+        restart()
     }
 
     /**
@@ -832,7 +940,8 @@ class Media3PlayerController(
     /**
      * Mends a failure without counting it as one, when its cause is known and fixable on the spot:
      * a live channel fallen behind (`BUG-036`), a subtitle that would not load (`BUG-045`), an HLS
-     * playlist read as a file (`BUG-044`). Each is bounded, so none can loop.
+     * playlist read as a file (`BUG-044`), a hardware decoder that would not start (`BUG-063`). Each
+     * is bounded, so none can loop.
      */
     private fun recoversInPlace(failure: EngineFailure): Boolean {
         if (rejoinsLiveEdge(failure, liveEdgeRejoins)) {
@@ -841,7 +950,37 @@ class Media3PlayerController(
             player.prepare()
             return true
         }
-        return dropSubtitles() || tryAsHls(failure)
+        return recoverDecoder(failure) || dropSubtitles() || tryAsHls(failure)
+    }
+
+    /**
+     * Starts the video decoder again when the hardware one would not start (`BUG-063`).
+     *
+     * Once more on hardware after a moment, which is usually all a decoder still held by the
+     * instance before it needs; then with the software one let in, as the fallback always did.
+     * Neither is a retry the viewer is told about: nothing is wrong with the stream.
+     */
+    private fun recoverDecoder(failure: EngineFailure): Boolean {
+        val step = afterDecoderInitFailure(failure.errorCode, softwareVideoAllowed, hardwareDecoderRetries)
+        when (step) {
+            DecoderInitStep.NotMine -> return false
+
+            is DecoderInitStep.RetryHardware -> {
+                hardwareDecoderRetries++
+                _state.value = _state.value.copy(status = PlaybackStatus.BUFFERING)
+                retryJob?.cancel()
+                retryJob = scope.launch {
+                    delay(step.delayMillis)
+                    restart()
+                }
+            }
+
+            DecoderInitStep.AllowSoftware -> {
+                softwareVideoAllowed = true
+                restart()
+            }
+        }
+        return true
     }
 
     /**

@@ -123,4 +123,56 @@
 
     <string name="player_brightness">Brightness</string>
     <string name="player_volume">Volume</string>
+
+    <!--
+      FEAT-040: the playback info overlay. A debugging aid a viewer screenshots for a bug report,
+      so the labels are short and the values are the engine's own words, untranslated.
+    -->
+    <string name="player_info_open">Playback info</string>
+    <string name="player_info_title">Playback info · %1$s</string>
+    <string name="player_info_collecting">Collecting…</string>
+    <string name="player_info_section_stream">Stream</string>
+    <string name="player_info_section_video">Video</string>
+    <string name="player_info_section_audio">Audio</string>
+    <string name="player_info_section_frames">Frames</string>
+    <string name="player_info_section_network">Network</string>
+    <string name="player_info_section_recovery">Recovery</string>
+    <string name="player_info_section_device">Device</string>
+    <string name="player_info_state">State</string>
+    <string name="player_info_kind">Kind</string>
+    <string name="player_info_kind_live">Live</string>
+    <string name="player_info_kind_vod">Film or episode</string>
+    <string name="player_info_playing">playing</string>
+    <string name="player_info_paused">paused</string>
+    <string name="player_info_container">Container</string>
+    <string name="player_info_position">Position</string>
+    <string name="player_info_buffered">Buffered ahead</string>
+    <string name="player_info_buffer_setting">Buffer · cap</string>
+    <string name="player_info_no_cap">none</string>
+    <string name="player_info_codec">Codec</string>
+    <string name="player_info_size">Size</string>
+    <string name="player_info_bitrate">Bitrate</string>
+    <string name="player_info_range">Range</string>
+    <string name="player_info_decoder">Decoder</string>
+    <string name="player_info_hardware">hardware</string>
+    <string name="player_info_software">SOFTWARE</string>
+    <string name="player_info_software_allowed">Software allowed</string>
+    <string name="player_info_yes">yes</string>
+    <string name="player_info_no">no</string>
+    <string name="player_info_history">Decoders started</string>
+    <string name="player_info_per_second">Rendered/s · dropped/s</string>
+    <string name="player_info_totals">Rendered · dropped · skipped</string>
+    <string name="player_info_worst">Worst run · to keyframe</string>
+    <string name="player_info_last_second">Last second</string>
+    <string name="player_info_estimate">Estimate</string>
+    <string name="player_info_received">Received</string>
+    <string name="player_info_last_byte">Last byte</string>
+    <string name="player_info_last_byte_ago">%1$s ago</string>
+    <string name="player_info_retries">Retries · rebuffers · load</string>
+    <string name="player_info_reloads">Reloads stall · stutter · decoder · live</string>
+    <string name="player_info_last_error">Last error</string>
+    <string name="player_info_model">Model</string>
+    <string name="player_info_display">Display</string>
+    <string name="player_info_app">Quiblo</string>
+    <string name="player_info_unknown">—</string>
 </resources>

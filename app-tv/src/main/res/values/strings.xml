@@ -355,6 +355,7 @@ Make one on the page below — it is quicker on a phone than on a remote — the
     <string name="tv_player_hint_zap">▲ to change channel</string>
     <string name="tv_player_audio">Audio</string>
     <string name="tv_player_subtitles">Subtitles</string>
+    <string name="tv_player_info">Playback info</string>
     <string name="tv_player_subtitles_off">Off</string>
 
     <!-- The next-episode banner. The count is redrawn every second, so it is its own string. -->

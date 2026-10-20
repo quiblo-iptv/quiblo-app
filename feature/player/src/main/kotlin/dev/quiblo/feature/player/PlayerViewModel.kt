@@ -30,6 +30,7 @@ import dev.quiblo.core.data.WatchEventRepository
 import dev.quiblo.core.data.WatchHistoryRepository
 import dev.quiblo.core.data.diagnostics.PlaybackDiagnoser
 import dev.quiblo.core.media.PlayableItem
+import dev.quiblo.core.media.PlaybackDiagnostics
 import dev.quiblo.core.media.PlaybackState
 import dev.quiblo.core.media.PlaybackStatus
 import dev.quiblo.core.media.PlayerController
@@ -208,6 +209,20 @@ class PlayerViewModel(
     fun cycleAspectRatio() {
         val modes = AspectRatioMode.entries
         _aspectRatioMode.value = modes[(_aspectRatioMode.value.ordinal + 1) % modes.size]
+    }
+
+    private val _diagnosticsVisible = MutableStateFlow(false)
+
+    /** Whether the playback info overlay is open (`FEAT-040`). Held here so a rotation keeps it. */
+    val diagnosticsVisible: StateFlow<Boolean> = _diagnosticsVisible.asStateFlow()
+
+    /** What the overlay shows; null while it is shut, because nothing is sampled then. */
+    val diagnostics: StateFlow<PlaybackDiagnostics?> = controller.diagnostics
+
+    fun toggleDiagnostics() {
+        val open = !_diagnosticsVisible.value
+        _diagnosticsVisible.value = open
+        controller.setDiagnosticsEnabled(open)
     }
 
     /** Skips by the configured interval, clamped so a rewind cannot run past the start. */

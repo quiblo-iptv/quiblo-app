@@ -15,6 +15,13 @@ Formatted after [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and ve
 
 ## Unreleased
 
+### Fixed
+
+- **Favourites show up on the phone again (#91).** Marking a film, a series or a channel as a
+  favourite saved it, but the phone's Favourites tab drew an empty grid: since the catalogue
+  screens moved to paging, that tab was handed the paged list, which is empty for everything but
+  the catalogue. It now gets its own list. The television was not affected.
+
 ## 0.27.3
 
 ### Fixed

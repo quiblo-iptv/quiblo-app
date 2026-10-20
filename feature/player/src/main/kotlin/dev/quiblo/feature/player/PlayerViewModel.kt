@@ -529,17 +529,23 @@ class PlayerViewModel(
      * Like [onStopped], except that nothing is restarted on the way back in: a live channel is
      * forgotten as well as stopped, so choosing the same channel again loads it afresh instead of
      * finding it already "loaded" and stopped (`BUG-037`).
+     *
+     * **A film or an episode lets go of the whole engine (`BUG-064`).** It used to be paused, and
+     * the paused engine — its hardware decoder, its buffer, still filling — was the one the next
+     * film played on. On a MediaTek television that second film dropped one frame in five from the
+     * first second to the last, until the process was killed; the first film after a fresh start
+     * never did. The place is written down first, so Resume still finds it.
      */
     fun onLeft() {
+        rememberPosition()
+        recordOccasion()
         if (isLive()) {
             controller.stop()
             stoppedLive = false
-            loadedRequest = null
         } else {
-            controller.pause()
+            controller.discardEngine()
         }
-        rememberPosition()
-        recordOccasion()
+        loadedRequest = null
     }
 
     private fun isLive(): Boolean = state.value.item?.isLive == true

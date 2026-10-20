@@ -15,6 +15,16 @@ Formatted after [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and ve
 
 ## Unreleased
 
+### Fixed
+
+- **The second film on the television no longer plays at a low frame rate (`BUG-064`).** Found
+  with the new playback info: after backing out of a film and playing another, the television
+  dropped about one frame in five for as long as it played, until the app was force-closed. Leaving
+  a film used to pause the player and keep it, and the next film played on that kept player.
+  Leaving a film now lets the player go, and every film starts on a fresh one; Resume still picks
+  up where you were. Playback info now also shows how many items the player has played, keeps
+  showing the decoder in use, and reads the screen's refresh rate live.
+
 ## 0.28.0
 
 ### Added

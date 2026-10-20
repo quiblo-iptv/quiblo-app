@@ -52,6 +52,13 @@ data class PlaybackDiagnostics(
     val maxVideoBitrate: Int?,
     /** The engine's name for the last failure on this item, if there was one. */
     val lastEngineError: String?,
+    /**
+     * Items the engine has been handed since it was built, this one included (`BUG-064`).
+     *
+     * One is a fresh engine. More is an engine carried over from what played before — which is
+     * what a film that plays well first time and badly the second time has to be checked against.
+     */
+    val engineItems: Int,
 )
 
 /** The engine's own playback state, as it reports it. */
@@ -72,7 +79,7 @@ data class VideoDiagnostics(
     val decoderName: String?,
     /** Whether that decoder runs on the CPU. Null when it is not known. */
     val decoderIsSoftware: Boolean?,
-    /** Decoders this item has started, oldest first, with when — a fallback shows up here. */
+    /** Decoders this engine has started, oldest first, with when — a fallback shows up here. */
     val decoderHistory: List<DecoderEvent>,
     /** Whether software decoders may be used for this codec right now (`BUG-063`). */
     val softwareAllowed: Boolean,

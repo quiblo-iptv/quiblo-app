@@ -48,7 +48,13 @@ internal class DiagnosticsSampler(private val appContext: Context) : AnalyticsLi
     private var audioDecoder: String? = null
     private var previous: Sample? = null
 
-    /** A new item: its decoders are its own. */
+    /**
+     * A new engine: nothing it has started yet.
+     *
+     * Not called for a new item. The engine keeps a decoder across items when the format allows,
+     * and starts no new one — so clearing the list per item showed no decoder at all for a film
+     * that was being decoded perfectly well (`BUG-064`).
+     */
     fun reset() {
         videoDecoders.clear()
         audioDecoder = null
@@ -111,6 +117,7 @@ internal class DiagnosticsSampler(private val appContext: Context) : AnalyticsLi
             bufferMode = facts.bufferMode,
             maxVideoBitrate = facts.maxVideoBitrate,
             lastEngineError = facts.lastEngineError,
+            engineItems = facts.engineItems,
         )
     }
 
@@ -199,6 +206,7 @@ internal data class ControllerFacts(
     val bufferMode: String,
     val maxVideoBitrate: Int?,
     val lastEngineError: String?,
+    val engineItems: Int,
 )
 
 private fun Int.toEngineState(): EngineState = when (this) {

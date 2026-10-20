@@ -119,6 +119,8 @@ private fun StreamSection(d: PlaybackDiagnostics) {
     val cap = d.maxVideoBitrate?.let { formatBitrate(it.toLong()) }
         ?: stringResource(R.string.player_info_no_cap)
     InfoRow(R.string.player_info_buffer_setting, "${d.bufferMode} · $cap")
+    // Amber past the first: an engine carried over from what played before (`BUG-064`).
+    InfoRow(R.string.player_info_engine_items, d.engineItems.toString(), warn = d.engineItems > 1)
 }
 
 @Composable
@@ -219,27 +221,34 @@ private fun DeviceSection(device: DeviceFacts, contentFps: Float?) {
     InfoRow(R.string.player_info_app, device.appVersion)
 }
 
-/** What does not change while the overlay is open: read once, not once a second. */
+/** The device, as the overlay draws it. */
 private class DeviceFacts(val model: String, val display: String, val refreshRate: Float, val appVersion: String)
 
+/**
+ * The model and version read once; the display read on every draw, which is once a second.
+ *
+ * A panel that switches its refresh rate for a film does so after the overlay is open, and a rate
+ * read once at opening would have shown the one it switched away from (`BUG-064`).
+ */
 @Composable
 private fun rememberDeviceFacts(): DeviceFacts {
     val context = LocalContext.current
     val view = LocalView.current
-    return remember(context, view) {
-        val display = view.display
-        val mode = display?.mode
-        val refreshRate = display?.refreshRate ?: 0f
-        DeviceFacts(
-            model = "${Build.MANUFACTURER} ${Build.MODEL} · " +
-                "Android ${Build.VERSION.RELEASE} (${Build.VERSION.SDK_INT})",
-            display = mode?.let {
-                "${it.physicalWidth}×${it.physicalHeight} @ ${formatFrameRate(refreshRate)} Hz"
-            }.orEmpty(),
-            refreshRate = refreshRate,
-            appVersion = context.versionName(),
-        )
+    val model = remember {
+        "${Build.MANUFACTURER} ${Build.MODEL} · Android ${Build.VERSION.RELEASE} (${Build.VERSION.SDK_INT})"
     }
+    val appVersion = remember(context) { context.versionName() }
+    val display = view.display
+    val mode = display?.mode
+    val refreshRate = display?.refreshRate ?: 0f
+    return DeviceFacts(
+        model = model,
+        display = mode?.let {
+            "${it.physicalWidth}×${it.physicalHeight} @ ${formatFrameRate(refreshRate)} Hz"
+        }.orEmpty(),
+        refreshRate = refreshRate,
+        appVersion = appVersion,
+    )
 }
 
 private fun Context.versionName(): String =

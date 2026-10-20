@@ -15,6 +15,8 @@ Formatted after [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and ve
 
 ## Unreleased
 
+## 0.27.3
+
 ### Fixed
 
 - **A film that stutters after a skip forward or back recovers on its own (`BUG-063`).** On some

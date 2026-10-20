@@ -17,6 +17,15 @@ Formatted after [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and ve
 
 ### Fixed
 
+- **Search and the grid switch are visible in the dark theme again (#90).** On the phone, icons
+  nothing else coloured were drawn black over the dark background — Search most noticeably —
+  since the app's background was opened up for the ambient light behind detail screens. They now
+  take the theme's own text colour, as everything else does. The light theme was not affected.
+
+## 0.27.3
+
+### Fixed
+
 - **A film that stutters after a skip forward or back recovers on its own (`BUG-063`).** On some
   films, a seek left the picture playing at a fraction of its rate for as long as it was watched.
   Quiblo now watches how many frames are being dropped, and a film or an episode that drops a
@@ -25,10 +34,6 @@ Formatted after [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and ve
   **HEVC, VP9, AV1 and Dolby Vision no longer slip onto the slow software decoder.** When the
   television's hardware decoder was not free at that instant, the film was handed to the CPU
   without a word. It is now tried again first, and software is only used if it fails twice.
-- **Search and the grid switch are visible in the dark theme again (#90).** On the phone, icons
-  nothing else coloured were drawn black over the dark background — Search most noticeably —
-  since the app's background was opened up for the ambient light behind detail screens. They now
-  take the theme's own text colour, as everything else does. The light theme was not affected.
 
 ## 0.27.2
 

@@ -149,6 +149,7 @@
     <string name="player_info_buffered">Buffered ahead</string>
     <string name="player_info_buffer_setting">Buffer · cap</string>
     <string name="player_info_no_cap">none</string>
+    <string name="player_info_engine_items">Items on this engine</string>
     <string name="player_info_codec">Codec</string>
     <string name="player_info_size">Size</string>
     <string name="player_info_bitrate">Bitrate</string>

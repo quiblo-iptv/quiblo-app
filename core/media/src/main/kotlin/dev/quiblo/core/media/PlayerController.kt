@@ -121,6 +121,17 @@ interface PlayerController {
     /** Starts or stops [diagnostics]. Survives [prepare]: the overlay stays open across items. */
     fun setDiagnosticsEnabled(enabled: Boolean)
 
+    /**
+     * Lets go of the engine — its decoders, its buffer, its connection — and gives the next
+     * [prepare] a new one (`BUG-064`).
+     *
+     * For a screen that outlives what it plays: the television's player is held by the activity,
+     * and a paused engine kept from one film to the next is what made the second film play at a
+     * fraction of its rate on a MediaTek panel, until the process was killed. The controller stays
+     * usable; only the engine inside it is replaced.
+     */
+    fun discardEngine()
+
     /** Frees the engine. The controller is unusable afterwards. */
     fun release()
 }

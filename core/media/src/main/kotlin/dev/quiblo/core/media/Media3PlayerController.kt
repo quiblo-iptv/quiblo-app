@@ -180,6 +180,9 @@ class Media3PlayerController(
     /** Fresh loads the frame watch has made after sustained stutter, for this item (`BUG-063`). */
     private var stutterReloads = 0
 
+    /** Items this engine has been handed, the current one included (`BUG-064`, for the overlay). */
+    private var engineItems = 0
+
     private var settings = PlayerSettings()
 
     /**
@@ -332,7 +335,24 @@ class Media3PlayerController(
         player.release()
         player = buildPlayer(wanted)
         builtWith = wanted
+        engineItems = 0
+        diagnosticsSampler.reset()
         attachedSurface?.let(player::setVideoSurfaceView)
+    }
+
+    override fun discardEngine() {
+        retryJob?.cancel()
+        watchdogJob?.cancel()
+        progressJob?.cancel()
+        frameWatchJob?.cancel()
+        player.release()
+        // Built now rather than on the next prepare, so nothing here is ever left holding a
+        // released engine. An idle one has no decoder and no connection: it costs nothing.
+        player = buildPlayer(builtWith)
+        engineItems = 0
+        attachedSurface?.let(player::setVideoSurfaceView)
+        diagnosticsSampler.reset()
+        _state.value = PlaybackState()
     }
 
     override fun prepare(item: PlayableItem) {
@@ -349,9 +369,9 @@ class Media3PlayerController(
         lastEngineCode = null
         bytesReceived.set(0L)
         lastByteAtMillis.set(0L)
-        diagnosticsSampler.reset()
         prepareStartedAtMillis = SystemClock.uptimeMillis()
         rebuildIfNeeded(EngineProfile(settings.bufferMode, item.isLive))
+        engineItems++
         val previous = _state.value.item
         _state.value = PlaybackState(status = PlaybackStatus.BUFFERING, item = item)
         startWatchdog()
@@ -550,6 +570,7 @@ class Media3PlayerController(
             bufferMode = builtWith.bufferMode.name,
             maxVideoBitrate = settings.maxBitrate.bitsPerSecond,
             lastEngineError = lastEngineCode,
+            engineItems = engineItems,
         )
     }
 

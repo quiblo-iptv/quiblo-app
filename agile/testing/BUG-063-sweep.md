@@ -10,4 +10,9 @@
    then it plays on as it is.
 4. Pause a film for a minute and resume. **Expect:** no reload.
 5. Play a live channel. **Expect:** unchanged.
-6. **Fail if** a smooth film is reloaded, or a reload lands anywhere but where the film was.
+6. Play an HEVC film, skip around it, and read the decoder in use (`adb shell dumpsys media.player`
+   or the engine's log). **Expect:** `c2.amlogic.hevc.decoder` (or the box's own), never
+   `c2.android.hevc.decoder`.
+7. Play an H.264 channel whose header the vendor decoder rejects, if you know one. **Expect:** it
+   still plays, as before.
+8. **Fail if** a smooth film is reloaded, or a reload lands anywhere but where the film was.

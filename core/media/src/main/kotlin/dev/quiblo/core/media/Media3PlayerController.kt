@@ -46,6 +46,8 @@ import androidx.media3.exoplayer.DecoderCounters
 import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.mediacodec.MediaCodecSelector
+import androidx.media3.exoplayer.mediacodec.MediaCodecUtil
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.exoplayer.upstream.DefaultLoadErrorHandlingPolicy
 import androidx.media3.exoplayer.upstream.LoadErrorHandlingPolicy
@@ -208,6 +210,28 @@ class Media3PlayerController(
 
     private var subtitleStyle = SubtitleStyle()
 
+    /**
+     * Whether the software decoder may play the codecs a television box can only play in hardware
+     * (`BUG-063`).
+     *
+     * Read by [videoDecoderSelector] on the engine's playback thread, whenever it picks a decoder.
+     */
+    @Volatile
+    private var softwareVideoAllowed = false
+
+    /** Times the hardware decoder has been tried again after it would not start, for this item. */
+    private var hardwareDecoderRetries = 0
+
+    /** The engine's own decoder list, less what [decodersFor] leaves out. */
+    private val videoDecoderSelector = MediaCodecSelector { mimeType, requiresSecure, requiresTunneling ->
+        decodersFor(
+            mimeType = mimeType,
+            decoders = MediaCodecUtil.getDecoderInfos(mimeType, requiresSecure, requiresTunneling),
+            softwareAllowed = softwareVideoAllowed,
+            isSoftwareOnly = { it.softwareOnly },
+        )
+    }
+
     private var player: ExoPlayer = buildPlayer(builtWith)
 
     private fun buildPlayer(profile: EngineProfile): ExoPlayer = ExoPlayer.Builder(
@@ -216,8 +240,12 @@ class Media3PlayerController(
         // TV boxes: a corrupt header, a stream the vendor's codec mis-handles, and the
         // frame goes green or audio plays over a black screen. Fallback lets the engine
         // try the next decoder that claims the format — in practice the platform software
-        // one — instead of surfacing an error the user can do nothing about.
-        DefaultRenderersFactory(appContext).setEnableDecoderFallback(true),
+        // one — instead of surfacing an error the user can do nothing about. Except for the
+        // codecs only hardware can keep up with, where the software one is held back until the
+        // hardware one has been given a second chance (`BUG-063`, [decodersFor]).
+        DefaultRenderersFactory(appContext)
+            .setMediaCodecSelector(videoDecoderSelector)
+            .setEnableDecoderFallback(true),
     )
         .setMediaSourceFactory(
             DefaultMediaSourceFactory(appContext)
@@ -307,6 +335,8 @@ class Media3PlayerController(
         triedAsHls = false
         stallReloads = 0
         stutterReloads = 0
+        softwareVideoAllowed = false
+        hardwareDecoderRetries = 0
         liveEdgeRejoins = 0
         lastEngineFailure = null
         lastEngineCode = null
@@ -361,6 +391,8 @@ class Media3PlayerController(
         triedAsHls = false
         stallReloads = 0
         stutterReloads = 0
+        softwareVideoAllowed = false
+        hardwareDecoderRetries = 0
         liveEdgeRejoins = 0
         lastEngineFailure = null
         lastEngineCode = null
@@ -683,6 +715,9 @@ class Media3PlayerController(
      */
     private fun reloadAfterStutter() {
         stutterReloads++
+        // The stutter is most likely the software decoder; give the hardware one another chance.
+        softwareVideoAllowed = false
+        hardwareDecoderRetries = 0
         player.stop()
         _state.value = _state.value.copy(status = PlaybackStatus.BUFFERING)
         restart()
@@ -905,7 +940,8 @@ class Media3PlayerController(
     /**
      * Mends a failure without counting it as one, when its cause is known and fixable on the spot:
      * a live channel fallen behind (`BUG-036`), a subtitle that would not load (`BUG-045`), an HLS
-     * playlist read as a file (`BUG-044`). Each is bounded, so none can loop.
+     * playlist read as a file (`BUG-044`), a hardware decoder that would not start (`BUG-063`). Each
+     * is bounded, so none can loop.
      */
     private fun recoversInPlace(failure: EngineFailure): Boolean {
         if (rejoinsLiveEdge(failure, liveEdgeRejoins)) {
@@ -914,7 +950,37 @@ class Media3PlayerController(
             player.prepare()
             return true
         }
-        return dropSubtitles() || tryAsHls(failure)
+        return recoverDecoder(failure) || dropSubtitles() || tryAsHls(failure)
+    }
+
+    /**
+     * Starts the video decoder again when the hardware one would not start (`BUG-063`).
+     *
+     * Once more on hardware after a moment, which is usually all a decoder still held by the
+     * instance before it needs; then with the software one let in, as the fallback always did.
+     * Neither is a retry the viewer is told about: nothing is wrong with the stream.
+     */
+    private fun recoverDecoder(failure: EngineFailure): Boolean {
+        val step = afterDecoderInitFailure(failure.errorCode, softwareVideoAllowed, hardwareDecoderRetries)
+        when (step) {
+            DecoderInitStep.NotMine -> return false
+
+            is DecoderInitStep.RetryHardware -> {
+                hardwareDecoderRetries++
+                _state.value = _state.value.copy(status = PlaybackStatus.BUFFERING)
+                retryJob?.cancel()
+                retryJob = scope.launch {
+                    delay(step.delayMillis)
+                    restart()
+                }
+            }
+
+            DecoderInitStep.AllowSoftware -> {
+                softwareVideoAllowed = true
+                restart()
+            }
+        }
+        return true
     }
 
     /**

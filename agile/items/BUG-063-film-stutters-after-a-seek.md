@@ -28,6 +28,13 @@ Not proven on a device. What is known:
   likeliest cause on a television box is a seek that has the engine set the decoder up again and
   land on the software one (`setEnableDecoderFallback(true)`) when the hardware one is not free.
 - TiviMate behaving the same points the same way: device or provider, not Quiblo's code.
+- Another Media3 player on Android TV reported the same mechanism and closed it by holding the
+  software decoder back (NuvioTV #3968, PR #3969): a hardware decoder that fails to start —
+  possibly still held by the player before it — is passed over for `c2.android.hevc.decoder`,
+  and 4K HEVC plays on the CPU with dropped frames.
+- Nothing upstream fixes it. The two closest Media3 fixes (androidx/media #3440, a progressive
+  seek retried from a stale offset, and #3457, bursty video after codec reuse on one Amlogic
+  stick) are merged but in no release up to 1.11.1, so a Media3 upgrade would not bring them.
 
 ## Scope
 
@@ -37,6 +44,11 @@ Not proven on a device. What is known:
   (`reloadsForStutter`): a fresh decoder and a fresh connection. Up to twice per item.
 - A pause, a buffer or a seek starts the count again, so the frames thrown away around a seek are
   never counted.
+- For HEVC, VP9, AV1 and Dolby Vision the software decoder is held back whenever a hardware one
+  claims the format (`decodersFor`). If the hardware one will not start, it is tried again once
+  after 1 s, and only then is the software one let in (`afterDecoderInitFailure`) — the fallback
+  is kept, it just comes last. A stutter reload holds software back again.
+- H.264, every other video codec and all audio keep the fallback as it was.
 
 ## Explicit Non-Scope
 
@@ -44,9 +56,12 @@ Not proven on a device. What is known:
 - A device that cannot play the film smoothly at all: after two reloads it is left to play.
 - Stalls with a spinner (the network not keeping up): that is `rebufferCount`, and the buffer
   setting, not this.
+- A Media3 upgrade: it brings neither upstream fix above.
 
 ## Acceptance Criteria
 
 - A film that stutters after a seek recovers within about ten seconds, at the same moment.
 - A film that plays smoothly is never reloaded, before or after a seek.
 - A film that stutters through two reloads is not reloaded a third time.
+- An HEVC film on a box with a hardware HEVC decoder never plays on `c2.android.hevc.decoder`
+  unless the hardware one has failed to start twice in a row.

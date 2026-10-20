@@ -288,6 +288,7 @@ class Media3PlayerController(
             )
             addListener(PlayerListener())
             addAnalyticsListener(diagnosticsSampler)
+            setVideoFrameMetadataListener(diagnosticsSampler)
             trackSelectionParameters = trackSelectionParameters.buildUpon()
                 .applyBitrateCap(settings.maxBitrate)
                 .build()
@@ -536,6 +537,7 @@ class Media3PlayerController(
 
     override fun setDiagnosticsEnabled(enabled: Boolean) {
         diagnosticsJob?.cancel()
+        diagnosticsSampler.recordingFrames = enabled
         if (!enabled) {
             _diagnostics.value = null
             return

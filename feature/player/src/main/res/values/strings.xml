@@ -164,6 +164,9 @@
     <string name="player_info_per_second">Rendered/s · dropped/s</string>
     <string name="player_info_totals">Rendered · dropped · skipped</string>
     <string name="player_info_worst">Worst run · to keyframe</string>
+    <string name="player_info_section_timing">On screen</string>
+    <string name="player_info_gap">Gap between frames avg · min–max</string>
+    <string name="player_info_spread">Spread · uneven gaps</string>
     <string name="player_info_last_second">Last second</string>
     <string name="player_info_estimate">Estimate</string>
     <string name="player_info_received">Received</string>

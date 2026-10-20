@@ -22,7 +22,9 @@ Formatted after [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and ve
   stutter on every pan, even with no frame dropped. While something plays, the television now moves
   to a refresh rate the film divides evenly — 24 Hz for a film, 50 Hz for a 25 fps channel — and
   back when you leave. The screen may go black for a moment as it switches. On by default; Settings →
-  Match frame rate turns it off. Playback info now lists the refresh rates your screen offers.
+  Match frame rate turns it off. Playback info now lists the refresh rates your screen offers,
+  shows how evenly frames reach the screen (the gap between them, and how much it wanders), and says
+  why each decoder was started.
 
 ## 0.28.1
 

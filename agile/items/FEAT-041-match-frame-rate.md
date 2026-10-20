@@ -24,6 +24,14 @@ Kodi, TiviMate, Plex, Netflix and Android TV itself all switch the panel's refre
 - The overlay lists the refresh rates the panel offers at its resolution, so a television that has
   no 24 Hz says so; and the total of dropped frames is no longer amber — the per-second line is the
   one that says whether frames are being dropped now.
+- **On screen** (overlay): the gaps between the times the engine scheduled the last second's frames
+  for — average, shortest, longest, spread, and the share well off the average. Every frame shown is
+  not the same as every frame shown evenly: 23.976 fps on 60 Hz alternates 33 and 50 ms, on 24 Hz
+  every gap is 41.7, and gaps that wander with no pattern are a timing fault the counts cannot show.
+  Collected on the playback thread only while the overlay is open.
+- **Why each decoder started** (overlay): `first`, a codec error, or the format change the decoder
+  before could not take, by the engine's own discard reasons. The reporter's screenshot showed a
+  second decoder four seconds into an episode and nothing to say why.
 
 ## Explicit Non-Scope
 

@@ -261,6 +261,24 @@ class BrowseViewModelTest {
         verify(exactly = 0) { channelRepository.observeBrowse(any(), any(), any(), any(), any()) }
     }
 
+    /**
+     * Favourites saved and never shown (#91).
+     *
+     * The phone's Favourites screen draws the paged stream and nothing else, and every scope but
+     * the catalogue handed it an empty one. The rows were in [BrowseUiState.items] all along.
+     */
+    @Test
+    fun `a favourite reaches the list the screen draws`() = runTest {
+        every { channelRepository.observeFavorites(SOURCE.id, any()) } returns flowOf(listOf(POPULAR_CHANNEL))
+        val viewModel = viewModelFor(BrowseFeed(MediaKind.LIVE, BrowseScope.FAVOURITES))
+
+        viewModel.listedItems.test {
+            testDispatcher.scheduler.advanceUntilIdle()
+            assertEquals(listOf(POPULAR_CHANNEL), expectMostRecentItem())
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
     @Test
     fun `the newest-first feed reads the newest-first query and nothing else`() = runTest {
         val viewModel = viewModelFor(BrowseFeed(MediaKind.VOD, BrowseScope.RECENTLY_ADDED))

@@ -54,6 +54,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flow
@@ -423,6 +424,14 @@ class BrowseViewModel(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS), BrowseUiState())
 
     /**
+     * The rows of every scope but the catalogue, as [pagedItems] hands them to the screen (#91).
+     *
+     * Only when the rows themselves change: a rating or a poster arriving changes [uiState] but
+     * not the list, and a new page for each would make the grid diff the whole list again.
+     */
+    internal val listedItems: Flow<List<Channel>> = uiState.map { it.items }.distinctUntilChanged()
+
+    /**
      * The catalogue, a page at a time, for the screens that draw it flat.
      *
      * **Separate from [uiState] rather than a field inside it, and that is Paging's own shape
@@ -434,14 +443,16 @@ class BrowseViewModel(
      * `cachedIn` is what makes the stream survive a configuration change, and it belongs to the
      * ViewModel because that is the only thing here that outlives one.
      *
-     * Empty for every scope but [BrowseScope.CATALOGUE]. Favourites is a list somebody built by
-     * hand, Recently Added is already capped at forty, and the television's poster grid groups
+     * Only [BrowseScope.CATALOGUE] is paged from the database. Favourites is a list somebody built
+     * by hand, Recently Added is already capped at forty, and the television's poster grid groups
      * its whole answer — none of the three is a list long enough to page, and two of them cannot
-     * be paged at all.
+     * be paged at all. They arrive here as one page of [listedItems] instead (#91): the phone's
+     * Favourites screen draws this stream and nothing else, and it used to be handed an empty one
+     * — so a favourite was saved and never shown.
      */
     val pagedItems: Flow<PagingData<Channel>> =
         if (feed.scope != BrowseScope.CATALOGUE) {
-            flowOf(PagingData.empty())
+            listedItems.map { PagingData.from(it) }
         } else {
             combine(
                 activeSourceId,

@@ -20,6 +20,7 @@ package dev.quiblo.core.media
 
 import androidx.media3.common.PlaybackException
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
@@ -272,6 +273,44 @@ class PlaybackDecisionsTest {
                 elapsed += next.delayMillis
             }
             assertEquals(VOD_LOAD_LIMIT_MILLIS, elapsed)
+        }
+    }
+
+    @Nested
+    inner class WhenAFilmDropsFrames {
+
+        @Test
+        fun `a quarter of the frames dropped is stutter`() {
+            assertTrue(isStuttering(renderedFrames = 36L, droppedFrames = 12L))
+            assertTrue(isStuttering(renderedFrames = 10L, droppedFrames = 38L))
+        }
+
+        @Test
+        fun `a few dropped frames are not`() {
+            assertFalse(isStuttering(renderedFrames = 46L, droppedFrames = 2L))
+            assertFalse(isStuttering(renderedFrames = 48L, droppedFrames = 0L))
+        }
+
+        @Test
+        fun `a window with too few frames says nothing`() {
+            assertFalse(isStuttering(renderedFrames = 0L, droppedFrames = STUTTER_MIN_FRAMES - 1L))
+            assertFalse(isStuttering(renderedFrames = 0L, droppedFrames = 0L))
+        }
+
+        @Test
+        fun `a moment of stutter is not reloaded`() {
+            assertFalse(reloadsForStutter(stutteringWindows = STUTTER_WINDOWS - 1, reloadsSoFar = 0))
+        }
+
+        @Test
+        fun `sustained stutter is reloaded`() {
+            assertTrue(reloadsForStutter(stutteringWindows = STUTTER_WINDOWS, reloadsSoFar = 0))
+            assertTrue(reloadsForStutter(stutteringWindows = STUTTER_WINDOWS, reloadsSoFar = STUTTER_RELOADS - 1))
+        }
+
+        @Test
+        fun `a film that stutters through every reload is left to play`() {
+            assertFalse(reloadsForStutter(stutteringWindows = STUTTER_WINDOWS * 4, reloadsSoFar = STUTTER_RELOADS))
         }
     }
 }

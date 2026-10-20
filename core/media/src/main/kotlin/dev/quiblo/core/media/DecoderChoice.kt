@@ -91,10 +91,13 @@ internal fun afterDecoderInitFailure(
  */
 internal val HARDWARE_ONLY_MIME_TYPES = setOf(
     MimeTypes.VIDEO_H265,
-    MimeTypes.VIDEO_VP9,
+    VP9_MIME_TYPE,
     MimeTypes.VIDEO_AV1,
     MimeTypes.VIDEO_DOLBY_VISION,
 )
+
+/** VP9, as Media3 names it (`MimeTypes.VIDEO_VP9`, which is marked unstable where the others are not). */
+private const val VP9_MIME_TYPE = "video/x-vnd.on2.vp9"
 
 /** Hardware retries per item before software is let in. */
 internal const val HARDWARE_DECODER_RETRIES = 1

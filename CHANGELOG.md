@@ -15,6 +15,8 @@ Formatted after [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and ve
 
 ## Unreleased
 
+## 0.29.0
+
 ### Added
 
 - **The television switches to the film's frame rate (`FEAT-041`).** A 24 frames-a-second film on a

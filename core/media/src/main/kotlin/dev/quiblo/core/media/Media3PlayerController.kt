@@ -42,6 +42,7 @@ import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.HttpDataSource
 import androidx.media3.datasource.TransferListener
 import androidx.media3.datasource.okhttp.OkHttpDataSource
+import androidx.media3.exoplayer.DecoderCounters
 import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
@@ -127,6 +128,7 @@ class Media3PlayerController(
     private var retryJob: Job? = null
     private var progressJob: Job? = null
     private var watchdogJob: Job? = null
+    private var frameWatchJob: Job? = null
 
     /**
      * Whether this item has ever reached a playable state.
@@ -172,6 +174,9 @@ class Media3PlayerController(
 
     /** Fresh loads the watchdog has made after a stall, for this item (`BUG-062`). */
     private var stallReloads = 0
+
+    /** Fresh loads the frame watch has made after sustained stutter, for this item (`BUG-063`). */
+    private var stutterReloads = 0
 
     private var settings = PlayerSettings()
 
@@ -288,6 +293,7 @@ class Media3PlayerController(
         if (wanted == builtWith) return
 
         progressJob?.cancel()
+        frameWatchJob?.cancel()
         player.release()
         player = buildPlayer(wanted)
         builtWith = wanted
@@ -300,6 +306,7 @@ class Media3PlayerController(
         lastFailure = null
         triedAsHls = false
         stallReloads = 0
+        stutterReloads = 0
         liveEdgeRejoins = 0
         lastEngineFailure = null
         lastEngineCode = null
@@ -323,6 +330,7 @@ class Media3PlayerController(
         player.prepare()
         player.playWhenReady = true
         startProgressUpdates()
+        startFrameWatch()
     }
 
     override fun play() {
@@ -336,6 +344,7 @@ class Media3PlayerController(
     override fun stop() {
         retryJob?.cancel()
         watchdogJob?.cancel()
+        frameWatchJob?.cancel()
         player.stop()
     }
 
@@ -351,6 +360,7 @@ class Media3PlayerController(
         lastFailure = null
         triedAsHls = false
         stallReloads = 0
+        stutterReloads = 0
         liveEdgeRejoins = 0
         lastEngineFailure = null
         lastEngineCode = null
@@ -457,6 +467,7 @@ class Media3PlayerController(
         retryJob?.cancel()
         progressJob?.cancel()
         watchdogJob?.cancel()
+        frameWatchJob?.cancel()
         player.release()
         _state.value = PlaybackState()
     }
@@ -613,6 +624,68 @@ class Media3PlayerController(
                 delay(PROGRESS_INTERVAL_MILLIS)
             }
         }
+    }
+
+    /**
+     * Reloads a film or an episode that keeps dropping frames, where it is (`BUG-063`).
+     *
+     * Reported after skipping forward or back on some films: the picture carried on at a fraction
+     * of its rate until the viewer gave up. Nothing in the engine reports this — the film is
+     * playing, and no error is ever raised — so the decoder's own counts are compared every
+     * [STUTTER_WINDOW_MILLIS] and [reloadsForStutter] decides.
+     *
+     * Only while playing: a pause, a buffer or a seek starts the count again, so the frames thrown
+     * away around a seek are never held against it. Live channels are left alone; reloading one
+     * means a new connection to the panel, and that is a different trade.
+     */
+    private fun startFrameWatch() {
+        frameWatchJob?.cancel()
+        frameWatchJob = scope.launch {
+            var counters: DecoderCounters? = null
+            var rendered = 0L
+            var dropped = 0L
+            var stutteringWindows = 0
+            while (true) {
+                delay(STUTTER_WINDOW_MILLIS)
+                val current = player.videoDecoderCounters?.takeIf {
+                    player.isPlaying && _state.value.item?.isLive == false
+                }
+                current?.ensureUpdated()
+
+                // A new decoder brings new counts; its first window is only where they start.
+                val comparable = current != null && current === counters
+                val renderedNow = current?.renderedOutputBufferCount?.toLong() ?: 0L
+                val droppedNow = current?.droppedBufferCount?.toLong() ?: 0L
+                stutteringWindows = when {
+                    !comparable -> 0
+                    isStuttering(renderedNow - rendered, droppedNow - dropped) -> stutteringWindows + 1
+                    else -> 0
+                }
+                counters = current
+                rendered = renderedNow
+                dropped = droppedNow
+
+                if (reloadsForStutter(stutteringWindows, stutterReloads)) {
+                    stutteringWindows = 0
+                    counters = null
+                    reloadAfterStutter()
+                }
+            }
+        }
+    }
+
+    /**
+     * Closes the decoder and the connection and opens both again, at the same moment of the film.
+     *
+     * Not a retry: nothing failed, and the viewer is not told *Reconnecting*. It is the same
+     * stop-then-prepare as [reloadAfterStall], because a prepare on an engine that is not idle is
+     * ignored.
+     */
+    private fun reloadAfterStutter() {
+        stutterReloads++
+        player.stop()
+        _state.value = _state.value.copy(status = PlaybackStatus.BUFFERING)
+        restart()
     }
 
     /**

@@ -15,6 +15,14 @@ Formatted after [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and ve
 
 ## Unreleased
 
+### Fixed
+
+- **A film that stutters after a skip forward or back recovers on its own (`BUG-063`).** On some
+  films, a seek left the picture playing at a fraction of its rate for as long as it was watched.
+  Quiblo now watches how many frames are being dropped, and a film or an episode that drops a
+  quarter of them for six seconds is loaded again from the same moment, with a fresh decoder and a
+  fresh connection — at most twice, so a film the device cannot play smoothly is left to play.
+
 ## 0.27.2
 
 ### Fixed

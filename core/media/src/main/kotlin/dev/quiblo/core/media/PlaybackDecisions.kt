@@ -319,3 +319,53 @@ private val KNOWN_EXTENSIONS = setOf(
     "m3u8", "mpd", "ism", "isml", "ts", "mp4", "m4v", "m4a", "mkv", "webm", "mov", "avi", "flv",
     "mp3", "aac", "ac3", "ogg", "wav",
 )
+
+/**
+ * Whether a stretch of playback dropped enough of its frames to be seen as stutter (`BUG-063`).
+ *
+ * The decoder hands each frame over on time or late, and a late one is dropped rather than shown.
+ * A few drops are normal — the first frames after a seek, a moment of load on the device — and are
+ * not counted here. A quarter of every frame, for seconds on end, is the film playing at a fraction
+ * of its rate: the "low fps" a viewer sees after skipping forward or back on some films.
+ *
+ * @param renderedFrames frames shown during the window.
+ * @param droppedFrames frames dropped during it.
+ */
+internal fun isStuttering(renderedFrames: Long, droppedFrames: Long): Boolean {
+    val decoded = renderedFrames + droppedFrames
+    return decoded >= STUTTER_MIN_FRAMES && droppedFrames * PERCENT >= decoded * STUTTER_DROP_PERCENT
+}
+
+/**
+ * Whether stutter has gone on long enough to load the film again where it is (`BUG-063`).
+ *
+ * The stutter does not end on its own. A fresh load closes the decoder and the connection and
+ * picks both again, which is the one thing the player can do about it without the viewer. The
+ * likeliest cause is the decoder: a seek that has the engine set it up again can land on the
+ * device's software one, when the hardware one is not free at that instant, and a software decoder
+ * on a television box cannot keep up with a high-bitrate film. Bounded at [STUTTER_RELOADS] per
+ * item, so a film the device simply cannot play smoothly is left to play rather than reloaded
+ * forever.
+ *
+ * @param stutteringWindows consecutive windows [isStuttering] has said yes to.
+ * @param reloadsSoFar reloads this decision has already asked for, for this item.
+ */
+internal fun reloadsForStutter(stutteringWindows: Int, reloadsSoFar: Int): Boolean =
+    stutteringWindows >= STUTTER_WINDOWS && reloadsSoFar < STUTTER_RELOADS
+
+/** How often the frame counts are compared. */
+internal const val STUTTER_WINDOW_MILLIS = 2_000L
+
+/** Windows in a row that must stutter before a reload: six seconds of it, not a moment. */
+internal const val STUTTER_WINDOWS = 3
+
+/** Below this many frames a window says nothing either way. */
+internal const val STUTTER_MIN_FRAMES = 12L
+
+/** The share of frames dropped, in percent, that is stutter rather than noise. */
+internal const val STUTTER_DROP_PERCENT = 25L
+
+/** Reloads for stutter, per item. */
+internal const val STUTTER_RELOADS = 2
+
+private const val PERCENT = 100L

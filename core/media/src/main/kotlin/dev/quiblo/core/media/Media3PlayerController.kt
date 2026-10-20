@@ -995,6 +995,7 @@ class Media3PlayerController(
             _state.value = _state.value.copy(
                 videoWidth = videoSize.width,
                 videoHeight = videoSize.height,
+                videoFrameRate = player.videoFormat?.frameRate?.takeIf { it > 0f },
             )
         }
 

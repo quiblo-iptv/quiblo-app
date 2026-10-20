@@ -164,6 +164,7 @@ fun TvSettingsScreen(
     val hiddenTabs by viewModel.hiddenTabs.collectAsStateWithLifecycle()
     val checkUpdatesOnLaunch by viewModel.checkUpdatesOnLaunch.collectAsStateWithLifecycle()
     val ambientPlayer by viewModel.ambientPlayer.collectAsStateWithLifecycle()
+    val matchFrameRate by viewModel.matchFrameRate.collectAsStateWithLifecycle()
     val playbackLog by koinViewModel<PlaybackLogViewModel>().entries.collectAsStateWithLifecycle()
 
     /*
@@ -332,6 +333,20 @@ fun TvSettingsScreen(
                         stringResource(if (it) R.string.tv_settings_on else R.string.tv_settings_off)
                     },
                     onSelect = viewModel::setAmbientPlayer,
+                )
+            }
+
+            // On by default, beside the other switch that changes how a film looks (`FEAT-041`).
+            item {
+                OptionRow(
+                    label = stringResource(R.string.tv_settings_match_frame_rate),
+                    description = stringResource(R.string.tv_settings_match_frame_rate_detail),
+                    options = listOf(true, false),
+                    selected = matchFrameRate,
+                    labelFor = {
+                        stringResource(if (it) R.string.tv_settings_on else R.string.tv_settings_off)
+                    },
+                    onSelect = viewModel::setMatchFrameRate,
                 )
             }
 

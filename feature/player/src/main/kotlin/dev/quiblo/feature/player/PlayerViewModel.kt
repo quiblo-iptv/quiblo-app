@@ -442,6 +442,10 @@ class PlayerViewModel(
     val ambientPlayer: StateFlow<Boolean> = settingsRepository.ambientPlayer
         .stateIn(viewModelScope, SharingStarted.Eagerly, true)
 
+    /** Whether the television matches its refresh rate to the film's (`FEAT-041`). */
+    val matchFrameRate: StateFlow<Boolean> = settingsRepository.matchFrameRate
+        .stateIn(viewModelScope, SharingStarted.Eagerly, true)
+
     private fun prepare(item: PlayableItem) {
         prepared = item
         controller.prepare(item)

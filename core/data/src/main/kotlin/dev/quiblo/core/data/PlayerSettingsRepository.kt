@@ -49,6 +49,9 @@ import kotlinx.coroutines.flow.map
  * stayed until something else happened to reload it would be worse than one that never changed.
  * Every write goes to whoever is watching now.
  */
+// One setter per preference, and each is one line over the store. Grouping them to satisfy a count
+// would hide which preference a screen writes behind a parameter, which is the opposite of the point.
+@Suppress("TooManyFunctions")
 @OptIn(ExperimentalCoroutinesApi::class)
 class PlayerSettingsRepository(
     private val store: PlayerSettingsStore,
@@ -139,6 +142,11 @@ class PlayerSettingsRepository(
     val ambientPlayer: Flow<Boolean> = perProfile(store::ambientPlayer)
 
     suspend fun setAmbientPlayer(enabled: Boolean) = store.setAmbientPlayer(profiles.activeProfileId, enabled)
+
+    /** Whether the television matches its refresh rate to the film's (`FEAT-041`). On unless switched off. */
+    val matchFrameRate: Flow<Boolean> = perProfile(store::matchFrameRate)
+
+    suspend fun setMatchFrameRate(enabled: Boolean) = store.setMatchFrameRate(profiles.activeProfileId, enabled)
 
     /**
      * Whether the app asks about a newer release when it opens (`029` #7).

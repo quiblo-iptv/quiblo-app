@@ -291,6 +291,13 @@ data class PlaybackState(
     val videoWidth: Int = 0,
     val videoHeight: Int = 0,
     /**
+     * The frame rate the stream declares, or null when it declares none (`FEAT-041`).
+     *
+     * What the television matches its refresh rate to. Declared, not measured: a container that
+     * says nothing — some Matroska files — leaves the screen as it is rather than switch on a guess.
+     */
+    val videoFrameRate: Float? = null,
+    /**
      * Whether a frame of *this* item has been drawn yet.
      *
      * False from [PlayerController.prepare] until the engine reports its first rendered

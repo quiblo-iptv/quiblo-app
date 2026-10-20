@@ -174,11 +174,10 @@ private fun FramesSection(f: FrameDiagnostics) {
         String.format(Locale.ROOT, "%.1f · %.1f", f.renderedPerSecond, f.droppedPerSecond),
         warn = f.droppedPerSecond > 0f,
     )
-    InfoRow(
-        R.string.player_info_totals,
-        "${f.rendered} · ${f.dropped} · ${f.skipped}",
-        warn = f.dropped > 0L,
-    )
+    // Not amber for a total: the frames dropped around a seek stay in it for the rest of the item,
+    // and an amber that never clears read as a fault still happening. The line above is the one
+    // that says whether frames are being dropped now.
+    InfoRow(R.string.player_info_totals, "${f.rendered} · ${f.dropped} · ${f.skipped}")
     InfoRow(
         R.string.player_info_worst,
         "${f.maxConsecutiveDropped} · ${f.droppedToKeyframe}",
@@ -218,11 +217,19 @@ private fun DeviceSection(device: DeviceFacts, contentFps: Float?) {
     InfoRow(R.string.player_info_model, device.model)
     val judders = contentFps != null && isJudderProne(contentFps, device.refreshRate)
     InfoRow(R.string.player_info_display, device.display, warn = judders)
+    InfoRow(R.string.player_info_refresh_rates, device.refreshRates.ifEmpty { unknown() })
     InfoRow(R.string.player_info_app, device.appVersion)
 }
 
 /** The device, as the overlay draws it. */
-private class DeviceFacts(val model: String, val display: String, val refreshRate: Float, val appVersion: String)
+private class DeviceFacts(
+    val model: String,
+    val display: String,
+    val refreshRate: Float,
+    /** What the panel offers at this resolution: whether a film can be matched at all (`FEAT-041`). */
+    val refreshRates: String,
+    val appVersion: String,
+)
 
 /**
  * The model and version read once; the display read on every draw, which is once a second.
@@ -247,6 +254,8 @@ private fun rememberDeviceFacts(): DeviceFacts {
             "${it.physicalWidth}×${it.physicalHeight} @ ${formatFrameRate(refreshRate)} Hz"
         }.orEmpty(),
         refreshRate = refreshRate,
+        refreshRates = display?.refreshRatesAtCurrentSize().orEmpty()
+            .joinToString(" · ") { formatFrameRate(it) },
         appVersion = appVersion,
     )
 }

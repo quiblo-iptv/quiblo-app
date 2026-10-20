@@ -15,6 +15,16 @@ Formatted after [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and ve
 
 ## Unreleased
 
+### Added
+
+- **Playback info, for when something plays badly (`FEAT-040`).** A new button in the player — the
+  top bar on the phone, the end of the options row on the television — opens a see-through panel
+  over the video with everything the player knows: the decoder in use and whether it is hardware or
+  software, frames shown and dropped each second, how much is buffered, how fast data is arriving,
+  every automatic retry and reload, and the screen's refresh rate against the film's frame rate.
+  What would explain a stutter is in amber. It is meant to be screenshotted for a bug report, and
+  it never shows a stream's address or an account.
+
 ## 0.27.4
 
 ### Fixed

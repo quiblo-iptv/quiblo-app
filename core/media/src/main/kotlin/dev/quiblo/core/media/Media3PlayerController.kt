@@ -232,6 +232,12 @@ class Media3PlayerController(
         )
     }
 
+    /** Reads the engine for the playback info overlay (`FEAT-040`). Listens from the first engine on. */
+    private val diagnosticsSampler = DiagnosticsSampler(appContext)
+    private val _diagnostics = MutableStateFlow<PlaybackDiagnostics?>(null)
+    override val diagnostics: StateFlow<PlaybackDiagnostics?> = _diagnostics.asStateFlow()
+    private var diagnosticsJob: Job? = null
+
     private var player: ExoPlayer = buildPlayer(builtWith)
 
     private fun buildPlayer(profile: EngineProfile): ExoPlayer = ExoPlayer.Builder(
@@ -278,6 +284,7 @@ class Media3PlayerController(
                 HANDLE_AUDIO_FOCUS,
             )
             addListener(PlayerListener())
+            addAnalyticsListener(diagnosticsSampler)
             trackSelectionParameters = trackSelectionParameters.buildUpon()
                 .applyBitrateCap(settings.maxBitrate)
                 .build()
@@ -342,6 +349,7 @@ class Media3PlayerController(
         lastEngineCode = null
         bytesReceived.set(0L)
         lastByteAtMillis.set(0L)
+        diagnosticsSampler.reset()
         prepareStartedAtMillis = SystemClock.uptimeMillis()
         rebuildIfNeeded(EngineProfile(settings.bufferMode, item.isLive))
         val previous = _state.value.item
@@ -500,8 +508,49 @@ class Media3PlayerController(
         progressJob?.cancel()
         watchdogJob?.cancel()
         frameWatchJob?.cancel()
+        diagnosticsJob?.cancel()
         player.release()
         _state.value = PlaybackState()
+        _diagnostics.value = null
+    }
+
+    override fun setDiagnosticsEnabled(enabled: Boolean) {
+        diagnosticsJob?.cancel()
+        if (!enabled) {
+            _diagnostics.value = null
+            return
+        }
+        diagnosticsJob = scope.launch {
+            while (true) {
+                _diagnostics.value = diagnosticsSampler.sample(player, controllerFacts())
+                delay(DIAGNOSTICS_INTERVAL_MILLIS)
+            }
+        }
+    }
+
+    /** What the overlay needs that only this class knows. */
+    private fun controllerFacts(): ControllerFacts {
+        val current = _state.value
+        return ControllerFacts(
+            isLive = current.item?.isLive == true,
+            bytesReceived = bytesReceived.get(),
+            lastByteAtMillis = lastByteAtMillis.get(),
+            softwareAllowed = softwareVideoAllowed,
+            recovery = RecoveryDiagnostics(
+                retries = current.retryAttempt,
+                rebuffers = current.rebufferCount,
+                loadTimeMillis = current.loadTimeMillis,
+                stallReloads = stallReloads,
+                stutterReloads = stutterReloads,
+                hardwareDecoderRetries = hardwareDecoderRetries,
+                liveEdgeRejoins = liveEdgeRejoins,
+            ),
+            // The setting's own name, for a screenshot read by whoever fixes the bug; it is not
+            // the label the settings screen shows.
+            bufferMode = builtWith.bufferMode.name,
+            maxVideoBitrate = settings.maxBitrate.bitsPerSecond,
+            lastEngineError = lastEngineCode,
+        )
     }
 
     private fun selectTrack(trackType: @C.TrackType Int, trackId: String?) {
@@ -1030,6 +1079,9 @@ class Media3PlayerController(
         const val HANDLE_AUDIO_FOCUS = true
 
         const val PROGRESS_INTERVAL_MILLIS = 500L
+
+        /** Once a second: often enough to watch a stutter happen, rarely enough to cost nothing. */
+        const val DIAGNOSTICS_INTERVAL_MILLIS = 1_000L
     }
 }
 

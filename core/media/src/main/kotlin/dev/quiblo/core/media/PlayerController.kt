@@ -111,6 +111,16 @@ interface PlayerController {
      */
     fun applySubtitleStyle(style: SubtitleStyle)
 
+    /**
+     * What the engine is doing, once a second, while [setDiagnosticsEnabled] is on (`FEAT-040`).
+     *
+     * Null while it is off. Nothing is sampled for a viewer who never opens the overlay.
+     */
+    val diagnostics: StateFlow<PlaybackDiagnostics?>
+
+    /** Starts or stops [diagnostics]. Survives [prepare]: the overlay stays open across items. */
+    fun setDiagnosticsEnabled(enabled: Boolean)
+
     /** Frees the engine. The controller is unusable afterwards. */
     fun release()
 }

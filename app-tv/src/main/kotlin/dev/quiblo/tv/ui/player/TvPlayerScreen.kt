@@ -89,6 +89,7 @@ import dev.quiblo.designsystem.AmbientColours
 import dev.quiblo.designsystem.ambientBackdrop
 import dev.quiblo.designsystem.ambientFrom
 import dev.quiblo.feature.player.DiagnosisState
+import dev.quiblo.feature.player.PlaybackInfoOverlay
 import dev.quiblo.feature.player.PlayerViewModel
 import dev.quiblo.feature.player.SubtitleNotice
 import dev.quiblo.feature.player.TrackMenu
@@ -197,6 +198,8 @@ fun TvPlayerScreen(
     // wrapped and the viewer is told rather than dropped into a crash.
     val subtitleNotice by viewModel.subtitleNotice.collectAsStateWithLifecycle()
     val diagnosis by viewModel.diagnosis.collectAsStateWithLifecycle()
+    val infoVisible by viewModel.diagnosticsVisible.collectAsStateWithLifecycle()
+    val diagnostics by viewModel.diagnostics.collectAsStateWithLifecycle()
     val pickSubtitleFile = rememberSubtitleFilePicker(
         onPicked = viewModel::attachSubtitleFile,
         onNoPicker = { viewModel.showSubtitleNotice(SubtitleNotice.NO_PICKER) },
@@ -460,6 +463,17 @@ fun TvPlayerScreen(
             modifier = Modifier.fillMaxSize(),
         )
 
+        // Under everything else, and never focusable: the remote keeps driving the player while
+        // it is open, and the button that opened it closes it (`FEAT-040`).
+        if (infoVisible) {
+            PlaybackInfoOverlay(
+                diagnostics = diagnostics,
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .padding(24.dp),
+            )
+        }
+
         PlayerOverlays(
             state = state,
             settings = settings,
@@ -490,6 +504,7 @@ fun TvPlayerScreen(
                 openAudio = { trackMenuAt = TrackMenuKind.AUDIO },
                 openSubtitles = { trackMenuAt = TrackMenuKind.SUBTITLES },
                 cycleAspect = viewModel::cycleAspectRatio,
+                toggleInfo = viewModel::toggleDiagnostics,
             ),
             onRetry = viewModel::retry,
             onBack = onBack,

@@ -19,16 +19,19 @@
 package dev.quiblo.core.media
 
 import android.content.Context
+import android.media.MediaFormat
 import android.os.SystemClock
 import androidx.media3.common.C
 import androidx.media3.common.Format
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.DecoderCounters
+import androidx.media3.exoplayer.DecoderReuseEvaluation
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.analytics.AnalyticsListener
 import androidx.media3.exoplayer.mediacodec.MediaCodecUtil
 import androidx.media3.exoplayer.upstream.DefaultBandwidthMeter
+import androidx.media3.exoplayer.video.VideoFrameMetadataListener
 
 /**
  * Reads the engine for [PlaybackDiagnostics] (`FEAT-040`).
@@ -42,11 +45,28 @@ import androidx.media3.exoplayer.upstream.DefaultBandwidthMeter
  * controller samples there too.
  */
 @androidx.annotation.OptIn(UnstableApi::class)
-internal class DiagnosticsSampler(private val appContext: Context) : AnalyticsListener {
+internal class DiagnosticsSampler(private val appContext: Context) :
+    AnalyticsListener,
+    VideoFrameMetadataListener {
 
     private val videoDecoders = ArrayDeque<DecoderEvent>()
     private var audioDecoder: String? = null
     private var previous: Sample? = null
+
+    /** Why the next video decoder is being started, if the engine has said (`FEAT-040`). */
+    private var pendingDecoderReason: String? = null
+
+    /**
+     * Whether frame times are being collected: only while the overlay is open.
+     *
+     * Read on the engine's playback thread for every frame, so it costs one volatile read when off.
+     */
+    @Volatile
+    var recordingFrames = false
+
+    /** Gaps between frames scheduled since the last [sample]. Written on the playback thread. */
+    private val frameIntervals = ArrayList<Long>()
+    private var lastReleaseNanos = 0L
 
     /**
      * A new engine: nothing it has started yet.
@@ -59,6 +79,43 @@ internal class DiagnosticsSampler(private val appContext: Context) : AnalyticsLi
         videoDecoders.clear()
         audioDecoder = null
         previous = null
+        pendingDecoderReason = null
+        synchronized(frameIntervals) {
+            frameIntervals.clear()
+            lastReleaseNanos = 0L
+        }
+    }
+
+    override fun onVideoFrameAboutToBeRendered(
+        presentationTimeUs: Long,
+        releaseTimeNs: Long,
+        format: Format,
+        mediaFormat: MediaFormat?,
+    ) {
+        if (!recordingFrames || releaseTimeNs <= 0L) return
+        synchronized(frameIntervals) {
+            if (lastReleaseNanos > 0L && frameIntervals.size < MAX_FRAME_INTERVALS) {
+                frameIntervals.add(releaseTimeNs - lastReleaseNanos)
+            }
+            lastReleaseNanos = releaseTimeNs
+        }
+    }
+
+    /** A decoder that failed is started again: that is a reason worth seeing beside it. */
+    override fun onVideoCodecError(eventTime: AnalyticsListener.EventTime, videoCodecError: Exception) {
+        pendingDecoderReason = "codec error: ${videoCodecError.javaClass.simpleName}"
+    }
+
+    /** A new format the decoder in use could not take is the other reason a new one starts. */
+    override fun onVideoInputFormatChanged(
+        eventTime: AnalyticsListener.EventTime,
+        format: Format,
+        decoderReuseEvaluation: DecoderReuseEvaluation?,
+    ) {
+        val evaluation = decoderReuseEvaluation ?: return
+        if (evaluation.result == DecoderReuseEvaluation.REUSE_RESULT_NO) {
+            pendingDecoderReason = "format: " + discardReasons(evaluation.discardReasons)
+        }
     }
 
     override fun onVideoDecoderInitialized(
@@ -67,7 +124,9 @@ internal class DiagnosticsSampler(private val appContext: Context) : AnalyticsLi
         initializedTimestampMs: Long,
         initializationDurationMs: Long,
     ) {
-        videoDecoders.addLast(DecoderEvent(System.currentTimeMillis(), decoderName, initializationDurationMs))
+        val reason = pendingDecoderReason ?: if (videoDecoders.isEmpty()) "first" else null
+        pendingDecoderReason = null
+        videoDecoders.addLast(DecoderEvent(System.currentTimeMillis(), decoderName, initializationDurationMs, reason))
         while (videoDecoders.size > DECODER_HISTORY) videoDecoders.removeFirst()
     }
 
@@ -106,6 +165,7 @@ internal class DiagnosticsSampler(private val appContext: Context) : AnalyticsLi
             video = player.videoFormat?.let { video(it, facts.softwareAllowed) },
             audio = player.audioFormat?.let(::audio),
             frames = counters?.let { frames(it, sample, last) },
+            timing = drainFrameTiming(),
             network = NetworkDiagnostics(
                 bytesReceived = facts.bytesReceived,
                 lastSecondBitsPerSecond = last?.let { bitsPerSecond(it, sample) } ?: 0L,
@@ -163,6 +223,14 @@ internal class DiagnosticsSampler(private val appContext: Context) : AnalyticsLi
         )
     }
 
+    /** The last second's frame gaps, summarised, and the list started afresh. */
+    private fun drainFrameTiming(): FrameTimingDiagnostics? {
+        val intervals = synchronized(frameIntervals) {
+            frameIntervals.toList().also { frameIntervals.clear() }
+        }
+        return summariseFrameIntervals(intervals)
+    }
+
     private fun bitsPerSecond(last: Sample, now: Sample): Long {
         val millis = now.atMillis - last.atMillis
         if (millis <= 0L) return 0L
@@ -191,6 +259,9 @@ internal class DiagnosticsSampler(private val appContext: Context) : AnalyticsLi
 
     private companion object {
         const val DECODER_HISTORY = 6
+
+        /** More than a second's worth at 120 fps; a cap so a closed overlay's list cannot grow. */
+        const val MAX_FRAME_INTERVALS = 240
         const val MILLIS_PER_SECOND = 1_000f
         const val BITS_PER_BYTE = 8L
     }
@@ -214,6 +285,27 @@ private fun Int.toEngineState(): EngineState = when (this) {
     Player.STATE_READY -> EngineState.READY
     Player.STATE_ENDED -> EngineState.ENDED
     else -> EngineState.IDLE
+}
+
+/** The reasons the engine gave for not keeping a decoder, by the names a bug report can search. */
+@androidx.annotation.OptIn(UnstableApi::class)
+private fun discardReasons(reasons: Int): String {
+    val names = listOf(
+        DecoderReuseEvaluation.DISCARD_REASON_REUSE_NOT_IMPLEMENTED to "reuse not implemented",
+        DecoderReuseEvaluation.DISCARD_REASON_WORKAROUND to "device workaround",
+        DecoderReuseEvaluation.DISCARD_REASON_APP_OVERRIDE to "app override",
+        DecoderReuseEvaluation.DISCARD_REASON_MIME_TYPE_CHANGED to "codec changed",
+        DecoderReuseEvaluation.DISCARD_REASON_OPERATING_RATE_CHANGED to "operating rate",
+        DecoderReuseEvaluation.DISCARD_REASON_INITIALIZATION_DATA_CHANGED to "init data changed",
+        DecoderReuseEvaluation.DISCARD_REASON_MAX_INPUT_SIZE_EXCEEDED to "input size",
+        DecoderReuseEvaluation.DISCARD_REASON_DRM_SESSION_CHANGED to "drm",
+        DecoderReuseEvaluation.DISCARD_REASON_VIDEO_MAX_RESOLUTION_EXCEEDED to "max resolution",
+        DecoderReuseEvaluation.DISCARD_REASON_VIDEO_RESOLUTION_CHANGED to "resolution changed",
+        DecoderReuseEvaluation.DISCARD_REASON_VIDEO_ROTATION_CHANGED to "rotation",
+        DecoderReuseEvaluation.DISCARD_REASON_VIDEO_COLOR_INFO_CHANGED to "colour info",
+    )
+    val named = names.filter { (bit, _) -> reasons and bit != 0 }.map { it.second }
+    return named.ifEmpty { listOf("0x" + Integer.toHexString(reasons)) }.joinToString(", ")
 }
 
 @androidx.annotation.OptIn(UnstableApi::class)

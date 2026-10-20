@@ -45,6 +45,8 @@ data class PlaybackDiagnostics(
     val video: VideoDiagnostics?,
     val audio: AudioDiagnostics?,
     val frames: FrameDiagnostics?,
+    /** When the last second's frames were scheduled for the screen; null while too few to say. */
+    val timing: FrameTimingDiagnostics?,
     val network: NetworkDiagnostics,
     val recovery: RecoveryDiagnostics,
     /** The buffer setting the engine was built with, and the bitrate cap in force. */
@@ -99,6 +101,12 @@ data class DecoderEvent(
     val atEpochMillis: Long,
     val name: String,
     val initMillis: Long,
+    /**
+     * Why it started, when the engine said: `first` for an engine's first, a codec error, or the
+     * format change the decoder before could not take. Null when nothing was said — a seek past a
+     * resolution change, a surface handed over — which is itself worth knowing.
+     */
+    val reason: String?,
 )
 
 /**

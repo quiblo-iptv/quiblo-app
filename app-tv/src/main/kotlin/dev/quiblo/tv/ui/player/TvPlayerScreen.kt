@@ -89,6 +89,7 @@ import dev.quiblo.designsystem.AmbientColours
 import dev.quiblo.designsystem.ambientBackdrop
 import dev.quiblo.designsystem.ambientFrom
 import dev.quiblo.feature.player.DiagnosisState
+import dev.quiblo.feature.player.MatchContentFrameRate
 import dev.quiblo.feature.player.PlaybackInfoOverlay
 import dev.quiblo.feature.player.PlayerViewModel
 import dev.quiblo.feature.player.SubtitleNotice
@@ -199,6 +200,10 @@ fun TvPlayerScreen(
     val subtitleNotice by viewModel.subtitleNotice.collectAsStateWithLifecycle()
     val diagnosis by viewModel.diagnosis.collectAsStateWithLifecycle()
     val infoVisible by viewModel.diagnosticsVisible.collectAsStateWithLifecycle()
+    val matchFrameRate by viewModel.matchFrameRate.collectAsStateWithLifecycle()
+
+    // The panel at the film's own rate while it plays, and back when the player goes (`FEAT-041`).
+    MatchContentFrameRate(contentFps = state.videoFrameRate, enabled = matchFrameRate)
     val diagnostics by viewModel.diagnostics.collectAsStateWithLifecycle()
     val pickSubtitleFile = rememberSubtitleFilePicker(
         onPicked = viewModel::attachSubtitleFile,

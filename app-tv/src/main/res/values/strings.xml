@@ -199,6 +199,8 @@ Make one on the page below — it is quicker on a phone than on a remote — the
     <string name="tv_settings_script_thai">Thai</string>
     <string name="tv_settings_ambient">Ambient light</string>
     <string name="tv_settings_ambient_detail">On. Lights the black bars around a film with the colours of the picture.</string>
+    <string name="tv_settings_match_frame_rate">Match frame rate</string>
+    <string name="tv_settings_match_frame_rate_detail">On. Switches the screen to the film\'s frame rate while it plays, so motion is even. The screen may go black for a moment when it switches.</string>
     <string name="tv_settings_search">Search</string>
     <string name="tv_settings_search_live">Live channels in advanced search</string>
     <string name="tv_settings_search_live_detail">Off. A live channel carries no genre, so a genre filter can only match it on its name.</string>

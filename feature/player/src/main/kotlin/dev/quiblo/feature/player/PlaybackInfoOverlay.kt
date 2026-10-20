@@ -41,11 +41,13 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.quiblo.core.media.AudioDiagnostics
 import dev.quiblo.core.media.FrameDiagnostics
+import dev.quiblo.core.media.FrameTimingDiagnostics
 import dev.quiblo.core.media.PlaybackDiagnostics
 import dev.quiblo.core.media.VideoDiagnostics
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import kotlin.math.roundToInt
 
 /**
  * Everything the engine knows about what is playing, drawn over the video (`FEAT-040`).
@@ -90,6 +92,7 @@ fun PlaybackInfoOverlay(diagnostics: PlaybackDiagnostics?, modifier: Modifier = 
             }
             Column(modifier = Modifier.weight(1f)) {
                 diagnostics.frames?.let { FramesSection(it) }
+                diagnostics.timing?.let { TimingSection(it) }
                 NetworkSection(diagnostics)
                 RecoverySection(diagnostics)
                 DeviceSection(device, contentFps = diagnostics.video?.frameRate)
@@ -147,7 +150,8 @@ private fun VideoSection(v: VideoDiagnostics) {
         InfoRow(R.string.player_info_history, "")
         val format = clockFormat()
         v.decoderHistory.forEach { event ->
-            InfoText("  ${format.format(Date(event.atEpochMillis))} ${event.name} (${event.initMillis} ms)")
+            val reason = event.reason?.let { " · $it" }.orEmpty()
+            InfoText("  ${format.format(Date(event.atEpochMillis))} ${event.name} (${event.initMillis} ms)$reason")
         }
     }
 }
@@ -174,15 +178,34 @@ private fun FramesSection(f: FrameDiagnostics) {
         String.format(Locale.ROOT, "%.1f · %.1f", f.renderedPerSecond, f.droppedPerSecond),
         warn = f.droppedPerSecond > 0f,
     )
-    InfoRow(
-        R.string.player_info_totals,
-        "${f.rendered} · ${f.dropped} · ${f.skipped}",
-        warn = f.dropped > 0L,
-    )
+    // Not amber for a total: the frames dropped around a seek stay in it for the rest of the item,
+    // and an amber that never clears read as a fault still happening. The line above is the one
+    // that says whether frames are being dropped now.
+    InfoRow(R.string.player_info_totals, "${f.rendered} · ${f.dropped} · ${f.skipped}")
     InfoRow(
         R.string.player_info_worst,
         "${f.maxConsecutiveDropped} · ${f.droppedToKeyframe}",
         warn = f.droppedToKeyframe > 0,
+    )
+}
+
+/**
+ * Whether the frames that were shown were shown evenly (`FEAT-040`).
+ *
+ * Amber when the gaps wander: more than [JITTER_WARN_MILLIS] either side of the average, or more
+ * than a tenth of them well off it. Both are what a viewer sees as a stutter with no frame dropped.
+ */
+@Composable
+private fun TimingSection(t: FrameTimingDiagnostics) {
+    Heading(R.string.player_info_section_timing)
+    InfoRow(
+        R.string.player_info_gap,
+        String.format(Locale.ROOT, "%.1f ms · %.1f–%.1f", t.meanMillis, t.minMillis, t.maxMillis),
+    )
+    InfoRow(
+        R.string.player_info_spread,
+        String.format(Locale.ROOT, "±%.1f ms · %d%%", t.jitterMillis, (t.unevenShare * PERCENT).roundToInt()),
+        warn = t.jitterMillis > JITTER_WARN_MILLIS || t.unevenShare > UNEVEN_WARN_SHARE,
     )
 }
 
@@ -218,11 +241,19 @@ private fun DeviceSection(device: DeviceFacts, contentFps: Float?) {
     InfoRow(R.string.player_info_model, device.model)
     val judders = contentFps != null && isJudderProne(contentFps, device.refreshRate)
     InfoRow(R.string.player_info_display, device.display, warn = judders)
+    InfoRow(R.string.player_info_refresh_rates, device.refreshRates.ifEmpty { unknown() })
     InfoRow(R.string.player_info_app, device.appVersion)
 }
 
 /** The device, as the overlay draws it. */
-private class DeviceFacts(val model: String, val display: String, val refreshRate: Float, val appVersion: String)
+private class DeviceFacts(
+    val model: String,
+    val display: String,
+    val refreshRate: Float,
+    /** What the panel offers at this resolution: whether a film can be matched at all (`FEAT-041`). */
+    val refreshRates: String,
+    val appVersion: String,
+)
 
 /**
  * The model and version read once; the display read on every draw, which is once a second.
@@ -247,6 +278,8 @@ private fun rememberDeviceFacts(): DeviceFacts {
             "${it.physicalWidth}×${it.physicalHeight} @ ${formatFrameRate(refreshRate)} Hz"
         }.orEmpty(),
         refreshRate = refreshRate,
+        refreshRates = display?.refreshRatesAtCurrentSize().orEmpty()
+            .joinToString(" · ") { formatFrameRate(it) },
         appVersion = appVersion,
     )
 }
@@ -296,6 +329,14 @@ private const val BACKDROP_ALPHA = 0.62f
 private const val TITLE_SIZE = 12
 private const val TEXT_SIZE = 10
 private const val LINE_HEIGHT = 13
+
+/** A few milliseconds either way is the panel's own rounding; past this, a viewer sees it. */
+private const val JITTER_WARN_MILLIS = 4f
+
+/** One gap in ten well off the average is a visible beat. */
+private const val UNEVEN_WARN_SHARE = 0.1f
+
+private const val PERCENT = 100
 
 /** Under two seconds of buffer, a film is one slow answer from a rebuffer. */
 private const val LOW_BUFFER_MILLIS = 2_000L

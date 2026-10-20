@@ -31,6 +31,10 @@ Formatted after [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and ve
   favourite saved it, but the phone's Favourites tab drew an empty grid: since the catalogue
   screens moved to paging, that tab was handed the paged list, which is empty for everything but
   the catalogue. It now gets its own list. The television was not affected.
+- **Search and the grid switch are visible in the dark theme again (#90).** On the phone, icons
+  nothing else coloured were drawn black over the dark background — Search most noticeably —
+  since the app's background was opened up for the ambient light behind detail screens. They now
+  take the theme's own text colour, as everything else does. The light theme was not affected.
 
 ## 0.27.3
 

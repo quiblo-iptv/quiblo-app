@@ -15,6 +15,8 @@ Formatted after [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and ve
 
 ## Unreleased
 
+## 0.27.4
+
 ### Fixed
 
 - **Favourites show up on the phone again (#91).** Marking a film, a series or a channel as a

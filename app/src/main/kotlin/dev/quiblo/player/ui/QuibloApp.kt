@@ -145,6 +145,12 @@ fun QuibloApp() {
                 // Transparent, so the light painted behind this reaches the screen rather than stopping
                 // at the Scaffold's own opaque surface.
                 containerColor = Color.Transparent,
+                // Said outright because it can no longer be worked out (#90). The content colour is
+                // derived from the container's, and transparent matches no colour in the scheme, so
+                // it fell back to the default of black: every icon nothing tinted — Search, the
+                // grid toggle — was drawn black on the dark theme's background. The background
+                // behind the transparent container is `background`, so this is its partner.
+                contentColor = MaterialTheme.colorScheme.onBackground,
                 modifier = Modifier.fillMaxSize(),
                 topBar = {
                     if (!ownsItsAppBar) {

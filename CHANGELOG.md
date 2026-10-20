@@ -25,6 +25,8 @@ Formatted after [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and ve
   What would explain a stutter is in amber. It is meant to be screenshotted for a bug report, and
   it never shows a stream's address or an account.
 
+## 0.27.4
+
 ### Fixed
 
 - **Favourites show up on the phone again (#91).** Marking a film, a series or a channel as a

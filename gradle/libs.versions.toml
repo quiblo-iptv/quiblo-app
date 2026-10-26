@@ -8,9 +8,9 @@ targetSdk = "37"
 minSdk = "30"
 
 # AndroidX / Compose
-composeBom = "2026.06.01"
+composeBom = "2026.09.00"
 activityCompose = "1.13.0"
-navigationCompose = "2.9.8"
+navigationCompose = "2.10.2"
 lifecycle = "2.11.0"
 coreKtx = "1.19.0"
 room = "2.8.4"

@@ -22,6 +22,10 @@ Formatted after [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and ve
 - **The cover above Movies and Series has no edges.** It runs past its banner up under the tabs and
   out to the edge of the screen, fading away on every side like a cloud, and most of all on the left
   where the title and plot are written.
+- **Rows glide.** Moving left and right used to snap the row a whole poster at a time; it now
+  glides there, and holding the remote is one smooth run.
+- **The numbers on the popular rows are bigger and part of the poster.** Each figure is larger,
+  outlined, and tucked under the edge of its cover instead of standing beside it.
 
 ## 0.30.0
 

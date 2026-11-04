@@ -15,6 +15,14 @@ Formatted after [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and ve
 
 ## Unreleased
 
+### Changed
+
+- **The focus frame is thinner and glides.** It used to stop and start on every press when the
+  remote was held; it now carries its speed from one poster to the next as one movement.
+- **The cover above Movies and Series has no edges.** It runs past its banner up under the tabs and
+  out to the edge of the screen, fading away on every side like a cloud, and most of all on the left
+  where the title and plot are written.
+
 ## 0.30.0
 
 ### Added

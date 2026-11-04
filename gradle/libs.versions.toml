@@ -1,8 +1,8 @@
 [versions]
 # Build
 agp = "9.3.1"
-kotlin = "2.4.10"
-ksp = "2.3.11"
+kotlin = "2.4.21"
+ksp = "2.3.12"
 compileSdk = "37"
 targetSdk = "37"
 minSdk = "30"
@@ -26,7 +26,7 @@ work = "2.11.0"
 # Libraries
 koin = "4.2.2"
 ktor = "3.5.2"
-kotlinxSerialization = "1.11.0"
+kotlinxSerialization = "1.12.0"
 coroutines = "1.11.0"
 coil = "3.5.0"
 # Pinned rather than left to Ktor's transitive choice: :core:media now names OkHttp

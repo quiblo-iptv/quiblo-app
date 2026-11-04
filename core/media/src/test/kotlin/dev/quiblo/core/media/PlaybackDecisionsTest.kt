@@ -319,17 +319,26 @@ class PlaybackDecisionsTest {
 
         @Test
         fun `a skip forward lands on the next keyframe`() {
-            assertEquals(SeekLanding.NEXT_KEYFRAME, seekLandingFor(fromMillis = 100_000L, toMillis = 110_000L, isLive = false))
+            assertEquals(
+                SeekLanding.NEXT_KEYFRAME,
+                seekLandingFor(fromMillis = 100_000L, toMillis = 110_000L, isLive = false),
+            )
         }
 
         @Test
         fun `a skip back lands on the previous keyframe`() {
-            assertEquals(SeekLanding.PREVIOUS_KEYFRAME, seekLandingFor(fromMillis = 100_000L, toMillis = 90_000L, isLive = false))
+            assertEquals(
+                SeekLanding.PREVIOUS_KEYFRAME,
+                seekLandingFor(fromMillis = 100_000L, toMillis = 90_000L, isLive = false),
+            )
         }
 
         @Test
         fun `a start at a saved place lands on the keyframe before it`() {
-            assertEquals(SeekLanding.PREVIOUS_KEYFRAME, seekLandingFor(fromMillis = null, toMillis = 1_234_567L, isLive = false))
+            assertEquals(
+                SeekLanding.PREVIOUS_KEYFRAME,
+                seekLandingFor(fromMillis = null, toMillis = 1_234_567L, isLive = false),
+            )
         }
 
         @Test

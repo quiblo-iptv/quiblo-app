@@ -16,12 +16,14 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+@file:Suppress("MatchingDeclarationName")
 
 package dev.quiblo.tv.ui.common
 
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -38,6 +40,7 @@ import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
@@ -45,6 +48,7 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.geometry.lerp
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.layout.LayoutCoordinates
@@ -235,6 +239,25 @@ fun Modifier.focusSlideTarget(state: TvFocusSlideState, isFocused: Boolean): Mod
         // focus as it is built — so a tile that is already focused claims on its first pass.
         if (isFocused && first) state.claim(coordinates) else state.moved(coordinates)
     }
+}
+
+/**
+ * The focus border for a tile's artwork, wherever it is drawn.
+ *
+ * Inside a [TvFocusSlideHost] the host's sliding frame is the border, and this only reports where
+ * the artwork is. Anywhere else the tile draws its own, as every poster did before the frame was
+ * shared. Either way it measures nothing, so a tile's bounds never depend on its focus (#008).
+ */
+fun Modifier.focusFrame(isFocused: Boolean, shape: Shape): Modifier = composed {
+    val slide = LocalTvFocusSlide.current
+    val drawsOwnBorder = isFocused && slide == null
+    (slide?.let { Modifier.focusSlideTarget(it, isFocused) } ?: Modifier)
+        .clip(shape)
+        .border(
+            width = if (drawsOwnBorder) FRAME_WIDTH else 0.dp,
+            color = if (drawsOwnBorder) Color.White else Color.Transparent,
+            shape = shape,
+        )
 }
 
 /** What the host remembers between frames. Plain fields: written in the draw pass, never observed. */

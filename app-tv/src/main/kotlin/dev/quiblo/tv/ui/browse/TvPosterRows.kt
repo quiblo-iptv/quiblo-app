@@ -21,7 +21,6 @@ package dev.quiblo.tv.ui.browse
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
@@ -98,10 +97,9 @@ import dev.quiblo.feature.browse.labelRes
 import dev.quiblo.tv.R
 import dev.quiblo.tv.ui.common.AmbientRequest
 import dev.quiblo.tv.ui.common.LocalAmbientSink
-import dev.quiblo.tv.ui.common.LocalTvFocusSlide
 import dev.quiblo.tv.ui.common.LocalTvReturn
 import dev.quiblo.tv.ui.common.TvFocusSlideHost
-import dev.quiblo.tv.ui.common.focusSlideTarget
+import dev.quiblo.tv.ui.common.focusFrame
 import dev.quiblo.tv.ui.common.insistOnFocus
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -1076,22 +1074,13 @@ private fun PosterArtwork(
     rating: Double?,
     showKindBadge: Boolean,
 ) {
-    // Inside a screen with a sliding frame, the frame is the border: this tile only says where it
-    // is. Anywhere else it draws its own, as every poster did before the frame was shared.
-    val slide = LocalTvFocusSlide.current
-    val drawsOwnBorder = isFocused && slide == null
     Box(
         modifier = Modifier
             .fillMaxWidth()
             .aspectRatio(POSTER_ASPECT_RATIO)
+            // The screen's sliding frame when there is one, this tile's own border when not.
             // Inside the tile's scale layer, so the frame follows the poster as it grows.
-            .then(slide?.let { Modifier.focusSlideTarget(it, isFocused) } ?: Modifier)
-            .clip(RoundedCornerShape(8.dp))
-            .border(
-                width = if (drawsOwnBorder) 3.dp else 0.dp,
-                color = if (drawsOwnBorder) Color.White else Color.Transparent,
-                shape = RoundedCornerShape(8.dp),
-            ),
+            .focusFrame(isFocused, RoundedCornerShape(8.dp)),
     ) {
         if (artworkUrl == null) {
             ArtworkPlaceholder()

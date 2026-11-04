@@ -20,7 +20,6 @@ package dev.quiblo.tv.ui.browse
 
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
@@ -48,7 +47,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
@@ -60,8 +58,7 @@ import androidx.compose.ui.unit.sp
 import coil3.compose.SubcomposeAsyncImage
 import dev.quiblo.core.model.HistoryEntry
 import dev.quiblo.tv.R
-import dev.quiblo.tv.ui.common.LocalTvFocusSlide
-import dev.quiblo.tv.ui.common.focusSlideTarget
+import dev.quiblo.tv.ui.common.focusFrame
 
 /**
  * "Continue watching": what was started and not finished, newest first.
@@ -198,21 +195,13 @@ private fun ContinueTile(
                     scaleY = scale
                 },
         ) {
-            // The catalogue's sliding frame, when there is one, so focus slides into this row and
-            // out of it like anywhere else on the screen. See `TvFocusSlideHost`.
-            val slide = LocalTvFocusSlide.current
-            val drawsOwnBorder = isFocused && slide == null
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .aspectRatio(TILE_ASPECT_RATIO)
-                    .then(slide?.let { Modifier.focusSlideTarget(it, isFocused) } ?: Modifier)
-                    .clip(RoundedCornerShape(8.dp))
-                    .border(
-                        width = if (drawsOwnBorder) 3.dp else 0.dp,
-                        color = if (drawsOwnBorder) Color.White else Color.Transparent,
-                        shape = RoundedCornerShape(8.dp),
-                    ),
+                    // The catalogue's sliding frame, so focus slides into this row and out of it
+                    // like anywhere else on the screen. See `focusFrame`.
+                    .focusFrame(isFocused, RoundedCornerShape(8.dp)),
             ) {
                 if (artworkUrl.isNullOrBlank()) {
                     Box(

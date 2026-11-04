@@ -26,7 +26,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -43,7 +42,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
@@ -51,9 +49,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -65,6 +65,7 @@ import dev.quiblo.core.model.TitleMetadata
 import dev.quiblo.tv.R
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
+import kotlin.math.roundToInt
 
 /**
  * Where a focused poster says which title it is, for the preview banner above it.
@@ -209,11 +210,8 @@ private fun PreviewContent(face: PreviewFace) {
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier
-                    .align(Alignment.CenterEnd)
-                    .fillMaxHeight()
-                    .fillMaxWidth(ARTWORK_SHARE)
-                    .clip(RoundedCornerShape(ARTWORK_CORNER))
-                    .fadedTowardsTheText(),
+                    .bleedingPastTheBanner()
+                    .fadedLikeACloud(),
             )
         }
 
@@ -292,32 +290,77 @@ private fun FactText(text: String) {
 }
 
 /**
- * Fades the picture out towards its left edge, where the text is, and a little along the bottom,
- * where the rows begin.
+ * Lays the picture out larger than the banner: up into the gap under the tab bar, out to the
+ * right-hand edge of the screen, and a little down towards the rows.
+ *
+ * A picture the exact size of its box has edges, however softly they are faded — the eye finds
+ * the rectangle. Letting it run past the banner on three sides, with every one of those sides
+ * faded to nothing, is what makes it read as light in the room rather than an image on a card.
+ * It takes the banner's size in layout, so nothing around it moves; it only *draws* further.
+ */
+private fun Modifier.bleedingPastTheBanner(): Modifier = layout { measurable, constraints ->
+    val top = ARTWORK_BLEED_TOP.roundToPx()
+    val end = ARTWORK_BLEED_END.roundToPx()
+    val bottom = ARTWORK_BLEED_BOTTOM.roundToPx()
+    val width = (constraints.maxWidth * ARTWORK_SHARE).roundToInt() + end
+    val height = constraints.maxHeight + top + bottom
+    val picture = measurable.measure(Constraints.fixed(width, height))
+    layout(constraints.maxWidth, constraints.maxHeight) {
+        picture.place(x = constraints.maxWidth - width + end, y = -top)
+    }
+}
+
+/**
+ * Fades the picture out on every side, so no edge of it can be seen: a cloud with the cover in
+ * it, not a rectangle.
+ *
+ * Strongest on the left, where the title and the plot are written over it — the picture is
+ * barely there until well past the middle of the banner. The other three sides are short fades,
+ * just long enough that the picture dissolves into the screen rather than stopping at it.
  *
  * A mask rather than a dark gradient laid over it: the screen behind is the ambient light, not
- * black, and a black wash would draw a dark rectangle on it. Masking makes the picture itself
- * transparent, so it dissolves into whatever the room is lit with.
+ * black, and a black wash would draw a dark rectangle on it. Each gradient eases in over several
+ * stops rather than one straight ramp, which on a television shows as a visible band.
  */
-private fun Modifier.fadedTowardsTheText(): Modifier = this
+private fun Modifier.fadedLikeACloud(): Modifier = this
     .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
     .drawWithContent {
         drawContent()
         drawRect(
-            brush = Brush.horizontalGradient(
-                0f to Color.Transparent,
-                FADE_SOLID_FROM to Color.Black,
-            ),
+            brush = CLOUD_ACROSS,
             blendMode = BlendMode.DstIn,
         )
         drawRect(
-            brush = Brush.verticalGradient(
-                FADE_BOTTOM_FROM to Color.Black,
-                1f to Color.Transparent,
-            ),
+            brush = CLOUD_DOWN,
             blendMode = BlendMode.DstIn,
         )
     }
+
+/**
+ * The cloud's opacity across the picture, left to right: a long, eased fade from the left where
+ * the text is, solid through the right of the middle, and a short fade into the screen's edge.
+ *
+ * Built once: a gradient with no start or end set stretches to whatever it is drawn into.
+ */
+private val CLOUD_ACROSS = Brush.horizontalGradient(
+    0f to Color.Transparent,
+    0.18f to Color.Black.copy(alpha = 0.06f),
+    0.34f to Color.Black.copy(alpha = 0.3f),
+    0.48f to Color.Black.copy(alpha = 0.72f),
+    0.6f to Color.Black,
+    0.88f to Color.Black,
+    1f to Color.Transparent,
+)
+
+/** And top to bottom: short eased fades at both ends, into the tab bar's gap and into the rows. */
+private val CLOUD_DOWN = Brush.verticalGradient(
+    0f to Color.Transparent,
+    0.12f to Color.Black.copy(alpha = 0.35f),
+    0.3f to Color.Black,
+    0.62f to Color.Black,
+    0.84f to Color.Black.copy(alpha = 0.35f),
+    1f to Color.Transparent,
+)
 
 /** A third of the catalogue's height, within limits that keep a row of posters readable below. */
 private const val BANNER_SHARE = 0.36f
@@ -325,13 +368,20 @@ private val BANNER_MIN_HEIGHT = 140.dp
 private val BANNER_MAX_HEIGHT = 220.dp
 private val BANNER_BOTTOM_GAP = 8.dp
 
-/** The picture starts a little left of centre, so its fade reaches across the middle. */
-private const val ARTWORK_SHARE = 0.62f
+/** How much of the banner's width the picture spans, before it bleeds past the right edge. */
+private const val ARTWORK_SHARE = 0.74f
 
-/** Where along the picture's width it becomes fully opaque. */
-private const val FADE_SOLID_FROM = 0.45f
-private const val FADE_BOTTOM_FROM = 0.75f
-private val ARTWORK_CORNER = 12.dp
+/**
+ * Up into the gap under the tab bar. Less than the bar's own 32dp bottom padding, so the fade
+ * never reaches the tab labels.
+ */
+private val ARTWORK_BLEED_TOP = 28.dp
+
+/** Out to the screen's edge: the shell's side padding, which the catalogue sits inside. */
+private val ARTWORK_BLEED_END = 48.dp
+
+/** A little down behind the first row's heading, where it is fading out anyway. */
+private val ARTWORK_BLEED_BOTTOM = 20.dp
 
 private const val TEXT_SHARE = 0.48f
 

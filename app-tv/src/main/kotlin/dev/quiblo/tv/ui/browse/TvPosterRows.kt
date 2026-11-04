@@ -22,6 +22,7 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.LocalBringIntoViewSpec
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.Arrangement
@@ -35,15 +36,18 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.relocation.BringIntoViewResponder
 import androidx.compose.foundation.relocation.bringIntoViewResponder
@@ -55,6 +59,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -71,10 +76,14 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -768,6 +777,7 @@ private fun groupIntoRows(
 }
 
 @Composable
+@OptIn(ExperimentalFoundationApi::class)
 @Suppress("LongParameterList")
 private fun CategoryRow(
     category: String,
@@ -786,6 +796,12 @@ private fun CategoryRow(
     posterWidth: Dp = POSTER_WIDTH,
     modifier: Modifier = Modifier,
 ) {
+    // The row scrolls itself, as a glide, rather than being snapped by Compose. See [TvRowGlide].
+    val rowState = rememberLazyListState()
+    val glide = remember(rowState) { TvRowGlide(rowState) }
+    val glideScope = rememberCoroutineScope()
+    LaunchedEffect(glide) { glide.drive() }
+
     Column(modifier = modifier) {
         Text(
             text = category,
@@ -800,38 +816,43 @@ private fun CategoryRow(
         // under the title has to clear the same growth or the two touch (#003).
         // No content padding, and no spacing beyond what the items carry themselves. Both
         // used to live here; both now live inside the poster. See `Poster`.
-        LazyRow {
-            items(items = items, key = { it.tile.key }) { item ->
-                // Per poster on screen, not per category: a category row can hold hundreds
-                // of films, and only the handful the remote has actually reached are
-                // displaying a score to fetch. A tile with no catalogue row behind it has
-                // nothing to ask about.
-                item.tile.channel?.let { channel ->
-                    LaunchedEffect(channel.id) { onVisible(channel) }
+        CompositionLocalProvider(LocalBringIntoViewSpec provides NoRowBringIntoView) {
+            LazyRow(state = rowState) {
+                itemsIndexed(items = items, key = { _, item -> item.tile.key }) { index, item ->
+                    // Per poster on screen, not per category: a category row can hold hundreds
+                    // of films, and only the handful the remote has actually reached are
+                    // displaying a score to fetch. A tile with no catalogue row behind it has
+                    // nothing to ask about.
+                    item.tile.channel?.let { channel ->
+                        LaunchedEffect(channel.id) { onVisible(channel) }
+                    }
+                    TvPoster(
+                        tile = item.tile,
+                        rating = ratings[item.tile.key],
+                        fallbackArtworkUrl = posters[item.tile.key],
+                        showKindBadge = showKindBadge,
+                        onClick = { onItemClick(item) },
+                        // Only the one tile carries the requester. Two nodes sharing a
+                        // `FocusRequester` is the state that throws, and a catalogue holds
+                        // thousands of these.
+                        focusRequester = cursorFocus.takeIf { item.tile.key == focusedKey },
+                        onFocused = {
+                            onFocusedKeyChange(item.tile.key)
+                            glide.reveal(index, glideScope)
+                        },
+                        rank = item.rank.takeIf { style == TvRowStyle.RANKED },
+                        // Reserved for the whole row, not only for the tiles that have one. A tile
+                        // one line taller than its neighbour is a tile whose bounds differ from its
+                        // neighbour's, which is where #008 came from.
+                        //
+                        // A ranked row reserves it unconditionally, because that is where the answer
+                        // to pressing an unavailable tile is written: a line that appears on one tile
+                        // when it is pressed would resize that tile mid-row.
+                        caption = item.caption,
+                        showCaption = style == TvRowStyle.RANKED || items.any { it.caption != null },
+                        posterWidth = posterWidth,
+                    )
                 }
-                TvPoster(
-                    tile = item.tile,
-                    rating = ratings[item.tile.key],
-                    fallbackArtworkUrl = posters[item.tile.key],
-                    showKindBadge = showKindBadge,
-                    onClick = { onItemClick(item) },
-                    // Only the one tile carries the requester. Two nodes sharing a
-                    // `FocusRequester` is the state that throws, and a catalogue holds
-                    // thousands of these.
-                    focusRequester = cursorFocus.takeIf { item.tile.key == focusedKey },
-                    onFocused = { onFocusedKeyChange(item.tile.key) },
-                    rank = item.rank.takeIf { style == TvRowStyle.RANKED },
-                    // Reserved for the whole row, not only for the tiles that have one. A tile
-                    // one line taller than its neighbour is a tile whose bounds differ from its
-                    // neighbour's, which is where #008 came from.
-                    //
-                    // A ranked row reserves it unconditionally, because that is where the answer
-                    // to pressing an unavailable tile is written: a line that appears on one tile
-                    // when it is pressed would resize that tile mid-row.
-                    caption = item.caption,
-                    showCaption = style == TvRowStyle.RANKED || items.any { it.caption != null },
-                    posterWidth = posterWidth,
-                )
             }
         }
     }
@@ -1204,14 +1225,22 @@ private fun kindLabel(kind: MediaKind): String? = when (kind) {
 }
 
 /**
- * The position, drawn large beside the poster in a gutter of its own.
+ * The position, drawn large beside the poster, with its foot tucked under the cover.
  *
  * **The width is [RANK_GUTTER_WIDTH] whatever the figure is**, and that constant is the whole
  * safety of this shape. The numeral used to be drawn inside the artwork for exactly this reason:
  * a tile as wide as its own number is one that measures differently from its neighbours, and a
  * focused tile whose bounds differ from its neighbour's is defect #008 — see the note inside
- * [TvPoster]. The figure is centred in the gutter and is allowed to be clipped by it rather than
- * allowed to widen it, which is why nothing here wraps its content.
+ * [TvPoster]. The figure is *drawn* wider than the gutter and never *measured* wider: it is laid
+ * out unbounded inside a fixed box, so every tile in the row still reports the same rectangle.
+ *
+ * **Tucked under the poster rather than standing beside it.** The figure is pushed right by
+ * [RANK_TUCK], past the tile's own focus padding and under the edge of the artwork, which is
+ * drawn after it and so covers it. The number and the poster read as one object — the way the
+ * numbered rows on a commercial service look — rather than as a label next to a picture.
+ *
+ * Drawn twice: a fill that fades towards its foot, where it meets the poster, and a thin outline
+ * over it, so a very large figure stays light on the screen instead of a slab of white.
  *
  * The gutter takes up layout, unlike everything in [PosterOverlays]. That is safe because it is
  * outside the animating scale and identical on every tile of the row: it moves the poster along
@@ -1219,20 +1248,50 @@ private fun kindLabel(kind: MediaKind): String? = when (kind) {
  */
 @Composable
 private fun RankGutter(rank: Int, dimmed: Boolean, modifier: Modifier = Modifier) {
+    val figure = rank.toString()
+    // Two digits at the full size would reach back over the poster before this one.
+    val size = if (figure.length > 1) RANK_SIZE_TWO_DIGITS else RANK_SIZE
+    val strength = if (dimmed) RANK_DIMMED_ALPHA else 1f
+    val outline = with(LocalDensity.current) { RANK_OUTLINE.toPx() }
+    val placement = Modifier
+        .wrapContentWidth(align = Alignment.End, unbounded = true)
+        .offset(x = RANK_TUCK, y = RANK_DROP)
+
     Box(
         modifier = modifier
             .width(RANK_GUTTER_WIDTH)
             .height(RANK_GUTTER_HEIGHT),
-        contentAlignment = Alignment.Center,
+        contentAlignment = Alignment.BottomEnd,
     ) {
         Text(
-            text = rank.toString(),
-            color = Color.White.copy(alpha = if (dimmed) RANK_DIMMED_ALPHA else 1f),
-            fontSize = RANK_SIZE,
-            lineHeight = RANK_SIZE,
+            text = figure,
+            style = TextStyle(
+                brush = Brush.verticalGradient(
+                    listOf(
+                        Color.White.copy(alpha = RANK_FILL_TOP * strength),
+                        Color.White.copy(alpha = RANK_FILL_FOOT * strength),
+                    ),
+                ),
+            ),
+            fontSize = size,
+            lineHeight = size,
             fontWeight = FontWeight.Black,
+            letterSpacing = RANK_TRACKING,
             maxLines = 1,
             softWrap = false,
+            modifier = placement,
+        )
+        Text(
+            text = figure,
+            color = Color.White.copy(alpha = RANK_OUTLINE_ALPHA * strength),
+            style = TextStyle(drawStyle = Stroke(width = outline)),
+            fontSize = size,
+            lineHeight = size,
+            fontWeight = FontWeight.Black,
+            letterSpacing = RANK_TRACKING,
+            maxLines = 1,
+            softWrap = false,
+            modifier = placement,
         )
     }
 }
@@ -1240,15 +1299,33 @@ private fun RankGutter(rank: Int, dimmed: Boolean, modifier: Modifier = Modifier
 private const val KIND_BADGE_ALPHA = 0.6f
 
 /** Big enough to be the thing a viewer reads first, which is the whole point of the row. */
-private val RANK_SIZE = 56.sp
+private val RANK_SIZE = 132.sp
+
+/** "10", which at [RANK_SIZE] would reach back over the poster before it. */
+private val RANK_SIZE_TWO_DIGITS = 96.sp
+
+/** Digits drawn this large have wide side bearings; pulled together they read as one figure. */
+private val RANK_TRACKING = (-6).sp
 
 /**
- * Wide enough for two digits at [RANK_SIZE], and the same for one.
- *
- * Fixed rather than measured. A gutter that wrapped its figure would make tile 1 narrower than
- * tile 10, and unequal tiles in a row is #008 — see [RankGutter].
+ * The figure's own space beside the poster. Fixed rather than measured: a gutter that wrapped its
+ * figure would make tile 1 narrower than tile 10, and unequal tiles in a row is #008 — see
+ * [RankGutter]. Narrower than it was, because the figure now reaches under the poster instead.
  */
-private val RANK_GUTTER_WIDTH = 68.dp
+private val RANK_GUTTER_WIDTH = 60.dp
+
+/** How far the figure reaches right, past the tile's focus padding and under the artwork. */
+private val RANK_TUCK = 30.dp
+
+/** Down to the poster's foot: the figure stands on the same line the cover does. */
+private val RANK_DROP = 6.dp
+
+private val RANK_OUTLINE = 2.dp
+private const val RANK_OUTLINE_ALPHA = 0.9f
+
+/** The fill, bright at the top and nearly gone at the foot, where it meets the cover. */
+private const val RANK_FILL_TOP = 0.5f
+private const val RANK_FILL_FOOT = 0.06f
 
 /** A number standing for something that cannot be opened is still a number, but a quieter one. */
 private const val RANK_DIMMED_ALPHA = 0.45f

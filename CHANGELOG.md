@@ -15,6 +15,8 @@ Formatted after [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and ve
 
 ## Unreleased
 
+## 0.30.0
+
 ### Added
 
 - **Focus slides from poster to poster on the television.** The white frame round the focused

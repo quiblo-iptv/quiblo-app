@@ -60,6 +60,8 @@ import androidx.compose.ui.unit.sp
 import coil3.compose.SubcomposeAsyncImage
 import dev.quiblo.core.model.HistoryEntry
 import dev.quiblo.tv.R
+import dev.quiblo.tv.ui.common.LocalTvFocusSlide
+import dev.quiblo.tv.ui.common.focusSlideTarget
 
 /**
  * "Continue watching": what was started and not finished, newest first.
@@ -196,14 +198,19 @@ private fun ContinueTile(
                     scaleY = scale
                 },
         ) {
+            // The catalogue's sliding frame, when there is one, so focus slides into this row and
+            // out of it like anywhere else on the screen. See `TvFocusSlideHost`.
+            val slide = LocalTvFocusSlide.current
+            val drawsOwnBorder = isFocused && slide == null
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .aspectRatio(TILE_ASPECT_RATIO)
+                    .then(slide?.let { Modifier.focusSlideTarget(it, isFocused) } ?: Modifier)
                     .clip(RoundedCornerShape(8.dp))
                     .border(
-                        width = if (isFocused) 3.dp else 0.dp,
-                        color = if (isFocused) Color.White else Color.Transparent,
+                        width = if (drawsOwnBorder) 3.dp else 0.dp,
+                        color = if (drawsOwnBorder) Color.White else Color.Transparent,
                         shape = RoundedCornerShape(8.dp),
                     ),
             ) {

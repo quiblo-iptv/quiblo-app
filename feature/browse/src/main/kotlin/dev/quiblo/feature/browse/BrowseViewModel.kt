@@ -47,6 +47,7 @@ import dev.quiblo.core.model.Programme
 import dev.quiblo.core.model.TitleMetadata
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -1053,6 +1054,35 @@ class BrowseViewModel(
         }
     }
 
+    /**
+     * What the preview banner over a catalogue says about the title the remote is resting on.
+     *
+     * **Local first, and the network only once the remote has stopped.** The cached record —
+     * often the cheap half a poster tile already fetched, with a year and artwork but no plot —
+     * is emitted straight away, so the banner keeps up with a held remote for free. The full
+     * record is asked for only after [PREVIEW_SETTLE_MILLIS] on the same title, which a caller
+     * collecting with the title as its key cancels the moment the remote moves on: walking a row
+     * costs no requests at all, and resting on a title costs the one its detail screen would
+     * have made anyway, cached across launches like every other answer.
+     *
+     * Empty for a live channel and when the metadata service is off. Neither has anything to add
+     * to the name and the artwork the banner already has.
+     */
+    fun titlePreview(channel: Channel): Flow<TitleMetadata?> = flow {
+        if (channel.kind == MediaKind.LIVE || !metadataRepository.isEnabled) {
+            emit(null)
+            return@flow
+        }
+        val cached = metadataRepository.cachedPreviewFor(channel.name, channel.kind)
+        emit(cached)
+        if (cached != null && !cached.isPartial) return@flow
+
+        delay(PREVIEW_SETTLE_MILLIS)
+        // Through the same limiter as the poster lookups: this is the same rate limit.
+        val full = ratingLimiter.withPermit { metadataRepository.forTitle(channel.name, channel.kind) }
+        if (full != null) emit(full)
+    }
+
     /** Now and next for one channel, for the detail sheet (AC-EPG-02). */
     fun nowNextFor(channel: Channel) = guideRepository.observeNowNext(channel.sourceId, channel.stableKey)
 
@@ -1189,6 +1219,9 @@ class BrowseViewModel(
          * thing this project keeps getting blocked by.
          */
         const val MAX_CONCURRENT_RATING_FETCHES = 4
+
+        /** How long the remote rests on a title before the preview banner asks about its plot. */
+        const val PREVIEW_SETTLE_MILLIS = 700L
         const val HERO_ITEM_COUNT = 5
     }
 }

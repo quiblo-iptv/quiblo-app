@@ -29,12 +29,16 @@ import dev.quiblo.designsystem.AMBIENT_CROSSFADE_MILLIS
 /**
  * The player's crossfade.
  *
- * The same number as [AMBIENT_CROSSFADE_MILLIS], and kept as its own name rather than folded
- * into it: the two follow different things — one follows focus, the other follows the picture —
- * and a single constant would make the next person to tune one of them tune both without
- * noticing.
+ * Kept apart from [AMBIENT_CROSSFADE_MILLIS] because the two follow different things — one
+ * follows focus, the other follows the picture — and they no longer agree.
+ *
+ * **Slow on purpose, the way YouTube's ambient mode is.** At 300ms the light chased every cut and
+ * every pan, which on a three-metre screen reads as the walls flickering. A light that takes a
+ * couple of seconds to settle reads as the room taking on the colour of the film, which is the
+ * point of having it. A new sample arrives before the last fade has finished, so the light is
+ * always easing towards the latest picture rather than stepping between them.
  */
-const val PLAYER_CROSSFADE_MILLIS = 300
+const val PLAYER_CROSSFADE_MILLIS = 2_500
 
 /**
  * Where a focused tile says which picture it is showing.

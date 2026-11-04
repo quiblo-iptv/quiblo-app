@@ -966,13 +966,11 @@ private fun VideoSurface(
         )
 
         /*
-         * A frame every 400ms, at 32x18.
+         * A frame a second, at 32x18, behind a slow crossfade.
          *
-         * Both numbers are the point. A frame that small costs nothing to copy and nothing to
-         * read, and it is already the blur — sampling six colours out of thirty-two pixels cannot
-         * pick up a detail, only a cast. And 400ms with a 300ms crossfade behind it is close
-         * enough to the picture to read as the picture's own light, where the 1500ms and 700ms
-         * this replaces could put the light a full two seconds behind the frame it came from.
+         * A frame that small costs nothing to copy and nothing to read, and it is already the
+         * blur — sampling six colours out of thirty-two pixels cannot pick up a detail, only a
+         * cast. The pace is YouTube's rather than the picture's: see `AMBIENT_SAMPLE_MILLIS`.
          *
          * Stopped whenever there is no first frame, so nothing is sampled off a dead surface, and
          * never started when the setting is off — a feature switched off does not do its work and
@@ -1236,17 +1234,13 @@ private const val AMBIENT_HEIGHT = 18
 /**
  * How often the surface is read.
  *
- * **Four times more often than it was, and the previous number was the complaint.** At 1500ms,
- * plus a 700ms crossfade behind it, the light could be a full two seconds behind the frame it was
- * supposedly taken from — close enough to be a feature, far enough to read as one thing following
- * another rather than as one thing. A `PixelCopy` of 32×18 pixels is a trivial copy and the
- * sampler reads six of them, so the cost of asking this often is the call itself, which is
- * nothing next to decoding the frame it copies.
- *
- * Still slow enough that a scene drifts rather than flickers: the crossfade is the same length
- * again, so nothing snaps.
+ * Once a second, behind a 2.5s crossfade (`PLAYER_CROSSFADE_MILLIS`). The 400ms this replaces
+ * was chosen to keep the light close behind the picture, and it did — close enough to flicker
+ * with every cut, which was the complaint the second time round. The light is meant to drift
+ * like YouTube's: a cast that follows the scene, not a copy of the frame. Sampling faster than
+ * the fade can show buys nothing, so this is slowed with it.
  */
-private const val AMBIENT_SAMPLE_MILLIS = 400L
+private const val AMBIENT_SAMPLE_MILLIS = 1_000L
 
 /**
  * Longer than it was, because the controls are now something a viewer navigates rather than

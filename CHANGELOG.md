@@ -15,6 +15,30 @@ Formatted after [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and ve
 
 ## Unreleased
 
+### Added
+
+- **Focus slides from poster to poster on the television.** The white frame round the focused
+  poster used to vanish from one and appear on the next. It now travels there, along a row and
+  between rows, while the poster still grows as before.
+- **A preview of the focused title above Movies and Series.** Its picture on the right, fading in
+  from the middle, and its name, year, age rating, score and plot on the left. The shelves move
+  down to make room. The plot is asked for only once you rest on a title, so walking a row costs
+  nothing.
+
+### Changed
+
+- **The light around the picture drifts slowly now, the way YouTube's does.** It used to follow
+  every cut within a third of a second, which made the black bars flicker. It now takes a couple
+  of seconds to settle into the colours of the scene.
+
+### Fixed
+
+- **Films and episodes no longer stutter after a skip or when resumed (`BUG-065`).** A film played
+  from its start was smooth, and the same film after skipping, or picked up from the middle,
+  dropped frames for as long as it played. Skips and resumes now land on a keyframe — the next one
+  going forward, the one before going back or resuming — so the picture starts the way it does
+  from the beginning.
+
 ## 0.29.0
 
 ### Added

@@ -46,6 +46,7 @@ import androidx.media3.exoplayer.DecoderCounters
 import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.SeekParameters
 import androidx.media3.exoplayer.mediacodec.MediaCodecSelector
 import androidx.media3.exoplayer.mediacodec.MediaCodecUtil
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
@@ -173,6 +174,17 @@ class Media3PlayerController(
 
     /** Whether this item has already been tried again as HLS (`BUG-044`). Once is enough. */
     private var triedAsHls = false
+
+    /**
+     * A film or episode starting from the middle, still waiting to be moved onto a keyframe
+     * (`BUG-065`, [seekLandingFor]).
+     *
+     * A start position is applied before the engine knows where the keyframes are, so the engine
+     * cannot snap it the way it snaps a seek. The snap is made instead the moment it can be: when
+     * the item's tracks are first known, which is before anything has been shown and while the
+     * keyframe it lands on is still in the buffer — so it costs no request and nothing is seen.
+     */
+    private var snapStartToKeyframe = false
 
     /** Fresh loads the watchdog has made after a stall, for this item (`BUG-062`). */
     private var stallReloads = 0
@@ -383,7 +395,10 @@ class Media3PlayerController(
         if (previous?.isLive == true) player.stop()
         if (item.subtitles.any { it.selectOnStart }) showSubtitlesOnStart()
         player.setMediaItem(item.toMediaItem())
-        if (!item.isLive && item.startPositionMillis > 0L) {
+        snapStartToKeyframe = !item.isLive && item.startPositionMillis > 0L
+        // Exact again for live, in case this engine last played a film and was left on keyframes.
+        if (item.isLive) player.setSeekParameters(SeekLanding.EXACT.toSeekParameters())
+        if (snapStartToKeyframe) {
             player.seekTo(item.startPositionMillis)
         }
         player.prepare()
@@ -409,6 +424,9 @@ class Media3PlayerController(
 
     override fun seekTo(positionMillis: Long) {
         if (_state.value.isSeekable) {
+            snapStartToKeyframe = false
+            val isLive = _state.value.item?.isLive == true
+            player.setSeekParameters(seekLandingFor(player.currentPosition, positionMillis, isLive).toSeekParameters())
             player.seekTo(positionMillis)
         }
     }
@@ -449,7 +467,13 @@ class Media3PlayerController(
      * *to* but now.
      */
     private fun restart() {
-        if (_state.value.item?.isLive == true) player.seekToDefaultPosition()
+        if (_state.value.item?.isLive == true) {
+            player.seekToDefaultPosition()
+        } else {
+            // A reload starts from where the film was, which is the middle — the case `BUG-065`
+            // is about. Without this, a stutter reload put the film straight back into stutter.
+            snapStartToKeyframe = player.currentPosition > 0L
+        }
         player.prepare()
         player.playWhenReady = true
     }
@@ -852,6 +876,7 @@ class Media3PlayerController(
 
         triedAsHls = true
         val start = if (item.isLive) C.TIME_UNSET else item.startPositionMillis
+        snapStartToKeyframe = !item.isLive && item.startPositionMillis > 0L
         player.setMediaItem(item.toMediaItem(mimeOverride = HLS_MIME_TYPE), start)
         player.prepare()
         return true
@@ -983,6 +1008,14 @@ class Media3PlayerController(
                 audioTracks = tracks.toOptions(C.TRACK_TYPE_AUDIO),
                 textTracks = tracks.toOptions(C.TRACK_TYPE_TEXT),
             )
+
+            // The first moment the keyframes are known. See [snapStartToKeyframe].
+            if (snapStartToKeyframe && !tracks.isEmpty) {
+                snapStartToKeyframe = false
+                val position = player.currentPosition
+                player.setSeekParameters(seekLandingFor(null, position, isLive = false).toSeekParameters())
+                player.seekTo(position)
+            }
         }
 
         override fun onRenderedFirstFrame() {
@@ -1119,6 +1152,14 @@ internal data class EngineProfile(
     val bufferMode: BufferMode,
     val isLive: Boolean,
 )
+
+/** The engine's name for a [SeekLanding]. */
+@androidx.annotation.OptIn(UnstableApi::class)
+internal fun SeekLanding.toSeekParameters(): SeekParameters = when (this) {
+    SeekLanding.EXACT -> SeekParameters.EXACT
+    SeekLanding.PREVIOUS_KEYFRAME -> SeekParameters.PREVIOUS_SYNC
+    SeekLanding.NEXT_KEYFRAME -> SeekParameters.NEXT_SYNC
+}
 
 /**
  * Reduces an engine exception to the facts [classify] reads. No engine detail reaches the UI.

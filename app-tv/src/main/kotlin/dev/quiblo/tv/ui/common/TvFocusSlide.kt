@@ -21,7 +21,9 @@
 package dev.quiblo.tv.ui.common
 
 import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.VectorConverter
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
@@ -46,7 +48,6 @@ import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.geometry.lerp
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -125,7 +126,10 @@ fun TvFocusSlideHost(
 ) {
     val state = remember { TvFocusSlideState() }
     val frame = remember { FrameMemory() }
-    val travel = remember { Animatable(1f) }
+    // How far the frame still is from the tile it is going to, edge by edge. The frame is drawn at
+    // the tile plus this gap, and the gap springs to nothing: the tile can scroll or grow under it
+    // and the frame follows exactly, while only the distance left to travel is animated.
+    val gap = remember { Animatable(Rect.Zero, Rect.VectorConverter) }
     val visibility = remember { Animatable(0f) }
 
     LaunchedEffect(state) {
@@ -146,19 +150,31 @@ fun TvFocusSlideHost(
             }
             hiding?.cancel()
 
-            // From wherever the frame was last drawn — mid-slide included, so a held remote
-            // bends the path rather than restarting it. Coming in from outside the host (the tab
-            // bar, the hero) there is nothing to slide from, so it appears in
-            // place instead of flying in from where it was left minutes ago.
-            frame.from = frame.last.takeIf { wasShowing }
+            /*
+             * From wherever the frame was last drawn, mid-slide included, and *at the speed it
+             * was already going*. A fixed-length slide restarted from rest on every press, so a
+             * held remote moved the frame in a series of starts and stops; a spring handed its
+             * own velocity carries on through the next press as one continuous movement.
+             *
+             * Coming in from outside the host (the tab bar, the hero) there is nothing to slide
+             * from, so it appears in place instead of flying in from where it was left minutes ago.
+             */
+            val last = frame.last.takeIf { wasShowing }
+            val landing = frame.boundsOf(target)
             wasShowing = true
-
             launch { visibility.animateTo(1f, tween(FADE_MILLIS)) }
-            launch {
-                // `snapTo` cancels a slide still running on the same value, which is what lets
-                // the next press take over from the frame wherever it is.
-                travel.snapTo(0f)
-                travel.animateTo(1f, tween(SLIDE_MILLIS, easing = FastOutSlowInEasing))
+            if (last != null && landing != null) {
+                val velocity = gap.velocity
+                gap.snapTo(last.minus(landing))
+                launch {
+                    gap.animateTo(
+                        targetValue = Rect.Zero,
+                        animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = SLIDE_STIFFNESS),
+                        initialVelocity = velocity,
+                    )
+                }
+            } else {
+                gap.snapTo(Rect.Zero)
             }
             // The poster grows for a moment after it is focused, and its row scrolls it into
             // view. Neither is reported to the host reliably, so it redraws every frame for as
@@ -179,20 +195,14 @@ fun TvFocusSlideHost(
 
                 // Read first, so this pass is invalidated by any of them whatever happens below.
                 frame.seenMoves = state.moves
-                val progress = travel.value
+                val left = gap.value
                 val alpha = visibility.value
 
-                val host = frame.host ?: return@drawWithContent
-                val target = state.target?.takeIf { it.isAttached && host.isAttached }
-                val here = if (target != null) {
-                    // Not clipped: a poster scrolling in at a row's edge is still the shape it is,
-                    // and a frame cut to its visible sliver would look like a different tile.
-                    host.localBoundingBoxOf(target, clipBounds = false).also { frame.landing = it }
-                } else {
-                    frame.landing
-                } ?: return@drawWithContent
+                val here = state.target?.let(frame::boundsOf)?.also { frame.landing = it }
+                    ?: frame.landing
+                    ?: return@drawWithContent
 
-                val drawn = frame.from?.let { lerp(it, here, progress) } ?: here
+                val drawn = here.plus(left)
                 frame.last = drawn
                 if (alpha <= 0f) return@drawWithContent
 
@@ -260,10 +270,24 @@ fun Modifier.focusFrame(isFocused: Boolean, shape: Shape): Modifier = composed {
         )
 }
 
+/** Edge by edge, so a gap between two rectangles can be added back to either of them. */
+private fun Rect.plus(other: Rect) = Rect(
+    left = left + other.left,
+    top = top + other.top,
+    right = right + other.right,
+    bottom = bottom + other.bottom,
+)
+
+private fun Rect.minus(other: Rect) = Rect(
+    left = left - other.left,
+    top = top - other.top,
+    right = right - other.right,
+    bottom = bottom - other.bottom,
+)
+
 /** What the host remembers between frames. Plain fields: written in the draw pass, never observed. */
 private class FrameMemory {
     var host: LayoutCoordinates? = null
-    var from: Rect? = null
     var last: Rect? = null
 
     /** Where the frame last landed, so it can fade out there rather than vanish. */
@@ -271,24 +295,43 @@ private class FrameMemory {
 
     /** Only there to be written: reading [TvFocusSlideState.moves] is what subscribes the draw. */
     var seenMoves: Int = 0
+
+    /**
+     * Where [target] is in the host, or null while either is not placed.
+     *
+     * Not clipped: a poster scrolling in at a row's edge is still the shape it is, and a frame cut
+     * to its visible sliver would look like a different tile.
+     */
+    fun boundsOf(target: LayoutCoordinates): Rect? {
+        val host = host?.takeIf { it.isAttached } ?: return null
+        if (!target.isAttached) return null
+        return host.localBoundingBoxOf(target, clipBounds = false)
+    }
 }
 
 private class NodeMemory {
     var coordinates: LayoutCoordinates? = null
 }
 
-/** Matches the border every poster drew for itself before the frame was shared. */
-private val FRAME_WIDTH = 3.dp
+/**
+ * Thin enough to sit on the artwork rather than box it in. Three was what every poster drew for
+ * itself, and as one frame moving across the screen it read as heavy.
+ */
+private val FRAME_WIDTH = 2.dp
 
 /** The poster's 8dp corner at its focused 1.1 scale. */
 private val FRAME_CORNER = 9.dp
 
-/** Quick enough to keep up with a held remote, slow enough to be seen moving. */
-private const val SLIDE_MILLIS = 220
+/**
+ * How firmly the frame is pulled to the tile: about a third of a second to arrive, with no
+ * overshoot. Firmer, and a single press reads as a jump; softer, and a held remote leaves the
+ * frame trailing behind the poster it is meant to be marking.
+ */
+private const val SLIDE_STIFFNESS = Spring.StiffnessMediumLow
 private const val FADE_MILLIS = 150
 
 /** Longer than the gap between one tile letting go and the next claiming; shorter than a glance. */
 private const val HIDE_GRACE_MILLIS = 80L
 
 /** Long enough to cover the poster's scale spring and the row's bring-into-view scroll. */
-private const val SETTLE_NANOS = 600_000_000L
+private const val SETTLE_NANOS = 700_000_000L

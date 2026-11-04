@@ -21,7 +21,6 @@ package dev.quiblo.tv.ui.browse
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
@@ -99,6 +98,8 @@ import dev.quiblo.tv.R
 import dev.quiblo.tv.ui.common.AmbientRequest
 import dev.quiblo.tv.ui.common.LocalAmbientSink
 import dev.quiblo.tv.ui.common.LocalTvReturn
+import dev.quiblo.tv.ui.common.TvFocusSlideHost
+import dev.quiblo.tv.ui.common.focusFrame
 import dev.quiblo.tv.ui.common.insistOnFocus
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -211,34 +212,46 @@ private fun TvMergedGrid(
             )
         }
 
-        else -> LazyVerticalGrid(
-            // Adaptive rather than a fixed count. A television panel is 960dp wide and a monitor
-            // running this build is not, and a column count chosen for one crops the other.
-            //
-            // The tile is narrower here than on the shelves (`030` #3). A shelf is walked
-            // sideways, so a big poster costs nothing but presses; a grid is the whole catalogue
-            // at once and the question it answers is "what is in here" — which is a question about
-            // how many titles fit on the screen. At 120dp a 960dp panel holds seven across where
-            // the shelf width held five.
-            columns = GridCells.Adaptive(minSize = GRID_POSTER_WIDTH + FOCUS_GROWTH_HORIZONTAL * 2),
-            modifier = modifier.fillMaxSize(),
-            // Room for a focused poster to grow into at the edges of the grid, on the same
-            // reasoning as the rows: a `LazyVerticalGrid` clips to its own bounds.
-            contentPadding = PaddingValues(vertical = FOCUS_GROWTH, horizontal = FOCUS_GROWTH_HORIZONTAL),
-            horizontalArrangement = Arrangement.Center,
-        ) {
-            items(count = items.itemCount) { index ->
-                val channel = items[index] ?: return@items
-                LaunchedEffect(channel.id) { viewModel.onPosterVisible(channel) }
-                TvPoster(
-                    tile = TvTile(channel),
-                    rating = state.ratings[channel.stableKey],
-                    fallbackArtworkUrl = state.posters[channel.stableKey],
-                    onClick = { onPlay(items.itemSnapshotList.items, index) },
-                    // Matches the cell the grid measured. A tile wider than its column is a tile
-                    // clipped down one side, and a focused one is clipped further.
-                    posterWidth = GRID_POSTER_WIDTH,
-                )
+        // The frame that slides between posters is the grid's, not each tile's. See `TvFocusSlideHost`.
+        // The grid ignores the height left under the banner: it is a grid, and it scrolls.
+        else -> TvCatalogueWithPreview(
+            firstTile = items.peek(0)?.let(::TvTile),
+            ratings = state.ratings,
+            posters = state.posters,
+            preview = viewModel::titlePreview,
+            modifier = modifier,
+        ) { _ ->
+            TvFocusSlideHost(modifier = Modifier.fillMaxSize()) {
+                LazyVerticalGrid(
+                    // Adaptive rather than a fixed count. A television panel is 960dp wide and a monitor
+                    // running this build is not, and a column count chosen for one crops the other.
+                    //
+                    // The tile is narrower here than on the shelves (`030` #3). A shelf is walked
+                    // sideways, so a big poster costs nothing but presses; a grid is the whole catalogue
+                    // at once and the question it answers is "what is in here" — which is a question about
+                    // how many titles fit on the screen. At 120dp a 960dp panel holds seven across where
+                    // the shelf width held five.
+                    columns = GridCells.Adaptive(minSize = GRID_POSTER_WIDTH + FOCUS_GROWTH_HORIZONTAL * 2),
+                    modifier = Modifier.fillMaxSize(),
+                    // Room for a focused poster to grow into at the edges of the grid, on the same
+                    // reasoning as the rows: a `LazyVerticalGrid` clips to its own bounds.
+                    contentPadding = PaddingValues(vertical = FOCUS_GROWTH, horizontal = FOCUS_GROWTH_HORIZONTAL),
+                    horizontalArrangement = Arrangement.Center,
+                ) {
+                    items(count = items.itemCount) { index ->
+                        val channel = items[index] ?: return@items
+                        LaunchedEffect(channel.id) { viewModel.onPosterVisible(channel) }
+                        TvPoster(
+                            tile = TvTile(channel),
+                            rating = state.ratings[channel.stableKey],
+                            fallbackArtworkUrl = state.posters[channel.stableKey],
+                            onClick = { onPlay(items.itemSnapshotList.items, index) },
+                            // Matches the cell the grid measured. A tile wider than its column is a tile
+                            // clipped down one side, and a focused one is clipped further.
+                            posterWidth = GRID_POSTER_WIDTH,
+                        )
+                    }
+                }
             }
         }
     }
@@ -372,40 +385,67 @@ private fun TvCategoryShelves(
             )
         }
 
-        else -> TvCategoryList(
-            rows = rows,
-            ratings = state.ratings,
-            onVisible = viewModel::onPosterVisible,
-            // The position travels with the item rather than being searched for. It is
-            // indexed against the flat list so zapping walks every item on screen, not just
-            // the row the viewer happened to start in.
-            onItemClick = { item -> onPlay(state.items, item.flatIndex) },
-            modifier = modifier,
-            // First, above the catalogue, because it is what a returning viewer came for.
-            // Empty on Favourites and on Live, which the ViewModel decides — a channel is
-            // not something anyone continues, and Favourites is a list built by hand.
-            continueWatching = if (state.history.isEmpty()) {
-                null
+        else -> {
+            val catalogue: @Composable (Modifier, Dp) -> Unit = { listModifier, posterWidth ->
+                TvCategoryList(
+                    rows = rows,
+                    posterWidth = posterWidth,
+                    ratings = state.ratings,
+                    onVisible = viewModel::onPosterVisible,
+                    // The position travels with the item rather than being searched for. It is
+                    // indexed against the flat list so zapping walks every item on screen, not just
+                    // the row the viewer happened to start in.
+                    onItemClick = { item -> onPlay(state.items, item.flatIndex) },
+                    modifier = listModifier,
+                    // First, above the catalogue, because it is what a returning viewer came for.
+                    // Empty on Favourites and on Live, which the ViewModel decides — a channel is
+                    // not something anyone continues, and Favourites is a list built by hand.
+                    continueWatching = if (state.history.isEmpty()) {
+                        null
+                    } else {
+                        {
+                            TvContinueWatchingRow(
+                                entries = state.history,
+                                posters = state.posters,
+                                // Null when the provider has since dropped the title, which is an
+                                // honest outcome rather than an error: the row is stale, and doing
+                                // nothing is better than opening a screen about nothing.
+                                onClick = { entry ->
+                                    scope.launch {
+                                        viewModel.channelForHistory(entry)?.let(onResume)
+                                    }
+                                },
+                                // The same repository call the phone's long-press makes, and the same
+                                // series branch inside it — one action, one implementation (INC-F3).
+                                onRemove = viewModel::removeFromHistory,
+                            )
+                        }
+                    },
+                )
+            }
+
+            /*
+             * Movies and Series get the preview banner above their shelves; Favourites does not —
+             * it is a short list somebody built by hand, and they know what is on it.
+             *
+             * The shelves move down to make the room, and the posters are sized from what is left
+             * so a whole row and its heading still fit, which is the arithmetic Search already
+             * does under its field. See `posterWidthFor`.
+             */
+            if (favouritesOnly) {
+                catalogue(modifier, POSTER_WIDTH)
             } else {
-                {
-                    TvContinueWatchingRow(
-                        entries = state.history,
-                        posters = state.posters,
-                        // Null when the provider has since dropped the title, which is an
-                        // honest outcome rather than an error: the row is stale, and doing
-                        // nothing is better than opening a screen about nothing.
-                        onClick = { entry ->
-                            scope.launch {
-                                viewModel.channelForHistory(entry)?.let(onResume)
-                            }
-                        },
-                        // The same repository call the phone's long-press makes, and the same
-                        // series branch inside it — one action, one implementation (INC-F3).
-                        onRemove = viewModel::removeFromHistory,
-                    )
+                TvCatalogueWithPreview(
+                    firstTile = rows.firstOrNull()?.items?.firstOrNull()?.tile,
+                    ratings = state.ratings,
+                    posters = state.posters,
+                    preview = viewModel::titlePreview,
+                    modifier = modifier,
+                ) { available ->
+                    catalogue(Modifier, posterWidthFor(available))
                 }
-            },
-        )
+            }
+        }
     }
 }
 
@@ -497,67 +537,74 @@ internal fun TvCategoryList(
         }
     }
 
-    LazyColumn(
-        state = listState,
-        modifier = modifier.fillMaxSize(),
-        // Padding at the ends so the first heading and last row are not flush against the
-        // edges. contentPadding is used rather than Modifier.padding so that the focused
-        // poster's growth is not clipped by the container's bounds.
-        //
-        // Full-bleed header: top padding is removed when a header is present, so a hero
-        // slider can reach the screen edges and blend into the ambient light.
-        contentPadding = PaddingValues(top = if (header == null) LIST_TOP_PADDING else 0.dp, bottom = 32.dp),
-        // Each row reserves FOCUS_GROWTH above and below itself, so the spacing between
-        // rows is reduced by the same amount to keep the rhythm on screen unchanged.
-        verticalArrangement = Arrangement.spacedBy(ROW_SPACING),
-    ) {
-        if (header != null) {
-            item(key = "header") {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .onFocusChanged { isHeaderFocused = it.hasFocus }
-                        .ignoreChildBringIntoView(),
-                ) {
-                    header()
+    /*
+     * One focus frame for the whole catalogue, sliding from the poster the remote left to the one
+     * it reached — across a row and between rows alike. It draws over the list and measures
+     * nothing, so the rows below are laid out exactly as they were. See `TvFocusSlideHost`.
+     */
+    TvFocusSlideHost(modifier = modifier.fillMaxSize()) {
+        LazyColumn(
+            state = listState,
+            modifier = Modifier.fillMaxSize(),
+            // Padding at the ends so the first heading and last row are not flush against the
+            // edges. contentPadding is used rather than Modifier.padding so that the focused
+            // poster's growth is not clipped by the container's bounds.
+            //
+            // Full-bleed header: top padding is removed when a header is present, so a hero
+            // slider can reach the screen edges and blend into the ambient light.
+            contentPadding = PaddingValues(top = if (header == null) LIST_TOP_PADDING else 0.dp, bottom = 32.dp),
+            // Each row reserves FOCUS_GROWTH above and below itself, so the spacing between
+            // rows is reduced by the same amount to keep the rhythm on screen unchanged.
+            verticalArrangement = Arrangement.spacedBy(ROW_SPACING),
+        ) {
+            if (header != null) {
+                item(key = "header") {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .onFocusChanged { isHeaderFocused = it.hasFocus }
+                            .ignoreChildBringIntoView(),
+                    ) {
+                        header()
+                    }
                 }
             }
-        }
 
-        if (continueWatching != null) {
-            item(key = CONTINUE_ROW_KEY) {
+            if (continueWatching != null) {
+                item(key = CONTINUE_ROW_KEY) {
+                    val rowModifier = if (header != null) {
+                        Modifier.padding(horizontal = ROW_HORIZONTAL_PADDING)
+                    } else {
+                        Modifier
+                    }
+                    Box(modifier = rowModifier) {
+                        continueWatching()
+                    }
+                }
+            }
+
+            items(items = rows, key = { it.title }) { row ->
                 val rowModifier = if (header != null) {
                     Modifier.padding(horizontal = ROW_HORIZONTAL_PADDING)
                 } else {
                     Modifier
                 }
-                Box(modifier = rowModifier) {
-                    continueWatching()
-                }
+                CategoryRow(
+                    category = row.title,
+                    items = row.items,
+                    ratings = ratings,
+                    posters = posters,
+                    onVisible = onVisible,
+                    onItemClick = onItemClick,
+                    showKindBadge = showKindBadge,
+                    style = row.style,
+                    focusedKey = focusedKey,
+                    cursorFocus = cursorFocus,
+                    onFocusedKeyChange = { focusedKey = it },
+                    posterWidth = posterWidth,
+                    modifier = rowModifier,
+                )
             }
-        }
-
-        items(items = rows, key = { it.title }) { row ->
-            val rowModifier = if (header != null) {
-                Modifier.padding(horizontal = ROW_HORIZONTAL_PADDING)
-            } else {
-                Modifier
-            }
-            CategoryRow(
-                category = row.title,
-                items = row.items,
-                ratings = ratings,
-                posters = posters,
-                onVisible = onVisible,
-                onItemClick = onItemClick,
-                showKindBadge = showKindBadge,
-                style = row.style,
-                focusedKey = focusedKey,
-                cursorFocus = cursorFocus,
-                onFocusedKeyChange = { focusedKey = it },
-                posterWidth = posterWidth,
-                modifier = rowModifier,
-            )
         }
     }
 }
@@ -861,8 +908,13 @@ internal fun TvPoster(
 
     // Reported rather than stored here: which tile the remote is on is a fact about the list,
     // and a tile that remembered it for itself would be forgotten with the tile.
+    // The preview banner over Movies and Series hears about it the same way the light does.
+    val focusedTileSink = LocalFocusedTileSink.current
     LaunchedEffect(isFocused) {
-        if (isFocused) onFocused()
+        if (isFocused) {
+            onFocused()
+            focusedTileSink(tile)
+        }
     }
 
     val scale by animateFloatAsState(
@@ -1026,12 +1078,9 @@ private fun PosterArtwork(
         modifier = Modifier
             .fillMaxWidth()
             .aspectRatio(POSTER_ASPECT_RATIO)
-            .clip(RoundedCornerShape(8.dp))
-            .border(
-                width = if (isFocused) 3.dp else 0.dp,
-                color = if (isFocused) Color.White else Color.Transparent,
-                shape = RoundedCornerShape(8.dp),
-            ),
+            // The screen's sliding frame when there is one, this tile's own border when not.
+            // Inside the tile's scale layer, so the frame follows the poster as it grows.
+            .focusFrame(isFocused, RoundedCornerShape(8.dp)),
     ) {
         if (artworkUrl == null) {
             ArtworkPlaceholder()

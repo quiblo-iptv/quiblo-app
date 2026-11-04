@@ -369,3 +369,36 @@ internal const val STUTTER_DROP_PERCENT = 25L
 internal const val STUTTER_RELOADS = 2
 
 private const val PERCENT = 100L
+
+/**
+ * Where a seek in a film or an episode lands (`BUG-065`).
+ *
+ * **On a keyframe, never between two.** Reported on the television: a film played from its start
+ * is smooth; the same film after a skip, or resumed from the middle, drops frames for as long as
+ * it is watched — and a stutter reload, which also starts from the middle, brings it straight
+ * back. An exact seek lands mid-group: the decoder starts at the keyframe before the target,
+ * decodes its way to it while the clock is already running, and only then shows anything. A seek
+ * to the keyframe itself starts the picture the way a film started from zero does, which is the
+ * one case that was always smooth.
+ *
+ * Forward skips land on the next keyframe and backward ones on the previous one, so a skip never
+ * goes the wrong way however far apart the keyframes are. A start at a saved place lands on the
+ * keyframe before it: a few seconds of what was already seen, rather than a few seconds missed.
+ *
+ * Live is left exact. A live stream's position is the edge, not a place in a film, and this is a
+ * film's problem.
+ *
+ * @param fromMillis where playback is now, or null for a start at a saved place.
+ */
+internal fun seekLandingFor(fromMillis: Long?, toMillis: Long, isLive: Boolean): SeekLanding = when {
+    isLive -> SeekLanding.EXACT
+    fromMillis == null || toMillis < fromMillis -> SeekLanding.PREVIOUS_KEYFRAME
+    else -> SeekLanding.NEXT_KEYFRAME
+}
+
+/** See [seekLandingFor]. */
+internal enum class SeekLanding {
+    EXACT,
+    PREVIOUS_KEYFRAME,
+    NEXT_KEYFRAME,
+}

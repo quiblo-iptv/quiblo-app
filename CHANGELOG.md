@@ -15,6 +15,8 @@ Formatted after [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and ve
 
 ## Unreleased
 
+## 0.33.0
+
 ### Changed
 
 - **A new look for Quiblo.** The mark is now a television screen whose corner turns into the tail

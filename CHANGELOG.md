@@ -15,6 +15,8 @@ Formatted after [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and ve
 
 ## Unreleased
 
+## 0.32.0
+
 ### Changed
 
 - **The cover above Movies and Series stands in the corner of the screen.** It used to float inside

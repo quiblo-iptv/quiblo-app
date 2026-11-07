@@ -336,13 +336,13 @@ row below is a question about how the screen reads and not about whether the con
 | **Passes if** | The two icons read as one group rather than as two stray controls, the highlight is obvious on each from across the room, and the face is recognisably the profile's own |
 | **Why it is here** | The spacing was wrong by 28dp and only looked wrong; `TvBarKeysTest` was green throughout |
 
-### A7.3 — the resting search screen
+### A7.3 — the search screen before anything is asked
 
 | | |
 | :---- | :---- |
-| **What to look at** | Open Search and do not type. The mark, the name, the field and Advanced |
-| **Passes if** | The block sits on what reads as the middle of the panel from three metres, and Advanced reads as belonging to the field above it |
-| **Why it is here** | This screen's position has been wrong four times, each time for a different reason, and twice it measured as correct while looking wrong. It is now measured against a line 46% down the panel rather than half way — **the lift is the part most likely to be wrong on a large screen**, in either direction |
+| **What to look at** | Open Search and do not type. The field at the top left, Advanced, and **Include TV** |
+| **Passes if** | The field lines up with the logo in the bar, and Right walks from it to Advanced and then to the switch |
+| **Fails if** | Include TV is missing until Advanced is opened, or switching it off still shows live results |
 
 ### A7.4 — picking a face for a new profile
 
@@ -364,8 +364,8 @@ without a working panel — `STOPPERS.md` S2. The dates come from `get_vod_strea
 
 | | |
 | :---- | :---- |
-| **What to look at** | Walk the tab bar left and right from Search |
-| **Passes if** | Recently Added sits after Live and before Movies, its label is legible from the sofa, and Back from it returns to Search like every other tab |
+| **What to look at** | Walk the tab bar left and right from Home |
+| **Passes if** | Recently Added sits after Live and before Movies, its label is legible from the sofa, and Back from it returns to Home like every other tab |
 | **Fails if** | It sits anywhere else, or the bar's Left and Right skip it — the bar is index arithmetic and a new position repoints all of it |
 
 ### A8.2 — the row against the account

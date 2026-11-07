@@ -22,14 +22,14 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.em
 
 /**
- * Outfit: the wordmark's face, and the titles on the television.
+ * Outfit: the titles and the tab bar on the television. The name itself is not set in it — see
+ * [QuibloWordmark], which is drawn.
  *
- * Bundled rather than downloaded, because a launch screen cannot wait on a font request and a
- * television is often offline when it is switched on. Two weights and nothing else: SemiBold for
- * the wordmark and titles, Medium for headings under them. Outfit covers Latin only; a title in
+ * Bundled rather than downloaded, because a television is often offline when it is switched on.
+ * Two weights and nothing else: SemiBold for titles and the selected tab, Medium for headings
+ * under them and the other tabs. Outfit covers Latin only; a title in
  * another script falls back to the system font glyph by glyph, which is what Android does with
  * any family that lacks a character.
  */
@@ -39,16 +39,14 @@ val QuibloDisplayFamily = FontFamily(
 )
 
 /**
- * The name as the wordmark writes it. Lowercase is the brand, not a typo: q, b and o are three
- * rounds held apart by straight strokes, and capitals would break the rhythm.
+ * The name as the wordmark writes it, for whoever cannot see the picture. Lowercase is the brand,
+ * not a typo: q, b and o are three screens held apart by straight strokes, and capitals would
+ * break the rhythm.
  *
  * The app's *label* — on the launcher, in settings — stays "Quiblo", because a label is a name in
  * a sentence and the wordmark is a picture of one.
  */
 const val QUIBLO_WORDMARK = "quiblo"
-
-/** The wordmark's tracking: pulled in so the six letters read as one shape. */
-val WordmarkTracking = (-0.035).em
 
 /** The brand's colours. Everything is ink and paper; the only colour is the light in the screen. */
 object QuibloColours {

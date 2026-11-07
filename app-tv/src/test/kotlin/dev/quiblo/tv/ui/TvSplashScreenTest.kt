@@ -21,6 +21,7 @@ package dev.quiblo.tv.ui
 import android.app.Application
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.v2.createComposeRule
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import dev.quiblo.tv.ui.splash.TvSplashScreen
@@ -55,8 +56,9 @@ class TvSplashScreenTest {
         }
         compose.waitForIdle()
 
-        // Lowercase: the wordmark, not the app label. See `QUIBLO_WORDMARK`.
-        compose.onNodeWithText("quiblo").assertIsDisplayed()
+        // Lowercase: the wordmark, not the app label, and a drawing rather than text. See
+        // `QuibloWordmark`.
+        compose.onNodeWithContentDescription("quiblo").assertIsDisplayed()
         compose.onNodeWithTag("splash_version_text").assertIsDisplayed()
         compose.onNodeWithText("v0.20.2").assertIsDisplayed()
     }

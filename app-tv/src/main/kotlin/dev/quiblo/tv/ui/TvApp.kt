@@ -95,7 +95,9 @@ import dev.quiblo.tv.ui.browse.TvForYouScreen
 import dev.quiblo.tv.ui.browse.TvPosterRows
 import dev.quiblo.tv.ui.common.AmbientRequest
 import dev.quiblo.tv.ui.common.LocalAmbientSink
+import dev.quiblo.tv.ui.common.LocalBackdropSink
 import dev.quiblo.tv.ui.common.LocalTvReturn
+import dev.quiblo.tv.ui.common.TvBackdrop
 import dev.quiblo.tv.ui.common.TvReturnSignal
 import dev.quiblo.tv.ui.common.insistOnFocus
 import dev.quiblo.tv.ui.common.onTap
@@ -724,6 +726,19 @@ private fun TvShell(
                 activeProfileAvatar = activeProfileAvatar,
             )
         } else {
+            /*
+             * The focused title's picture, in the screen's top right-hand corner, under the bar.
+             *
+             * Drawn here rather than in the catalogue's banner because only the shell's box is
+             * the whole screen: inside the banner the picture had four edges to fade, and a
+             * rectangle faded on four sides still reads as a rectangle. Here two of its sides are
+             * the screen's own edges and the bar's dark gradient lies over its top. Only Movies
+             * and Series report one; every other tab leaves it empty, and it fades away.
+             */
+            var backdrop by remember { mutableStateOf(emptyList<String>()) }
+            val backdropSink = remember { { candidates: List<String> -> backdrop = candidates } }
+            TvBackdrop(candidates = { backdrop })
+
             Column(modifier = Modifier.fillMaxSize()) {
                 TvTopBar(
                     tabs = tabs,
@@ -745,35 +760,8 @@ private fun TvShell(
                         .focusGroup(),
                 ) {
                     tabState.SaveableStateProvider(TvTab.entries[selectedTab]) {
-                        when (TvTab.entries[selectedTab]) {
-                            TvTab.SEARCH -> TvSearchScreen(
-                                onOpen = { items, index -> onOpen(items, index, WatchOrigin.SEARCH) },
-                            )
-
-                            TvTab.LIVE -> TvLiveScreen(
-                                onPlay = { items, index -> onOpen(items, index, WatchOrigin.ROW) },
-                            )
-
-                            TvTab.MOVIES -> TvPosterRows(
-                                kind = MediaKind.VOD,
-                                onPlay = { items, index -> onOpen(items, index, WatchOrigin.ROW) },
-                                onResume = onOpenChannel,
-                            )
-
-                            TvTab.SERIES -> TvPosterRows(
-                                kind = MediaKind.SERIES,
-                                onPlay = { items, index -> onOpen(items, index, WatchOrigin.ROW) },
-                                onResume = onOpenChannel,
-                            )
-
-                            TvTab.FAVOURITES -> TvPosterRows(
-                                kind = MediaKind.VOD,
-                                favouritesOnly = true,
-                                onPlay = { items, index -> onOpen(items, index, WatchOrigin.FAVOURITE) },
-                                onResume = onOpenChannel,
-                            )
-
-                            TvTab.FOR_YOU -> Unit
+                        CompositionLocalProvider(LocalBackdropSink provides backdropSink) {
+                            TvTabContent(TvTab.entries[selectedTab], onOpen, onOpenChannel)
                         }
                     }
                 }
@@ -801,6 +789,45 @@ private fun TvShell(
                     .padding(bottom = SCREEN_PADDING),
             )
         }
+    }
+}
+
+/** What sits under the bar on every tab but Home. Its own function so [TvShell] stays readable. */
+@Composable
+private fun TvTabContent(
+    tab: TvTab,
+    onOpen: (List<Channel>, Int, WatchOrigin) -> Unit,
+    onOpenChannel: (Channel) -> Unit,
+) {
+    when (tab) {
+        TvTab.SEARCH -> TvSearchScreen(
+            onOpen = { items, index -> onOpen(items, index, WatchOrigin.SEARCH) },
+        )
+
+        TvTab.LIVE -> TvLiveScreen(
+            onPlay = { items, index -> onOpen(items, index, WatchOrigin.ROW) },
+        )
+
+        TvTab.MOVIES -> TvPosterRows(
+            kind = MediaKind.VOD,
+            onPlay = { items, index -> onOpen(items, index, WatchOrigin.ROW) },
+            onResume = onOpenChannel,
+        )
+
+        TvTab.SERIES -> TvPosterRows(
+            kind = MediaKind.SERIES,
+            onPlay = { items, index -> onOpen(items, index, WatchOrigin.ROW) },
+            onResume = onOpenChannel,
+        )
+
+        TvTab.FAVOURITES -> TvPosterRows(
+            kind = MediaKind.VOD,
+            favouritesOnly = true,
+            onPlay = { items, index -> onOpen(items, index, WatchOrigin.FAVOURITE) },
+            onResume = onOpenChannel,
+        )
+
+        TvTab.FOR_YOU -> Unit
     }
 }
 

@@ -459,9 +459,8 @@ private fun SeriesHeader(
 ) {
     Row(horizontalArrangement = Arrangement.spacedBy(DETAIL_COLUMN_GAP)) {
         DetailArtwork(
-            url = state.channel.logoUrl?.takeIf { it.isNotBlank() }
-                ?: state.details.coverUrl
-                ?: state.metadata?.posterUrl,
+            urls = listOf(state.channel.logoUrl, state.details.coverUrl, state.metadata?.posterUrl),
+            retry = state.refreshResult,
         )
 
         Column(modifier = Modifier.fillMaxWidth()) {

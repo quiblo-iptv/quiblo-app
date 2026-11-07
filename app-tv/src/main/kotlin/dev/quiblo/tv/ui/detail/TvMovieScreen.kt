@@ -229,9 +229,8 @@ private fun Loaded(
                 // The provider own artwork first, and the metadata service only where there is
                 // none. A panel cover is the cover for the thing it is serving.
                 DetailArtwork(
-                    url = state.channel.logoUrl?.takeIf { it.isNotBlank() }
-                        ?: state.details?.coverUrl
-                        ?: state.metadata?.posterUrl,
+                    urls = listOf(state.channel.logoUrl, state.details?.coverUrl, state.metadata?.posterUrl),
+                    retry = state.refreshResult,
                 )
 
                 Column(modifier = Modifier.fillMaxWidth()) {

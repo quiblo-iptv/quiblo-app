@@ -110,6 +110,7 @@ import dev.quiblo.tv.ui.common.LocalTvReturn
 import dev.quiblo.tv.ui.common.TvFocusSlideHost
 import dev.quiblo.tv.ui.common.focusFrame
 import dev.quiblo.tv.ui.common.insistOnFocus
+import dev.quiblo.tv.ui.common.rememberArtworkChain
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -912,8 +913,10 @@ internal fun TvPoster(
     // shows a corner of a logo — the exact mistake PLAN-TV.md §3.3 exists to avoid — so a
     // live item keeps its whole logo inside the same tile instead.
     val isLogo = tile.kind == MediaKind.LIVE
-    val artworkUrl = tile.artworkUrl?.takeIf { it.isNotBlank() }
-        ?: fallbackArtworkUrl?.takeIf { it.isNotBlank() }
+    // The provider's picture, and the metadata service's when that one will not load — not only
+    // when the provider sent none. A dead link is the commoner of the two. See `BrokenArtwork`.
+    val artwork = rememberArtworkChain(tile.artworkUrl, fallbackArtworkUrl)
+    val artworkUrl = artwork.url
     val isPlayable = tile.channel != null
     val interactionSource = remember { MutableInteractionSource() }
     val isFocused by interactionSource.collectIsFocusedAsState()
@@ -1030,6 +1033,7 @@ internal fun TvPoster(
         ) {
             PosterArtwork(
                 artworkUrl = artworkUrl,
+                onArtworkFailed = artwork::failed,
                 isLogo = isLogo,
                 isPlayable = isPlayable,
                 isFocused = isFocused,
@@ -1088,6 +1092,8 @@ internal fun TvPoster(
 @Composable
 private fun PosterArtwork(
     artworkUrl: String?,
+    /** The picture at [artworkUrl] did not load; the tile moves on to its next one. */
+    onArtworkFailed: (String) -> Unit,
     isLogo: Boolean,
     isPlayable: Boolean,
     isFocused: Boolean,
@@ -1120,6 +1126,7 @@ private fun PosterArtwork(
                     .alpha(if (isPlayable) 1f else UNAVAILABLE_ARTWORK_ALPHA),
                 loading = { ArtworkPlaceholder() },
                 error = { ArtworkPlaceholder() },
+                onError = { onArtworkFailed(artworkUrl) },
             )
         }
 

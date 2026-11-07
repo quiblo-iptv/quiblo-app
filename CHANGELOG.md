@@ -15,6 +15,22 @@ Formatted after [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and ve
 
 ## Unreleased
 
+### Changed
+
+- **The cover above Movies and Series stands in the corner of the screen.** It used to float inside
+  its banner, faded on all four sides, and still read as a rectangle — worse while a new one was
+  loading. It now sits in the top right of the screen, under the tabs, with only the left and the
+  bottom fading away, and a new title's picture dissolves in once it has loaded rather than before.
+
+### Fixed
+
+- **Posters whose link is dead now show the TMDB poster.** A provider's artwork link that would not
+  load left a grey box, because a link that existed always won over the poster the metadata service
+  had already found. The tile now falls back to that poster when the provider's will not load, and
+  remembers the dead link for the session. The detail screens do the same.
+- **"Reload info" shows the poster it finds.** It fetched a fresh TMDB poster and then kept showing
+  the provider's broken one; it now tries every picture again and lands on one that loads.
+
 ## 0.31.0
 
 ### Changed

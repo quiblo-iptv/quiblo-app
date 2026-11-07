@@ -6,7 +6,10 @@
 
 <div align="center">
 
-<img src="https://quiblo-iptv.github.io/quiblo-wiki/brand/quiblo-icon-256.png" alt="Quiblo" width="120" height="120">
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/brand/quiblo-lockup-dark.svg">
+  <img src="docs/brand/quiblo-lockup-light.svg" alt="Quiblo" width="320">
+</picture>
 
 # Quiblo
 

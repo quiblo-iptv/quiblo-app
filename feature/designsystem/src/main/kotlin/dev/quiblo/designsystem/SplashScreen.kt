@@ -222,13 +222,8 @@ fun QuibloSplashScreen(
                     .onGloballyPositioned { markCentre = it.boundsInRoot().center - origin },
             )
             Spacer(modifier = Modifier.height(logoTitleSpacing))
-            Text(
-                text = QUIBLO_WORDMARK,
-                color = QuibloColours.Paper,
-                fontSize = titleSize,
-                fontFamily = QuibloDisplayFamily,
-                fontWeight = FontWeight.SemiBold,
-                letterSpacing = WordmarkTracking,
+            QuibloWordmark(
+                height = with(LocalDensity.current) { titleSize.toDp() },
                 modifier = Modifier.wipedIn(clock) { diveAt },
             )
         }

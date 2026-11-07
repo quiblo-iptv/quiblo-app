@@ -33,11 +33,11 @@ import org.junit.jupiter.api.Test
 class TvTabOrderTest {
 
     @Test
-    fun `the bar reads search, for you, live, movies, series, favourites`() {
+    fun `the bar reads home, search, live, movies, series, favourites`() {
         assertEquals(
             listOf(
-                TvTab.SEARCH,
                 TvTab.FOR_YOU,
+                TvTab.SEARCH,
                 TvTab.LIVE,
                 TvTab.MOVIES,
                 TvTab.SERIES,
@@ -48,20 +48,7 @@ class TvTabOrderTest {
     }
 
     @Test
-    fun `search is still first, because Back comes to rest there`() {
-        assertEquals(0, TvTab.SEARCH.ordinal)
-    }
-
-    @Test
-    fun `for you sits ahead of live and the catalogues`() {
-        assertEquals(TvTab.SEARCH.ordinal + 1, TvTab.FOR_YOU.ordinal)
-        assertEquals(TvTab.FOR_YOU.ordinal + 1, TvTab.LIVE.ordinal)
-    }
-
-    @Test
-    fun `search is the only icon-only tab`() {
-        // Everything else is a word. An icon nobody recognises on a bar of words reads as a
-        // missing label, and a magnifier is the one glyph that does not need one.
-        assertEquals(listOf(TvTab.SEARCH), TvTab.entries.filter { it.isIconOnly })
+    fun `home is first, because Back comes to rest there`() {
+        assertEquals(0, TvTab.FOR_YOU.ordinal)
     }
 }

@@ -19,7 +19,6 @@
 package dev.quiblo.tv.ui
 
 import androidx.activity.compose.BackHandler
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.focusGroup
@@ -33,15 +32,12 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -72,9 +68,7 @@ import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.quiblo.core.data.CatalogueWarmup
 import dev.quiblo.core.data.PlayerSettingsRepository
@@ -690,8 +684,8 @@ private fun TvShell(
 
     BackHandler {
         when (tvBackAction(TvBackState(selectedTab, exitArmed))) {
-            TvBackAction.GoToSearch -> {
-                onSelectTab(TvTab.SEARCH.ordinal)
+            TvBackAction.GoToHome -> {
+                onSelectTab(TvTab.FOR_YOU.ordinal)
                 // The bar is already placed here — this is a press, not a first composition — so
                 // one ask is enough and there is no coroutine to insist from.
                 barFocusRequester.tryRequestFocus()
@@ -852,11 +846,10 @@ private const val EXIT_WINDOW_MILLIS = 3_000L
 private const val EXIT_NOTICE_ALPHA = 0.75f
 
 /**
- * Text tabs with an underline, as the Google TV home screen does it.
+ * The lockup, then the tabs as words, with a soft pill under the selected one.
  *
- * No pill, no card, no surface behind the labels — the reference is plain text, and a
- * filled chip reads as a button rather than as a place you are.
- *
+ * Words because a bar of words needs no legend, and one pill because the selection is a place the
+ * remote is, not a state each label has. See [TvBarTabs].
  * **The bar is one focus target, not five.** Moving left and right along it still switches
  * tab immediately, which is the Google TV feel this was always after, but the switch is
  * driven by the key press rather than by which label happens to hold focus.
@@ -962,36 +955,19 @@ private fun TvTopBar(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(28.dp),
         ) {
-            tabs.forEach { tab ->
-                // Bright only when the bar itself holds the remote *and* the remote is on the
-                // tabs rather than one of the icons past them. While focus is down in the content
-                // the selected tab stays legible but recedes, which is how a viewer tells where a
-                // press will land.
-                val isBarFocused = isFocused && spot == TvBarSpot.TABS
+            TvBarLockup()
 
-                if (tab.isIconOnly) {
-                    IconTab(
-                        icon = Icons.Filled.Search,
-                        contentDescription = stringResource(tab.labelRes),
-                        isSelected = tab.ordinal == selectedTab,
-                        isBarFocused = isBarFocused,
-                        modifier = Modifier.onTap {
-                            spot = TvBarSpot.TABS
-                            onSelect(tab.ordinal)
-                        },
-                    )
-                } else {
-                    TextTab(
-                        label = stringResource(tab.labelRes),
-                        isSelected = tab.ordinal == selectedTab,
-                        isBarFocused = isBarFocused,
-                        modifier = Modifier.onTap {
-                            spot = TvBarSpot.TABS
-                            onSelect(tab.ordinal)
-                        },
-                    )
-                }
-            }
+            // Bright only when the bar holds the remote *and* the remote is on the tabs rather than
+            // one of the icons past them. That is how a viewer tells where a press will land.
+            TvBarTabs(
+                tabs = tabs,
+                selectedTab = selectedTab,
+                isBarFocused = isFocused && spot == TvBarSpot.TABS,
+                onTap = { tab ->
+                    spot = TvBarSpot.TABS
+                    onSelect(tab.ordinal)
+                },
+            )
 
             Spacer(modifier = Modifier.weight(1f))
 
@@ -1075,101 +1051,6 @@ private fun BarProfile(
     }
 }
 
-/** One tab. A label and an underline — the bar above owns focus and selection. */
-@Composable
-private fun TextTab(
-    label: String,
-    isSelected: Boolean,
-    isBarFocused: Boolean,
-    modifier: Modifier = Modifier,
-) {
-    val alpha by animateFloatAsState(
-        targetValue = when {
-            isSelected && isBarFocused -> 1f
-            isSelected -> SELECTED_ALPHA
-            else -> IDLE_ALPHA
-        },
-        label = "tabAlpha",
-    )
-
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = modifier,
-    ) {
-        Text(
-            text = label,
-            color = Color.White.copy(alpha = alpha),
-            fontSize = TAB_TEXT_SIZE,
-            fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
-        )
-
-        Spacer(modifier = Modifier.height(6.dp))
-
-        // The underline marks the selected tab. Drawn always, transparent when not
-        // selected, so the label never shifts as selection moves along the bar.
-        Box(
-            modifier = Modifier
-                .width(UNDERLINE_WIDTH)
-                .height(2.dp)
-                .background(
-                    color = if (isSelected) Color.White else Color.Transparent,
-                    shape = RoundedCornerShape(1.dp),
-                ),
-        )
-    }
-}
-
-/**
- * A tab carrying a magnifier instead of a word.
- *
- * Same underline, same alpha rules, same rhythm as [TextTab] — it is a tab, and the only
- * thing different about it is that it needs no translating. The icon sits in a box the height
- * of a tab label so the underlines along the bar stay on one line.
- */
-@Composable
-private fun IconTab(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    contentDescription: String,
-    isSelected: Boolean,
-    isBarFocused: Boolean,
-    modifier: Modifier = Modifier,
-) {
-    val alpha by animateFloatAsState(
-        targetValue = when {
-            isSelected && isBarFocused -> 1f
-            isSelected -> SELECTED_ALPHA
-            else -> IDLE_ALPHA
-        },
-        label = "iconTabAlpha",
-    )
-
-    Column(modifier = modifier, horizontalAlignment = Alignment.CenterHorizontally) {
-        Box(
-            modifier = Modifier.height(TAB_LABEL_HEIGHT),
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = contentDescription,
-                tint = Color.White.copy(alpha = alpha),
-                modifier = Modifier.size(TAB_ICON_SIZE),
-            )
-        }
-
-        Spacer(modifier = Modifier.height(6.dp))
-
-        Box(
-            modifier = Modifier
-                .width(UNDERLINE_WIDTH)
-                .height(2.dp)
-                .background(
-                    color = if (isSelected) Color.White else Color.Transparent,
-                    shape = RoundedCornerShape(1.dp),
-                ),
-        )
-    }
-}
-
 @Composable
 private fun BarIcon(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
@@ -1199,13 +1080,6 @@ private fun BarIcon(
 
 /** Overscan margin. Televisions crop the edges of the frame, and many still do. */
 private val SCREEN_PADDING = 48.dp
-private val UNDERLINE_WIDTH = 28.dp
-private val TAB_TEXT_SIZE = 20.sp
-
-/** A 20sp label's line box, near enough — what an icon tab matches so the bar stays level. */
-private val TAB_LABEL_HEIGHT = 24.dp
-private val TAB_ICON_SIZE = 22.dp
-private const val SELECTED_ALPHA = 0.90f
 private const val IDLE_ALPHA = 0.55f
 
 /** Close enough that the gear and the face read as one group at the end of the bar. */

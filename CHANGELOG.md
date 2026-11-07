@@ -17,6 +17,14 @@ Formatted after [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and ve
 
 ### Changed
 
+- **A new bar across the top on the television.** The logo comes first, then Home, Search, Live,
+  Movies, Series and Favourites as words. One soft pill slides to the selected tab and lifts while
+  the remote is on the bar. Back now comes to rest on Home, where the app opens.
+- **Search keeps the field at the top left.** The logo and the field in the middle of the screen
+  are gone. **Include TV** is there on every search now, so live channels can be hidden without
+  opening Advanced.
+- **The name is drawn on the mark's grid.** Its q, b and o are small screens like the mark, on the
+  intro, the bar and the TV banner.
 - **A new look for Quiblo.** The mark is now a television screen whose corner turns into the tail
   of a Q, in place of the ring and play button that read as a magnifying glass. The name is
   written in lowercase in Outfit, and the colours are ink, warm white and one warm amber light

@@ -7,18 +7,14 @@ The mark is a filled outline here (ring, minus the cut either side of the tail, 
 because a vector drawable cannot mask one stroke with another. Compose draws the same shape
 with strokes in `QuibloMark.kt`; change both together.
 
-    pip install shapely fonttools
-    python3 tools/brand_vectors.py . feature/designsystem/src/main/res/font/outfit_semibold.ttf /dev/null
+    pip install shapely
+    python3 tools/brand_vectors.py . /dev/null
 """
 import sys
 from shapely.geometry import box, LineString
 from shapely.ops import unary_union
-from fontTools.ttLib import TTFont
-from fontTools.pens.svgPathPen import SVGPathPen
-from fontTools.pens.transformPen import TransformPen
 
 REPO = sys.argv[1]
-FONT = sys.argv[2]
 SEG = 24
 
 def rounded(x0, y0, x1, y1, r):
@@ -45,17 +41,25 @@ MARK = path_of(mark)
 COUNTER = "M40,20.5 H60 A19.5,19.5 0 0 1 79.5,40 V60 A19.5,19.5 0 0 1 60,79.5 H40 A19.5,19.5 0 0 1 20.5,60 V40 A19.5,19.5 0 0 1 40,20.5 Z"
 print("mark bounds", mark.bounds, "path chars", len(MARK), file=sys.stderr)
 
-def wordmark(text, size, tracking_em):
-    f = TTFont(FONT)
-    gs = f.getGlyphSet(); cmap = f.getBestCmap(); upem = f["head"].unitsPerEm
-    s = size / upem; x = 0.0; parts = []
-    for ch in text:
-        g = cmap[ord(ch)]
-        pen = SVGPathPen(gs)
-        gs[g].draw(TransformPen(pen, (s, 0, 0, -s, x, 0)))
-        parts.append(pen.getCommands())
-        x += f["hmtx"][g][0] * s + tracking_em * size
-    return " ".join(parts), x - tracking_em * size
+# The name on the mark's grid, 297 by 103 with the baseline at 0: every bowl is a small screen.
+# `QuibloWordmark.kt` draws the same strokes in Compose; change both together.
+def bowl(left):
+    right = left + 45.5
+    return (f"M{left + 15},-47.75 H{right - 15} A15,15 0 0 1 {right},-32.75 V-21.25 "
+            f"A15,15 0 0 1 {right - 15},-6.25 H{left + 15} A15,15 0 0 1 {left},-21.25 V-32.75 "
+            f"A15,15 0 0 1 {left + 15},-47.75 Z")
+
+WORD_STROKES = " ".join([
+    bowl(6.25), "M51.75,-54 V25",
+    "M72.25,-54 V-21.25 A15,15 0 0 0 87.25,-6.25 H102.75 A15,15 0 0 0 117.75,-21.25 V-54",
+    "M117.75,-54 V0",
+    "M138.25,-54 V0",
+    "M158.75,-78 V0", bowl(158.75),
+    "M224.75,-78 V0",
+    bowl(245.25),
+])
+WORD_DOT = ("M135,-78 H141.5 A3,3 0 0 1 144.5,-75 V-68.5 A3,3 0 0 1 141.5,-65.5 H135 "
+            "A3,3 0 0 1 132,-68.5 V-75 A3,3 0 0 1 135,-78 Z")
 
 HEADER = """<?xml version="1.0" encoding="utf-8"?>
 <!--
@@ -145,10 +149,9 @@ def background():
 """
 
 def banner():
-    word, width = wordmark("quiblo", 50, -0.035)
     return HEADER.format(note="""  The Android TV launcher banner: 320x180, as leanback requires, its own artwork at its own
   aspect ratio rather than the square icon letterboxed. The mark with its light, and the name
-  in Outfit SemiBold as outlines, so nothing depends on a font being installed.""") + f"""<vector xmlns:android="http://schemas.android.com/apk/res/android"
+  drawn on the mark's grid as strokes, so nothing depends on a font being installed.""") + f"""<vector xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:aapt="http://schemas.android.com/aapt"
     android:width="320dp"
     android:height="180dp"
@@ -180,19 +183,25 @@ def banner():
         <path android:fillColor="#FFF3F1EC" android:pathData="{MARK}" />
     </group>
 
-    <!-- The name, baseline at y=108. -->
-    <group android:translateX="142" android:translateY="108">
-        <path android:fillColor="#FFF3F1EC" android:pathData="{word}" />
+    <!-- The name, 137 units across, centred on y=90. -->
+    <group android:translateX="140" android:translateY="102" android:scaleX="0.46" android:scaleY="0.46">
+        <path
+            android:strokeColor="#FFF3F1EC"
+            android:strokeWidth="12.5"
+            android:pathData="{WORD_STROKES}" />
+        <path android:fillColor="#FFF3F1EC" android:pathData="{WORD_DOT}" />
     </group>
 </vector>
 """
 
 for app in ("app", "app-tv"):
     d = f"{REPO}/{app}/src/main/res/drawable"
-    open(f"{d}/ic_launcher_foreground.xml", "w").write(foreground())
-    open(f"{d}/ic_launcher_monochrome.xml", "w").write(monochrome())
-    open(f"{d}/ic_launcher_background.xml", "w").write(background())
-open(f"{REPO}/app-tv/src/main/res/drawable/tv_banner.xml", "w").write(banner())
-open(sys.argv[3], "w").write(MARK)
-w, width = wordmark("quiblo", 50, -0.035)
-print("banner word width", round(width, 1), "ends at", round(138 + width, 1), file=sys.stderr)
+    open(f"{d}/ic_launcher_foreground.xml", "w", encoding="utf-8", newline="
+").write(foreground())
+    open(f"{d}/ic_launcher_monochrome.xml", "w", encoding="utf-8", newline="
+").write(monochrome())
+    open(f"{d}/ic_launcher_background.xml", "w", encoding="utf-8", newline="
+").write(background())
+open(f"{REPO}/app-tv/src/main/res/drawable/tv_banner.xml", "w", encoding="utf-8", newline="
+").write(banner())
+open(sys.argv[2], "w").write(MARK)

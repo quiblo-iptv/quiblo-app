@@ -15,6 +15,8 @@ Formatted after [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and ve
 
 ## Unreleased
 
+## 0.34.0
+
 ### Changed
 
 - **A new bar across the top on the television.** The logo comes first, then Home, Search, Live,

@@ -55,7 +55,8 @@ class TvSplashScreenTest {
         }
         compose.waitForIdle()
 
-        compose.onNodeWithText("Quiblo").assertIsDisplayed()
+        // Lowercase: the wordmark, not the app label. See `QUIBLO_WORDMARK`.
+        compose.onNodeWithText("quiblo").assertIsDisplayed()
         compose.onNodeWithTag("splash_version_text").assertIsDisplayed()
         compose.onNodeWithText("v0.20.2").assertIsDisplayed()
     }

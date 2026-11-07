@@ -5,5 +5,5 @@
   Licensed under the GNU General Public License v3.0 or later. See LICENSE.
 -->
 <resources>
-    <color name="quiblo_window_background">#131318</color>
+    <color name="quiblo_window_background">#0B0C10</color>
 </resources>

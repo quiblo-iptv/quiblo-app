@@ -15,6 +15,19 @@ Formatted after [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and ve
 
 ## Unreleased
 
+### Changed
+
+- **A new look for Quiblo.** The mark is now a television screen whose corner turns into the tail
+  of a Q, in place of the ring and play button that read as a magnifying glass. The name is
+  written in lowercase in Outfit, and the colours are ink, warm white and one warm amber light
+  where the indigo and purple were. New launcher icons on phone and TV, including themed icons,
+  and a new Android TV banner.
+- **The intro flies into the app.** The mark draws itself, lands on one hit with the light coming
+  on inside it, and the camera dives through the screen into the catalogue — the real one,
+  already drawn behind it. On a slow start it holds on the glowing mark until the catalogue is
+  ready. The sound is new and is written to the picture: it is never cut off, because its second
+  half plays when the dive does.
+
 ## 0.32.0
 
 ### Changed

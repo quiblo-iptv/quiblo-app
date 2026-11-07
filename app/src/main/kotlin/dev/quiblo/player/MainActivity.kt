@@ -22,7 +22,6 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.compose.animation.Crossfade
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -30,6 +29,7 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.quiblo.core.data.PlayerSettingsRepository
 import dev.quiblo.core.model.Appearance
+import dev.quiblo.designsystem.QuibloSplashHost
 import dev.quiblo.designsystem.QuibloSplashScreen
 import dev.quiblo.player.ui.ConsentGate
 import dev.quiblo.player.ui.ProfileGate
@@ -57,16 +57,20 @@ class MainActivity : ComponentActivity() {
             // against one value, and a change applies without restarting the app.
             val appearance by appearanceRepository.appearance.collectAsStateWithLifecycle(Appearance())
             QuibloTheme(appearance = appearance) {
-                Crossfade(targetState = showSplash, label = "mainSplashCrossfade") { inSplash ->
-                    if (inSplash) {
+                // Flies into the app rather than fading to it. See `QuibloSplashHost`.
+                QuibloSplashHost(
+                    showSplash = showSplash,
+                    splash = { reveal ->
                         QuibloSplashScreen(
                             versionName = BuildConfig.VERSION_NAME,
+                            onPrepareReveal = reveal.onPrepare,
+                            onRevealStart = reveal.onStart,
                             onSplashComplete = { showSplash = false },
                         )
-                    } else {
-                        ConsentGate {
-                            ProfileGate { QuibloApp() }
-                        }
+                    },
+                ) {
+                    ConsentGate {
+                        ProfileGate { QuibloApp() }
                     }
                 }
             }

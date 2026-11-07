@@ -5,6 +5,5 @@
   Licensed under the GNU General Public License v3.0 or later. See LICENSE.
 -->
 <resources>
-    <color name="quiblo_window_background">#FCF8FF</color>
-    <color name="ic_launcher_background">#4A4FBF</color>
+    <color name="quiblo_window_background">#F7F6F3</color>
 </resources>

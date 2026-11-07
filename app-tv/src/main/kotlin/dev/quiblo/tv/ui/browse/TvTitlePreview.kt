@@ -50,11 +50,13 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import dev.quiblo.core.common.cleanedForDisplay
 import dev.quiblo.core.model.Channel
 import dev.quiblo.core.model.MediaKind
 import dev.quiblo.core.model.TitleMetadata
+import dev.quiblo.designsystem.QuibloDisplayFamily
 import dev.quiblo.tv.R
 import dev.quiblo.tv.ui.common.LocalBackdropSink
 import kotlinx.coroutines.delay
@@ -240,7 +242,9 @@ private fun PreviewContent(face: PreviewFace) {
                 text = face.title,
                 color = Color.White,
                 fontSize = 26.sp,
-                fontWeight = FontWeight.Bold,
+                fontFamily = QuibloDisplayFamily,
+                fontWeight = FontWeight.SemiBold,
+                letterSpacing = (-0.02).em,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )

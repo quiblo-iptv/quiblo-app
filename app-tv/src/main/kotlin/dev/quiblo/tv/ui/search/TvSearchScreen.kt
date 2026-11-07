@@ -68,7 +68,10 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.quiblo.core.model.Channel
 import dev.quiblo.core.model.MediaKind
+import dev.quiblo.designsystem.QUIBLO_WORDMARK
+import dev.quiblo.designsystem.QuibloDisplayFamily
 import dev.quiblo.designsystem.QuibloMark
+import dev.quiblo.designsystem.WordmarkTracking
 import dev.quiblo.feature.browse.SearchUiState
 import dev.quiblo.feature.browse.SearchViewModel
 import dev.quiblo.feature.browse.labelRes
@@ -402,14 +405,17 @@ internal fun ColumnScope.SearchHeader(
         if (wordmarkHeight > 0.dp) {
             QuibloMark(
                 colour = Color.White.copy(alpha = wordmarkAlpha),
+                lit = true,
                 modifier = Modifier.size(LOGO_SIZE),
             )
+            // The wordmark, as the splash and the banner write it.
             Text(
-                text = stringResource(R.string.tv_app_name),
+                text = QUIBLO_WORDMARK,
                 color = Color.White.copy(alpha = wordmarkAlpha),
                 fontSize = WORDMARK_TEXT_SIZE,
+                fontFamily = QuibloDisplayFamily,
                 fontWeight = FontWeight.SemiBold,
-                letterSpacing = 1.sp,
+                letterSpacing = WordmarkTracking,
             )
         }
     }

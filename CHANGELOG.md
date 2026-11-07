@@ -15,8 +15,6 @@ Formatted after [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and ve
 
 ## Unreleased
 
-## 0.33.0
-
 ### Changed
 
 - **A new bar across the top on the television.** The logo comes first, then Home, Search, Live,
@@ -27,6 +25,11 @@ Formatted after [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and ve
   opening Advanced.
 - **The name is drawn on the mark's grid.** Its q, b and o are small screens like the mark, on the
   intro, the bar and the TV banner.
+
+## 0.33.0
+
+### Changed
+
 - **A new look for Quiblo.** The mark is now a television screen whose corner turns into the tail
   of a Q, in place of the ring and play button that read as a magnifying glass. The name is
   written in lowercase in Outfit, and the colours are ink, warm white and one warm amber light

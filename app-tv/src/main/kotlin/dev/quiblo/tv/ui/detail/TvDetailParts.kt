@@ -56,12 +56,14 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import coil3.compose.SubcomposeAsyncImage
 import dev.quiblo.core.common.cleanedForDisplay
 import dev.quiblo.core.data.TitleVersion
 import dev.quiblo.core.model.TitleMetadata
 import dev.quiblo.designsystem.AutoDirection
+import dev.quiblo.designsystem.QuibloDisplayFamily
 import dev.quiblo.tv.R
 import dev.quiblo.tv.ui.common.TvChip
 import dev.quiblo.tv.ui.common.rememberArtworkChain
@@ -331,7 +333,9 @@ fun DetailTitle(title: String) {
             // and the two lines overlap — visible immediately on any title long enough to
             // wrap, which on a panel's own naming is most of them.
             lineHeight = 33.sp,
+            fontFamily = QuibloDisplayFamily,
             fontWeight = FontWeight.SemiBold,
+            letterSpacing = TITLE_TRACKING,
             maxLines = 2,
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.fillMaxWidth(),
@@ -416,3 +420,6 @@ fun TvVersionRow(versions: List<TitleVersion>, shownId: Long, onSelect: (Long) -
         }
     }
 }
+
+/** Titles in the display face are pulled in a little, as the wordmark is, so they read as one line. */
+private val TITLE_TRACKING = (-0.02).em

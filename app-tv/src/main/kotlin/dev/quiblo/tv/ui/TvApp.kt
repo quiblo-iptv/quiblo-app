@@ -19,7 +19,6 @@
 package dev.quiblo.tv.ui
 
 import androidx.activity.compose.BackHandler
-import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -86,6 +85,8 @@ import dev.quiblo.core.model.MediaKind
 import dev.quiblo.core.model.Profile
 import dev.quiblo.core.model.WatchOrigin
 import dev.quiblo.designsystem.ProfileAvatar
+import dev.quiblo.designsystem.QuibloColours
+import dev.quiblo.designsystem.QuibloSplashHost
 import dev.quiblo.designsystem.ambientBackdrop
 import dev.quiblo.designsystem.driftingGlow
 import dev.quiblo.designsystem.rememberAmbient
@@ -165,17 +166,22 @@ fun TvApp(
         warm = true
     }
 
-    Crossfade(targetState = showSplash, label = "tvSplashCrossfade") { inSplash ->
-        if (inSplash) {
+    // The splash flies into the app rather than fading to it, so the app is composed underneath
+    // before the dive. See `QuibloSplashHost`.
+    QuibloSplashHost(
+        showSplash = showSplash,
+        splash = { reveal ->
             TvSplashScreen(
                 versionName = BuildConfig.VERSION_NAME,
                 isReady = warm,
+                onPrepareReveal = reveal.onPrepare,
+                onRevealStart = reveal.onStart,
                 onSplashComplete = { showSplash = false },
             )
-        } else {
-            Box(modifier = if (insetForKeyboard) Modifier.imePadding() else Modifier) {
-                TvConsentGate { TvAppBehindConsent(onExit = onExit) }
-            }
+        },
+    ) {
+        Box(modifier = if (insetForKeyboard) Modifier.imePadding() else Modifier) {
+            TvConsentGate { TvAppBehindConsent(onExit = onExit) }
         }
     }
 }
@@ -309,7 +315,7 @@ private fun TvAppBehindConsent(onExit: () -> Unit) {
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color.Black)
+            .background(QuibloColours.Ink)
             .ambientBackdrop(ambient)
             .then(if (ambientRequest is AmbientRequest.Drift) Modifier.driftingGlow() else Modifier),
     ) {

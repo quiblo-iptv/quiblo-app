@@ -33,8 +33,8 @@ class ThemeTest {
      */
     @Test
     fun `dark theme colours keep their defined ARGB values`() {
-        assertEquals(Color(0xFF0C0E14), QuibloBackgroundDark)
-        assertEquals(Color(0xFF12141C), QuibloSurfaceDark)
-        assertEquals(Color(0xFFE4E5F1), QuibloOnBackgroundDark)
+        assertEquals(Color(0xFF0B0C10), QuibloBackgroundDark)
+        assertEquals(Color(0xFF121318), QuibloSurfaceDark)
+        assertEquals(Color(0xFFF3F1EC), QuibloOnBackgroundDark)
     }
 }

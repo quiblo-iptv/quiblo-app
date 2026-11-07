@@ -227,6 +227,18 @@ val THIRD_PARTY_LICENSES: List<ThirdPartyLicense> = listOf(
             "list that is not Apache 2.0; MIT is equally compatible with GPLv3.",
     ),
     ThirdPartyLicense(
+        name = "Outfit typeface",
+        // Not a Maven coordinate either: two font files bundled as resources, which no
+        // dependency graph can see. The licence text ships beside them, as the OFL asks, in
+        // `assets/licences/OFL-Outfit.txt`.
+        coordinates = "(bundled font, no artefact)",
+        license = "SIL Open Font License 1.1",
+        url = "https://github.com/Outfitio/Outfit-Fonts",
+        notes = "The wordmark and the titles on the television. The OFL allows a font to be " +
+            "bundled with any software, GPLv3 included, as long as the font itself is not sold " +
+            "on its own.",
+    ),
+    ThirdPartyLicense(
         name = "boring-avatars",
         // Deliberately not a Maven coordinate, because there is no artefact. `licenceCheck`
         // resolves the shipped dependency graph and would never ask about this entry — which is

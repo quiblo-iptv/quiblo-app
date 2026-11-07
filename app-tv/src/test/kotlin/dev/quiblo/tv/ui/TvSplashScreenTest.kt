@@ -55,7 +55,8 @@ class TvSplashScreenTest {
         }
         compose.waitForIdle()
 
-        compose.onNodeWithText("Quiblo").assertIsDisplayed()
+        // Lowercase: the wordmark, not the app label. See `QUIBLO_WORDMARK`.
+        compose.onNodeWithText("quiblo").assertIsDisplayed()
         compose.onNodeWithTag("splash_version_text").assertIsDisplayed()
         compose.onNodeWithText("v0.20.2").assertIsDisplayed()
     }
@@ -66,12 +67,13 @@ class TvSplashScreenTest {
         compose.setContent {
             TvSplashScreen(
                 versionName = "0.20.2",
-                durationMillis = 100L,
+                // Longer than the dive, which always plays in full and is the splash's last 700ms.
+                durationMillis = 1000L,
                 playSound = false,
                 onSplashComplete = { completed++ },
             )
         }
-        compose.mainClock.advanceTimeBy(200L)
+        compose.mainClock.advanceTimeBy(1100L)
         compose.waitForIdle()
 
         assertEquals(1, completed)

@@ -15,11 +15,11 @@
 
 **A free, open source IPTV player for Android phones and TV. Bring your own playlist.**
 
-[![Release](https://img.shields.io/github/v/release/quiblo-iptv/quiblo-app?include_prereleases&sort=semver&label=release&color=3DDC84)](https://github.com/quiblo-iptv/quiblo-app/releases/latest)
-[![Downloads](https://img.shields.io/github/downloads/quiblo-iptv/quiblo-app/total?label=downloads&color=blue)](https://github.com/quiblo-iptv/quiblo-app/releases)
-[![Stars](https://img.shields.io/github/stars/quiblo-iptv/quiblo-app?label=stars&color=FFCA28)](https://github.com/quiblo-iptv/quiblo-app/stargazers)
+[![Release](https://img.shields.io/github/v/release/quiblo-iptv/quiblo-app?include_prereleases&sort=semver&label=release&color=FFB648)](https://github.com/quiblo-iptv/quiblo-app/releases/latest)
+[![Downloads](https://img.shields.io/github/downloads/quiblo-iptv/quiblo-app/total?label=downloads&color=FF6A3D)](https://github.com/quiblo-iptv/quiblo-app/releases)
+[![Stars](https://img.shields.io/github/stars/quiblo-iptv/quiblo-app?label=stars&color=FFD58A)](https://github.com/quiblo-iptv/quiblo-app/stargazers)
 [![CI](https://github.com/quiblo-iptv/quiblo-app/actions/workflows/ci.yml/badge.svg)](https://github.com/quiblo-iptv/quiblo-app/actions/workflows/ci.yml)
-[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
+[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-0B0C10.svg)](LICENSE)
 
 [![Sponsor on GitHub](https://img.shields.io/badge/Sponsor-GitHub_Sponsors-EA4AAA?logo=githubsponsors&logoColor=white)](https://github.com/sponsors/quiblo-iptv)
 

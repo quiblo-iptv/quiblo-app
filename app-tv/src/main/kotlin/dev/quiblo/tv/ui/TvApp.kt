@@ -630,7 +630,15 @@ private fun TvShell(
     // reached. This effect runs after composition and before layout has necessarily placed
     // anything, and the shell leaves composition whenever an overlay opens, so it lost that race
     // again on every return from Settings, a detail screen or the player.
-    LaunchedEffect(Unit) { barFocusRequester.insistOnFocus() }
+    //
+    // **Keyed on [isForYou], not on `Unit`.** Home draws its bar in a different branch from every
+    // other tab (it floats over the shelves rather than sitting above them), so walking along the
+    // bar between Home and Search *replaces* the focused bar with a new one that has no focus. The
+    // next Right then reached no bar at all, and Android's own focus search dropped the remote into
+    // the search field instead of on to Live. Only a key press on the bar or Back changes the tab,
+    // and both leave the remote on the bar, so asking again on every flip asks for what was true.
+    val isForYou = TvTab.entries[selectedTab] == TvTab.FOR_YOU
+    LaunchedEffect(isForYou) { barFocusRequester.insistOnFocus() }
 
     /**
      * Whether one back press has already been spent, and the app is waiting for the second.
@@ -699,7 +707,6 @@ private fun TvShell(
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
-        val isForYou = TvTab.entries[selectedTab] == TvTab.FOR_YOU
         if (isForYou) {
             Box(
                 modifier = Modifier

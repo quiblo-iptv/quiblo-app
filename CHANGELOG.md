@@ -15,6 +15,8 @@ Formatted after [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and ve
 
 ## Unreleased
 
+## 0.34.1
+
 ### Fixed
 
 - **Walking the bar on the television no longer drops you into the search box.** Going right

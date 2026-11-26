@@ -12,6 +12,8 @@
     <string name="destination_favorites">Favourites</string>
     <string name="destination_sources">Sources</string>
     <string name="destination_settings">Settings</string>
+    <string name="bar_switch_profile">Switch who is watching</string>
+    <string name="bar_back">Back</string>
 
     <!-- Profiles -->
     <!-- First launch (FREEZE.md Amendment 9). The essential text is on the screen; the link

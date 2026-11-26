@@ -42,9 +42,13 @@ import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.HttpDataSource
 import androidx.media3.datasource.TransferListener
 import androidx.media3.datasource.okhttp.OkHttpDataSource
+import androidx.media3.exoplayer.DecoderCounters
 import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.SeekParameters
+import androidx.media3.exoplayer.mediacodec.MediaCodecSelector
+import androidx.media3.exoplayer.mediacodec.MediaCodecUtil
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.exoplayer.upstream.DefaultLoadErrorHandlingPolicy
 import androidx.media3.exoplayer.upstream.LoadErrorHandlingPolicy
@@ -127,6 +131,7 @@ class Media3PlayerController(
     private var retryJob: Job? = null
     private var progressJob: Job? = null
     private var watchdogJob: Job? = null
+    private var frameWatchJob: Job? = null
 
     /**
      * Whether this item has ever reached a playable state.
@@ -170,8 +175,25 @@ class Media3PlayerController(
     /** Whether this item has already been tried again as HLS (`BUG-044`). Once is enough. */
     private var triedAsHls = false
 
+    /**
+     * A film or episode starting from the middle, still waiting to be moved onto a keyframe
+     * (`BUG-065`, [seekLandingFor]).
+     *
+     * A start position is applied before the engine knows where the keyframes are, so the engine
+     * cannot snap it the way it snaps a seek. The snap is made instead the moment it can be: when
+     * the item's tracks are first known, which is before anything has been shown and while the
+     * keyframe it lands on is still in the buffer — so it costs no request and nothing is seen.
+     */
+    private var snapStartToKeyframe = false
+
     /** Fresh loads the watchdog has made after a stall, for this item (`BUG-062`). */
     private var stallReloads = 0
+
+    /** Fresh loads the frame watch has made after sustained stutter, for this item (`BUG-063`). */
+    private var stutterReloads = 0
+
+    /** Items this engine has been handed, the current one included (`BUG-064`, for the overlay). */
+    private var engineItems = 0
 
     private var settings = PlayerSettings()
 
@@ -203,6 +225,34 @@ class Media3PlayerController(
 
     private var subtitleStyle = SubtitleStyle()
 
+    /**
+     * Whether the software decoder may play the codecs a television box can only play in hardware
+     * (`BUG-063`).
+     *
+     * Read by [videoDecoderSelector] on the engine's playback thread, whenever it picks a decoder.
+     */
+    @Volatile
+    private var softwareVideoAllowed = false
+
+    /** Times the hardware decoder has been tried again after it would not start, for this item. */
+    private var hardwareDecoderRetries = 0
+
+    /** The engine's own decoder list, less what [decodersFor] leaves out. */
+    private val videoDecoderSelector = MediaCodecSelector { mimeType, requiresSecure, requiresTunneling ->
+        decodersFor(
+            mimeType = mimeType,
+            decoders = MediaCodecUtil.getDecoderInfos(mimeType, requiresSecure, requiresTunneling),
+            softwareAllowed = softwareVideoAllowed,
+            isSoftwareOnly = { it.softwareOnly },
+        )
+    }
+
+    /** Reads the engine for the playback info overlay (`FEAT-040`). Listens from the first engine on. */
+    private val diagnosticsSampler = DiagnosticsSampler(appContext)
+    private val _diagnostics = MutableStateFlow<PlaybackDiagnostics?>(null)
+    override val diagnostics: StateFlow<PlaybackDiagnostics?> = _diagnostics.asStateFlow()
+    private var diagnosticsJob: Job? = null
+
     private var player: ExoPlayer = buildPlayer(builtWith)
 
     private fun buildPlayer(profile: EngineProfile): ExoPlayer = ExoPlayer.Builder(
@@ -211,8 +261,12 @@ class Media3PlayerController(
         // TV boxes: a corrupt header, a stream the vendor's codec mis-handles, and the
         // frame goes green or audio plays over a black screen. Fallback lets the engine
         // try the next decoder that claims the format — in practice the platform software
-        // one — instead of surfacing an error the user can do nothing about.
-        DefaultRenderersFactory(appContext).setEnableDecoderFallback(true),
+        // one — instead of surfacing an error the user can do nothing about. Except for the
+        // codecs only hardware can keep up with, where the software one is held back until the
+        // hardware one has been given a second chance (`BUG-063`, [decodersFor]).
+        DefaultRenderersFactory(appContext)
+            .setMediaCodecSelector(videoDecoderSelector)
+            .setEnableDecoderFallback(true),
     )
         .setMediaSourceFactory(
             DefaultMediaSourceFactory(appContext)
@@ -245,6 +299,8 @@ class Media3PlayerController(
                 HANDLE_AUDIO_FOCUS,
             )
             addListener(PlayerListener())
+            addAnalyticsListener(diagnosticsSampler)
+            setVideoFrameMetadataListener(diagnosticsSampler)
             trackSelectionParameters = trackSelectionParameters.buildUpon()
                 .applyBitrateCap(settings.maxBitrate)
                 .build()
@@ -288,10 +344,28 @@ class Media3PlayerController(
         if (wanted == builtWith) return
 
         progressJob?.cancel()
+        frameWatchJob?.cancel()
         player.release()
         player = buildPlayer(wanted)
         builtWith = wanted
+        engineItems = 0
+        diagnosticsSampler.reset()
         attachedSurface?.let(player::setVideoSurfaceView)
+    }
+
+    override fun discardEngine() {
+        retryJob?.cancel()
+        watchdogJob?.cancel()
+        progressJob?.cancel()
+        frameWatchJob?.cancel()
+        player.release()
+        // Built now rather than on the next prepare, so nothing here is ever left holding a
+        // released engine. An idle one has no decoder and no connection: it costs nothing.
+        player = buildPlayer(builtWith)
+        engineItems = 0
+        attachedSurface?.let(player::setVideoSurfaceView)
+        diagnosticsSampler.reset()
+        _state.value = PlaybackState()
     }
 
     override fun prepare(item: PlayableItem) {
@@ -300,6 +374,9 @@ class Media3PlayerController(
         lastFailure = null
         triedAsHls = false
         stallReloads = 0
+        stutterReloads = 0
+        softwareVideoAllowed = false
+        hardwareDecoderRetries = 0
         liveEdgeRejoins = 0
         lastEngineFailure = null
         lastEngineCode = null
@@ -307,6 +384,7 @@ class Media3PlayerController(
         lastByteAtMillis.set(0L)
         prepareStartedAtMillis = SystemClock.uptimeMillis()
         rebuildIfNeeded(EngineProfile(settings.bufferMode, item.isLive))
+        engineItems++
         val previous = _state.value.item
         _state.value = PlaybackState(status = PlaybackStatus.BUFFERING, item = item)
         startWatchdog()
@@ -317,12 +395,16 @@ class Media3PlayerController(
         if (previous?.isLive == true) player.stop()
         if (item.subtitles.any { it.selectOnStart }) showSubtitlesOnStart()
         player.setMediaItem(item.toMediaItem())
-        if (!item.isLive && item.startPositionMillis > 0L) {
+        snapStartToKeyframe = !item.isLive && item.startPositionMillis > 0L
+        // Exact again for live, in case this engine last played a film and was left on keyframes.
+        if (item.isLive) player.setSeekParameters(SeekLanding.EXACT.toSeekParameters())
+        if (snapStartToKeyframe) {
             player.seekTo(item.startPositionMillis)
         }
         player.prepare()
         player.playWhenReady = true
         startProgressUpdates()
+        startFrameWatch()
     }
 
     override fun play() {
@@ -336,11 +418,15 @@ class Media3PlayerController(
     override fun stop() {
         retryJob?.cancel()
         watchdogJob?.cancel()
+        frameWatchJob?.cancel()
         player.stop()
     }
 
     override fun seekTo(positionMillis: Long) {
         if (_state.value.isSeekable) {
+            snapStartToKeyframe = false
+            val isLive = _state.value.item?.isLive == true
+            player.setSeekParameters(seekLandingFor(player.currentPosition, positionMillis, isLive).toSeekParameters())
             player.seekTo(positionMillis)
         }
     }
@@ -351,6 +437,9 @@ class Media3PlayerController(
         lastFailure = null
         triedAsHls = false
         stallReloads = 0
+        stutterReloads = 0
+        softwareVideoAllowed = false
+        hardwareDecoderRetries = 0
         liveEdgeRejoins = 0
         lastEngineFailure = null
         lastEngineCode = null
@@ -378,7 +467,13 @@ class Media3PlayerController(
      * *to* but now.
      */
     private fun restart() {
-        if (_state.value.item?.isLive == true) player.seekToDefaultPosition()
+        if (_state.value.item?.isLive == true) {
+            player.seekToDefaultPosition()
+        } else {
+            // A reload starts from where the film was, which is the middle — the case `BUG-065`
+            // is about. Without this, a stutter reload put the film straight back into stutter.
+            snapStartToKeyframe = player.currentPosition > 0L
+        }
         player.prepare()
         player.playWhenReady = true
     }
@@ -457,8 +552,52 @@ class Media3PlayerController(
         retryJob?.cancel()
         progressJob?.cancel()
         watchdogJob?.cancel()
+        frameWatchJob?.cancel()
+        diagnosticsJob?.cancel()
         player.release()
         _state.value = PlaybackState()
+        _diagnostics.value = null
+    }
+
+    override fun setDiagnosticsEnabled(enabled: Boolean) {
+        diagnosticsJob?.cancel()
+        diagnosticsSampler.recordingFrames = enabled
+        if (!enabled) {
+            _diagnostics.value = null
+            return
+        }
+        diagnosticsJob = scope.launch {
+            while (true) {
+                _diagnostics.value = diagnosticsSampler.sample(player, controllerFacts())
+                delay(DIAGNOSTICS_INTERVAL_MILLIS)
+            }
+        }
+    }
+
+    /** What the overlay needs that only this class knows. */
+    private fun controllerFacts(): ControllerFacts {
+        val current = _state.value
+        return ControllerFacts(
+            isLive = current.item?.isLive == true,
+            bytesReceived = bytesReceived.get(),
+            lastByteAtMillis = lastByteAtMillis.get(),
+            softwareAllowed = softwareVideoAllowed,
+            recovery = RecoveryDiagnostics(
+                retries = current.retryAttempt,
+                rebuffers = current.rebufferCount,
+                loadTimeMillis = current.loadTimeMillis,
+                stallReloads = stallReloads,
+                stutterReloads = stutterReloads,
+                hardwareDecoderRetries = hardwareDecoderRetries,
+                liveEdgeRejoins = liveEdgeRejoins,
+            ),
+            // The setting's own name, for a screenshot read by whoever fixes the bug; it is not
+            // the label the settings screen shows.
+            bufferMode = builtWith.bufferMode.name,
+            maxVideoBitrate = settings.maxBitrate.bitsPerSecond,
+            lastEngineError = lastEngineCode,
+            engineItems = engineItems,
+        )
     }
 
     private fun selectTrack(trackType: @C.TrackType Int, trackId: String?) {
@@ -616,6 +755,71 @@ class Media3PlayerController(
     }
 
     /**
+     * Reloads a film or an episode that keeps dropping frames, where it is (`BUG-063`).
+     *
+     * Reported after skipping forward or back on some films: the picture carried on at a fraction
+     * of its rate until the viewer gave up. Nothing in the engine reports this — the film is
+     * playing, and no error is ever raised — so the decoder's own counts are compared every
+     * [STUTTER_WINDOW_MILLIS] and [reloadsForStutter] decides.
+     *
+     * Only while playing: a pause, a buffer or a seek starts the count again, so the frames thrown
+     * away around a seek are never held against it. Live channels are left alone; reloading one
+     * means a new connection to the panel, and that is a different trade.
+     */
+    private fun startFrameWatch() {
+        frameWatchJob?.cancel()
+        frameWatchJob = scope.launch {
+            var counters: DecoderCounters? = null
+            var rendered = 0L
+            var dropped = 0L
+            var stutteringWindows = 0
+            while (true) {
+                delay(STUTTER_WINDOW_MILLIS)
+                val current = player.videoDecoderCounters?.takeIf {
+                    player.isPlaying && _state.value.item?.isLive == false
+                }
+                current?.ensureUpdated()
+
+                // A new decoder brings new counts; its first window is only where they start.
+                val comparable = current != null && current === counters
+                val renderedNow = current?.renderedOutputBufferCount?.toLong() ?: 0L
+                val droppedNow = current?.droppedBufferCount?.toLong() ?: 0L
+                stutteringWindows = when {
+                    !comparable -> 0
+                    isStuttering(renderedNow - rendered, droppedNow - dropped) -> stutteringWindows + 1
+                    else -> 0
+                }
+                counters = current
+                rendered = renderedNow
+                dropped = droppedNow
+
+                if (reloadsForStutter(stutteringWindows, stutterReloads)) {
+                    stutteringWindows = 0
+                    counters = null
+                    reloadAfterStutter()
+                }
+            }
+        }
+    }
+
+    /**
+     * Closes the decoder and the connection and opens both again, at the same moment of the film.
+     *
+     * Not a retry: nothing failed, and the viewer is not told *Reconnecting*. It is the same
+     * stop-then-prepare as [reloadAfterStall], because a prepare on an engine that is not idle is
+     * ignored.
+     */
+    private fun reloadAfterStutter() {
+        stutterReloads++
+        // The stutter is most likely the software decoder; give the hardware one another chance.
+        softwareVideoAllowed = false
+        hardwareDecoderRetries = 0
+        player.stop()
+        _state.value = _state.value.copy(status = PlaybackStatus.BUFFERING)
+        restart()
+    }
+
+    /**
      * Reconnects after a failure, or reports it.
      *
      * AC-PLAY-06 requires at least three automatic attempts with backoff before the user
@@ -672,6 +876,7 @@ class Media3PlayerController(
 
         triedAsHls = true
         val start = if (item.isLive) C.TIME_UNSET else item.startPositionMillis
+        snapStartToKeyframe = !item.isLive && item.startPositionMillis > 0L
         player.setMediaItem(item.toMediaItem(mimeOverride = HLS_MIME_TYPE), start)
         player.prepare()
         return true
@@ -803,6 +1008,14 @@ class Media3PlayerController(
                 audioTracks = tracks.toOptions(C.TRACK_TYPE_AUDIO),
                 textTracks = tracks.toOptions(C.TRACK_TYPE_TEXT),
             )
+
+            // The first moment the keyframes are known. See [snapStartToKeyframe].
+            if (snapStartToKeyframe && !tracks.isEmpty) {
+                snapStartToKeyframe = false
+                val position = player.currentPosition
+                player.setSeekParameters(seekLandingFor(null, position, isLive = false).toSeekParameters())
+                player.seekTo(position)
+            }
         }
 
         override fun onRenderedFirstFrame() {
@@ -817,6 +1030,7 @@ class Media3PlayerController(
             _state.value = _state.value.copy(
                 videoWidth = videoSize.width,
                 videoHeight = videoSize.height,
+                videoFrameRate = player.videoFormat?.frameRate?.takeIf { it > 0f },
             )
         }
 
@@ -832,7 +1046,8 @@ class Media3PlayerController(
     /**
      * Mends a failure without counting it as one, when its cause is known and fixable on the spot:
      * a live channel fallen behind (`BUG-036`), a subtitle that would not load (`BUG-045`), an HLS
-     * playlist read as a file (`BUG-044`). Each is bounded, so none can loop.
+     * playlist read as a file (`BUG-044`), a hardware decoder that would not start (`BUG-063`). Each
+     * is bounded, so none can loop.
      */
     private fun recoversInPlace(failure: EngineFailure): Boolean {
         if (rejoinsLiveEdge(failure, liveEdgeRejoins)) {
@@ -841,7 +1056,37 @@ class Media3PlayerController(
             player.prepare()
             return true
         }
-        return dropSubtitles() || tryAsHls(failure)
+        return recoverDecoder(failure) || dropSubtitles() || tryAsHls(failure)
+    }
+
+    /**
+     * Starts the video decoder again when the hardware one would not start (`BUG-063`).
+     *
+     * Once more on hardware after a moment, which is usually all a decoder still held by the
+     * instance before it needs; then with the software one let in, as the fallback always did.
+     * Neither is a retry the viewer is told about: nothing is wrong with the stream.
+     */
+    private fun recoverDecoder(failure: EngineFailure): Boolean {
+        val step = afterDecoderInitFailure(failure.errorCode, softwareVideoAllowed, hardwareDecoderRetries)
+        when (step) {
+            DecoderInitStep.NotMine -> return false
+
+            is DecoderInitStep.RetryHardware -> {
+                hardwareDecoderRetries++
+                _state.value = _state.value.copy(status = PlaybackStatus.BUFFERING)
+                retryJob?.cancel()
+                retryJob = scope.launch {
+                    delay(step.delayMillis)
+                    restart()
+                }
+            }
+
+            DecoderInitStep.AllowSoftware -> {
+                softwareVideoAllowed = true
+                restart()
+            }
+        }
+        return true
     }
 
     /**
@@ -891,6 +1136,9 @@ class Media3PlayerController(
         const val HANDLE_AUDIO_FOCUS = true
 
         const val PROGRESS_INTERVAL_MILLIS = 500L
+
+        /** Once a second: often enough to watch a stutter happen, rarely enough to cost nothing. */
+        const val DIAGNOSTICS_INTERVAL_MILLIS = 1_000L
     }
 }
 
@@ -904,6 +1152,14 @@ internal data class EngineProfile(
     val bufferMode: BufferMode,
     val isLive: Boolean,
 )
+
+/** The engine's name for a [SeekLanding]. */
+@androidx.annotation.OptIn(UnstableApi::class)
+internal fun SeekLanding.toSeekParameters(): SeekParameters = when (this) {
+    SeekLanding.EXACT -> SeekParameters.EXACT
+    SeekLanding.PREVIOUS_KEYFRAME -> SeekParameters.PREVIOUS_SYNC
+    SeekLanding.NEXT_KEYFRAME -> SeekParameters.NEXT_SYNC
+}
 
 /**
  * Reduces an engine exception to the facts [classify] reads. No engine detail reaches the UI.

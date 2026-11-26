@@ -15,13 +15,192 @@ Formatted after [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and ve
 
 ## Unreleased
 
+## 0.35.0
+
+### Changed
+
+- **The phone now looks like the television.** The same ink background, warm white text and one
+  amber light; titles, tabs and headings in Outfit, the television's typeface.
+- **A new bar across the top of the phone.** The logo comes first, with Settings and your own
+  profile face at the other end. Tap the face to switch who is watching.
+- **A new tab bar at the bottom.** It floats over the catalogue, and one soft pill slides to the
+  tab you choose, as on the television.
+- **The room is lit.** When nothing on screen has colours to give, a slow glow drifts behind the
+  catalogue, the same light the television's search screen has. Touching a poster lights the room
+  from that poster.
+- **Posters lift when you touch them.** They rise towards you with a thin frame and settle back
+  when you let go, the television's focus movement made for a finger. Titles now sit under the
+  poster instead of over it.
+- **Search glows while it waits.** A light travels round the edge of the search box until you
+  start typing, as it does on the television.
+- **The app's own colours are now the default on Android 12 and later.** Colours taken from your
+  wallpaper replaced the brand's amber, so they are now off unless you switch them on in
+  Settings → Appearance.
+
 ### Fixed
 
-- **An episode the provider answers with nothing is asked again, and no longer called a format
-  Quiblo cannot play (`BUG-066`).** A provider sometimes answers a film or an episode with an empty reply — when
-  the account's one screen is still counted, or when the file is not really there. Quiblo read that as an unknown
-  format and never asked again. It is now retried twice, and if it still fails the screen says the
-  provider refused.
+- **An episode the provider answers with nothing is asked again, and is no longer called a format
+  Quiblo cannot play (`BUG-066`).** A provider sometimes answers a film or an episode with an empty
+  reply — when the account's one screen is still counted, or when the file is not really there.
+  Quiblo read that as an unknown format and never asked again. It is now retried twice, and if it
+  still fails the screen says the provider refused.
+
+## 0.34.1
+
+### Fixed
+
+- **Walking the bar on the television no longer drops you into the search box.** Going right
+  from Home onto Search and pressing right again now moves on to Live and Movies, as it should,
+  instead of putting the remote in the search field.
+
+## 0.34.0
+
+### Changed
+
+- **A new bar across the top on the television.** The logo comes first, then Home, Search, Live,
+  Movies, Series and Favourites as words. One soft pill slides to the selected tab and lifts while
+  the remote is on the bar. Back now comes to rest on Home, where the app opens.
+- **Search keeps the field at the top left.** The logo and the field in the middle of the screen
+  are gone. **Include TV** is there on every search now, so live channels can be hidden without
+  opening Advanced.
+- **The name is drawn on the mark's grid.** Its q, b and o are small screens like the mark, on the
+  intro, the bar and the TV banner.
+
+## 0.33.0
+
+### Changed
+
+- **A new look for Quiblo.** The mark is now a television screen whose corner turns into the tail
+  of a Q, in place of the ring and play button that read as a magnifying glass. The name is
+  written in lowercase in Outfit, and the colours are ink, warm white and one warm amber light
+  where the indigo and purple were. New launcher icons on phone and TV, including themed icons,
+  and a new Android TV banner.
+- **The intro flies into the app.** The mark draws itself, lands on one hit with the light coming
+  on inside it, and the camera dives through the screen into the catalogue — the real one,
+  already drawn behind it. On a slow start it holds on the glowing mark until the catalogue is
+  ready. The sound is new and is written to the picture: it is never cut off, because its second
+  half plays when the dive does.
+
+## 0.32.0
+
+### Changed
+
+- **The cover above Movies and Series stands in the corner of the screen.** It used to float inside
+  its banner, faded on all four sides, and still read as a rectangle — worse while a new one was
+  loading. It now sits in the top right of the screen, under the tabs, with only the left and the
+  bottom fading away, and a new title's picture dissolves in once it has loaded rather than before.
+
+### Fixed
+
+- **Posters whose link is dead now show the TMDB poster.** A provider's artwork link that would not
+  load left a grey box, because a link that existed always won over the poster the metadata service
+  had already found. The tile now falls back to that poster when the provider's will not load, and
+  remembers the dead link for the session. The detail screens do the same.
+- **"Reload info" shows the poster it finds.** It fetched a fresh TMDB poster and then kept showing
+  the provider's broken one; it now tries every picture again and lands on one that loads.
+
+## 0.31.0
+
+### Changed
+
+- **The focus frame is thinner and glides.** It used to stop and start on every press when the
+  remote was held; it now carries its speed from one poster to the next as one movement.
+- **The cover above Movies and Series has no edges.** It runs past its banner up under the tabs and
+  out to the edge of the screen, fading away on every side like a cloud, and most of all on the left
+  where the title and plot are written.
+- **Rows glide.** Moving left and right used to snap the row a whole poster at a time; it now
+  glides there, and holding the remote is one smooth run.
+- **The numbers on the popular rows are bigger and part of the poster.** Each figure is larger,
+  outlined, and tucked under the edge of its cover instead of standing beside it.
+
+## 0.30.0
+
+### Added
+
+- **Focus slides from poster to poster on the television.** The white frame round the focused
+  poster used to vanish from one and appear on the next. It now travels there, along a row and
+  between rows, while the poster still grows as before.
+- **A preview of the focused title above Movies and Series.** Its picture on the right, fading in
+  from the middle, and its name, year, age rating, score and plot on the left. The shelves move
+  down to make room. The plot is asked for only once you rest on a title, so walking a row costs
+  nothing.
+
+### Changed
+
+- **The light around the picture drifts slowly now, the way YouTube's does.** It used to follow
+  every cut within a third of a second, which made the black bars flicker. It now takes a couple
+  of seconds to settle into the colours of the scene.
+
+### Fixed
+
+- **Films and episodes no longer stutter after a skip or when resumed (`BUG-065`).** A film played
+  from its start was smooth, and the same film after skipping, or picked up from the middle,
+  dropped frames for as long as it played. Skips and resumes now land on a keyframe — the next one
+  going forward, the one before going back or resuming — so the picture starts the way it does
+  from the beginning.
+
+## 0.29.0
+
+### Added
+
+- **The television switches to the film's frame rate (`FEAT-041`).** A 24 frames-a-second film on a
+  60 Hz screen holds its frames for two refreshes and then three, and that uneven beat shows as a
+  stutter on every pan, even with no frame dropped. While something plays, the television now moves
+  to a refresh rate the film divides evenly — 24 Hz for a film, 50 Hz for a 25 fps channel — and
+  back when you leave. The screen may go black for a moment as it switches. On by default; Settings →
+  Match frame rate turns it off. Playback info now lists the refresh rates your screen offers,
+  shows how evenly frames reach the screen (the gap between them, and how much it wanders), and says
+  why each decoder was started.
+
+## 0.28.1
+
+### Fixed
+
+- **The second film on the television no longer plays at a low frame rate (`BUG-064`).** Found
+  with the new playback info: after backing out of a film and playing another, the television
+  dropped about one frame in five for as long as it played, until the app was force-closed. Leaving
+  a film used to pause the player and keep it, and the next film played on that kept player.
+  Leaving a film now lets the player go, and every film starts on a fresh one; Resume still picks
+  up where you were. Playback info now also shows how many items the player has played, keeps
+  showing the decoder in use, and reads the screen's refresh rate live.
+
+## 0.28.0
+
+### Added
+
+- **Playback info, for when something plays badly (`FEAT-040`).** A new button in the player — the
+  top bar on the phone, the end of the options row on the television — opens a see-through panel
+  over the video with everything the player knows: the decoder in use and whether it is hardware or
+  software, frames shown and dropped each second, how much is buffered, how fast data is arriving,
+  every automatic retry and reload, and the screen's refresh rate against the film's frame rate.
+  What would explain a stutter is in amber. It is meant to be screenshotted for a bug report, and
+  it never shows a stream's address or an account.
+
+## 0.27.4
+
+### Fixed
+
+- **Favourites show up on the phone again (#91).** Marking a film, a series or a channel as a
+  favourite saved it, but the phone's Favourites tab drew an empty grid: since the catalogue
+  screens moved to paging, that tab was handed the paged list, which is empty for everything but
+  the catalogue. It now gets its own list. The television was not affected.
+- **Search and the grid switch are visible in the dark theme again (#90).** On the phone, icons
+  nothing else coloured were drawn black over the dark background — Search most noticeably —
+  since the app's background was opened up for the ambient light behind detail screens. They now
+  take the theme's own text colour, as everything else does. The light theme was not affected.
+
+## 0.27.3
+
+### Fixed
+
+- **A film that stutters after a skip forward or back recovers on its own (`BUG-063`).** On some
+  films, a seek left the picture playing at a fraction of its rate for as long as it was watched.
+  Quiblo now watches how many frames are being dropped, and a film or an episode that drops a
+  quarter of them for six seconds is loaded again from the same moment, with a fresh decoder and a
+  fresh connection — at most twice, so a film the device cannot play smoothly is left to play.
+  **HEVC, VP9, AV1 and Dolby Vision no longer slip onto the slow software decoder.** When the
+  television's hardware decoder was not free at that instant, the film was handed to the CPU
+  without a word. It is now tried again first, and software is only used if it fails twice.
 
 ## 0.27.2
 

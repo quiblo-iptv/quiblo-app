@@ -326,3 +326,86 @@ private val KNOWN_EXTENSIONS = setOf(
     "m3u8", "mpd", "ism", "isml", "ts", "mp4", "m4v", "m4a", "mkv", "webm", "mov", "avi", "flv",
     "mp3", "aac", "ac3", "ogg", "wav",
 )
+
+/**
+ * Whether a stretch of playback dropped enough of its frames to be seen as stutter (`BUG-063`).
+ *
+ * The decoder hands each frame over on time or late, and a late one is dropped rather than shown.
+ * A few drops are normal — the first frames after a seek, a moment of load on the device — and are
+ * not counted here. A quarter of every frame, for seconds on end, is the film playing at a fraction
+ * of its rate: the "low fps" a viewer sees after skipping forward or back on some films.
+ *
+ * @param renderedFrames frames shown during the window.
+ * @param droppedFrames frames dropped during it.
+ */
+internal fun isStuttering(renderedFrames: Long, droppedFrames: Long): Boolean {
+    val decoded = renderedFrames + droppedFrames
+    return decoded >= STUTTER_MIN_FRAMES && droppedFrames * PERCENT >= decoded * STUTTER_DROP_PERCENT
+}
+
+/**
+ * Whether stutter has gone on long enough to load the film again where it is (`BUG-063`).
+ *
+ * The stutter does not end on its own. A fresh load closes the decoder and the connection and
+ * picks both again, which is the one thing the player can do about it without the viewer. The
+ * likeliest cause is the decoder: a seek that has the engine set it up again can land on the
+ * device's software one, when the hardware one is not free at that instant, and a software decoder
+ * on a television box cannot keep up with a high-bitrate film. Bounded at [STUTTER_RELOADS] per
+ * item, so a film the device simply cannot play smoothly is left to play rather than reloaded
+ * forever.
+ *
+ * @param stutteringWindows consecutive windows [isStuttering] has said yes to.
+ * @param reloadsSoFar reloads this decision has already asked for, for this item.
+ */
+internal fun reloadsForStutter(stutteringWindows: Int, reloadsSoFar: Int): Boolean =
+    stutteringWindows >= STUTTER_WINDOWS && reloadsSoFar < STUTTER_RELOADS
+
+/** How often the frame counts are compared. */
+internal const val STUTTER_WINDOW_MILLIS = 2_000L
+
+/** Windows in a row that must stutter before a reload: six seconds of it, not a moment. */
+internal const val STUTTER_WINDOWS = 3
+
+/** Below this many frames a window says nothing either way. */
+internal const val STUTTER_MIN_FRAMES = 12L
+
+/** The share of frames dropped, in percent, that is stutter rather than noise. */
+internal const val STUTTER_DROP_PERCENT = 25L
+
+/** Reloads for stutter, per item. */
+internal const val STUTTER_RELOADS = 2
+
+private const val PERCENT = 100L
+
+/**
+ * Where a seek in a film or an episode lands (`BUG-065`).
+ *
+ * **On a keyframe, never between two.** Reported on the television: a film played from its start
+ * is smooth; the same film after a skip, or resumed from the middle, drops frames for as long as
+ * it is watched — and a stutter reload, which also starts from the middle, brings it straight
+ * back. An exact seek lands mid-group: the decoder starts at the keyframe before the target,
+ * decodes its way to it while the clock is already running, and only then shows anything. A seek
+ * to the keyframe itself starts the picture the way a film started from zero does, which is the
+ * one case that was always smooth.
+ *
+ * Forward skips land on the next keyframe and backward ones on the previous one, so a skip never
+ * goes the wrong way however far apart the keyframes are. A start at a saved place lands on the
+ * keyframe before it: a few seconds of what was already seen, rather than a few seconds missed.
+ *
+ * Live is left exact. A live stream's position is the edge, not a place in a film, and this is a
+ * film's problem.
+ *
+ * @param fromMillis where playback is now, or null for a start at a saved place.
+ */
+internal fun seekLandingFor(fromMillis: Long?, toMillis: Long, isLive: Boolean): SeekLanding = when {
+    isLive -> SeekLanding.EXACT
+    fromMillis == null || toMillis < fromMillis -> SeekLanding.PREVIOUS_KEYFRAME
+    else -> SeekLanding.NEXT_KEYFRAME
+}
+
+/** See [seekLandingFor]. */
+internal enum class SeekLanding {
+    EXACT,
+    PREVIOUS_KEYFRAME,
+    NEXT_KEYFRAME,
+}

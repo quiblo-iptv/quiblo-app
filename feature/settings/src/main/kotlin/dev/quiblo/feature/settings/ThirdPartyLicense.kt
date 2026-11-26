@@ -66,6 +66,27 @@ val THIRD_PARTY_LICENSES: List<ThirdPartyLicense> = listOf(
         notes = "Parses Xtream API responses and reads and writes export files.",
     ),
     ThirdPartyLicense(
+        name = "kaml",
+        coordinates = "com.charleskorn.kaml",
+        license = "Apache License 2.0",
+        url = "https://github.com/charleskorn/kaml",
+        notes = "YAML for kotlinx.serialization. Arrives with Ktor's JSON support; Quiblo reads no YAML.",
+    ),
+    ThirdPartyLicense(
+        name = "SnakeYAML Engine KMP",
+        coordinates = "it.krzeminski:snakeyaml-engine-kmp",
+        license = "Apache License 2.0",
+        url = "https://github.com/krzema12/snakeyaml-engine-kmp",
+        notes = "The YAML parser underneath kaml, there for the same reason.",
+    ),
+    ThirdPartyLicense(
+        name = "urlencoder",
+        coordinates = "net.thauvin.erik.urlencoder",
+        license = "Apache License 2.0",
+        url = "https://github.com/ethauvin/urlencoder",
+        notes = "URL encoding used by the YAML parser above.",
+    ),
+    ThirdPartyLicense(
         name = "Jetpack Compose",
         coordinates = "androidx.compose:*",
         license = "Apache License 2.0",
@@ -225,6 +246,18 @@ val THIRD_PARTY_LICENSES: List<ThirdPartyLicense> = listOf(
         notes = "A logging interface the HTTP client compiles against, with no " +
             "implementation behind it here — so it writes nothing. The one component in this " +
             "list that is not Apache 2.0; MIT is equally compatible with GPLv3.",
+    ),
+    ThirdPartyLicense(
+        name = "Outfit typeface",
+        // Not a Maven coordinate either: two font files bundled as resources, which no
+        // dependency graph can see. The licence text ships beside them, as the OFL asks, in
+        // `assets/licences/OFL-Outfit.txt`.
+        coordinates = "(bundled font, no artefact)",
+        license = "SIL Open Font License 1.1",
+        url = "https://github.com/Outfitio/Outfit-Fonts",
+        notes = "The wordmark and the titles on the television. The OFL allows a font to be " +
+            "bundled with any software, GPLv3 included, as long as the font itself is not sold " +
+            "on its own.",
     ),
     ThirdPartyLicense(
         name = "boring-avatars",

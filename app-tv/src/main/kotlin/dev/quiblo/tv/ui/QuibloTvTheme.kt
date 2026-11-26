@@ -22,10 +22,12 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
+import dev.quiblo.designsystem.QuibloColours
 import dev.quiblo.designsystem.QuibloShapes
 
 /**
- * Always dark, and deliberately not the phone theme.
+ * Always dark, and deliberately not the phone theme. Ink and paper, with tungsten — the light
+ * inside the mark's screen — as the one colour.
  *
  * A television is watched at a distance in a dim room. The phone app's light theme would
  * be glaring there, and following the system setting is meaningless on a device that has
@@ -35,9 +37,12 @@ import dev.quiblo.designsystem.QuibloShapes
 fun QuibloTvTheme(content: @Composable () -> Unit) {
     MaterialTheme(
         colorScheme = darkColorScheme(
-            primary = Color(0xFF9FA4FF),
-            background = Color.Black,
-            surface = Color(0xFF101014),
+            primary = QuibloColours.Glow,
+            onPrimary = Color(0xFF432C00),
+            background = QuibloColours.Ink,
+            surface = QuibloColours.Ink2,
+            onBackground = QuibloColours.Paper,
+            onSurface = QuibloColours.Paper,
         ),
         shapes = QuibloShapes,
         content = content,

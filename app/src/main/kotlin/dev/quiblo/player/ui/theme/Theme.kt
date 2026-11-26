@@ -46,6 +46,11 @@ private val LightColors = lightColorScheme(
     onSurface = QuibloOnSurfaceLight,
     surfaceVariant = QuibloSurfaceVariantLight,
     onSurfaceVariant = QuibloOnSurfaceVariantLight,
+    surfaceContainerLowest = QuibloSurfaceContainerLowestLight,
+    surfaceContainerLow = QuibloSurfaceContainerLowLight,
+    surfaceContainer = QuibloSurfaceContainerLight,
+    surfaceContainerHigh = QuibloSurfaceContainerHighLight,
+    surfaceContainerHighest = QuibloSurfaceContainerHighestLight,
     error = QuibloErrorLight,
     onError = QuibloOnErrorLight,
 )
@@ -65,6 +70,13 @@ private val DarkColors = darkColorScheme(
     onSurface = QuibloOnSurfaceDark,
     surfaceVariant = QuibloSurfaceVariantDark,
     onSurfaceVariant = QuibloOnSurfaceVariantDark,
+    outline = QuibloOutlineDark,
+    outlineVariant = QuibloOutlineVariantDark,
+    surfaceContainerLowest = QuibloSurfaceContainerLowestDark,
+    surfaceContainerLow = QuibloSurfaceContainerLowDark,
+    surfaceContainer = QuibloSurfaceContainerDark,
+    surfaceContainerHigh = QuibloSurfaceContainerHighDark,
+    surfaceContainerHighest = QuibloSurfaceContainerHighestDark,
     error = QuibloErrorDark,
     onError = QuibloOnErrorDark,
 )
@@ -72,8 +84,9 @@ private val DarkColors = darkColorScheme(
 /**
  * The Material 3 theme for Quiblo.
  *
- * Honours the system dark/light setting by default (AC-NFR-09) and opts into dynamic
- * colour on Android 12+, falling back to the static palette in [Color.kt] elsewhere.
+ * Honours the system dark/light setting by default (AC-NFR-09). The dark scheme is the
+ * television's own room — see [Color.kt] — and dynamic colour on Android 12+ is there for
+ * anybody who switches it on, no longer by default.
  *
  * @param appearance the user's stored preference. [ThemeMode.SYSTEM] follows the device,
  *   which is the default and what AC-NFR-09 requires to keep working.

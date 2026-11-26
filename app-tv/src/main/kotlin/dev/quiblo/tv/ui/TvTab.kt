@@ -25,10 +25,9 @@ import dev.quiblo.tv.R
 /**
  * The top-level destinations, in the order they sit in the bar.
  *
- * Search is first, and it is the only one drawn as an icon: a magnifier says "search" in
- * every language and needs no word beside it, and the leftmost position is where a remote
- * already is when the app opens. It is also where Back comes to rest — pressing Back on any
- * catalogue lands here, and pressing it again leaves the app.
+ * Home is first, because it is where the app opens and where Back comes to rest — pressing
+ * Back on any other tab lands there, and pressing it again leaves the app. Search is next to it,
+ * a word like every other tab.
  *
  * Sources is deliberately *not* here any more. It was a top-level destination for the whole
  * life of the television app, which put "add a playlist" — something a viewer does once —
@@ -36,7 +35,6 @@ import dev.quiblo.tv.R
  */
 internal enum class TvTab(
     @param:StringRes val labelRes: Int,
-    val isIconOnly: Boolean = false,
     /**
      * Which switchable tab this is, or null for one that cannot be switched off (`029` #5).
      *
@@ -47,8 +45,6 @@ internal enum class TvTab(
      */
     val tab: AppTab? = null,
 ) {
-    SEARCH(R.string.tv_tab_search, isIconOnly = true),
-
     /**
      * Three rows about three questions: what the provider added, what the world is watching of
      * the things the provider carries, and what this viewer is likely to want.
@@ -61,6 +57,7 @@ internal enum class TvTab(
      * It was Recently Added, which is now the first of its three rows.
      */
     FOR_YOU(R.string.tv_tab_for_you),
+    SEARCH(R.string.tv_tab_search),
     LIVE(R.string.tv_tab_live, tab = AppTab.LIVE),
     MOVIES(R.string.tv_tab_movies, tab = AppTab.MOVIES),
     SERIES(R.string.tv_tab_series, tab = AppTab.SERIES),

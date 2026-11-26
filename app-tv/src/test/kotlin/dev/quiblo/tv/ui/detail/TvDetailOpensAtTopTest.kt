@@ -251,7 +251,7 @@ class TvDetailOpensAtTopTest {
         ) {
             item(key = "header") {
                 Row(horizontalArrangement = Arrangement.spacedBy(DETAIL_COLUMN_GAP)) {
-                    DetailArtwork(url = null)
+                    DetailArtwork(urls = emptyList())
                     Column(modifier = Modifier.fillMaxWidth()) {
                         DetailTitle(TITLE)
                         DetailFacts(rating = 8.2, ageRating = "12", genres = listOf("Drama"))

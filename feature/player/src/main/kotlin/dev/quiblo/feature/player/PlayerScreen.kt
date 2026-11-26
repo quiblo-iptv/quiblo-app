@@ -58,6 +58,7 @@ import androidx.compose.material.icons.filled.Replay10
 import androidx.compose.material.icons.filled.Replay30
 import androidx.compose.material.icons.filled.Replay5
 import androidx.compose.material.icons.filled.SwapHoriz
+import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -118,6 +119,9 @@ private const val CONTROLS_TIMEOUT_MILLIS = 3_000L
 private const val SUBTITLE_NOTICE_MILLIS = 4_000L
 private val SUBTITLE_NOTICE_BOTTOM_PADDING = 96.dp
 
+/** Below the top bar, so the playback info overlay never sits under the back button. */
+private val INFO_TOP_PADDING = 64.dp
+
 /**
  * Full-screen playback.
  *
@@ -143,6 +147,8 @@ fun PlayerScreen(
     val state by viewModel.state.collectAsStateWithLifecycle()
     val settings by viewModel.settings.collectAsStateWithLifecycle()
     val aspectRatioMode by viewModel.aspectRatioMode.collectAsStateWithLifecycle()
+    val infoVisible by viewModel.diagnosticsVisible.collectAsStateWithLifecycle()
+    val diagnostics by viewModel.diagnostics.collectAsStateWithLifecycle()
     var controlsVisible by remember { mutableStateOf(true) }
     var tracksVisible by remember { mutableStateOf(false) }
 
@@ -274,6 +280,17 @@ fun PlayerScreen(
 
         SubtitleOutput(viewModel = viewModel, modifier = Modifier.fillMaxSize())
 
+        // Under the controls and the lock, and drawn whatever they are doing: it is there to be
+        // screenshotted mid-stutter, and takes no touch, so everything under it still works.
+        if (infoVisible) {
+            PlaybackInfoOverlay(
+                diagnostics = diagnostics,
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .padding(top = INFO_TOP_PADDING),
+            )
+        }
+
         // While locked the lock button is the only thing on screen, and the only thing that
         // responds. It stays visible rather than auto-hiding, because a lock with no
         // visible way out is indistinguishable from a frozen app.
@@ -334,6 +351,7 @@ fun PlayerScreen(
                     tracksVisible = true
                     controlsVisible = true
                 },
+                onToggleInfo = viewModel::toggleDiagnostics,
             )
         }
 
@@ -739,6 +757,7 @@ private fun PlayerControls(
     onCycleAspectRatio: () -> Unit,
     hasTrackChoice: Boolean,
     onOpenTracks: () -> Unit,
+    onToggleInfo: () -> Unit,
 ) {
     Box(modifier = Modifier.fillMaxSize()) {
         LockButton(isLocked = false, isTopLeft = isLockTopLeft, onClick = onLock)
@@ -817,6 +836,15 @@ private fun PlayerControls(
                             tint = Color.White,
                         )
                     }
+                }
+
+                // Opens and closes the playback info overlay (`FEAT-040`).
+                IconButton(onClick = onToggleInfo) {
+                    Icon(
+                        imageVector = Icons.Outlined.Info,
+                        contentDescription = stringResource(R.string.player_info_open),
+                        tint = Color.White,
+                    )
                 }
             }
 

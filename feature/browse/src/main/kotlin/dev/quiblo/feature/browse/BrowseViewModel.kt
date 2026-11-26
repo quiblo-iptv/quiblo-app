@@ -47,6 +47,7 @@ import dev.quiblo.core.model.Programme
 import dev.quiblo.core.model.TitleMetadata
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -54,6 +55,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flow
@@ -423,6 +425,14 @@ class BrowseViewModel(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS), BrowseUiState())
 
     /**
+     * The rows of every scope but the catalogue, as [pagedItems] hands them to the screen (#91).
+     *
+     * Only when the rows themselves change: a rating or a poster arriving changes [uiState] but
+     * not the list, and a new page for each would make the grid diff the whole list again.
+     */
+    internal val listedItems: Flow<List<Channel>> = uiState.map { it.items }.distinctUntilChanged()
+
+    /**
      * The catalogue, a page at a time, for the screens that draw it flat.
      *
      * **Separate from [uiState] rather than a field inside it, and that is Paging's own shape
@@ -434,14 +444,16 @@ class BrowseViewModel(
      * `cachedIn` is what makes the stream survive a configuration change, and it belongs to the
      * ViewModel because that is the only thing here that outlives one.
      *
-     * Empty for every scope but [BrowseScope.CATALOGUE]. Favourites is a list somebody built by
-     * hand, Recently Added is already capped at forty, and the television's poster grid groups
+     * Only [BrowseScope.CATALOGUE] is paged from the database. Favourites is a list somebody built
+     * by hand, Recently Added is already capped at forty, and the television's poster grid groups
      * its whole answer — none of the three is a list long enough to page, and two of them cannot
-     * be paged at all.
+     * be paged at all. They arrive here as one page of [listedItems] instead (#91): the phone's
+     * Favourites screen draws this stream and nothing else, and it used to be handed an empty one
+     * — so a favourite was saved and never shown.
      */
     val pagedItems: Flow<PagingData<Channel>> =
         if (feed.scope != BrowseScope.CATALOGUE) {
-            flowOf(PagingData.empty())
+            listedItems.map { PagingData.from(it) }
         } else {
             combine(
                 activeSourceId,
@@ -1042,6 +1054,35 @@ class BrowseViewModel(
         }
     }
 
+    /**
+     * What the preview banner over a catalogue says about the title the remote is resting on.
+     *
+     * **Local first, and the network only once the remote has stopped.** The cached record —
+     * often the cheap half a poster tile already fetched, with a year and artwork but no plot —
+     * is emitted straight away, so the banner keeps up with a held remote for free. The full
+     * record is asked for only after [PREVIEW_SETTLE_MILLIS] on the same title, which a caller
+     * collecting with the title as its key cancels the moment the remote moves on: walking a row
+     * costs no requests at all, and resting on a title costs the one its detail screen would
+     * have made anyway, cached across launches like every other answer.
+     *
+     * Empty for a live channel and when the metadata service is off. Neither has anything to add
+     * to the name and the artwork the banner already has.
+     */
+    fun titlePreview(channel: Channel): Flow<TitleMetadata?> = flow {
+        if (channel.kind == MediaKind.LIVE || !metadataRepository.isEnabled) {
+            emit(null)
+            return@flow
+        }
+        val cached = metadataRepository.cachedPreviewFor(channel.name, channel.kind)
+        emit(cached)
+        if (cached != null && !cached.isPartial) return@flow
+
+        delay(PREVIEW_SETTLE_MILLIS)
+        // Through the same limiter as the poster lookups: this is the same rate limit.
+        val full = ratingLimiter.withPermit { metadataRepository.forTitle(channel.name, channel.kind) }
+        if (full != null) emit(full)
+    }
+
     /** Now and next for one channel, for the detail sheet (AC-EPG-02). */
     fun nowNextFor(channel: Channel) = guideRepository.observeNowNext(channel.sourceId, channel.stableKey)
 
@@ -1178,6 +1219,9 @@ class BrowseViewModel(
          * thing this project keeps getting blocked by.
          */
         const val MAX_CONCURRENT_RATING_FETCHES = 4
+
+        /** How long the remote rests on a title before the preview banner asks about its plot. */
+        const val PREVIEW_SETTLE_MILLIS = 700L
         const val HERO_ITEM_COUNT = 5
     }
 }

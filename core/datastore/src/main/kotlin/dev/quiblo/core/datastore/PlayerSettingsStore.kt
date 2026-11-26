@@ -245,6 +245,20 @@ class PlayerSettingsStore(context: Context) : ProfileScopedStore {
     suspend fun setAmbientPlayer(profileId: Long, enabled: Boolean) = put(AMBIENT_PLAYER, profileId, enabled)
 
     /**
+     * Whether the television switches its refresh rate to the film's while it plays (`FEAT-041`).
+     *
+     * **On by default.** A film at 24 frames a second on a 60 Hz panel holds its frames for two
+     * refreshes and then three, and that uneven beat is a stutter on every pan however well the
+     * film decodes. Every serious player on a television switches for it. It is a switch because
+     * a switch costs a moment of black screen, which some setups make longer than others.
+     */
+    fun matchFrameRate(profileId: Long): Flow<Boolean> = dataStore.data.map { preferences ->
+        preferences.scopedBoolean(MATCH_FRAME_RATE, profileId) ?: true
+    }
+
+    suspend fun setMatchFrameRate(profileId: Long, enabled: Boolean) = put(MATCH_FRAME_RATE, profileId, enabled)
+
+    /**
      * Whether the app asks GitHub about a newer release when it opens (`029` #7).
      *
      * **The one preference in this file that is not per profile**, and the exception is the point:
@@ -342,6 +356,7 @@ class PlayerSettingsStore(context: Context) : ProfileScopedStore {
         const val DYNAMIC_COLOR = "dynamic_color"
         const val SHOW_LIVE_IN_SEARCH = "show_live_in_search"
         const val AMBIENT_PLAYER = "ambient_player"
+        const val MATCH_FRAME_RATE = "match_frame_rate"
         const val MERGE_DUPLICATE_TITLES = "merge_duplicate_titles"
         const val MERGE_CATEGORIES = "merge_categories"
         const val HIDDEN_SCRIPTS = "hidden_scripts"

@@ -209,6 +209,20 @@ class SearchViewModelTest {
         assertTrue(viewModel.uiState.value.includeLive)
     }
 
+    /** The switch answers a plain search as well, not only an advanced one. */
+    @Test
+    fun `a plain search can leave live channels out`() = runTest {
+        val viewModel = searchViewModel()
+        advanceUntilIdle()
+
+        viewModel.search("fargo")
+        viewModel.setIncludeLive(false)
+        advanceUntilIdle()
+
+        assertFalse(optionsOfLastSearch().includeLive)
+        assertFalse(viewModel.uiState.value.includeLive)
+    }
+
     /**
      * Clearing forgets the switch rather than turning it off.
      *

@@ -19,8 +19,6 @@
 package dev.quiblo.tv.ui
 
 import androidx.activity.compose.BackHandler
-import androidx.compose.animation.Crossfade
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.focusGroup
@@ -34,15 +32,12 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -73,9 +68,7 @@ import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.quiblo.core.data.CatalogueWarmup
 import dev.quiblo.core.data.PlayerSettingsRepository
@@ -86,6 +79,8 @@ import dev.quiblo.core.model.MediaKind
 import dev.quiblo.core.model.Profile
 import dev.quiblo.core.model.WatchOrigin
 import dev.quiblo.designsystem.ProfileAvatar
+import dev.quiblo.designsystem.QuibloColours
+import dev.quiblo.designsystem.QuibloSplashHost
 import dev.quiblo.designsystem.ambientBackdrop
 import dev.quiblo.designsystem.driftingGlow
 import dev.quiblo.designsystem.rememberAmbient
@@ -95,7 +90,9 @@ import dev.quiblo.tv.ui.browse.TvForYouScreen
 import dev.quiblo.tv.ui.browse.TvPosterRows
 import dev.quiblo.tv.ui.common.AmbientRequest
 import dev.quiblo.tv.ui.common.LocalAmbientSink
+import dev.quiblo.tv.ui.common.LocalBackdropSink
 import dev.quiblo.tv.ui.common.LocalTvReturn
+import dev.quiblo.tv.ui.common.TvBackdrop
 import dev.quiblo.tv.ui.common.TvReturnSignal
 import dev.quiblo.tv.ui.common.insistOnFocus
 import dev.quiblo.tv.ui.common.onTap
@@ -163,17 +160,22 @@ fun TvApp(
         warm = true
     }
 
-    Crossfade(targetState = showSplash, label = "tvSplashCrossfade") { inSplash ->
-        if (inSplash) {
+    // The splash flies into the app rather than fading to it, so the app is composed underneath
+    // before the dive. See `QuibloSplashHost`.
+    QuibloSplashHost(
+        showSplash = showSplash,
+        splash = { reveal ->
             TvSplashScreen(
                 versionName = BuildConfig.VERSION_NAME,
                 isReady = warm,
+                onPrepareReveal = reveal.onPrepare,
+                onRevealStart = reveal.onStart,
                 onSplashComplete = { showSplash = false },
             )
-        } else {
-            Box(modifier = if (insetForKeyboard) Modifier.imePadding() else Modifier) {
-                TvConsentGate { TvAppBehindConsent(onExit = onExit) }
-            }
+        },
+    ) {
+        Box(modifier = if (insetForKeyboard) Modifier.imePadding() else Modifier) {
+            TvConsentGate { TvAppBehindConsent(onExit = onExit) }
         }
     }
 }
@@ -307,7 +309,7 @@ private fun TvAppBehindConsent(onExit: () -> Unit) {
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color.Black)
+            .background(QuibloColours.Ink)
             .ambientBackdrop(ambient)
             .then(if (ambientRequest is AmbientRequest.Drift) Modifier.driftingGlow() else Modifier),
     ) {
@@ -628,7 +630,15 @@ private fun TvShell(
     // reached. This effect runs after composition and before layout has necessarily placed
     // anything, and the shell leaves composition whenever an overlay opens, so it lost that race
     // again on every return from Settings, a detail screen or the player.
-    LaunchedEffect(Unit) { barFocusRequester.insistOnFocus() }
+    //
+    // **Keyed on [isForYou], not on `Unit`.** Home draws its bar in a different branch from every
+    // other tab (it floats over the shelves rather than sitting above them), so walking along the
+    // bar between Home and Search *replaces* the focused bar with a new one that has no focus. The
+    // next Right then reached no bar at all, and Android's own focus search dropped the remote into
+    // the search field instead of on to Live. Only a key press on the bar or Back changes the tab,
+    // and both leave the remote on the bar, so asking again on every flip asks for what was true.
+    val isForYou = TvTab.entries[selectedTab] == TvTab.FOR_YOU
+    LaunchedEffect(isForYou) { barFocusRequester.insistOnFocus() }
 
     /**
      * Whether one back press has already been spent, and the app is waiting for the second.
@@ -682,8 +692,8 @@ private fun TvShell(
 
     BackHandler {
         when (tvBackAction(TvBackState(selectedTab, exitArmed))) {
-            TvBackAction.GoToSearch -> {
-                onSelectTab(TvTab.SEARCH.ordinal)
+            TvBackAction.GoToHome -> {
+                onSelectTab(TvTab.FOR_YOU.ordinal)
                 // The bar is already placed here — this is a press, not a first composition — so
                 // one ask is enough and there is no coroutine to insist from.
                 barFocusRequester.tryRequestFocus()
@@ -697,7 +707,6 @@ private fun TvShell(
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
-        val isForYou = TvTab.entries[selectedTab] == TvTab.FOR_YOU
         if (isForYou) {
             Box(
                 modifier = Modifier
@@ -724,6 +733,19 @@ private fun TvShell(
                 activeProfileAvatar = activeProfileAvatar,
             )
         } else {
+            /*
+             * The focused title's picture, in the screen's top right-hand corner, under the bar.
+             *
+             * Drawn here rather than in the catalogue's banner because only the shell's box is
+             * the whole screen: inside the banner the picture had four edges to fade, and a
+             * rectangle faded on four sides still reads as a rectangle. Here two of its sides are
+             * the screen's own edges and the bar's dark gradient lies over its top. Only Movies
+             * and Series report one; every other tab leaves it empty, and it fades away.
+             */
+            var backdrop by remember { mutableStateOf(emptyList<String>()) }
+            val backdropSink = remember { { candidates: List<String> -> backdrop = candidates } }
+            TvBackdrop(candidates = { backdrop })
+
             Column(modifier = Modifier.fillMaxSize()) {
                 TvTopBar(
                     tabs = tabs,
@@ -745,35 +767,8 @@ private fun TvShell(
                         .focusGroup(),
                 ) {
                     tabState.SaveableStateProvider(TvTab.entries[selectedTab]) {
-                        when (TvTab.entries[selectedTab]) {
-                            TvTab.SEARCH -> TvSearchScreen(
-                                onOpen = { items, index -> onOpen(items, index, WatchOrigin.SEARCH) },
-                            )
-
-                            TvTab.LIVE -> TvLiveScreen(
-                                onPlay = { items, index -> onOpen(items, index, WatchOrigin.ROW) },
-                            )
-
-                            TvTab.MOVIES -> TvPosterRows(
-                                kind = MediaKind.VOD,
-                                onPlay = { items, index -> onOpen(items, index, WatchOrigin.ROW) },
-                                onResume = onOpenChannel,
-                            )
-
-                            TvTab.SERIES -> TvPosterRows(
-                                kind = MediaKind.SERIES,
-                                onPlay = { items, index -> onOpen(items, index, WatchOrigin.ROW) },
-                                onResume = onOpenChannel,
-                            )
-
-                            TvTab.FAVOURITES -> TvPosterRows(
-                                kind = MediaKind.VOD,
-                                favouritesOnly = true,
-                                onPlay = { items, index -> onOpen(items, index, WatchOrigin.FAVOURITE) },
-                                onResume = onOpenChannel,
-                            )
-
-                            TvTab.FOR_YOU -> Unit
+                        CompositionLocalProvider(LocalBackdropSink provides backdropSink) {
+                            TvTabContent(TvTab.entries[selectedTab], onOpen, onOpenChannel)
                         }
                     }
                 }
@@ -804,6 +799,45 @@ private fun TvShell(
     }
 }
 
+/** What sits under the bar on every tab but Home. Its own function so [TvShell] stays readable. */
+@Composable
+private fun TvTabContent(
+    tab: TvTab,
+    onOpen: (List<Channel>, Int, WatchOrigin) -> Unit,
+    onOpenChannel: (Channel) -> Unit,
+) {
+    when (tab) {
+        TvTab.SEARCH -> TvSearchScreen(
+            onOpen = { items, index -> onOpen(items, index, WatchOrigin.SEARCH) },
+        )
+
+        TvTab.LIVE -> TvLiveScreen(
+            onPlay = { items, index -> onOpen(items, index, WatchOrigin.ROW) },
+        )
+
+        TvTab.MOVIES -> TvPosterRows(
+            kind = MediaKind.VOD,
+            onPlay = { items, index -> onOpen(items, index, WatchOrigin.ROW) },
+            onResume = onOpenChannel,
+        )
+
+        TvTab.SERIES -> TvPosterRows(
+            kind = MediaKind.SERIES,
+            onPlay = { items, index -> onOpen(items, index, WatchOrigin.ROW) },
+            onResume = onOpenChannel,
+        )
+
+        TvTab.FAVOURITES -> TvPosterRows(
+            kind = MediaKind.VOD,
+            favouritesOnly = true,
+            onPlay = { items, index -> onOpen(items, index, WatchOrigin.FAVOURITE) },
+            onResume = onOpenChannel,
+        )
+
+        TvTab.FOR_YOU -> Unit
+    }
+}
+
 /**
  * The one key the shell's saved state is filed under.
  *
@@ -819,11 +853,10 @@ private const val EXIT_WINDOW_MILLIS = 3_000L
 private const val EXIT_NOTICE_ALPHA = 0.75f
 
 /**
- * Text tabs with an underline, as the Google TV home screen does it.
+ * The lockup, then the tabs as words, with a soft pill under the selected one.
  *
- * No pill, no card, no surface behind the labels — the reference is plain text, and a
- * filled chip reads as a button rather than as a place you are.
- *
+ * Words because a bar of words needs no legend, and one pill because the selection is a place the
+ * remote is, not a state each label has. See [TvBarTabs].
  * **The bar is one focus target, not five.** Moving left and right along it still switches
  * tab immediately, which is the Google TV feel this was always after, but the switch is
  * driven by the key press rather than by which label happens to hold focus.
@@ -929,36 +962,19 @@ private fun TvTopBar(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(28.dp),
         ) {
-            tabs.forEach { tab ->
-                // Bright only when the bar itself holds the remote *and* the remote is on the
-                // tabs rather than one of the icons past them. While focus is down in the content
-                // the selected tab stays legible but recedes, which is how a viewer tells where a
-                // press will land.
-                val isBarFocused = isFocused && spot == TvBarSpot.TABS
+            TvBarLockup()
 
-                if (tab.isIconOnly) {
-                    IconTab(
-                        icon = Icons.Filled.Search,
-                        contentDescription = stringResource(tab.labelRes),
-                        isSelected = tab.ordinal == selectedTab,
-                        isBarFocused = isBarFocused,
-                        modifier = Modifier.onTap {
-                            spot = TvBarSpot.TABS
-                            onSelect(tab.ordinal)
-                        },
-                    )
-                } else {
-                    TextTab(
-                        label = stringResource(tab.labelRes),
-                        isSelected = tab.ordinal == selectedTab,
-                        isBarFocused = isBarFocused,
-                        modifier = Modifier.onTap {
-                            spot = TvBarSpot.TABS
-                            onSelect(tab.ordinal)
-                        },
-                    )
-                }
-            }
+            // Bright only when the bar holds the remote *and* the remote is on the tabs rather than
+            // one of the icons past them. That is how a viewer tells where a press will land.
+            TvBarTabs(
+                tabs = tabs,
+                selectedTab = selectedTab,
+                isBarFocused = isFocused && spot == TvBarSpot.TABS,
+                onTap = { tab ->
+                    spot = TvBarSpot.TABS
+                    onSelect(tab.ordinal)
+                },
+            )
 
             Spacer(modifier = Modifier.weight(1f))
 
@@ -1042,101 +1058,6 @@ private fun BarProfile(
     }
 }
 
-/** One tab. A label and an underline — the bar above owns focus and selection. */
-@Composable
-private fun TextTab(
-    label: String,
-    isSelected: Boolean,
-    isBarFocused: Boolean,
-    modifier: Modifier = Modifier,
-) {
-    val alpha by animateFloatAsState(
-        targetValue = when {
-            isSelected && isBarFocused -> 1f
-            isSelected -> SELECTED_ALPHA
-            else -> IDLE_ALPHA
-        },
-        label = "tabAlpha",
-    )
-
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = modifier,
-    ) {
-        Text(
-            text = label,
-            color = Color.White.copy(alpha = alpha),
-            fontSize = TAB_TEXT_SIZE,
-            fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
-        )
-
-        Spacer(modifier = Modifier.height(6.dp))
-
-        // The underline marks the selected tab. Drawn always, transparent when not
-        // selected, so the label never shifts as selection moves along the bar.
-        Box(
-            modifier = Modifier
-                .width(UNDERLINE_WIDTH)
-                .height(2.dp)
-                .background(
-                    color = if (isSelected) Color.White else Color.Transparent,
-                    shape = RoundedCornerShape(1.dp),
-                ),
-        )
-    }
-}
-
-/**
- * A tab carrying a magnifier instead of a word.
- *
- * Same underline, same alpha rules, same rhythm as [TextTab] — it is a tab, and the only
- * thing different about it is that it needs no translating. The icon sits in a box the height
- * of a tab label so the underlines along the bar stay on one line.
- */
-@Composable
-private fun IconTab(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    contentDescription: String,
-    isSelected: Boolean,
-    isBarFocused: Boolean,
-    modifier: Modifier = Modifier,
-) {
-    val alpha by animateFloatAsState(
-        targetValue = when {
-            isSelected && isBarFocused -> 1f
-            isSelected -> SELECTED_ALPHA
-            else -> IDLE_ALPHA
-        },
-        label = "iconTabAlpha",
-    )
-
-    Column(modifier = modifier, horizontalAlignment = Alignment.CenterHorizontally) {
-        Box(
-            modifier = Modifier.height(TAB_LABEL_HEIGHT),
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = contentDescription,
-                tint = Color.White.copy(alpha = alpha),
-                modifier = Modifier.size(TAB_ICON_SIZE),
-            )
-        }
-
-        Spacer(modifier = Modifier.height(6.dp))
-
-        Box(
-            modifier = Modifier
-                .width(UNDERLINE_WIDTH)
-                .height(2.dp)
-                .background(
-                    color = if (isSelected) Color.White else Color.Transparent,
-                    shape = RoundedCornerShape(1.dp),
-                ),
-        )
-    }
-}
-
 @Composable
 private fun BarIcon(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
@@ -1166,13 +1087,6 @@ private fun BarIcon(
 
 /** Overscan margin. Televisions crop the edges of the frame, and many still do. */
 private val SCREEN_PADDING = 48.dp
-private val UNDERLINE_WIDTH = 28.dp
-private val TAB_TEXT_SIZE = 20.sp
-
-/** A 20sp label's line box, near enough — what an icon tab matches so the bar stays level. */
-private val TAB_LABEL_HEIGHT = 24.dp
-private val TAB_ICON_SIZE = 22.dp
-private const val SELECTED_ALPHA = 0.90f
 private const val IDLE_ALPHA = 0.55f
 
 /** Close enough that the gear and the face read as one group at the end of the bar. */

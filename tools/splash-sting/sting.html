@@ -1,0 +1,115 @@
+<!--
+  Quiblo — a free, open source IPTV player.
+  Copyright (C) 2026 The Quiblo Authors
+  Licensed under the GNU General Public License v3.0 or later. See LICENSE.
+
+  The splash sting, as Web Audio synthesis. render.js renders it offline in headless Chromium
+  into the two clips in feature/designsystem/src/main/res/raw: splash_intro (build, hit, chord)
+  and splash_dive (whoosh, landing), which the splash plays at launch and at the dive.
+-->
+<script>
+const NEW = { draw0: 0.10, draw1: 0.56, tail0: 0.46, hit: 0.62, word0: 0.70, dive0: 1.60, dive1: 2.30, end: 2.80 };
+  function impulse(ctx, seconds, decay) {
+    const len = Math.floor(ctx.sampleRate * seconds);
+    const buf = ctx.createBuffer(2, len, ctx.sampleRate);
+    for (let c = 0; c < 2; c++) {
+      const d = buf.getChannelData(c);
+      for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, decay);
+    }
+    return buf;
+  }
+  function noise(ctx, seconds) {
+    const len = Math.floor(ctx.sampleRate * seconds);
+    const buf = ctx.createBuffer(1, len, ctx.sampleRate);
+    const d = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+    const src = ctx.createBufferSource(); src.buffer = buf; return src;
+  }
+  function saturator(ctx, amount) {
+    const ws = ctx.createWaveShaper(); const n = 1024; const curve = new Float32Array(n);
+    for (let i = 0; i < n; i++) { const x = i / (n - 1) * 2 - 1; curve[i] = Math.tanh(x * amount) / Math.tanh(amount); }
+    ws.curve = curve; return ws;
+  }
+  function lowHit(ctx, bus, at, from, to, level, length) {
+    const o = ctx.createOscillator(); o.type = 'sine';
+    o.frequency.setValueAtTime(from, at); o.frequency.exponentialRampToValueAtTime(to, at + 0.2);
+    const sat = saturator(ctx, 3.2);
+    const g = ctx.createGain(); g.gain.setValueAtTime(0.0001, at);
+    g.gain.exponentialRampToValueAtTime(level, at + 0.006); g.gain.exponentialRampToValueAtTime(0.0001, at + length);
+    o.connect(sat); sat.connect(g); g.connect(bus); o.start(at); o.stop(at + length + 0.05);
+    const n = noise(ctx, 0.2); const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 1100;
+    const ng = ctx.createGain(); ng.gain.setValueAtTime(level * 0.55, at); ng.gain.exponentialRampToValueAtTime(0.0001, at + 0.13);
+    n.connect(lp); lp.connect(ng); ng.connect(bus); n.start(at); n.stop(at + 0.2);
+  }
+  function stingIntro(ctx, out, t0) {
+    const hold = 0;
+    const T = { hit: t0 + NEW.hit, dive0: t0 + NEW.dive0 + hold, dive1: t0 + NEW.dive1 + hold };
+    const comp = ctx.createDynamicsCompressor();
+    comp.threshold.value = -14; comp.ratio.value = 4; comp.attack.value = 0.003; comp.release.value = 0.25;
+    const master = ctx.createGain(); master.gain.value = 0.9;
+    comp.connect(master); master.connect(out);
+    const bus = ctx.createGain(); bus.connect(comp);
+    const rev = ctx.createConvolver(); rev.buffer = impulse(ctx, 2.4, 2.6);
+    const send = ctx.createGain(); send.gain.value = 0.28; bus.connect(send); send.connect(rev); rev.connect(comp);
+
+    // The build: air through a rising band-pass, a low tone climbing under it.
+    const air = noise(ctx, NEW.hit + 0.05); const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.Q.value = 1.4;
+    bp.frequency.setValueAtTime(260, t0); bp.frequency.exponentialRampToValueAtTime(3200, T.hit);
+    const ag = ctx.createGain(); ag.gain.setValueAtTime(0.0001, t0); ag.gain.exponentialRampToValueAtTime(0.32, T.hit - 0.01); ag.gain.linearRampToValueAtTime(0, T.hit);
+    air.connect(bp); bp.connect(ag); ag.connect(bus); air.start(t0); air.stop(T.hit + 0.05);
+    const rise = ctx.createOscillator(); rise.type = 'triangle'; rise.frequency.setValueAtTime(55, t0); rise.frequency.exponentialRampToValueAtTime(146.8, T.hit);
+    const rg = ctx.createGain(); rg.gain.setValueAtTime(0.0001, t0); rg.gain.exponentialRampToValueAtTime(0.16, T.hit - 0.01); rg.gain.linearRampToValueAtTime(0, T.hit);
+    rise.connect(rg); rg.connect(bus); rise.start(t0); rise.stop(T.hit + 0.02);
+
+    // The hit.
+    lowHit(ctx, bus, T.hit, 130, 46, 0.95, 1.1);
+
+    // The chord: D, A, D, F#, A, E, two detuned saws each, through a filter that opens and closes.
+    const chord = [73.42, 110, 146.83, 185, 220, 329.63];
+    const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.Q.value = 2;
+    lp.frequency.setValueAtTime(240, T.hit); lp.frequency.exponentialRampToValueAtTime(2600, T.hit + 0.09); lp.frequency.exponentialRampToValueAtTime(520, T.hit + 1.7);
+    const cg = ctx.createGain(); cg.gain.setValueAtTime(0.0001, T.hit); cg.gain.exponentialRampToValueAtTime(0.42, T.hit + 0.025); cg.gain.exponentialRampToValueAtTime(0.0001, T.hit + 2.0);
+    lp.connect(cg); cg.connect(bus);
+    chord.forEach((f) => [-7, 7].forEach((cents) => {
+      const o = ctx.createOscillator(); o.type = 'sawtooth'; o.frequency.value = f; o.detune.value = cents;
+      const v = ctx.createGain(); v.gain.value = 0.065;
+      const pan = ctx.createStereoPanner ? ctx.createStereoPanner() : null;
+      if (pan) { pan.pan.value = cents > 0 ? 0.35 : -0.35; o.connect(v); v.connect(pan); pan.connect(lp); } else { o.connect(v); v.connect(lp); }
+      o.start(T.hit); o.stop(T.hit + 2.1);
+    }));
+    // A high shimmer that fades in under the hold.
+    [587.33, 880].forEach((f, i) => {
+      const o = ctx.createOscillator(); o.type = 'sine'; o.frequency.value = f;
+      const g = ctx.createGain(); g.gain.setValueAtTime(0.0001, T.hit); g.gain.exponentialRampToValueAtTime(0.035 - i * 0.012, T.hit + 0.5); g.gain.exponentialRampToValueAtTime(0.0001, T.hit + 1.9);
+      o.connect(g); g.connect(bus); o.start(T.hit); o.stop(T.hit + 2.0);
+    });
+  }
+  function stingDive(ctx, out, t0) {
+    const T = { dive0: t0, dive1: t0 + (NEW.dive1 - NEW.dive0) };
+    const comp = ctx.createDynamicsCompressor();
+    comp.threshold.value = -14; comp.ratio.value = 4; comp.attack.value = 0.003; comp.release.value = 0.25;
+    const master = ctx.createGain(); master.gain.value = 0.9;
+    comp.connect(master); master.connect(out);
+    const bus = ctx.createGain(); bus.connect(comp);
+    const rev = ctx.createConvolver(); rev.buffer = impulse(ctx, 2.4, 2.6);
+    const send = ctx.createGain(); send.gain.value = 0.28; bus.connect(send); send.connect(rev); rev.connect(comp);
+
+    // The dive: a whoosh sweeping up, cut as the catalogue appears.
+    const w = noise(ctx, T.dive1 - T.dive0 + 0.05); const wbp = ctx.createBiquadFilter(); wbp.type = 'bandpass'; wbp.Q.value = 0.9;
+    wbp.frequency.setValueAtTime(380, T.dive0); wbp.frequency.exponentialRampToValueAtTime(7000, T.dive1);
+    const wg = ctx.createGain(); wg.gain.setValueAtTime(0.0001, T.dive0); wg.gain.exponentialRampToValueAtTime(0.42, T.dive1 - 0.03); wg.gain.linearRampToValueAtTime(0, T.dive1);
+    w.connect(wbp); wbp.connect(wg); wg.connect(bus); w.start(T.dive0); w.stop(T.dive1 + 0.05);
+
+    // The landing.
+    lowHit(ctx, bus, T.dive1, 92, 44, 0.5, 0.8);
+  }
+
+
+async function render(fn, secs){
+  const rate=44100; const o=new OfflineAudioContext(2, Math.ceil(rate*secs), rate);
+  fn(o, o.destination, 0); const buf=await o.startRendering();
+  const enc=(a)=>{ const u=new Uint8Array(a.buffer); let s=''; for(let i=0;i<u.length;i+=8192) s+=String.fromCharCode.apply(null,u.subarray(i,i+8192)); return btoa(s); };
+  return {L:enc(buf.getChannelData(0)), R:enc(buf.getChannelData(1)), rate};
+}
+window.go = async () => ({ intro: await render(stingIntro, 3.0), dive: await render(stingDive, 2.2) });
+</script>

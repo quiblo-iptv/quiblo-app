@@ -342,6 +342,14 @@ class SettingsViewModel(
         playerSettingsRepository.setAmbientPlayer(enabled)
     }
 
+    /** Whether the television matches its refresh rate to the film's (`FEAT-041`). On by default, as above. */
+    val matchFrameRate: StateFlow<Boolean> = playerSettingsRepository.matchFrameRate
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(SUBSCRIPTION_TIMEOUT_MILLIS), true)
+
+    fun setMatchFrameRate(enabled: Boolean) = viewModelScope.launch {
+        playerSettingsRepository.setMatchFrameRate(enabled)
+    }
+
     /** Writing systems the viewer has hidden from the catalogue and from search (INC-F14). */
     val hiddenScripts: StateFlow<Set<TitleScript>> = scriptFilter.hiddenScripts
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(SUBSCRIPTION_TIMEOUT_MILLIS), emptySet())

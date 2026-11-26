@@ -56,15 +56,18 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import coil3.compose.SubcomposeAsyncImage
 import dev.quiblo.core.common.cleanedForDisplay
 import dev.quiblo.core.data.TitleVersion
 import dev.quiblo.core.model.TitleMetadata
 import dev.quiblo.designsystem.AutoDirection
+import dev.quiblo.designsystem.QuibloDisplayFamily
+import dev.quiblo.designsystem.travellingGlow
 import dev.quiblo.tv.R
 import dev.quiblo.tv.ui.common.TvChip
-import dev.quiblo.tv.ui.common.travellingGlow
+import dev.quiblo.tv.ui.common.rememberArtworkChain
 
 /**
  * The parts a film and a series detail screen both need.
@@ -74,9 +77,20 @@ import dev.quiblo.tv.ui.common.travellingGlow
  * Two copies is how one of them ends up with the age rating and the other does not.
  */
 
-/** Cover art, at a size a poster actually reads at from across a room. */
+/**
+ * Cover art, at a size a poster actually reads at from across a room.
+ *
+ * [urls] best first — the panel's picture, then the metadata service's. One that will not load
+ * hands over to the next, so a dead provider link shows the TMDB poster rather than an icon.
+ *
+ * @param retry what "Reload info" answered, or null. Each answer tries every picture again from
+ *   the top — including ones this session had given up on — so a provider link that has come
+ *   back is shown again, and a poster the reload just found is shown at all.
+ */
 @Composable
-fun DetailArtwork(url: String?, modifier: Modifier = Modifier) {
+fun DetailArtwork(urls: List<String?>, modifier: Modifier = Modifier, retry: Any? = null) {
+    val artwork = rememberArtworkChain(urls, retry = retry)
+    val url = artwork.url
     Box(
         modifier = modifier
             .width(ARTWORK_WIDTH)
@@ -85,7 +99,7 @@ fun DetailArtwork(url: String?, modifier: Modifier = Modifier) {
             .background(Color.White.copy(alpha = 0.06f)),
         contentAlignment = Alignment.Center,
     ) {
-        if (url.isNullOrBlank()) {
+        if (url == null) {
             Icon(
                 imageVector = Icons.Filled.Movie,
                 contentDescription = null,
@@ -98,6 +112,7 @@ fun DetailArtwork(url: String?, modifier: Modifier = Modifier) {
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.fillMaxSize(),
+                onError = { artwork.failed(url) },
             )
         }
     }
@@ -318,7 +333,9 @@ fun DetailTitle(title: String) {
             // and the two lines overlap — visible immediately on any title long enough to
             // wrap, which on a panel's own naming is most of them.
             lineHeight = 33.sp,
+            fontFamily = QuibloDisplayFamily,
             fontWeight = FontWeight.SemiBold,
+            letterSpacing = TITLE_TRACKING,
             maxLines = 2,
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.fillMaxWidth(),
@@ -403,3 +420,6 @@ fun TvVersionRow(versions: List<TitleVersion>, shownId: Long, onSelect: (Long) -
         }
     }
 }
+
+/** Titles in the display face are pulled in a little, as the wordmark is, so they read as one line. */
+private val TITLE_TRACKING = (-0.02).em

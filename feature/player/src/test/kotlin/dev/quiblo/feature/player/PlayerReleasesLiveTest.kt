@@ -170,6 +170,30 @@ class PlayerReleasesLiveTest {
         verify(exactly = 0) { controller.retry() }
     }
 
+    /**
+     * A film left on the television lets go of its engine (`BUG-064`).
+     *
+     * Paused, the engine was carried into the next film, and on a MediaTek panel that film dropped
+     * a frame in five until the process was killed. And the same film chosen again is a fresh load
+     * on the fresh engine, not a request found already "loaded" with nothing behind it.
+     */
+    @Test
+    fun `leaving a film lets go of its engine and lets the same film load again`() = runTest {
+        val viewModel = viewModel()
+        viewModel.load(channelId = FILM.id)
+        advanceUntilIdle()
+        playing(FILM)
+
+        viewModel.onLeft()
+        verify(exactly = 1) { controller.discardEngine() }
+        verify(exactly = 0) { controller.pause() }
+
+        clearMocks(controller, answers = false)
+        viewModel.load(channelId = FILM.id)
+        advanceUntilIdle()
+        verify(exactly = 1) { controller.prepare(any()) }
+    }
+
     private companion object {
         val LIVE = Channel(
             id = 1L,

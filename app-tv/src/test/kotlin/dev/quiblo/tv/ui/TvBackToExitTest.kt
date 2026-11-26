@@ -38,38 +38,38 @@ import org.junit.jupiter.api.Test
 class TvBackToExitTest {
 
     @Test
-    fun `back from another tab walks to Search rather than leaving`() {
+    fun `back from another tab walks to Home rather than leaving`() {
         val action = tvBackAction(TvBackState(selectedTab = LAST, isExitArmed = false))
 
-        assertEquals(TvBackAction.GoToSearch, action)
+        assertEquals(TvBackAction.GoToHome, action)
     }
 
     @Test
     fun `and it disarms an exit somebody had already started`() {
         // A viewer who has gone somewhere else has stopped leaving. Without this, arming on
-        // Search and then walking to Movies leaves the next back on Search closing the app with
+        // Search and then walking to Movies leaves the next back on Home closing the app with
         // no notice on screen at all.
         val action = tvBackAction(TvBackState(selectedTab = LAST, isExitArmed = true))
 
-        assertEquals(TvBackAction.GoToSearch, action)
+        assertEquals(TvBackAction.GoToHome, action)
     }
 
     @Test
-    fun `the first back on Search asks rather than closing`() {
-        val action = tvBackAction(TvBackState(selectedTab = SEARCH, isExitArmed = false))
+    fun `the first back on Home asks rather than closing`() {
+        val action = tvBackAction(TvBackState(selectedTab = HOME, isExitArmed = false))
 
         assertEquals(TvBackAction.ArmExit, action)
     }
 
     @Test
     fun `the second closes`() {
-        val action = tvBackAction(TvBackState(selectedTab = SEARCH, isExitArmed = true))
+        val action = tvBackAction(TvBackState(selectedTab = HOME, isExitArmed = true))
 
         assertEquals(TvBackAction.Exit, action)
     }
 
     private companion object {
-        const val SEARCH = 0
+        const val HOME = 0
         const val LAST = 3
     }
 }

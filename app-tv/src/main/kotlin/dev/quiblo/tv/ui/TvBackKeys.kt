@@ -32,7 +32,7 @@ data class TvBackState(val selectedTab: Int, val isExitArmed: Boolean)
 sealed interface TvBackAction {
 
     /** Walk to the first tab. Where back comes to rest, and where it stops being navigation. */
-    data object GoToSearch : TvBackAction
+    data object GoToHome : TvBackAction
 
     /** Say that another press will close, and wait for it. */
     data object ArmExit : TvBackAction
@@ -51,20 +51,20 @@ sealed interface TvBackAction {
  *
  * Three cases, and only the first was ever written down:
  *
- * - **Anywhere but Search**, back is navigation: walk to the first tab, which is where back has
+ * - **Anywhere but Home**, back is navigation: walk to the first tab, which is where back has
  *   always come to rest. The alternative — back leaving from wherever somebody happens to be — is
  *   how a television app loses a viewer three tabs deep with one stray press.
- * - **On Search, unarmed**, back asks. Two presses rather than one because back is also how a
+ * - **On Home, unarmed**, back asks. Two presses rather than one because back is also how a
  *   viewer walks out of everything else, and a stray press that closes the app is the one mistake
  *   a television app cannot let somebody make.
- * - **On Search, armed**, back closes.
+ * - **On Home, armed**, back closes.
  *
- * Walking off Search disarms, and that is the case a careless version drops: a viewer who has
- * gone somewhere else has stopped leaving, and without it, arming on Search and then walking to
- * Movies leaves the next back on Search closing the app with no notice on screen at all.
+ * Walking off Home disarms, and that is the case a careless version drops: a viewer who has
+ * gone somewhere else has stopped leaving, and without it, arming on Home and then walking to
+ * Movies leaves the next back on Home closing the app with no notice on screen at all.
  */
 fun tvBackAction(state: TvBackState): TvBackAction = when {
-    state.selectedTab != TvTab.SEARCH.ordinal -> TvBackAction.GoToSearch
+    state.selectedTab != TvTab.FOR_YOU.ordinal -> TvBackAction.GoToHome
     state.isExitArmed -> TvBackAction.Exit
     else -> TvBackAction.ArmExit
 }

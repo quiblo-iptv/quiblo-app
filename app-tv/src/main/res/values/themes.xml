@@ -10,6 +10,6 @@
       the phone app offers would be glaring rather than merely bright.
     -->
     <style name="Theme.QuibloTv" parent="android:Theme.Material.NoActionBar">
-        <item name="android:windowBackground">@android:color/black</item>
+        <item name="android:windowBackground">@color/quiblo_tv_window</item>
     </style>
 </resources>

@@ -53,6 +53,7 @@ import androidx.compose.material.icons.filled.Replay30
 import androidx.compose.material.icons.filled.Replay5
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
+import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -393,6 +394,16 @@ private fun OptionsRow(
                 },
             ),
         )
+        // Last, and never first: picture fit is always drawn ahead of it, so the row's first
+        // button is unchanged (`FEAT-040`).
+        add(
+            PlayerButton(
+                icon = Icons.Outlined.Info,
+                label = stringResource(R.string.tv_player_info),
+                onClick = actions.toggleInfo,
+                size = OPTION_BUTTON_SIZE,
+            ),
+        )
     }
 
     ButtonRow(
@@ -722,6 +733,8 @@ internal data class TvControlActions(
     val openAudio: () -> Unit,
     val openSubtitles: () -> Unit,
     val cycleAspect: () -> Unit,
+    /** Opens and closes the playback info overlay (`FEAT-040`). */
+    val toggleInfo: () -> Unit = {},
 )
 
 /**

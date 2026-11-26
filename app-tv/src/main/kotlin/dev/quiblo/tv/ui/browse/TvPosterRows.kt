@@ -21,8 +21,8 @@ package dev.quiblo.tv.ui.browse
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.LocalBringIntoViewSpec
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.Arrangement
@@ -36,15 +36,18 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.relocation.BringIntoViewResponder
 import androidx.compose.foundation.relocation.bringIntoViewResponder
@@ -56,6 +59,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -72,10 +76,14 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -99,7 +107,10 @@ import dev.quiblo.tv.R
 import dev.quiblo.tv.ui.common.AmbientRequest
 import dev.quiblo.tv.ui.common.LocalAmbientSink
 import dev.quiblo.tv.ui.common.LocalTvReturn
+import dev.quiblo.tv.ui.common.TvFocusSlideHost
+import dev.quiblo.tv.ui.common.focusFrame
 import dev.quiblo.tv.ui.common.insistOnFocus
+import dev.quiblo.tv.ui.common.rememberArtworkChain
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -211,34 +222,46 @@ private fun TvMergedGrid(
             )
         }
 
-        else -> LazyVerticalGrid(
-            // Adaptive rather than a fixed count. A television panel is 960dp wide and a monitor
-            // running this build is not, and a column count chosen for one crops the other.
-            //
-            // The tile is narrower here than on the shelves (`030` #3). A shelf is walked
-            // sideways, so a big poster costs nothing but presses; a grid is the whole catalogue
-            // at once and the question it answers is "what is in here" — which is a question about
-            // how many titles fit on the screen. At 120dp a 960dp panel holds seven across where
-            // the shelf width held five.
-            columns = GridCells.Adaptive(minSize = GRID_POSTER_WIDTH + FOCUS_GROWTH_HORIZONTAL * 2),
-            modifier = modifier.fillMaxSize(),
-            // Room for a focused poster to grow into at the edges of the grid, on the same
-            // reasoning as the rows: a `LazyVerticalGrid` clips to its own bounds.
-            contentPadding = PaddingValues(vertical = FOCUS_GROWTH, horizontal = FOCUS_GROWTH_HORIZONTAL),
-            horizontalArrangement = Arrangement.Center,
-        ) {
-            items(count = items.itemCount) { index ->
-                val channel = items[index] ?: return@items
-                LaunchedEffect(channel.id) { viewModel.onPosterVisible(channel) }
-                TvPoster(
-                    tile = TvTile(channel),
-                    rating = state.ratings[channel.stableKey],
-                    fallbackArtworkUrl = state.posters[channel.stableKey],
-                    onClick = { onPlay(items.itemSnapshotList.items, index) },
-                    // Matches the cell the grid measured. A tile wider than its column is a tile
-                    // clipped down one side, and a focused one is clipped further.
-                    posterWidth = GRID_POSTER_WIDTH,
-                )
+        // The frame that slides between posters is the grid's, not each tile's. See `TvFocusSlideHost`.
+        // The grid ignores the height left under the banner: it is a grid, and it scrolls.
+        else -> TvCatalogueWithPreview(
+            firstTile = items.peek(0)?.let(::TvTile),
+            ratings = state.ratings,
+            posters = state.posters,
+            preview = viewModel::titlePreview,
+            modifier = modifier,
+        ) { _ ->
+            TvFocusSlideHost(modifier = Modifier.fillMaxSize()) {
+                LazyVerticalGrid(
+                    // Adaptive rather than a fixed count. A television panel is 960dp wide and a monitor
+                    // running this build is not, and a column count chosen for one crops the other.
+                    //
+                    // The tile is narrower here than on the shelves (`030` #3). A shelf is walked
+                    // sideways, so a big poster costs nothing but presses; a grid is the whole catalogue
+                    // at once and the question it answers is "what is in here" — which is a question about
+                    // how many titles fit on the screen. At 120dp a 960dp panel holds seven across where
+                    // the shelf width held five.
+                    columns = GridCells.Adaptive(minSize = GRID_POSTER_WIDTH + FOCUS_GROWTH_HORIZONTAL * 2),
+                    modifier = Modifier.fillMaxSize(),
+                    // Room for a focused poster to grow into at the edges of the grid, on the same
+                    // reasoning as the rows: a `LazyVerticalGrid` clips to its own bounds.
+                    contentPadding = PaddingValues(vertical = FOCUS_GROWTH, horizontal = FOCUS_GROWTH_HORIZONTAL),
+                    horizontalArrangement = Arrangement.Center,
+                ) {
+                    items(count = items.itemCount) { index ->
+                        val channel = items[index] ?: return@items
+                        LaunchedEffect(channel.id) { viewModel.onPosterVisible(channel) }
+                        TvPoster(
+                            tile = TvTile(channel),
+                            rating = state.ratings[channel.stableKey],
+                            fallbackArtworkUrl = state.posters[channel.stableKey],
+                            onClick = { onPlay(items.itemSnapshotList.items, index) },
+                            // Matches the cell the grid measured. A tile wider than its column is a tile
+                            // clipped down one side, and a focused one is clipped further.
+                            posterWidth = GRID_POSTER_WIDTH,
+                        )
+                    }
+                }
             }
         }
     }
@@ -372,40 +395,67 @@ private fun TvCategoryShelves(
             )
         }
 
-        else -> TvCategoryList(
-            rows = rows,
-            ratings = state.ratings,
-            onVisible = viewModel::onPosterVisible,
-            // The position travels with the item rather than being searched for. It is
-            // indexed against the flat list so zapping walks every item on screen, not just
-            // the row the viewer happened to start in.
-            onItemClick = { item -> onPlay(state.items, item.flatIndex) },
-            modifier = modifier,
-            // First, above the catalogue, because it is what a returning viewer came for.
-            // Empty on Favourites and on Live, which the ViewModel decides — a channel is
-            // not something anyone continues, and Favourites is a list built by hand.
-            continueWatching = if (state.history.isEmpty()) {
-                null
+        else -> {
+            val catalogue: @Composable (Modifier, Dp) -> Unit = { listModifier, posterWidth ->
+                TvCategoryList(
+                    rows = rows,
+                    posterWidth = posterWidth,
+                    ratings = state.ratings,
+                    onVisible = viewModel::onPosterVisible,
+                    // The position travels with the item rather than being searched for. It is
+                    // indexed against the flat list so zapping walks every item on screen, not just
+                    // the row the viewer happened to start in.
+                    onItemClick = { item -> onPlay(state.items, item.flatIndex) },
+                    modifier = listModifier,
+                    // First, above the catalogue, because it is what a returning viewer came for.
+                    // Empty on Favourites and on Live, which the ViewModel decides — a channel is
+                    // not something anyone continues, and Favourites is a list built by hand.
+                    continueWatching = if (state.history.isEmpty()) {
+                        null
+                    } else {
+                        {
+                            TvContinueWatchingRow(
+                                entries = state.history,
+                                posters = state.posters,
+                                // Null when the provider has since dropped the title, which is an
+                                // honest outcome rather than an error: the row is stale, and doing
+                                // nothing is better than opening a screen about nothing.
+                                onClick = { entry ->
+                                    scope.launch {
+                                        viewModel.channelForHistory(entry)?.let(onResume)
+                                    }
+                                },
+                                // The same repository call the phone's long-press makes, and the same
+                                // series branch inside it — one action, one implementation (INC-F3).
+                                onRemove = viewModel::removeFromHistory,
+                            )
+                        }
+                    },
+                )
+            }
+
+            /*
+             * Movies and Series get the preview banner above their shelves; Favourites does not —
+             * it is a short list somebody built by hand, and they know what is on it.
+             *
+             * The shelves move down to make the room, and the posters are sized from what is left
+             * so a whole row and its heading still fit, which is the arithmetic Search already
+             * does under its field. See `posterWidthFor`.
+             */
+            if (favouritesOnly) {
+                catalogue(modifier, POSTER_WIDTH)
             } else {
-                {
-                    TvContinueWatchingRow(
-                        entries = state.history,
-                        posters = state.posters,
-                        // Null when the provider has since dropped the title, which is an
-                        // honest outcome rather than an error: the row is stale, and doing
-                        // nothing is better than opening a screen about nothing.
-                        onClick = { entry ->
-                            scope.launch {
-                                viewModel.channelForHistory(entry)?.let(onResume)
-                            }
-                        },
-                        // The same repository call the phone's long-press makes, and the same
-                        // series branch inside it — one action, one implementation (INC-F3).
-                        onRemove = viewModel::removeFromHistory,
-                    )
+                TvCatalogueWithPreview(
+                    firstTile = rows.firstOrNull()?.items?.firstOrNull()?.tile,
+                    ratings = state.ratings,
+                    posters = state.posters,
+                    preview = viewModel::titlePreview,
+                    modifier = modifier,
+                ) { available ->
+                    catalogue(Modifier, posterWidthFor(available))
                 }
-            },
-        )
+            }
+        }
     }
 }
 
@@ -497,67 +547,74 @@ internal fun TvCategoryList(
         }
     }
 
-    LazyColumn(
-        state = listState,
-        modifier = modifier.fillMaxSize(),
-        // Padding at the ends so the first heading and last row are not flush against the
-        // edges. contentPadding is used rather than Modifier.padding so that the focused
-        // poster's growth is not clipped by the container's bounds.
-        //
-        // Full-bleed header: top padding is removed when a header is present, so a hero
-        // slider can reach the screen edges and blend into the ambient light.
-        contentPadding = PaddingValues(top = if (header == null) LIST_TOP_PADDING else 0.dp, bottom = 32.dp),
-        // Each row reserves FOCUS_GROWTH above and below itself, so the spacing between
-        // rows is reduced by the same amount to keep the rhythm on screen unchanged.
-        verticalArrangement = Arrangement.spacedBy(ROW_SPACING),
-    ) {
-        if (header != null) {
-            item(key = "header") {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .onFocusChanged { isHeaderFocused = it.hasFocus }
-                        .ignoreChildBringIntoView(),
-                ) {
-                    header()
+    /*
+     * One focus frame for the whole catalogue, sliding from the poster the remote left to the one
+     * it reached — across a row and between rows alike. It draws over the list and measures
+     * nothing, so the rows below are laid out exactly as they were. See `TvFocusSlideHost`.
+     */
+    TvFocusSlideHost(modifier = modifier.fillMaxSize()) {
+        LazyColumn(
+            state = listState,
+            modifier = Modifier.fillMaxSize(),
+            // Padding at the ends so the first heading and last row are not flush against the
+            // edges. contentPadding is used rather than Modifier.padding so that the focused
+            // poster's growth is not clipped by the container's bounds.
+            //
+            // Full-bleed header: top padding is removed when a header is present, so a hero
+            // slider can reach the screen edges and blend into the ambient light.
+            contentPadding = PaddingValues(top = if (header == null) LIST_TOP_PADDING else 0.dp, bottom = 32.dp),
+            // Each row reserves FOCUS_GROWTH above and below itself, so the spacing between
+            // rows is reduced by the same amount to keep the rhythm on screen unchanged.
+            verticalArrangement = Arrangement.spacedBy(ROW_SPACING),
+        ) {
+            if (header != null) {
+                item(key = "header") {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .onFocusChanged { isHeaderFocused = it.hasFocus }
+                            .ignoreChildBringIntoView(),
+                    ) {
+                        header()
+                    }
                 }
             }
-        }
 
-        if (continueWatching != null) {
-            item(key = CONTINUE_ROW_KEY) {
+            if (continueWatching != null) {
+                item(key = CONTINUE_ROW_KEY) {
+                    val rowModifier = if (header != null) {
+                        Modifier.padding(horizontal = ROW_HORIZONTAL_PADDING)
+                    } else {
+                        Modifier
+                    }
+                    Box(modifier = rowModifier) {
+                        continueWatching()
+                    }
+                }
+            }
+
+            items(items = rows, key = { it.title }) { row ->
                 val rowModifier = if (header != null) {
                     Modifier.padding(horizontal = ROW_HORIZONTAL_PADDING)
                 } else {
                     Modifier
                 }
-                Box(modifier = rowModifier) {
-                    continueWatching()
-                }
+                CategoryRow(
+                    category = row.title,
+                    items = row.items,
+                    ratings = ratings,
+                    posters = posters,
+                    onVisible = onVisible,
+                    onItemClick = onItemClick,
+                    showKindBadge = showKindBadge,
+                    style = row.style,
+                    focusedKey = focusedKey,
+                    cursorFocus = cursorFocus,
+                    onFocusedKeyChange = { focusedKey = it },
+                    posterWidth = posterWidth,
+                    modifier = rowModifier,
+                )
             }
-        }
-
-        items(items = rows, key = { it.title }) { row ->
-            val rowModifier = if (header != null) {
-                Modifier.padding(horizontal = ROW_HORIZONTAL_PADDING)
-            } else {
-                Modifier
-            }
-            CategoryRow(
-                category = row.title,
-                items = row.items,
-                ratings = ratings,
-                posters = posters,
-                onVisible = onVisible,
-                onItemClick = onItemClick,
-                showKindBadge = showKindBadge,
-                style = row.style,
-                focusedKey = focusedKey,
-                cursorFocus = cursorFocus,
-                onFocusedKeyChange = { focusedKey = it },
-                posterWidth = posterWidth,
-                modifier = rowModifier,
-            )
         }
     }
 }
@@ -721,6 +778,7 @@ private fun groupIntoRows(
 }
 
 @Composable
+@OptIn(ExperimentalFoundationApi::class)
 @Suppress("LongParameterList")
 private fun CategoryRow(
     category: String,
@@ -739,6 +797,12 @@ private fun CategoryRow(
     posterWidth: Dp = POSTER_WIDTH,
     modifier: Modifier = Modifier,
 ) {
+    // The row scrolls itself, as a glide, rather than being snapped by Compose. See [TvRowGlide].
+    val rowState = rememberLazyListState()
+    val glide = remember(rowState) { TvRowGlide(rowState) }
+    val glideScope = rememberCoroutineScope()
+    LaunchedEffect(glide) { glide.drive() }
+
     Column(modifier = modifier) {
         Text(
             text = category,
@@ -753,38 +817,43 @@ private fun CategoryRow(
         // under the title has to clear the same growth or the two touch (#003).
         // No content padding, and no spacing beyond what the items carry themselves. Both
         // used to live here; both now live inside the poster. See `Poster`.
-        LazyRow {
-            items(items = items, key = { it.tile.key }) { item ->
-                // Per poster on screen, not per category: a category row can hold hundreds
-                // of films, and only the handful the remote has actually reached are
-                // displaying a score to fetch. A tile with no catalogue row behind it has
-                // nothing to ask about.
-                item.tile.channel?.let { channel ->
-                    LaunchedEffect(channel.id) { onVisible(channel) }
+        CompositionLocalProvider(LocalBringIntoViewSpec provides NoRowBringIntoView) {
+            LazyRow(state = rowState) {
+                itemsIndexed(items = items, key = { _, item -> item.tile.key }) { index, item ->
+                    // Per poster on screen, not per category: a category row can hold hundreds
+                    // of films, and only the handful the remote has actually reached are
+                    // displaying a score to fetch. A tile with no catalogue row behind it has
+                    // nothing to ask about.
+                    item.tile.channel?.let { channel ->
+                        LaunchedEffect(channel.id) { onVisible(channel) }
+                    }
+                    TvPoster(
+                        tile = item.tile,
+                        rating = ratings[item.tile.key],
+                        fallbackArtworkUrl = posters[item.tile.key],
+                        showKindBadge = showKindBadge,
+                        onClick = { onItemClick(item) },
+                        // Only the one tile carries the requester. Two nodes sharing a
+                        // `FocusRequester` is the state that throws, and a catalogue holds
+                        // thousands of these.
+                        focusRequester = cursorFocus.takeIf { item.tile.key == focusedKey },
+                        onFocused = {
+                            onFocusedKeyChange(item.tile.key)
+                            glide.reveal(index, glideScope)
+                        },
+                        rank = item.rank.takeIf { style == TvRowStyle.RANKED },
+                        // Reserved for the whole row, not only for the tiles that have one. A tile
+                        // one line taller than its neighbour is a tile whose bounds differ from its
+                        // neighbour's, which is where #008 came from.
+                        //
+                        // A ranked row reserves it unconditionally, because that is where the answer
+                        // to pressing an unavailable tile is written: a line that appears on one tile
+                        // when it is pressed would resize that tile mid-row.
+                        caption = item.caption,
+                        showCaption = style == TvRowStyle.RANKED || items.any { it.caption != null },
+                        posterWidth = posterWidth,
+                    )
                 }
-                TvPoster(
-                    tile = item.tile,
-                    rating = ratings[item.tile.key],
-                    fallbackArtworkUrl = posters[item.tile.key],
-                    showKindBadge = showKindBadge,
-                    onClick = { onItemClick(item) },
-                    // Only the one tile carries the requester. Two nodes sharing a
-                    // `FocusRequester` is the state that throws, and a catalogue holds
-                    // thousands of these.
-                    focusRequester = cursorFocus.takeIf { item.tile.key == focusedKey },
-                    onFocused = { onFocusedKeyChange(item.tile.key) },
-                    rank = item.rank.takeIf { style == TvRowStyle.RANKED },
-                    // Reserved for the whole row, not only for the tiles that have one. A tile
-                    // one line taller than its neighbour is a tile whose bounds differ from its
-                    // neighbour's, which is where #008 came from.
-                    //
-                    // A ranked row reserves it unconditionally, because that is where the answer
-                    // to pressing an unavailable tile is written: a line that appears on one tile
-                    // when it is pressed would resize that tile mid-row.
-                    caption = item.caption,
-                    showCaption = style == TvRowStyle.RANKED || items.any { it.caption != null },
-                    posterWidth = posterWidth,
-                )
             }
         }
     }
@@ -844,8 +913,10 @@ internal fun TvPoster(
     // shows a corner of a logo — the exact mistake PLAN-TV.md §3.3 exists to avoid — so a
     // live item keeps its whole logo inside the same tile instead.
     val isLogo = tile.kind == MediaKind.LIVE
-    val artworkUrl = tile.artworkUrl?.takeIf { it.isNotBlank() }
-        ?: fallbackArtworkUrl?.takeIf { it.isNotBlank() }
+    // The provider's picture, and the metadata service's when that one will not load — not only
+    // when the provider sent none. A dead link is the commoner of the two. See `BrokenArtwork`.
+    val artwork = rememberArtworkChain(tile.artworkUrl, fallbackArtworkUrl)
+    val artworkUrl = artwork.url
     val isPlayable = tile.channel != null
     val interactionSource = remember { MutableInteractionSource() }
     val isFocused by interactionSource.collectIsFocusedAsState()
@@ -861,8 +932,13 @@ internal fun TvPoster(
 
     // Reported rather than stored here: which tile the remote is on is a fact about the list,
     // and a tile that remembered it for itself would be forgotten with the tile.
+    // The preview banner over Movies and Series hears about it the same way the light does.
+    val focusedTileSink = LocalFocusedTileSink.current
     LaunchedEffect(isFocused) {
-        if (isFocused) onFocused()
+        if (isFocused) {
+            onFocused()
+            focusedTileSink(tile)
+        }
     }
 
     val scale by animateFloatAsState(
@@ -957,6 +1033,7 @@ internal fun TvPoster(
         ) {
             PosterArtwork(
                 artworkUrl = artworkUrl,
+                onArtworkFailed = artwork::failed,
                 isLogo = isLogo,
                 isPlayable = isPlayable,
                 isFocused = isFocused,
@@ -1015,6 +1092,8 @@ internal fun TvPoster(
 @Composable
 private fun PosterArtwork(
     artworkUrl: String?,
+    /** The picture at [artworkUrl] did not load; the tile moves on to its next one. */
+    onArtworkFailed: (String) -> Unit,
     isLogo: Boolean,
     isPlayable: Boolean,
     isFocused: Boolean,
@@ -1026,12 +1105,9 @@ private fun PosterArtwork(
         modifier = Modifier
             .fillMaxWidth()
             .aspectRatio(POSTER_ASPECT_RATIO)
-            .clip(RoundedCornerShape(8.dp))
-            .border(
-                width = if (isFocused) 3.dp else 0.dp,
-                color = if (isFocused) Color.White else Color.Transparent,
-                shape = RoundedCornerShape(8.dp),
-            ),
+            // The screen's sliding frame when there is one, this tile's own border when not.
+            // Inside the tile's scale layer, so the frame follows the poster as it grows.
+            .focusFrame(isFocused, RoundedCornerShape(8.dp)),
     ) {
         if (artworkUrl == null) {
             ArtworkPlaceholder()
@@ -1050,6 +1126,7 @@ private fun PosterArtwork(
                     .alpha(if (isPlayable) 1f else UNAVAILABLE_ARTWORK_ALPHA),
                 loading = { ArtworkPlaceholder() },
                 error = { ArtworkPlaceholder() },
+                onError = { onArtworkFailed(artworkUrl) },
             )
         }
 
@@ -1155,14 +1232,22 @@ private fun kindLabel(kind: MediaKind): String? = when (kind) {
 }
 
 /**
- * The position, drawn large beside the poster in a gutter of its own.
+ * The position, drawn large beside the poster, with its foot tucked under the cover.
  *
  * **The width is [RANK_GUTTER_WIDTH] whatever the figure is**, and that constant is the whole
  * safety of this shape. The numeral used to be drawn inside the artwork for exactly this reason:
  * a tile as wide as its own number is one that measures differently from its neighbours, and a
  * focused tile whose bounds differ from its neighbour's is defect #008 — see the note inside
- * [TvPoster]. The figure is centred in the gutter and is allowed to be clipped by it rather than
- * allowed to widen it, which is why nothing here wraps its content.
+ * [TvPoster]. The figure is *drawn* wider than the gutter and never *measured* wider: it is laid
+ * out unbounded inside a fixed box, so every tile in the row still reports the same rectangle.
+ *
+ * **Tucked under the poster rather than standing beside it.** The figure is pushed right by
+ * [RANK_TUCK], past the tile's own focus padding and under the edge of the artwork, which is
+ * drawn after it and so covers it. The number and the poster read as one object — the way the
+ * numbered rows on a commercial service look — rather than as a label next to a picture.
+ *
+ * Drawn twice: a fill that fades towards its foot, where it meets the poster, and a thin outline
+ * over it, so a very large figure stays light on the screen instead of a slab of white.
  *
  * The gutter takes up layout, unlike everything in [PosterOverlays]. That is safe because it is
  * outside the animating scale and identical on every tile of the row: it moves the poster along
@@ -1170,20 +1255,50 @@ private fun kindLabel(kind: MediaKind): String? = when (kind) {
  */
 @Composable
 private fun RankGutter(rank: Int, dimmed: Boolean, modifier: Modifier = Modifier) {
+    val figure = rank.toString()
+    // Two digits at the full size would reach back over the poster before this one.
+    val size = if (figure.length > 1) RANK_SIZE_TWO_DIGITS else RANK_SIZE
+    val strength = if (dimmed) RANK_DIMMED_ALPHA else 1f
+    val outline = with(LocalDensity.current) { RANK_OUTLINE.toPx() }
+    val placement = Modifier
+        .wrapContentWidth(align = Alignment.End, unbounded = true)
+        .offset(x = RANK_TUCK, y = RANK_DROP)
+
     Box(
         modifier = modifier
             .width(RANK_GUTTER_WIDTH)
             .height(RANK_GUTTER_HEIGHT),
-        contentAlignment = Alignment.Center,
+        contentAlignment = Alignment.BottomEnd,
     ) {
         Text(
-            text = rank.toString(),
-            color = Color.White.copy(alpha = if (dimmed) RANK_DIMMED_ALPHA else 1f),
-            fontSize = RANK_SIZE,
-            lineHeight = RANK_SIZE,
+            text = figure,
+            style = TextStyle(
+                brush = Brush.verticalGradient(
+                    listOf(
+                        Color.White.copy(alpha = RANK_FILL_TOP * strength),
+                        Color.White.copy(alpha = RANK_FILL_FOOT * strength),
+                    ),
+                ),
+            ),
+            fontSize = size,
+            lineHeight = size,
             fontWeight = FontWeight.Black,
+            letterSpacing = RANK_TRACKING,
             maxLines = 1,
             softWrap = false,
+            modifier = placement,
+        )
+        Text(
+            text = figure,
+            color = Color.White.copy(alpha = RANK_OUTLINE_ALPHA * strength),
+            style = TextStyle(drawStyle = Stroke(width = outline)),
+            fontSize = size,
+            lineHeight = size,
+            fontWeight = FontWeight.Black,
+            letterSpacing = RANK_TRACKING,
+            maxLines = 1,
+            softWrap = false,
+            modifier = placement,
         )
     }
 }
@@ -1191,15 +1306,33 @@ private fun RankGutter(rank: Int, dimmed: Boolean, modifier: Modifier = Modifier
 private const val KIND_BADGE_ALPHA = 0.6f
 
 /** Big enough to be the thing a viewer reads first, which is the whole point of the row. */
-private val RANK_SIZE = 56.sp
+private val RANK_SIZE = 132.sp
+
+/** "10", which at [RANK_SIZE] would reach back over the poster before it. */
+private val RANK_SIZE_TWO_DIGITS = 96.sp
+
+/** Digits drawn this large have wide side bearings; pulled together they read as one figure. */
+private val RANK_TRACKING = (-6).sp
 
 /**
- * Wide enough for two digits at [RANK_SIZE], and the same for one.
- *
- * Fixed rather than measured. A gutter that wrapped its figure would make tile 1 narrower than
- * tile 10, and unequal tiles in a row is #008 — see [RankGutter].
+ * The figure's own space beside the poster. Fixed rather than measured: a gutter that wrapped its
+ * figure would make tile 1 narrower than tile 10, and unequal tiles in a row is #008 — see
+ * [RankGutter]. Narrower than it was, because the figure now reaches under the poster instead.
  */
-private val RANK_GUTTER_WIDTH = 68.dp
+private val RANK_GUTTER_WIDTH = 60.dp
+
+/** How far the figure reaches right, past the tile's focus padding and under the artwork. */
+private val RANK_TUCK = 30.dp
+
+/** Down to the poster's foot: the figure stands on the same line the cover does. */
+private val RANK_DROP = 6.dp
+
+private val RANK_OUTLINE = 2.dp
+private const val RANK_OUTLINE_ALPHA = 0.9f
+
+/** The fill, bright at the top and nearly gone at the foot, where it meets the cover. */
+private const val RANK_FILL_TOP = 0.5f
+private const val RANK_FILL_FOOT = 0.06f
 
 /** A number standing for something that cannot be opened is still a number, but a quieter one. */
 private const val RANK_DIMMED_ALPHA = 0.45f

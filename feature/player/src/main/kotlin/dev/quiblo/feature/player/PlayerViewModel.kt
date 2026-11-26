@@ -30,6 +30,7 @@ import dev.quiblo.core.data.WatchEventRepository
 import dev.quiblo.core.data.WatchHistoryRepository
 import dev.quiblo.core.data.diagnostics.PlaybackDiagnoser
 import dev.quiblo.core.media.PlayableItem
+import dev.quiblo.core.media.PlaybackDiagnostics
 import dev.quiblo.core.media.PlaybackState
 import dev.quiblo.core.media.PlaybackStatus
 import dev.quiblo.core.media.PlayerController
@@ -208,6 +209,20 @@ class PlayerViewModel(
     fun cycleAspectRatio() {
         val modes = AspectRatioMode.entries
         _aspectRatioMode.value = modes[(_aspectRatioMode.value.ordinal + 1) % modes.size]
+    }
+
+    private val _diagnosticsVisible = MutableStateFlow(false)
+
+    /** Whether the playback info overlay is open (`FEAT-040`). Held here so a rotation keeps it. */
+    val diagnosticsVisible: StateFlow<Boolean> = _diagnosticsVisible.asStateFlow()
+
+    /** What the overlay shows; null while it is shut, because nothing is sampled then. */
+    val diagnostics: StateFlow<PlaybackDiagnostics?> = controller.diagnostics
+
+    fun toggleDiagnostics() {
+        val open = !_diagnosticsVisible.value
+        _diagnosticsVisible.value = open
+        controller.setDiagnosticsEnabled(open)
     }
 
     /** Skips by the configured interval, clamped so a rewind cannot run past the start. */
@@ -427,6 +442,10 @@ class PlayerViewModel(
     val ambientPlayer: StateFlow<Boolean> = settingsRepository.ambientPlayer
         .stateIn(viewModelScope, SharingStarted.Eagerly, true)
 
+    /** Whether the television matches its refresh rate to the film's (`FEAT-041`). */
+    val matchFrameRate: StateFlow<Boolean> = settingsRepository.matchFrameRate
+        .stateIn(viewModelScope, SharingStarted.Eagerly, true)
+
     private fun prepare(item: PlayableItem) {
         prepared = item
         controller.prepare(item)
@@ -514,17 +533,23 @@ class PlayerViewModel(
      * Like [onStopped], except that nothing is restarted on the way back in: a live channel is
      * forgotten as well as stopped, so choosing the same channel again loads it afresh instead of
      * finding it already "loaded" and stopped (`BUG-037`).
+     *
+     * **A film or an episode lets go of the whole engine (`BUG-064`).** It used to be paused, and
+     * the paused engine — its hardware decoder, its buffer, still filling — was the one the next
+     * film played on. On a MediaTek television that second film dropped one frame in five from the
+     * first second to the last, until the process was killed; the first film after a fresh start
+     * never did. The place is written down first, so Resume still finds it.
      */
     fun onLeft() {
+        rememberPosition()
+        recordOccasion()
         if (isLive()) {
             controller.stop()
             stoppedLive = false
-            loadedRequest = null
         } else {
-            controller.pause()
+            controller.discardEngine()
         }
-        rememberPosition()
-        recordOccasion()
+        loadedRequest = null
     }
 
     private fun isLive(): Boolean = state.value.item?.isLive == true

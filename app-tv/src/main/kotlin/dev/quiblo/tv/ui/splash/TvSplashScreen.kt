@@ -27,13 +27,13 @@ import dev.quiblo.designsystem.QuibloSplashScreen
 /**
  * The launch screen, at the size a television is watched from.
  *
- * **A set of numbers, not a second implementation.** It was a copy of the phone's file with four
- * values changed and a hand-drawn brand mark of its own that had the wrong geometry; the mark and
- * the animation are `dev.quiblo.designsystem.QuibloSplashScreen` now and this says only what a
- * television wants of them — a bigger mark, a bigger name, the whole five seconds of the sting,
+ * **A set of numbers, not a second implementation.** The mark and the choreography are
+ * `dev.quiblo.designsystem.QuibloSplashScreen`; this says only what a television wants of them —
+ * a mark sized for across a room, a window that can hold on the mark while a cold catalogue warms,
  * and no system-bar insets, because a television has none to avoid.
  */
 @Composable
+@Suppress("LongParameterList")
 fun TvSplashScreen(
     versionName: String,
     modifier: Modifier = Modifier,
@@ -41,6 +41,9 @@ fun TvSplashScreen(
     /** See [QuibloSplashScreen]: whether the catalogue behind this is warm enough to draw. */
     isReady: Boolean = true,
     playSound: Boolean = true,
+    /** See [QuibloSplashScreen]. Wired to `QuibloSplashHost` by `TvApp`. */
+    onPrepareReveal: () -> Unit = {},
+    onRevealStart: () -> Unit = {},
     onSplashComplete: () -> Unit = {},
 ) {
     QuibloSplashScreen(
@@ -51,31 +54,32 @@ fun TvSplashScreen(
         logoTitleSpacing = TV_LOGO_TITLE_SPACING,
         durationMillis = durationMillis,
         isReady = isReady,
-        minDurationMillis = TV_SPLASH_MIN_DURATION_MILLIS,
+        minDurationMillis = TV_SPLASH_MIN_DURATION_MILLIS.coerceAtMost(durationMillis),
         insetForSystemBars = false,
         playSound = playSound,
+        onPrepareReveal = onPrepareReveal,
+        onRevealStart = onRevealStart,
         onSplashComplete = onSplashComplete,
     )
 }
 
 /**
- * The longest the mark stays up: the whole sting, reverb and all.
+ * The longest the mark stays up before it dives regardless.
  *
- * A ceiling since `030` rather than a fixed length. It is the time a cold catalogue is allowed to
- * take before the app is shown regardless — not a delay the viewer pays on every launch.
+ * A ceiling rather than a fixed length (`030`): the time a cold catalogue is allowed to take
+ * before the app is shown anyway — not a delay the viewer pays on every launch.
  */
 private const val TV_SPLASH_DURATION_MILLIS = 5000L
 
 /**
- * The shortest: long enough for the mark to be seen and read, and no longer (`030` #5).
+ * The shortest: the mark drawn, the hit, the name, a breath, and the dive (`030` #5).
  *
- * A warm start now leaves here rather than at five seconds. The sting is cut short when it does,
- * which is the trade the length was chosen against: a viewer opening the app wants their catalogue
- * more than they want the rest of a jingle they have heard every evening this year.
+ * A warm start leaves here. Nothing is cut short to do it: the sting's dive half plays when the
+ * picture dives, whenever that is, so the sound always finishes with the screen.
  */
-private const val TV_SPLASH_MIN_DURATION_MILLIS = 1500L
+private const val TV_SPLASH_MIN_DURATION_MILLIS = 2300L
 
-// Read from across a room rather than at arm's length.
-private val TV_LOGO_SIZE = 240.dp
-private val TV_LOGO_TITLE_SPACING = 8.dp
-private val TV_TITLE_FONT_SIZE = 64.sp
+// Read from across a room: the mark a fifth of the screen across, the name under it.
+private val TV_LOGO_SIZE = 180.dp
+private val TV_LOGO_TITLE_SPACING = 4.dp
+private val TV_TITLE_FONT_SIZE = 68.sp

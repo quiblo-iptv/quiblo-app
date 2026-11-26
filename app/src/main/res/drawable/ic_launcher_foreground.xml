@@ -4,34 +4,39 @@
   Copyright (C) 2026 The Quiblo Authors
   Licensed under the GNU General Public License v3.0 or later. See LICENSE.
 
-  A Q built from a play mark: the ring reads as the letter, the triangle as a player,
-  and the tail finishes the Q. Drawn inside the adaptive-icon safe zone — an adaptive
-  launcher can mask this to a circle, a squircle or a rounded square, and anything
-  outside the middle 66dp is liable to be cropped away by the launcher's shape.
+  The launcher mark: the screen-shaped Q with the warm light inside it. Drawn into the middle
+  50 units of the 108-unit adaptive canvas, inside the 66-unit safe zone every launcher mask
+  keeps.
+  Generated from the mark's geometry: a 72-unit screen with corner radius 26 and a 13-unit
+  stroke, its tail at 45 degrees with a 4-unit cut each side. See `QuibloMark.kt`, which
+  draws the same thing in Compose. Change both together.
 -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
     android:width="108dp"
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
 
-    <!-- The ring: the body of the Q. -->
-    <path
-        android:strokeColor="#FFFFFF"
-        android:strokeWidth="5"
-        android:fillColor="#00000000"
-        android:pathData="M36,54 a18,18 0 1,0 36,0 a18,18 0 1,0 -36,0" />
-
-    <!-- The tail, breaking the ring at the lower right. -->
-    <path
-        android:strokeColor="#FFFFFF"
-        android:strokeWidth="5"
-        android:strokeLineCap="round"
-        android:fillColor="#00000000"
-        android:pathData="M64,64 L74,74" />
-
-    <!-- The play mark. -->
-    <path
-        android:fillColor="#FFFFFF"
-        android:pathData="M49,45 L49,63 L65,54 Z" />
+    <group android:translateX="29" android:translateY="29" android:scaleX="0.5" android:scaleY="0.5">
+        <!-- The light inside the screen. -->
+        <path android:pathData="M40,20.5 H60 A19.5,19.5 0 0 1 79.5,40 V60 A19.5,19.5 0 0 1 60,79.5 H40 A19.5,19.5 0 0 1 20.5,60 V40 A19.5,19.5 0 0 1 40,20.5 Z">
+            <aapt:attr name="android:fillColor">
+                <gradient
+                    android:type="radial"
+                    android:centerX="50"
+                    android:centerY="54"
+                    android:gradientRadius="33">
+                    <item android:offset="0" android:color="#FFFFD58A" />
+                    <item android:offset="0.45" android:color="#FFFFB648" />
+                    <item android:offset="0.8" android:color="#8CFF6A3D" />
+                    <item android:offset="1" android:color="#00FF6A3D" />
+                </gradient>
+            </aapt:attr>
+        </path>
+        <!-- The mark. -->
+        <path
+            android:fillColor="#FFF3F1EC"
+            android:pathData="M35.76,7.78 L33.66,8.12 L31.59,8.61 L29.55,9.22 L27.56,9.97 L25.63,10.85 L23.75,11.85 L21.94,12.98 L20.22,14.22 L18.57,15.57 L17.02,17.02 L15.57,18.57 L14.22,20.22 L12.98,21.94 L11.85,23.75 L10.85,25.63 L9.97,27.56 L9.22,29.55 L8.61,31.59 L8.12,33.66 L7.78,35.76 L7.57,37.87 L7.50,40.00 L7.50,60.00 L7.57,62.13 L7.78,64.24 L8.12,66.34 L8.61,68.41 L9.22,70.45 L9.97,72.44 L10.85,74.37 L11.85,76.25 L12.98,78.06 L14.22,79.78 L15.57,81.43 L17.02,82.98 L18.57,84.43 L20.22,85.78 L21.94,87.02 L23.75,88.15 L25.63,89.15 L27.56,90.03 L29.55,90.78 L31.59,91.39 L33.66,91.88 L35.76,92.22 L37.87,92.43 L40.00,92.50 L60.00,92.50 L62.13,92.43 L64.24,92.22 L66.34,91.88 L68.41,91.39 L70.45,90.78 L72.44,90.03 L74.32,89.17 L64.19,79.04 L63.80,79.13 L62.55,79.33 L61.28,79.46 L60.00,79.50 L40.00,79.50 L38.72,79.46 L37.45,79.33 L36.20,79.13 L34.95,78.84 L33.73,78.47 L32.54,78.02 L31.38,77.49 L30.25,76.89 L29.17,76.21 L28.13,75.47 L27.14,74.66 L26.21,73.79 L25.34,72.86 L24.53,71.87 L23.79,70.83 L23.11,69.75 L22.51,68.62 L21.98,67.46 L21.53,66.27 L21.16,65.05 L20.87,63.80 L20.67,62.55 L20.54,61.28 L20.50,60.00 L20.50,40.00 L20.54,38.72 L20.67,37.45 L20.87,36.20 L21.16,34.95 L21.53,33.73 L21.98,32.54 L22.51,31.38 L23.11,30.25 L23.79,29.17 L24.53,28.13 L25.34,27.14 L26.21,26.21 L27.14,25.34 L28.13,24.53 L29.17,23.79 L30.25,23.11 L31.38,22.51 L32.54,21.98 L33.73,21.53 L34.95,21.16 L36.20,20.87 L37.45,20.67 L38.72,20.54 L40.00,20.50 L60.00,20.50 L61.28,20.54 L62.55,20.67 L63.80,20.87 L65.05,21.16 L66.27,21.53 L67.46,21.98 L68.62,22.51 L69.75,23.11 L70.83,23.79 L71.87,24.53 L72.86,25.34 L73.79,26.21 L74.66,27.14 L75.47,28.13 L76.21,29.17 L76.89,30.25 L77.49,31.38 L78.02,32.54 L78.47,33.73 L78.84,34.95 L79.13,36.20 L79.33,37.45 L79.46,38.72 L79.50,40.00 L79.50,60.00 L79.46,61.28 L79.33,62.55 L79.13,63.80 L79.04,64.19 L89.17,74.32 L90.03,72.44 L90.78,70.45 L91.39,68.41 L91.88,66.34 L92.22,64.24 L92.43,62.13 L92.50,60.00 L92.50,40.00 L92.43,37.87 L92.22,35.76 L91.88,33.66 L91.39,31.59 L90.78,29.55 L90.03,27.56 L89.15,25.63 L88.15,23.75 L87.02,21.94 L85.78,20.22 L84.43,18.57 L82.98,17.02 L81.43,15.57 L79.78,14.22 L78.06,12.98 L76.25,11.85 L74.37,10.85 L72.44,9.97 L70.45,9.22 L68.41,8.61 L66.34,8.12 L64.24,7.78 L62.13,7.57 L60.00,7.50 L40.00,7.50 L37.87,7.57 Z M82.71,91.89 L83.04,92.16 L83.39,92.40 L83.75,92.63 L84.13,92.83 L84.51,93.01 L84.91,93.16 L85.32,93.28 L85.73,93.38 L86.15,93.44 L86.57,93.49 L87.00,93.50 L87.43,93.49 L87.85,93.44 L88.27,93.38 L88.68,93.28 L89.09,93.16 L89.49,93.01 L89.87,92.83 L90.25,92.63 L90.61,92.40 L90.96,92.16 L91.29,91.89 L91.60,91.60 L91.89,91.29 L92.16,90.96 L92.40,90.61 L92.63,90.25 L92.83,89.87 L93.01,89.49 L93.16,89.09 L93.28,88.68 L93.38,88.27 L93.44,87.85 L93.49,87.43 L93.50,87.00 L93.49,86.57 L93.44,86.15 L93.38,85.73 L93.28,85.32 L93.16,84.91 L93.01,84.51 L92.83,84.13 L92.63,83.75 L92.40,83.39 L92.16,83.04 L91.89,82.71 L91.60,82.40 L66.60,57.40 L66.29,57.11 L65.96,56.84 L65.61,56.60 L65.25,56.37 L64.87,56.17 L64.49,55.99 L64.09,55.84 L63.68,55.72 L63.27,55.62 L62.85,55.56 L62.43,55.51 L62.00,55.50 L61.57,55.51 L61.15,55.56 L60.73,55.62 L60.32,55.72 L59.91,55.84 L59.51,55.99 L59.13,56.17 L58.75,56.37 L58.39,56.60 L58.04,56.84 L57.71,57.11 L57.40,57.40 L57.11,57.71 L56.84,58.04 L56.60,58.39 L56.37,58.75 L56.17,59.13 L55.99,59.51 L55.84,59.91 L55.72,60.32 L55.62,60.73 L55.56,61.15 L55.51,61.57 L55.50,62.00 L55.51,62.43 L55.56,62.85 L55.62,63.27 L55.72,63.68 L55.84,64.09 L55.99,64.49 L56.17,64.87 L56.37,65.25 L56.60,65.61 L56.84,65.96 L57.11,66.29 L57.40,66.60 L82.40,91.60 Z" />
+    </group>
 </vector>

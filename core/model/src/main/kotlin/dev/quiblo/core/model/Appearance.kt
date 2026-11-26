@@ -36,11 +36,13 @@ enum class ThemeMode {
  * Visual preferences.
  *
  * @property dynamicColor whether to derive the palette from the device wallpaper on
- *   Android 12 and later. On by default because it makes the app feel native to the phone
- *   it is on; switchable off because it also means the app's own identity disappears, and
- *   some people would rather keep it.
+ *   Android 12 and later. **Off by default since the phone took the television's look.** It was
+ *   on, because it makes an app feel native to the phone it is on — but it also means the app's
+ *   own identity disappears, and the phone and the television are now meant to read as one
+ *   product: the same ink, the same tungsten light, the same room. A wallpaper's teal replaced
+ *   the one colour the brand has. Still one switch away for anybody who prefers it.
  */
 data class Appearance(
     val themeMode: ThemeMode = ThemeMode.SYSTEM,
-    val dynamicColor: Boolean = true,
+    val dynamicColor: Boolean = false,
 )

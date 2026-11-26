@@ -57,6 +57,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.quiblo.core.model.Channel
 import dev.quiblo.core.model.MediaKind
+import dev.quiblo.designsystem.travellingGlow
 import dev.quiblo.feature.browse.SearchUiState
 import dev.quiblo.feature.browse.SearchViewModel
 import dev.quiblo.feature.browse.labelRes
@@ -71,7 +72,6 @@ import dev.quiblo.tv.ui.common.LocalAmbientSink
 import dev.quiblo.tv.ui.common.TvChip
 import dev.quiblo.tv.ui.common.TvTextField
 import dev.quiblo.tv.ui.common.TvToggle
-import dev.quiblo.tv.ui.common.travellingGlow
 import org.koin.androidx.compose.koinViewModel
 
 /**

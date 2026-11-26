@@ -21,6 +21,7 @@ package dev.quiblo.feature.browse
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -59,6 +60,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil3.compose.SubcomposeAsyncImage
 import dev.quiblo.core.model.HistoryEntry
+import dev.quiblo.designsystem.posterLift
 
 /**
  * "Continue watching": everything started and not finished, newest first.
@@ -85,8 +87,8 @@ internal fun ContinueWatchingRow(
     Column(modifier = modifier.fillMaxWidth()) {
         Text(
             text = stringResource(R.string.browse_continue_watching),
-            style = MaterialTheme.typography.titleSmall,
-            fontWeight = FontWeight.Bold,
+            // The television's row heading: the display face, not a bold body line.
+            style = MaterialTheme.typography.titleMedium,
             modifier = Modifier.padding(start = 12.dp, end = 12.dp, bottom = 8.dp),
         )
 
@@ -118,11 +120,15 @@ private fun ContinueWatchingCard(
     onRemove: () -> Unit,
 ) {
     var menuExpanded by remember { mutableStateOf(false) }
+    // Lifted when reached for, like every poster in the app. See `posterLift`.
+    val interactionSource = remember { MutableInteractionSource() }
 
     Column(
         modifier = Modifier
             .width(CARD_WIDTH)
             .combinedClickable(
+                interactionSource = interactionSource,
+                indication = null,
                 onClick = onClick,
                 onLongClick = { menuExpanded = true },
             ),
@@ -131,7 +137,8 @@ private fun ContinueWatchingCard(
             modifier = Modifier
                 .fillMaxWidth()
                 .aspectRatio(POSTER_ASPECT_RATIO)
-                .clip(RoundedCornerShape(10.dp))
+                .posterLift(interactionSource, CARD_SHAPE)
+                .clip(CARD_SHAPE)
                 .background(MaterialTheme.colorScheme.surfaceVariant),
         ) {
             if (artworkUrl.isNullOrBlank()) {
@@ -227,4 +234,5 @@ private fun Placeholder() {
 
 /** Narrower than a grid tile, so the row reads as a strip rather than as another grid. */
 private val CARD_WIDTH = 104.dp
+private val CARD_SHAPE = RoundedCornerShape(8.dp)
 private const val POSTER_ASPECT_RATIO = 2f / 3f

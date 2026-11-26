@@ -24,9 +24,13 @@ import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.hoverable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.interaction.collectIsHoveredAsState
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -37,13 +41,12 @@ import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.LiveTv
 import androidx.compose.material.icons.filled.Movie
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -62,19 +65,28 @@ import coil3.compose.SubcomposeAsyncImage
 import dev.quiblo.core.common.cleanedForDisplay
 import dev.quiblo.core.model.Channel
 import dev.quiblo.core.model.MediaKind
+import dev.quiblo.designsystem.LocalAmbientArtwork
+import dev.quiblo.designsystem.posterLift
 
 /**
- * A poster card: artwork edge to edge, a gradient foot, and the title over it.
+ * A poster card, as the television draws one: the artwork in a thin rounded frame, the title
+ * underneath it, and a lift towards the viewer when it is reached for.
+ *
+ * **The title moved off the poster when the phone took the television's look.** It used to sit
+ * on a gradient foot over the artwork, which made the contrast a property of the card — and also
+ * put a dark band across the bottom third of every poster in the grid. The television never did
+ * that: its posters are pictures, edge to edge, and their names sit beneath them in the room's own
+ * colour. Underneath, the contrast is the theme's to guarantee, and the poster is all poster.
+ *
+ * Touching it lifts it and lights the room from it — [posterLift], and the same
+ * [LocalAmbientArtwork] the detail screens report to — which is what a remote's focus does on the
+ * television: the thing being reached for changes the colour of the room around it.
  *
  * Handles a live channel too, which is what lets Favourites — the one screen holding every
  * kind at once — be a single uniform grid. A live channel's "logo" is a small wide badge on
  * a transparent background, so it is fitted inside the tile rather than cropped to fill it;
  * cropping one to 2:3 gives you a corner of a logo. The tile keeps its shape either way, so
  * the grid does not go ragged.
- *
- * The gradient is not decoration. Poster art is arbitrary, so a title drawn straight onto
- * it is legible or not depending on the film, and a scrim is the only way to make the
- * contrast a property of the card instead of a property of the artwork.
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -99,41 +111,48 @@ internal fun ChannelArtCard(
     var scrollTitle by remember { mutableStateOf(false) }
     val interactionSource = remember { MutableInteractionSource() }
     val isHovered by interactionSource.collectIsHoveredAsState()
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val isFocused by interactionSource.collectIsFocusedAsState()
     val animateTitle = isHovered || scrollTitle
+    val isReachedFor = isPressed || isFocused || isHovered
+    val artworkUrl = channel.logoUrl?.takeIf { it.isNotBlank() } ?: fallbackPosterUrl
 
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .aspectRatio(POSTER_ASPECT_RATIO)
-            .hoverable(interactionSource)
-            .combinedClickable(
-                interactionSource = interactionSource,
-                indication = null,
-                onClick = onClick,
-                onLongClick = { scrollTitle = !scrollTitle },
-            ),
-        shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-    ) {
-        Box(modifier = Modifier.fillMaxSize()) {
+    LightTheRoomWhileReachedFor(
+        isReachedFor = isReachedFor,
+        // A channel's logo is a badge on transparency, not a picture worth lighting a room from.
+        artworkUrl = artworkUrl.takeIf { channel.kind != MediaKind.LIVE },
+    )
+
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .aspectRatio(POSTER_ASPECT_RATIO)
+                .posterLift(interactionSource, POSTER_SHAPE)
+                .clip(POSTER_SHAPE)
+                .background(MaterialTheme.colorScheme.surfaceVariant)
+                .hoverable(interactionSource)
+                .combinedClickable(
+                    interactionSource = interactionSource,
+                    indication = null,
+                    onClick = onClick,
+                    onLongClick = { scrollTitle = !scrollTitle },
+                ),
+        ) {
             Artwork(
-                logoUrl = channel.logoUrl?.takeIf { it.isNotBlank() } ?: fallbackPosterUrl,
+                logoUrl = artworkUrl,
                 isLogo = channel.kind == MediaKind.LIVE,
             )
 
+            // A short wash under the two badges only, so a white heart holds on a white poster.
+            // The rest of the artwork is left alone: the poster is the point of the tile.
             Box(
                 modifier = Modifier
-                    .fillMaxSize()
+                    .fillMaxWidth()
+                    .fillMaxHeight(BADGE_WASH_HEIGHT)
                     .background(
                         Brush.verticalGradient(
-                            // Transparent well past the halfway point so the scrim darkens
-                            // the title area without dulling the artwork it exists to
-                            // showcase.
-                            colorStops = arrayOf(
-                                0f to Color.Transparent,
-                                SCRIM_START to Color.Transparent,
-                                1f to Color.Black.copy(alpha = SCRIM_ALPHA),
-                            ),
+                            colors = listOf(Color.Black.copy(alpha = BADGE_WASH_ALPHA), Color.Transparent),
                         ),
                     ),
             )
@@ -163,24 +182,40 @@ internal fun ChannelArtCard(
                     tint = if (channel.isFavorite) MaterialTheme.colorScheme.primary else Color.White,
                 )
             }
-
-            Text(
-                text = channel.name.cleanedForDisplay(),
-                style = MaterialTheme.typography.bodyMedium,
-                fontWeight = FontWeight.SemiBold,
-                color = Color.White,
-                maxLines = 1,
-                softWrap = false,
-                // basicMarquee is a no-op when the text fits, so short titles are
-                // unaffected and only the ones that actually overflow move.
-                overflow = if (animateTitle) TextOverflow.Clip else TextOverflow.Ellipsis,
-                modifier = Modifier
-                    .align(Alignment.BottomStart)
-                    .fillMaxWidth()
-                    .padding(horizontal = 10.dp, vertical = 8.dp)
-                    .then(if (animateTitle) Modifier.basicMarquee() else Modifier),
-            )
         }
+
+        // The television's caption: under the picture, quieter than it until it is reached for.
+        Text(
+            text = channel.name.cleanedForDisplay(),
+            style = MaterialTheme.typography.bodyMedium,
+            fontWeight = FontWeight.Medium,
+            color = MaterialTheme.colorScheme.onBackground.copy(
+                alpha = if (isReachedFor) 1f else IDLE_TITLE_ALPHA,
+            ),
+            maxLines = 1,
+            softWrap = false,
+            // basicMarquee is a no-op when the text fits, so short titles are
+            // unaffected and only the ones that actually overflow move.
+            overflow = if (animateTitle) TextOverflow.Clip else TextOverflow.Ellipsis,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(start = 2.dp, end = 2.dp, top = 8.dp)
+                .then(if (animateTitle) Modifier.basicMarquee() else Modifier),
+        )
+    }
+}
+
+/**
+ * The poster being reached for lights the room, as focus does on the television.
+ *
+ * Reported on the press rather than on sight, so scrolling a grid past a hundred posters asks for
+ * nothing. See [LocalAmbientArtwork].
+ */
+@Composable
+private fun LightTheRoomWhileReachedFor(isReachedFor: Boolean, artworkUrl: String?) {
+    val ambientSink = LocalAmbientArtwork.current
+    LaunchedEffect(isReachedFor) {
+        if (isReachedFor && artworkUrl != null) ambientSink(artworkUrl)
     }
 }
 
@@ -204,7 +239,6 @@ private fun Artwork(logoUrl: String?, isLogo: Boolean) {
         contentScale = if (isLogo) ContentScale.Fit else ContentScale.Crop,
         modifier = Modifier
             .fillMaxSize()
-            .clip(RoundedCornerShape(12.dp))
             .padding(if (isLogo) LOGO_INSET else 0.dp),
         loading = { ArtworkPlaceholder(isLogo = isLogo) },
         error = { ArtworkPlaceholder(isLogo = isLogo) },
@@ -233,5 +267,13 @@ private const val POSTER_ASPECT_RATIO = 2f / 3f
 
 /** Keeps a wide channel logo clear of the tile's rounded corners and its two badges. */
 private val LOGO_INSET = 16.dp
-private const val SCRIM_START = 0.55f
-private const val SCRIM_ALPHA = 0.85f
+
+/** The television's corner: rounder than this and a wall of posters reads as a wall of buttons. */
+private val POSTER_SHAPE = RoundedCornerShape(8.dp)
+
+/** How far down the poster the wash under the badges reaches, and how dark it starts. */
+private const val BADGE_WASH_HEIGHT = 0.28f
+private const val BADGE_WASH_ALPHA = 0.45f
+
+/** The television's caption alpha, for a title nobody is reaching for. */
+private const val IDLE_TITLE_ALPHA = 0.78f

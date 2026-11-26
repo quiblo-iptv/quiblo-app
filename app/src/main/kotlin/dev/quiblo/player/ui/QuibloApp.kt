@@ -22,17 +22,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
@@ -40,9 +31,11 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavDestination
@@ -52,8 +45,11 @@ import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import dev.quiblo.core.data.PlayerSettingsRepository
+import dev.quiblo.core.data.ProfileRepository
+import dev.quiblo.designsystem.AmbientColours
 import dev.quiblo.designsystem.LocalAmbientArtwork
 import dev.quiblo.designsystem.ambientBackdrop
+import dev.quiblo.designsystem.driftingGlow
 import dev.quiblo.designsystem.rememberAmbient
 import dev.quiblo.player.R
 import dev.quiblo.player.navigation.MovieDetailRoute
@@ -62,6 +58,7 @@ import dev.quiblo.player.navigation.QuibloNavHost
 import dev.quiblo.player.navigation.SeriesDetailRoute
 import dev.quiblo.player.navigation.SettingsRoute
 import dev.quiblo.player.navigation.TopLevelDestination
+import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
 import kotlin.reflect.KClass
 
@@ -71,7 +68,6 @@ import kotlin.reflect.KClass
  * Playback is chrome-free — when the player is on screen the bars are hidden, which is
  * the behaviour AC-PLAY-10 will build on in M2.
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun QuibloApp() {
     val navController = rememberNavController()
@@ -134,12 +130,35 @@ fun QuibloApp() {
     // its colours behind an unrelated list.
     DisposableEffect(currentDestination) { onDispose { ambientArtwork = null } }
 
+    /*
+     * Who is watching, for the face at the end of the bar.
+     *
+     * Tapping it puts the chooser back, which is what the television's face does: the chooser is
+     * the only place a profile is picked, and `ProfileGate` already stands it in front of the app
+     * the moment nobody is active. On a scope that outlives this composition, because signing out
+     * is exactly what removes it.
+     */
+    val profiles: ProfileRepository = koinInject()
+    val activeProfile by profiles.activeProfile.collectAsStateWithLifecycle()
+    val scope = rememberCoroutineScope()
+
+    val isSettings = currentDestination.matches(SettingsRoute::class)
+
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
-            .ambientBackdrop(ambient),
+            .background(MaterialTheme.colorScheme.background),
     ) {
+        RoomLight(
+            ambient = ambient,
+            // Light from nowhere when nothing on screen has given any — the television's search
+            // glow, spent on the phone's whole catalogue. A phone has no focused poster to light
+            // the room from, so without this every tab was the black-on-black the television's
+            // ambient light was invented to get away from. The player is the exception: nothing
+            // may move behind a picture somebody is watching.
+            drift = !isPlayer && ambient == AmbientColours.None,
+        )
+
         CompositionLocalProvider(LocalAmbientArtwork provides { ambientArtwork = it }) {
             Scaffold(
                 // Transparent, so the light painted behind this reaches the screen rather than stopping
@@ -154,37 +173,36 @@ fun QuibloApp() {
                 modifier = Modifier.fillMaxSize(),
                 topBar = {
                     if (!ownsItsAppBar) {
-                        TopAppBar(
-                            title = { Text(text = stringResource(currentDestination.titleRes())) },
-                            actions = {
-                                IconButton(onClick = { navController.navigateSingleTop(SettingsRoute) }) {
-                                    Icon(
-                                        imageVector = Icons.Filled.Settings,
-                                        contentDescription = stringResource(R.string.destination_settings),
-                                    )
-                                }
+                        QuibloTopBar(
+                            title = stringResource(currentDestination.titleRes()),
+                            // Settings is somewhere you go, not a tab you are on, so it gets the
+                            // way back that a tab does not need.
+                            onBack = if (isSettings) {
+                                { navController.popBackStack() }
+                            } else {
+                                null
                             },
+                            onOpenSettings = if (isSettings) {
+                                null
+                            } else {
+                                { navController.navigateSingleTop(SettingsRoute) }
+                            },
+                            profileName = activeProfile?.name,
+                            profileAvatar = activeProfile?.avatar,
+                            onSwitchProfile = { scope.launch { profiles.signOut() } },
+                            settingsLabel = stringResource(R.string.destination_settings),
+                            switchProfileLabel = stringResource(R.string.bar_switch_profile),
+                            backLabel = stringResource(R.string.bar_back),
                         )
                     }
                 },
                 bottomBar = {
                     if (!isPlayer) {
-                        NavigationBar {
-                            destinations.forEach { destination ->
-                                val selected = currentDestination.matches(destination.route::class)
-                                NavigationBarItem(
-                                    selected = selected,
-                                    onClick = { navController.navigateSingleTop(destination.route) },
-                                    icon = {
-                                        Icon(
-                                            imageVector = destination.icon,
-                                            contentDescription = null,
-                                        )
-                                    },
-                                    label = { Text(text = stringResource(destination.labelRes)) },
-                                )
-                            }
-                        }
+                        QuibloTabBar(
+                            items = destinations.map { TabBarItem(stringResource(it.labelRes), it.icon) },
+                            selectedIndex = destinations.indexOfFirst { currentDestination.matches(it.route::class) },
+                            onSelect = { index -> navController.navigateSingleTop(destinations[index].route) },
+                        )
                     }
                 },
             ) { innerPadding ->
@@ -202,14 +220,25 @@ fun QuibloApp() {
 }
 
 /**
- * True when [this] destination, or any parent of it, is [route].
+ * The light in the room: the artwork's colours when a screen has given some, a slow drifting
+ * glow when none has.
  *
- * Uses `hasRoute` rather than comparing `destination.route` to a qualified name by hand.
- * The generated route string carries its arguments — `…/PlayerRoute/{channelId}?title=…` —
- * so string surgery has to guess where the name ends, and it guessed wrong for the one
- * route that takes arguments. That left the player unable to recognise itself and the app
- * chrome drawn over full-screen playback.
+ * **Its own layer, on purpose.** Both lights redraw every frame while they move — the glow never
+ * stops — and drawn on the shell's root they would invalidate the root's layer, which is the layer
+ * the whole catalogue is recorded into. A sibling with a layer of its own re-records only itself,
+ * and the grid above it is composited, not redrawn.
  */
+@Composable
+private fun RoomLight(ambient: AmbientColours, drift: Boolean) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .graphicsLayer { }
+            .ambientBackdrop(ambient)
+            .then(if (drift) Modifier.driftingGlow() else Modifier),
+    )
+}
+
 private fun NavDestination?.matches(route: KClass<*>): Boolean {
     if (this == null) return false
     return hierarchy.any { it.hasRoute(route) }

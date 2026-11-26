@@ -16,7 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-package dev.quiblo.tv.ui.common
+package dev.quiblo.designsystem
 
 import android.graphics.Matrix
 import androidx.compose.animation.core.LinearEasing
@@ -37,7 +37,6 @@ import androidx.compose.ui.graphics.SweepGradientShader
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import dev.quiblo.designsystem.GLOW_CIRCUIT_MILLIS
 
 /**
  * A highlight that travels round the edge of something (`013` INC-E3).

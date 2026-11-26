@@ -15,6 +15,26 @@ Formatted after [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and ve
 
 ## Unreleased
 
+### Changed
+
+- **The phone now looks like the television.** The same ink background, warm white text and one
+  amber light; titles, tabs and headings in Outfit, the television's typeface.
+- **A new bar across the top of the phone.** The logo comes first, with Settings and your own
+  profile face at the other end. Tap the face to switch who is watching.
+- **A new tab bar at the bottom.** It floats over the catalogue, and one soft pill slides to the
+  tab you choose, as on the television.
+- **The room is lit.** When nothing on screen has colours to give, a slow glow drifts behind the
+  catalogue, the same light the television's search screen has. Touching a poster lights the room
+  from that poster.
+- **Posters lift when you touch them.** They rise towards you with a thin frame and settle back
+  when you let go, the television's focus movement made for a finger. Titles now sit under the
+  poster instead of over it.
+- **Search glows while it waits.** A light travels round the edge of the search box until you
+  start typing, as it does on the television.
+- **The app's own colours are now the default on Android 12 and later.** Colours taken from your
+  wallpaper replaced the brand's amber, so they are now off unless you switch them on in
+  Settings → Appearance.
+
 ## 0.34.1
 
 ### Fixed

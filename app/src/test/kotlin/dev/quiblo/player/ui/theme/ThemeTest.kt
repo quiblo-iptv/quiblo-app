@@ -34,7 +34,10 @@ class ThemeTest {
     @Test
     fun `dark theme colours keep their defined ARGB values`() {
         assertEquals(Color(0xFF0B0C10), QuibloBackgroundDark)
-        assertEquals(Color(0xFF121318), QuibloSurfaceDark)
+        // The television's room: the phone's surfaces are the same ink, not a near-miss of it.
+        assertEquals(Color(0xFF0B0C10), QuibloSurfaceDark)
+        assertEquals(Color(0xFF14161D), QuibloSurfaceVariantDark)
         assertEquals(Color(0xFFF3F1EC), QuibloOnBackgroundDark)
+        assertEquals(Color(0xFFFFB648), QuibloPrimaryDark)
     }
 }

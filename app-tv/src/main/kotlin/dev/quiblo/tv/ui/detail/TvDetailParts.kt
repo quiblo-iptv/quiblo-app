@@ -64,10 +64,10 @@ import dev.quiblo.core.data.TitleVersion
 import dev.quiblo.core.model.TitleMetadata
 import dev.quiblo.designsystem.AutoDirection
 import dev.quiblo.designsystem.QuibloDisplayFamily
+import dev.quiblo.designsystem.travellingGlow
 import dev.quiblo.tv.R
 import dev.quiblo.tv.ui.common.TvChip
 import dev.quiblo.tv.ui.common.rememberArtworkChain
-import dev.quiblo.tv.ui.common.travellingGlow
 
 /**
  * The parts a film and a series detail screen both need.

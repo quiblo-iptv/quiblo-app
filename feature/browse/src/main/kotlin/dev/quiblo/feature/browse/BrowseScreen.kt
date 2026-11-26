@@ -20,8 +20,12 @@ package dev.quiblo.feature.browse
 
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsFocusedAsState
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -54,10 +58,7 @@ import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.LiveTv
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -76,6 +77,7 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -93,6 +95,8 @@ import dev.quiblo.core.model.Category
 import dev.quiblo.core.model.Channel
 import dev.quiblo.core.model.HistoryEntry
 import dev.quiblo.core.model.Programme
+import dev.quiblo.designsystem.posterLift
+import dev.quiblo.designsystem.travellingGlow
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.launch
 
@@ -448,10 +452,16 @@ private fun BrowseHeader(
         if (isExpanded && showSearch) {
             // No label, only a placeholder: a floating label makes the field tall enough to
             // change the row height, which is the thing this layout exists to avoid.
+            // The television's search field: a light travels round its edge while it waits to be
+            // typed in, and stops the moment it is — the cursor is the thing to watch then.
+            val fieldInteraction = remember { MutableInteractionSource() }
+            val isFieldFocused by fieldInteraction.collectIsFocusedAsState()
             OutlinedTextField(
                 value = query,
                 onValueChange = onQueryChange,
                 singleLine = true,
+                interactionSource = fieldInteraction,
+                shape = SEARCH_SHAPE,
                 placeholder = { Text(stringResource(R.string.browse_search)) },
                 leadingIcon = {
                     IconButton(onClick = {
@@ -473,7 +483,15 @@ private fun BrowseHeader(
                         }
                     }
                 },
-                modifier = Modifier.weight(1f),
+                modifier = Modifier
+                    .weight(1f)
+                    .travellingGlow(
+                        isActive = !isFieldFocused,
+                        cornerRadius = SEARCH_CORNER,
+                        colour = MaterialTheme.colorScheme.onBackground,
+                        width = 2.dp,
+                        intensity = SEARCH_GLOW_INTENSITY,
+                    ),
             )
         } else {
             if (showCategory) {
@@ -510,18 +528,34 @@ private fun CategoryChip(selectedCategory: String?, label: String?, onClick: () 
         else -> label ?: selectedCategory
     }
 
-    FilterChip(
-        selected = selectedCategory != null,
-        onClick = onClick,
-        label = {
-            Text(
-                text = stringResource(R.string.browse_category_label, displayLabel),
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-        },
-        trailingIcon = { Icon(Icons.Filled.ArrowDropDown, contentDescription = null) },
-    )
+    // The television's chip: a word, filled when something is chosen and quiet when it is not.
+    // Two marks for two facts, as there — "a filter is on" is the fill, never only a colour.
+    val isSelected = selectedCategory != null
+    val ink = MaterialTheme.colorScheme.onBackground
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .clip(CHIP_SHAPE)
+            .background(if (isSelected) ink.copy(alpha = CHIP_SELECTED_ALPHA) else Color.Transparent)
+            .border(1.dp, ink.copy(alpha = if (isSelected) 0f else CHIP_EDGE_ALPHA), CHIP_SHAPE)
+            .clickable(onClick = onClick)
+            .padding(start = 14.dp, end = 8.dp, top = 7.dp, bottom = 7.dp),
+    ) {
+        Text(
+            text = stringResource(R.string.browse_category_label, displayLabel),
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Medium,
+            color = ink.copy(alpha = if (isSelected) 1f else CHIP_IDLE_ALPHA),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f, fill = false),
+        )
+        Icon(
+            imageVector = Icons.Filled.ArrowDropDown,
+            contentDescription = null,
+            tint = ink.copy(alpha = if (isSelected) 1f else CHIP_IDLE_ALPHA),
+        )
+    }
 }
 
 @Composable
@@ -532,47 +566,48 @@ private fun ChannelGridCard(
     onClick: () -> Unit,
     onToggleFavorite: () -> Unit,
 ) {
-    Card(
+    // The television's channel tile: a raised ink panel with the logo on it, lifted and framed
+    // when it is reached for. See `posterLift`.
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+
+    Column(
         modifier = Modifier
             .fillMaxWidth()
             .height(140.dp)
-            .clickable(onClick = onClick),
-        shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+            .posterLift(interactionSource, TILE_SHAPE)
+            .clip(TILE_SHAPE)
+            .background(MaterialTheme.colorScheme.surfaceVariant)
+            .clickable(interactionSource = interactionSource, indication = null, onClick = onClick)
+            .padding(10.dp),
+        verticalArrangement = Arrangement.SpaceBetween,
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(10.dp),
-            verticalArrangement = Arrangement.SpaceBetween,
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.Top,
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.Top,
-            ) {
-                ChannelLogo(channel.logoUrl?.takeIf { it.isNotBlank() } ?: fallbackLogoUrl)
-                IconButton(onClick = onToggleFavorite, modifier = Modifier.size(24.dp)) {
-                    Icon(
-                        imageVector = if (channel.isFavorite) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,
-                        contentDescription = stringResource(R.string.browse_favorite),
-                        tint = if (channel.isFavorite) {
-                            MaterialTheme.colorScheme.primary
-                        } else {
-                            MaterialTheme.colorScheme.onSurfaceVariant
-                        },
-                    )
-                }
+            ChannelLogo(channel.logoUrl?.takeIf { it.isNotBlank() } ?: fallbackLogoUrl)
+            IconButton(onClick = onToggleFavorite, modifier = Modifier.size(24.dp)) {
+                Icon(
+                    imageVector = if (channel.isFavorite) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,
+                    contentDescription = stringResource(R.string.browse_favorite),
+                    tint = if (channel.isFavorite) {
+                        MaterialTheme.colorScheme.primary
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
+                )
             }
-
-            Text(
-                text = channel.name.cleanedForDisplay(),
-                style = MaterialTheme.typography.bodyMedium,
-                fontWeight = FontWeight.Bold,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-            )
         }
+
+        Text(
+            text = channel.name.cleanedForDisplay(),
+            style = MaterialTheme.typography.titleSmall,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = if (isPressed) 1f else IDLE_TEXT_ALPHA),
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+        )
     }
 }
 
@@ -720,3 +755,20 @@ private fun CentredMessage(message: String, modifier: Modifier = Modifier) {
  * artwork under another's title.
  */
 private const val HISTORY_ITEM_KEY = "continue-watching"
+
+/** The television's tile corner, shared by every card in the browse grids. */
+private val TILE_SHAPE = RoundedCornerShape(8.dp)
+private val CHIP_SHAPE = RoundedCornerShape(8.dp)
+private val SEARCH_CORNER = 14.dp
+private val SEARCH_SHAPE = RoundedCornerShape(SEARCH_CORNER)
+
+/** The television's numbers for a chip: the selected fill, and how far back an idle one sits. */
+private const val CHIP_SELECTED_ALPHA = 0.20f
+private const val CHIP_IDLE_ALPHA = 0.62f
+private const val CHIP_EDGE_ALPHA = 0.16f
+
+/** A channel's name, until somebody reaches for it. */
+private const val IDLE_TEXT_ALPHA = 0.85f
+
+/** Below full strength: the field is on a screen full of posters, not alone as on the television. */
+private const val SEARCH_GLOW_INTENSITY = 0.7f

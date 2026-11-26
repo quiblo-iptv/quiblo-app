@@ -19,12 +19,37 @@
 package dev.quiblo.player.ui.theme
 
 import androidx.compose.material3.Typography
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontWeight
+import dev.quiblo.designsystem.QuibloDisplayFamily
 
 /**
- * Typography for Quiblo.
+ * Typography for Quiblo: the television's voice, at a phone's sizes.
  *
- * The Material 3 defaults are used deliberately: they ship with the library, add nothing
- * to the APK, and keep the project inside the AC-NFR-02 size budget. A bundled typeface
- * would be the first thing to justify against that budget.
+ * **Outfit for everything that names something** — screen titles, a film's name, a shelf's
+ * heading, the tab labels — and the platform's own face for everything that is read in a run:
+ * plots, settings descriptions, a guide's programme lines. That is exactly the split the
+ * television makes, and it is what makes the two apps read as one product rather than as a phone
+ * app and a television app that happen to share a logo.
+ *
+ * The AC-NFR-02 note this file used to carry still holds, and it is why the weights stop at two:
+ * Outfit is already in the APK — `:feature:designsystem` bundles it for the splash and the
+ * wordmark's neighbours — so naming it here costs no bytes. A third weight would.
  */
-internal val QuibloTypography = Typography()
+private val Base = Typography()
+
+private fun TextStyle.display(weight: FontWeight): TextStyle =
+    copy(fontFamily = QuibloDisplayFamily, fontWeight = weight)
+
+internal val QuibloTypography = Base.copy(
+    displayLarge = Base.displayLarge.display(FontWeight.SemiBold),
+    displayMedium = Base.displayMedium.display(FontWeight.SemiBold),
+    displaySmall = Base.displaySmall.display(FontWeight.SemiBold),
+    headlineLarge = Base.headlineLarge.display(FontWeight.SemiBold),
+    headlineMedium = Base.headlineMedium.display(FontWeight.SemiBold),
+    headlineSmall = Base.headlineSmall.display(FontWeight.SemiBold),
+    titleLarge = Base.titleLarge.display(FontWeight.SemiBold),
+    titleMedium = Base.titleMedium.display(FontWeight.Medium),
+    titleSmall = Base.titleSmall.display(FontWeight.Medium),
+    labelLarge = Base.labelLarge.display(FontWeight.Medium),
+)

@@ -176,6 +176,7 @@ components ship.
 - `androidx.sqlite:sqlite-framework-android`
 - `androidx.startup:startup-runtime`
 - `androidx.tracing:tracing`
+- `androidx.tracing:tracing-android`
 - `androidx.tracing:tracing-ktx`
 - `androidx.transition:transition`
 - `androidx.tv:tv-material`
@@ -280,6 +281,8 @@ components ship.
 - `org.jetbrains.kotlin:kotlin-bom`
 - `org.jetbrains.kotlin:kotlin-stdlib`
 - `org.jetbrains.kotlin:kotlin-stdlib-common`
+- `org.jetbrains.kotlinx:atomicfu`
+- `org.jetbrains.kotlinx:atomicfu-jvm`
 - `org.jetbrains.kotlinx:kotlinx-coroutines-android`
 - `org.jetbrains.kotlinx:kotlinx-coroutines-bom`
 - `org.jetbrains.kotlinx:kotlinx-coroutines-core`

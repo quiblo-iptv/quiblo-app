@@ -37,6 +37,14 @@ Formatted after [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and ve
   wallpaper replaced the brand's amber, so they are now off unless you switch them on in
   Settings → Appearance.
 
+### Fixed
+
+- **An episode the provider answers with nothing is asked again, and is no longer called a format
+  Quiblo cannot play (`BUG-066`).** A provider sometimes answers a film or an episode with an empty
+  reply — when the account's one screen is still counted, or when the file is not really there.
+  Quiblo read that as an unknown format and never asked again. It is now retried twice, and if it
+  still fails the screen says the provider refused.
+
 ## 0.34.1
 
 ### Fixed

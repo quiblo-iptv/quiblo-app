@@ -66,6 +66,27 @@ val THIRD_PARTY_LICENSES: List<ThirdPartyLicense> = listOf(
         notes = "Parses Xtream API responses and reads and writes export files.",
     ),
     ThirdPartyLicense(
+        name = "kaml",
+        coordinates = "com.charleskorn.kaml",
+        license = "Apache License 2.0",
+        url = "https://github.com/charleskorn/kaml",
+        notes = "YAML for kotlinx.serialization. Arrives with Ktor's JSON support; Quiblo reads no YAML.",
+    ),
+    ThirdPartyLicense(
+        name = "SnakeYAML Engine KMP",
+        coordinates = "it.krzeminski:snakeyaml-engine-kmp",
+        license = "Apache License 2.0",
+        url = "https://github.com/krzema12/snakeyaml-engine-kmp",
+        notes = "The YAML parser underneath kaml, there for the same reason.",
+    ),
+    ThirdPartyLicense(
+        name = "urlencoder",
+        coordinates = "net.thauvin.erik.urlencoder",
+        license = "Apache License 2.0",
+        url = "https://github.com/ethauvin/urlencoder",
+        notes = "URL encoding used by the YAML parser above.",
+    ),
+    ThirdPartyLicense(
         name = "Jetpack Compose",
         coordinates = "androidx.compose:*",
         license = "Apache License 2.0",

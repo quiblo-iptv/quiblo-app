@@ -1,4 +1,4 @@
-# BUG-063 Automated Tests
+# BUG-066 Automated Tests
 
 | Test | Asserts |
 | --- | --- |

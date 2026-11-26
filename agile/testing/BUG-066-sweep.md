@@ -1,4 +1,4 @@
-# BUG-063 Manual Sweep
+# BUG-066 Manual Sweep
 
 On an Xtream account with one screen.
 

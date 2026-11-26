@@ -1,4 +1,4 @@
-# BUG-063: an episode the panel answers with nothing is called an unplayable format
+# BUG-066: an episode the panel answers with nothing is called an unplayable format
 
 Reported by the owner on 2026-10-08, on 0.27.2, right after a film that `BUG-062` fixed played.
 

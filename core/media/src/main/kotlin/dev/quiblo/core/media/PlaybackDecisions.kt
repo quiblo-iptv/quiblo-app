@@ -70,7 +70,7 @@ internal fun classify(failure: EngineFailure): PlaybackError = when (failure.err
 
     PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT -> PlaybackError.TIMEOUT
 
-    // An empty answer is not a format (`BUG-063`). A panel whose one screen is still held answers
+    // An empty answer is not a format (`BUG-066`). A panel whose one screen is still held answers
     // 200 with no body; no extractor recognises nothing, so the engine calls it an unsupported
     // container — terminal, never asked again. Nothing arrived, so nothing was read.
     PlaybackException.ERROR_CODE_PARSING_CONTAINER_MALFORMED,

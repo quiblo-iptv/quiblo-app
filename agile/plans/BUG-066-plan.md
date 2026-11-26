@@ -1,4 +1,4 @@
-# BUG-063 Implementation Plan
+# BUG-066 Implementation Plan
 
 ## Approach
 
@@ -10,7 +10,7 @@
 
 - `core/media/.../PlaybackDecisions.kt`, `core/media/.../Media3PlayerController.kt`
 - Tests: `PlaybackDecisionsTest`
-- `agile/items|plans|testing/BUG-063-*`, `CHANGELOG.md`
+- `agile/items|plans|testing/BUG-066-*`, `CHANGELOG.md`
 
 ## Risks & Rollback
 

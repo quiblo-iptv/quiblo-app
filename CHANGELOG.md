@@ -15,6 +15,8 @@ Formatted after [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and ve
 
 ## Unreleased
 
+## 0.35.0
+
 ### Changed
 
 - **The phone now looks like the television.** The same ink background, warm white text and one

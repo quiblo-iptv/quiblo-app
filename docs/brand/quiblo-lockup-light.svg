@@ -12,6 +12,8 @@
       <line x1="61" y1="61" x2="89" y2="89" stroke="#000" stroke-width="21" stroke-linecap="round"/>
     </mask>
   </defs>
+  <!-- The screen is inked under the light: on white, the light alone fades to a washed-out pink at its edge. -->
+  <rect x="20.5" y="20.5" width="59" height="59" rx="19.5" fill="#0B0C10"/>
   <rect x="20.5" y="20.5" width="59" height="59" rx="19.5" fill="url(#light)"/>
   <rect x="14" y="14" width="72" height="72" rx="26" fill="none" stroke="#0B0C10" stroke-width="13" mask="url(#cut)"/>
   <line x1="62" y1="62" x2="87" y2="87" stroke="#0B0C10" stroke-width="13" stroke-linecap="round"/>
